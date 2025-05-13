@@ -1,0 +1,649 @@
+# DependencyManager.psm1
+# Modul für die Verwaltung von Abhängigkeiten der PowerShell GUI-Applikation
+
+# Import notwendiger Assemblies
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+
+# Konfiguration der wichtigsten Abhängigkeiten
+$script:dependencies = @{
+    # DLLs in Lib-Ordner
+    "LibHardwareMonitor" = @{
+        Path          = @(
+            "Lib\LibHardwareMonitor.dll",
+            "Lib\LibreHardwareMonitorLib.dll"
+        )
+        Required      = $true
+        InstallMethod = "Download"
+        DownloadUrl   = "https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases/latest/download/LibreHardwareMonitor.zip"
+        ExtractPath   = "Lib"
+        Description   = "Hardware-Monitoring-Bibliothek zum Auslesen von CPU, GPU und RAM-Daten"
+    }
+    
+    # .NET Framework
+    "DotNetFramework"    = @{
+        MinVersion    = "4.7.2"
+        Required      = $true
+        InstallMethod = "Installer"
+        InstallerUrl  = "https://go.microsoft.com/fwlink/?LinkId=2085155"
+        RegistryPath  = "HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full"
+        RegistryKey   = "Release"
+        # Versionstabelle für .NET Framework Release-Werte
+        VersionTable  = @{
+            "461808" = "4.7.2"
+            "528040" = "4.8"
+            "528372" = "4.8.1"
+        }
+        Description   = ".NET Framework für grundlegende Programmfunktionalität"
+    }
+    
+    # Visual C++ Redistributable
+    "VisualCppRedist"    = @{
+        Required      = $true
+        InstallMethod = "Installer"
+        InstallerUrl  = "https://aka.ms/vs/17/release/vc_redist.x64.exe"
+        RegistryPath  = "HKLM:\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64"
+        RegistryKey   = "Installed"
+        Description   = "Visual C++ Redistributable für native Bibliotheken"
+    }
+}
+
+# Funktion zum Überprüfen der Abhängigkeiten
+function Test-Dependencies {
+    param (
+        [System.Windows.Forms.RichTextBox]$OutputBox,
+        [switch]$Verbose
+    )
+
+    if ($OutputBox) {
+        $OutputBox.AppendText("Starte Abhängigkeitsprüfung..`r`n")
+    }
+    
+    $missingDependencies = @()
+    $installedDependencies = @()
+    
+    foreach ($dep in $script:dependencies.Keys) {
+        $dependency = $script:dependencies[$dep]
+        $isInstalled = $false
+        
+        if ($Verbose -and $OutputBox) {
+            $OutputBox.AppendText("Prüfe $dep..`r`n")
+        }
+        
+        switch ($dep) {
+            "LibHardwareMonitor" {
+                $isInstalled = Test-LibHardwareMonitor -OutputBox $OutputBox -Verbose:$Verbose
+            }
+            "DotNetFramework" {
+                $isInstalled = Test-DotNetFramework -OutputBox $OutputBox -Verbose:$Verbose
+            }
+            "VisualCppRedist" {
+                $isInstalled = Test-VisualCppRedist -OutputBox $OutputBox -Verbose:$Verbose
+            }
+            default {
+                $isInstalled = $false
+            }
+        }
+        
+        if ($isInstalled) {
+            $installedDependencies += $dep
+            if ($OutputBox) {
+                $OutputBox.SelectionColor = [System.Drawing.Color]::Green
+                $OutputBox.AppendText("[OK] $dep ist installiert`r`n")
+                $OutputBox.SelectionColor = [System.Drawing.Color]::Black
+            }
+        }
+        else {
+            $missingDependencies += $dep
+            if ($OutputBox) {
+                $OutputBox.SelectionColor = [System.Drawing.Color]::Red
+                $OutputBox.AppendText("[X] $dep fehlt oder ist nicht korrekt installiert`r`n")
+                $OutputBox.SelectionColor = [System.Drawing.Color]::Black
+            }
+        }
+    }
+    
+    return @{
+        Missing      = $missingDependencies
+        Installed    = $installedDependencies
+        AllInstalled = ($missingDependencies.Count -eq 0)
+    }
+}
+
+# Funktion zum Installieren aller fehlenden Abhängigkeiten
+function Install-Dependencies {
+    param (
+        [System.Windows.Forms.RichTextBox]$OutputBox,
+        [switch]$AutoInstall
+    )
+    
+    $result = Test-Dependencies -OutputBox $OutputBox
+    
+    if ($result.AllInstalled) {
+        if ($OutputBox) {
+            $OutputBox.SelectionColor = [System.Drawing.Color]::Green
+            $OutputBox.AppendText("`r`nAlle Abhängigkeiten sind korrekt installiert!`r`n")
+            $OutputBox.SelectionColor = [System.Drawing.Color]::Black
+        }
+        return $true
+    }
+    
+    if ($OutputBox) {
+        $OutputBox.SelectionColor = [System.Drawing.Color]::Red
+        $OutputBox.AppendText("`r`nFehlende Abhängigkeiten gefunden: $($result.Missing -join ', ')`r`n")
+        $OutputBox.SelectionColor = [System.Drawing.Color]::Black
+    }
+    
+    $installationSuccessful = $true
+    
+    if ($AutoInstall -or (Show-DependencyInstallPrompt -Dependencies $result.Missing)) {
+        foreach ($dep in $result.Missing) {
+            if ($OutputBox) {
+                $OutputBox.AppendText("`r`nInstalliere $dep...`r`n")
+            }
+            
+            $success = $false
+            switch ($dep) {
+                "LibHardwareMonitor" {
+                    $success = Install-LibHardwareMonitor -OutputBox $OutputBox
+                }
+                "DotNetFramework" {
+                    $success = Install-DotNetFramework -OutputBox $OutputBox
+                }
+                "VisualCppRedist" {
+                    $success = Install-VisualCppRedist -OutputBox $OutputBox
+                }
+                default {
+                    $success = $false
+                }
+            }
+            
+            if ($success) {
+                if ($OutputBox) {
+                    $OutputBox.SelectionColor = [System.Drawing.Color]::Green
+                    $OutputBox.AppendText("Installation von $dep erfolgreich!`r`n")
+                    $OutputBox.SelectionColor = [System.Drawing.Color]::Black
+                }
+            }
+            else {
+                $installationSuccessful = $false
+                if ($OutputBox) {
+                    $OutputBox.SelectionColor = [System.Drawing.Color]::Red
+                    $OutputBox.AppendText("Installation von $dep fehlgeschlagen!`r`n")
+                    $OutputBox.SelectionColor = [System.Drawing.Color]::Black
+                }
+            }
+        }
+    }
+    else {
+        if ($OutputBox) {
+            $OutputBox.AppendText("Installation der Abhängigkeiten wurde vom Benutzer abgebrochen.`r`n")
+        }
+        return $false
+    }
+    
+    return $installationSuccessful
+}
+
+# Funktion zur Überprüfung von LibHardwareMonitor
+function Test-LibHardwareMonitor {
+    param (
+        [System.Windows.Forms.RichTextBox]$OutputBox,
+        [switch]$Verbose
+    )
+    
+    $dependency = $script:dependencies["LibHardwareMonitor"]
+    $dllFound = $false
+    
+    # Verschiedene mögliche Pfade zur DLL prüfen
+    $possiblePaths = @(
+        (Join-Path -Path $PSScriptRoot -ChildPath "..\..\$($dependency.Path[0])"),
+        (Join-Path -Path $PSScriptRoot -ChildPath "..\..\$($dependency.Path[1])"),
+        (Join-Path -Path (Split-Path -Parent $PSScriptRoot) -ChildPath $dependency.Path[0]),
+        (Join-Path -Path (Split-Path -Parent $PSScriptRoot) -ChildPath $dependency.Path[1]),
+        (Join-Path -Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) -ChildPath $dependency.Path[0]),
+        (Join-Path -Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) -ChildPath $dependency.Path[1])
+    )
+    
+    foreach ($path in $possiblePaths) {
+        if ($Verbose -and $OutputBox) {
+            $OutputBox.AppendText("  Prüfe Pfad: $path`r`n")
+        }
+        
+        if (Test-Path $path) {
+            $dllFound = $true
+            
+            # Zusätzlich versuchen, die DLL zu laden, um zu sehen, ob sie funktioniert
+            try {
+                Add-Type -Path $path -ErrorAction Stop
+                if ($Verbose -and $OutputBox) {
+                    $OutputBox.AppendText("  DLL gefunden und erfolgreich geladen: $path`r`n")
+                }
+                return $true
+            }
+            catch {
+                if ($_.Exception.Message -match "bereits geladen") {
+                    if ($Verbose -and $OutputBox) {
+                        $OutputBox.AppendText("  DLL bereits geladen: $path`r`n")
+                    }
+                    return $true
+                }
+                
+                if ($Verbose -and $OutputBox) {
+                    $OutputBox.AppendText("  Fehler beim Laden der DLL: $_`r`n")
+                }
+            }
+        }
+    }
+    
+    return $dllFound
+}
+
+# Funktion zur Überprüfung von .NET Framework
+function Test-DotNetFramework {
+    param (
+        [System.Windows.Forms.RichTextBox]$OutputBox,
+        [switch]$Verbose
+    )
+    
+    $dependency = $script:dependencies["DotNetFramework"]
+    
+    try {
+        if (Test-Path $dependency.RegistryPath) {
+            $regKey = Get-ItemProperty -Path $dependency.RegistryPath -ErrorAction SilentlyContinue
+            $release = $regKey.Release
+            
+            if ($release -ge 461808) {
+                # 461808 entspricht .NET Framework 4.7.2
+                $version = $dependency.VersionTable["$release"]
+                if ([string]::IsNullOrEmpty($version)) {
+                    # Wenn der genaue Wert nicht in der Tabelle steht, ermitteln wir die Version approximativ
+                    if ($release -ge 528372) { $version = "4.8.1 oder höher" }
+                    elseif ($release -ge 528040) { $version = "4.8 oder höher" }
+                    elseif ($release -ge 461808) { $version = "4.7.2 oder höher" }
+                }
+                
+                if ($Verbose -and $OutputBox) {
+                    $OutputBox.AppendText("  .NET Framework Version $version gefunden (Release: $release)`r`n")
+                }
+                return $true
+            }
+            
+            if ($Verbose -and $OutputBox) {
+                $OutputBox.AppendText("  .NET Framework Version zu alt: Release $release (benötigt mind. 461808)`r`n")
+            }
+        }
+        else {
+            if ($Verbose -and $OutputBox) {
+                $OutputBox.AppendText("  Registry-Pfad nicht gefunden: $($dependency.RegistryPath)`r`n")
+            }
+        }
+    }
+    catch {
+        if ($Verbose -and $OutputBox) {
+            $OutputBox.AppendText("  Fehler bei der Überprüfung von .NET Framework: $_`r`n")
+        }
+    }
+    
+    return $false
+}
+
+# Funktion zur Überprüfung von Visual C++ Redistributable
+function Test-VisualCppRedist {
+    param (
+        [System.Windows.Forms.RichTextBox]$OutputBox,
+        [switch]$Verbose
+    )
+    
+    $dependency = $script:dependencies["VisualCppRedist"]
+    
+    try {
+        # Prüfen, ob der Registry-Pfad existiert
+        if (Test-Path $dependency.RegistryPath) {
+            $regKey = Get-ItemProperty -Path $dependency.RegistryPath -ErrorAction SilentlyContinue
+            if ($regKey -and $regKey.Installed -eq 1) {
+                if ($Verbose -and $OutputBox) {
+                    $OutputBox.AppendText("  Visual C++ Redistributable ist installiert`r`n")
+                }
+                return $true
+            }
+        }
+        
+        # Alternative Prüfung: Vorhandensein typischer DLLs
+        $dllFiles = @("msvcp140.dll", "vcruntime140.dll")
+        $systemDir = "$env:SystemRoot\System32"
+        
+        foreach ($dll in $dllFiles) {
+            $dllPath = Join-Path -Path $systemDir -ChildPath $dll
+            if (Test-Path $dllPath) {
+                if ($Verbose -and $OutputBox) {
+                    $OutputBox.AppendText("  DLL gefunden: $dllPath`r`n")
+                }
+            }
+            else {
+                if ($Verbose -and $OutputBox) {
+                    $OutputBox.AppendText("  DLL nicht gefunden: $dllPath`r`n")
+                }
+                return $false
+            }
+        }
+        
+        # Wenn alle DLLs gefunden wurden
+        if ($Verbose -and $OutputBox) {
+            $OutputBox.AppendText("  Visual C++ Redistributable DLLs gefunden`r`n")
+        }
+        return $true
+    }
+    catch {
+        if ($Verbose -and $OutputBox) {
+            $OutputBox.AppendText("  Fehler bei der Überprüfung von Visual C++ Redistributable: $_`r`n")
+        }
+    }
+    
+    return $false
+}
+
+# Hilfsfunktion zur Anzeige des Installations-Dialogs
+function Show-DependencyInstallPrompt {
+    param (
+        [string[]]$Dependencies
+    )
+    
+    # Erstelle einen benutzerfreundlichen Dialog
+    $message = "Die folgenden Abhängigkeiten fehlen oder sind nicht korrekt installiert:`n`n"
+    
+    foreach ($dep in $Dependencies) {
+        $description = $script:dependencies[$dep].Description
+        $message += "- $dep: $description`n"
+    }
+    
+    $message += "`nSollen die fehlenden Abhängigkeiten jetzt installiert werden?"
+    
+    $result = [System.Windows.Forms.MessageBox]::Show(
+        $message,
+        "Fehlende Abhängigkeiten",
+        [System.Windows.Forms.MessageBoxButtons]::YesNo,
+        [System.Windows.Forms.MessageBoxIcon]::Warning
+    )
+    
+    return $result -eq [System.Windows.Forms.DialogResult]::Yes
+}
+
+# Funktion zur Installation von LibHardwareMonitor
+function Install-LibHardwareMonitor {
+    param (
+        [System.Windows.Forms.RichTextBox]$OutputBox
+    )
+    
+    $dependency = $script:dependencies["LibHardwareMonitor"]
+    $downloadUrl = $dependency.DownloadUrl
+    $extractPath = Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) $dependency.ExtractPath
+    $zipPath = Join-Path $env:TEMP "LibreHardwareMonitor.zip"
+    
+    if ($OutputBox) {
+        $OutputBox.AppendText("Lade LibreHardwareMonitor herunter...`r`n")
+    }
+    
+    try {
+        # Download der ZIP-Datei
+        $webClient = New-Object System.Net.WebClient
+        $webClient.DownloadFile($downloadUrl, $zipPath)
+        
+        if ($OutputBox) {
+            $OutputBox.AppendText("Download abgeschlossen, extrahiere Dateien...`r`n")
+        }
+        
+        # Stelle sicher, dass der Zielordner existiert
+        if (-not (Test-Path $extractPath)) {
+            New-Item -Path $extractPath -ItemType Directory -Force | Out-Null
+        }
+        
+        # Extrahiere die DLLs aus der ZIP-Datei
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        $zip = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
+        
+        # Suche nach den benötigten DLLs in der ZIP
+        $dllEntries = $zip.Entries | Where-Object { 
+            $_.Name -eq "LibreHardwareMonitorLib.dll" -or 
+            $_.Name -eq "LibHardwareMonitor.dll" -or
+            $_.Name -eq "HidSharp.dll"
+        }
+        
+        if ($dllEntries.Count -gt 0) {
+            foreach ($entry in $dllEntries) {
+                $targetPath = Join-Path $extractPath $entry.Name
+                
+                # Extrahiere die Datei
+                [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $targetPath, $true)
+                
+                if ($OutputBox) {
+                    $OutputBox.AppendText("Extrahiert: $($entry.Name)`r`n")
+                }
+            }
+            
+            $zip.Dispose()
+            
+            # Aufräumen
+            Remove-Item $zipPath -Force
+            
+            if ($OutputBox) {
+                $OutputBox.AppendText("LibreHardwareMonitor erfolgreich installiert`r`n")
+            }
+            
+            return $true
+        }
+        else {
+            $zip.Dispose()
+            
+            if ($OutputBox) {
+                $OutputBox.SelectionColor = [System.Drawing.Color]::Red
+                $OutputBox.AppendText("Erforderliche DLLs nicht in der ZIP-Datei gefunden`r`n")
+                $OutputBox.SelectionColor = [System.Drawing.Color]::Black
+            }
+            
+            return $false
+        }
+    }
+    catch {
+        if ($OutputBox) {
+            $OutputBox.SelectionColor = [System.Drawing.Color]::Red
+            $OutputBox.AppendText("Fehler beim Download: $_`r`n")
+            $OutputBox.SelectionColor = [System.Drawing.Color]::Black
+        }
+        return $false
+    }
+}
+
+# Funktion zur Installation von .NET Framework
+function Install-DotNetFramework {
+    param (
+        [System.Windows.Forms.RichTextBox]$OutputBox
+    )
+    
+    $dependency = $script:dependencies["DotNetFramework"]
+    $downloadUrl = $dependency.InstallerUrl
+    $installerPath = Join-Path $env:TEMP "dotnet-installer.exe"
+    
+    if ($OutputBox) {
+        $OutputBox.AppendText("Lade .NET Framework Installer herunter...`r`n")
+    }
+    
+    try {
+        # Download des Installers
+        $webClient = New-Object System.Net.WebClient
+        $webClient.DownloadFile($downloadUrl, $installerPath)
+        
+        if ($OutputBox) {
+            $OutputBox.AppendText("Download abgeschlossen, starte Installation...`r`n")
+        }
+        
+        # Installation starten
+        if (Test-Path $installerPath) {
+            $process = Start-Process -FilePath $installerPath -ArgumentList "/quiet", "/norestart" -Wait -PassThru
+            
+            if ($process.ExitCode -eq 0) {
+                if ($OutputBox) {
+                    $OutputBox.AppendText(".NET Framework erfolgreich installiert`r`n")
+                }
+                
+                # Aufräumen
+                Remove-Item $installerPath -Force
+                return $true
+            }
+            else {
+                if ($OutputBox) {
+                    $OutputBox.SelectionColor = [System.Drawing.Color]::Red
+                    $OutputBox.AppendText("Installation fehlgeschlagen mit Exit-Code: $($process.ExitCode)`r`n")
+                    $OutputBox.SelectionColor = [System.Drawing.Color]::Black
+                }
+                return $false
+            }
+        }
+        else {
+            if ($OutputBox) {
+                $OutputBox.SelectionColor = [System.Drawing.Color]::Red
+                $OutputBox.AppendText("Installer nicht gefunden: $installerPath`r`n")
+                $OutputBox.SelectionColor = [System.Drawing.Color]::Black
+            }
+            return $false
+        }
+    }
+    catch {
+        if ($OutputBox) {
+            $OutputBox.SelectionColor = [System.Drawing.Color]::Red
+            $OutputBox.AppendText("Fehler bei .NET Framework Installation: $_`r`n")
+            $OutputBox.SelectionColor = [System.Drawing.Color]::Black
+        }
+        return $false
+    }
+}
+
+# Funktion zur Installation von Visual C++ Redistributable
+function Install-VisualCppRedist {
+    param (
+        [System.Windows.Forms.RichTextBox]$OutputBox
+    )
+    
+    $dependency = $script:dependencies["VisualCppRedist"]
+    $downloadUrl = $dependency.InstallerUrl
+    $installerPath = Join-Path $env:TEMP "vcredist_x64.exe"
+    
+    if ($OutputBox) {
+        $OutputBox.AppendText("Lade Visual C++ Redistributable Installer herunter...`r`n")
+    }
+    
+    try {
+        # Download des Installers
+        $webClient = New-Object System.Net.WebClient
+        $webClient.DownloadFile($downloadUrl, $installerPath)
+        
+        if ($OutputBox) {
+            $OutputBox.AppendText("Download abgeschlossen, starte Installation...`r`n")
+        }
+        
+        # Installation starten
+        if (Test-Path $installerPath) {
+            $process = Start-Process -FilePath $installerPath -ArgumentList "/quiet", "/norestart" -Wait -PassThru
+            
+            if ($process.ExitCode -eq 0) {
+                if ($OutputBox) {
+                    $OutputBox.AppendText("Visual C++ Redistributable erfolgreich installiert`r`n")
+                }
+                
+                # Aufräumen
+                Remove-Item $installerPath -Force
+                return $true
+            }
+            else {
+                if ($OutputBox) {
+                    $OutputBox.SelectionColor = [System.Drawing.Color]::Red
+                    $OutputBox.AppendText("Installation fehlgeschlagen mit Exit-Code: $($process.ExitCode)`r`n")
+                    $OutputBox.SelectionColor = [System.Drawing.Color]::Black
+                }
+                return $false
+            }
+        }
+        else {
+            if ($OutputBox) {
+                $OutputBox.SelectionColor = [System.Drawing.Color]::Red
+                $OutputBox.AppendText("Installer nicht gefunden: $installerPath`r`n")
+                $OutputBox.SelectionColor = [System.Drawing.Color]::Black
+            }
+            return $false
+        }
+    }
+    catch {
+        if ($OutputBox) {
+            $OutputBox.SelectionColor = [System.Drawing.Color]::Red
+            $OutputBox.AppendText("Fehler bei Visual C++ Redistributable Installation: $_`r`n")
+            $OutputBox.SelectionColor = [System.Drawing.Color]::Black
+        }
+        return $false
+    }
+}
+
+# Funktion zum Anzeigen des Abhängigkeits-Managements in der GUI
+function Show-DependencyManager {
+    param (
+        [System.Windows.Forms.RichTextBox]$OutputBox,
+        [System.Windows.Forms.Form]$MainForm
+    )
+    
+    # Erstelle ein neues Formular
+    $form = New-Object System.Windows.Forms.Form
+    $form.Text = "Abhängigkeiten-Manager"
+    $form.Size = New-Object System.Drawing.Size(600, 400)
+    $form.StartPosition = "CenterParent"
+    $form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedDialog
+    $form.MaximizeBox = $false
+    $form.MinimizeBox = $false
+    
+    # Erstelle eine RichTextBox für die Ausgabe
+    $rtbDependencies = New-Object System.Windows.Forms.RichTextBox
+    $rtbDependencies.Location = New-Object System.Drawing.Point(10, 10)
+    $rtbDependencies.Size = New-Object System.Drawing.Size(570, 280)
+    $rtbDependencies.ReadOnly = $true
+    $rtbDependencies.BackColor = [System.Drawing.Color]::White
+    $rtbDependencies.Font = New-Object System.Drawing.Font("Consolas", 10)
+    $form.Controls.Add($rtbDependencies)
+    
+    # Erstelle Buttons für die Aktionen
+    $btnCheck = New-Object System.Windows.Forms.Button
+    $btnCheck.Location = New-Object System.Drawing.Point(10, 300)
+    $btnCheck.Size = New-Object System.Drawing.Size(150, 40)
+    $btnCheck.Text = "Abhängigkeiten prüfen"
+    $btnCheck.Add_Click({
+            $rtbDependencies.Clear()
+            Test-Dependencies -OutputBox $rtbDependencies -Verbose
+        })
+    $form.Controls.Add($btnCheck)
+    
+    $btnInstall = New-Object System.Windows.Forms.Button
+    $btnInstall.Location = New-Object System.Drawing.Point(170, 300)
+    $btnInstall.Size = New-Object System.Drawing.Size(150, 40)
+    $btnInstall.Text = "Alle installieren"
+    $btnInstall.Add_Click({
+            $rtbDependencies.Clear()
+            Install-Dependencies -OutputBox $rtbDependencies
+        })
+    $form.Controls.Add($btnInstall)
+    
+    $btnClose = New-Object System.Windows.Forms.Button
+    $btnClose.Location = New-Object System.Drawing.Point(430, 300)
+    $btnClose.Size = New-Object System.Drawing.Size(150, 40)
+    $btnClose.Text = "Schliessen"
+    $btnClose.Add_Click({ $form.Close() })
+    $form.Controls.Add($btnClose)
+    
+    # Initial scan ausführen
+    Test-Dependencies -OutputBox $rtbDependencies -Verbose
+    
+    # Formular anzeigen
+    if ($MainForm -ne $null) {
+        $form.Owner = $MainForm
+    }
+    $form.ShowDialog() | Out-Null
+}
+
+# Exportiere die öffentlichen Funktionen
+Export-ModuleMember -Function Test-Dependencies, Install-Dependencies, Show-DependencyManager 

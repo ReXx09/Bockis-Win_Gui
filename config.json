@@ -1,0 +1,17 @@
+﻿{
+    "EnableNotifications":  true,
+    "CheckUpdates":  true,
+    "AdvancedCleanup":  false,
+    "RamThreshold":  85,
+    "CpuThreshold":  90,
+    "ShowSplash":  true,
+    "UpdateInterval":  1000,
+    "GpuThreshold":  80,
+    "ConfirmActions":  true,
+    "SaveWindowSize":  true,
+    "LogLevel":  "Standard",
+    "FontSize":  12,
+    "AutoSaveLogs":  false,
+    "LogPath":  "C:\\Users\\Baldoin\\Desktop\\PowerShell_Gui_Tool\\TEST_Cursor_Tool\\Win_Gui_Module_BAT\\Logs",
+    "ColorScheme":  "Hell (Light Mode)"
+}
