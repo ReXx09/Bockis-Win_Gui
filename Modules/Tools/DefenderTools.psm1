@@ -41,8 +41,8 @@ function Write-ColoredCenteredText {
         [string]$text,
         [string]$frameColor = "Green",
         [string]$textColor = "Red",
-        [int]$totalWidth = 100,
-        [int]$contentWidth = 98  # Breite innerhalb der Rahmenzeichen (║)
+        [int]$totalWidth = 80,
+        [int]$contentWidth = 78  # Breite innerhalb der Rahmenzeichen (║)
     )
     
     # Berechne die tatsächliche Textlänge
@@ -107,12 +107,12 @@ function Start-WindowsDefender {
     $userName = $env:USERNAME
     $osInfo = (Get-CimInstance -ClassName Win32_OperatingSystem).Caption
     $dateTime = Get-Date -Format "dd.MM.yyyy HH:mm:ss"
-    $width = 100
+    $width = 80
     
     # Rahmen oben
-    Write-Host "╔══════════════════════════════════════════════════════════════════════════════════════════════════╗" -ForegroundColor Green
+    Write-Host "╔══════════════════════════════════════════════════════════════════════════════╗" -ForegroundColor Green
     Write-ColoredCenteredText                              "Windows Defender"                                          
-    Write-Host "╚══════════════════════════════════════════════════════════════════════════════════════════════════╝" -ForegroundColor Green
+    Write-Host "╚══════════════════════════════════════════════════════════════════════════════╝" -ForegroundColor Green
     
     # ASCII-Art Logo
     Write-Host
@@ -137,20 +137,20 @@ function Start-WindowsDefender {
     Write-Host
     
     # Rahmen für Systeminformationen
-    Write-Host "╔══════════════════════════════════════════════════════════════════════════════════════════════════╗" -ForegroundColor Green
+    Write-Host "╔══════════════════════════════════════════════════════════════════════════════╗" -ForegroundColor Green
     Write-ColoredCenteredText                          "SYSTEMINFORMATIONEN"                                           
-    Write-Host "╠══════════════════════════════════════════════════════════════════════════════════════════════════╣" -ForegroundColor Green
+    Write-Host "╠══════════════════════════════════════════════════════════════════════════════╣" -ForegroundColor Green
     # Systeminformationen
-    Write-Host "║                                                                                                  ║" -ForegroundColor Green
+    Write-Host "║                                                                              ║" -ForegroundColor Green
     Write-Host "      ├─    Betriebssystem: $osInfo           "            -ForegroundColor Yellow                 
     Write-Host "      ├─    Computer:       $computerName     "            -ForegroundColor Yellow                                    
     Write-Host "      ├─    Benutzer:       $userName         "            -ForegroundColor Yellow                                    
     Write-Host "      └─    Datum und Zeit: $dateTime         "            -ForegroundColor Yellow                                  
-    Write-Host "║                                                                                                  ║" -ForegroundColor Green
+    Write-Host "║                                                                              ║" -ForegroundColor Green
     
-    Write-Host "╠══════════════════════════════════════════════════════════════════════════════════════════════════╣" -ForegroundColor Green
+    Write-Host "╠══════════════════════════════════════════════════════════════════════════════╣" -ForegroundColor Green
     Write-ColoredCenteredText "Windows Defender wird initialisiert..."
-    Write-Host "╚══════════════════════════════════════════════════════════════════════════════════════════════════╝" -ForegroundColor Green
+    Write-Host "╚══════════════════════════════════════════════════════════════════════════════╝" -ForegroundColor Green
     
     # 2 Sekunden warten vor dem Start
     Start-Sleep -Seconds 2
@@ -381,6 +381,17 @@ function Start-WindowsDefender {
         Write-ToolLog -ToolName "WindowsDefender" -Message "Fehler beim Ausführen des Windows Defender Scans: $_" -OutputBox $outputBox -Color ([System.Drawing.Color]::Red) -NoTimestamp
         Update-ProgressStatus -StatusText "Fehler" -ProgressValue 0 -TextColor ([System.Drawing.Color]::Red) -progressBarParam $progressBar
     }
+
+    # Nach dem Scan: Nutzer fragen, ob das Windows-Sicherheitscenter geöffnet werden soll
+    $result = [System.Windows.Forms.MessageBox]::Show(
+        "Möchten Sie das Windows-Sicherheitscenter (Defender) öffnen?",
+        "Windows Defender öffnen",
+        [System.Windows.Forms.MessageBoxButtons]::YesNo,
+        [System.Windows.Forms.MessageBoxIcon]::Question
+    )
+    if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
+        Start-Process "windowsdefender:"
+    }
 }
 
 # Funktion zum Neustart des Windows Defender-Dienstes
@@ -427,9 +438,9 @@ function Restart-DefenderService {
     $config = Get-SystemToolConfig -ToolName "WindowsDefender"
     
     # Rahmen oben
-    Write-Host "╔══════════════════════════════════════════════════════════════════════════════════════════════════╗" -ForegroundColor Green
+    Write-Host "╔══════════════════════════════════════════════════════════════════════════════╗" -ForegroundColor Green
     Write-ColoredCenteredText                    "Windows Defender Dienst Neustart"                                          
-    Write-Host "╚══════════════════════════════════════════════════════════════════════════════════════════════════╝" -ForegroundColor Green
+    Write-Host "╚══════════════════════════════════════════════════════════════════════════════╝" -ForegroundColor Green
     
     try {
         # Status aktualisieren

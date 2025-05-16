@@ -1,5 +1,5 @@
 ﻿# Win_Gui_Module.ps1 - Hauptskript für die PowerShell-GUI
-# Autor: Bocki (modularisierte Version)
+# Autor: Bocki 
 
 # Import required modules
 Import-Module "$PSScriptRoot\Modules\Core\Core.psm1" -Force
@@ -8,7 +8,6 @@ Import-Module "$PSScriptRoot\Modules\Core\ProgressBarTools.psm1" -Force
 Import-Module "$PSScriptRoot\Modules\Monitor\HardwareMonitorTools.psm1" -Force
 Import-Module "$PSScriptRoot\Modules\SystemInfo.psm1" -Force
 Import-Module "$PSScriptRoot\Modules\Tools\SystemTools.psm1" -Force
-Import-Module "$PSScriptRoot\Modules\Tools\DiskTools.psm1" -Force
 Import-Module "$PSScriptRoot\Modules\Tools\CHKDSKTools.psm1" -Force
 Import-Module "$PSScriptRoot\Modules\Tools\NetworkTools.psm1" -Force
 Import-Module "$PSScriptRoot\Modules\Tools\CleanupTools.psm1" -Force
@@ -17,6 +16,7 @@ Import-Module "$PSScriptRoot\Modules\HardwareInfo.psm1" -Force
 Import-Module "$PSScriptRoot\Modules\Tools\DefenderTools.psm1" -Force
 Import-Module "$PSScriptRoot\Modules\Tools\WindowsUpdateTools.psm1" -Force
 Import-Module "$PSScriptRoot\Modules\DatabaseManager.psm1" -Force
+Import-Module "$PSScriptRoot\Modules\Tools\DISM-Tools.psm1" -Force
 
 # Globale Einstellungen
 $script:settings = @{
@@ -211,7 +211,7 @@ function Show-SystemToolLogo {
     $secondaryColor = [System.ConsoleColor]::Yellow
     $accentColor = [System.ConsoleColor]::Green
 
-
+    Write-Host
     Write-Host "    ███████╗██╗   ██╗███████╗████████╗███████╗███╗   ███╗" -ForegroundColor $primaryColor
     Write-Host "    ██╔════╝╚██╗ ██╔╝██╔════╝╚══██╔══╝██╔════╝████╗ ████║" -ForegroundColor $primaryColor
     Write-Host "    ███████╗ ╚████╔╝ ███████╗   ██║   █████╗  ██╔████╔██║" -ForegroundColor $primaryColor
@@ -224,9 +224,7 @@ function Show-SystemToolLogo {
     Write-Host "       ██║   ██║   ██║██║   ██║██║     ╚════██║" -ForegroundColor $secondaryColor
     Write-Host "       ██║   ╚██████╔╝╚██████╔╝███████╗███████║" -ForegroundColor $secondaryColor
     Write-Host "       ╚═╝    ╚═════╝  ╚═════╝ ╚══════╝╚══════╝" -ForegroundColor $secondaryColor
-
-    # Versionsinformation und Credits
-    Write-Host "`n`n                   Version 3.0 - PowerShell Edition" -ForegroundColor $accentColor
+    Write-Host "`n`n                  Version 3.0 - PowerShell Edition" -ForegroundColor $accentColor
     Write-Host "                      Entwickelt von Bocki" -ForegroundColor $accentColor
 
     # Trennlinie
@@ -277,7 +275,7 @@ $moduleOrder = @(
     'Monitor\HardwareMonitorTools ', # Hardware-Monitor-Tools
     'SystemInfo                   ', # System-Informationen
     'Tools\SystemTools            ', # System-Tools
-    'Tools\DiskTools              ', # Festplatten-Tools
+    'Tools\DISM-Tools              ', # Festplatten-Tools
     'Tools\CHKDSKTools            ', # CHKDSK-Tools
     'Tools\NetworkTools           ', # Netzwerk-Tools
     'Tools\CleanupTools           ', # Bereinigungs-Tools
@@ -392,14 +390,6 @@ if ($missingModules.Count -gt 0) {
     }
 }
 
-# Definiere Statuswerte
-$STATUS_SUCCESS = 0
-$STATUS_MODULE_ERROR = 1
-
-# Status-Variable initialisieren
-$moduleLadingStatus = $STATUS_SUCCESS
-
-
 # Initialisiere Ausgabecodierung
 & {
     [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -414,14 +404,14 @@ try {
     
     # Neue Fenstergröße setzen (nicht größer als der aktuelle Puffer)
     $newWindowSize = New-Object System.Management.Automation.Host.Size(
-        [Math]::Min(90, $currentBufferSize.Width),
-        [Math]::Min(65, $currentBufferSize.Height)
+        [Math]::Min(80, $currentBufferSize.Width),
+        [Math]::Min(50, $currentBufferSize.Height)
     )
     
     # Neue Puffergröße setzen (nicht zu groß)
     $newBufferSize = New-Object System.Management.Automation.Host.Size(
         [Math]::Min(100, $currentBufferSize.Width),
-        [Math]::Min(3000, $currentBufferSize.Height)
+        [Math]::Min(2000, $currentBufferSize.Height)
     )
     
     # Größen anwenden
@@ -433,13 +423,21 @@ catch {
     Write-Host "Hinweis: Konnte PowerShell-Fenster nicht anpassen: $_" -ForegroundColor Yellow
 }
 
+# Definiere Statuswerte
+$STATUS_SUCCESS = 0
+$STATUS_MODULE_ERROR = 1
+
+# Status-Variable initialisieren
+$moduleLadingStatus = $STATUS_SUCCESS
+
+
 # Trennlinie
 Write-Host "`n" + ("═" * 70) -ForegroundColor Cyan
 
 # Erstelle das Hauptformular
 $mainform = New-Object System.Windows.Forms.Form
 $mainform.Text = "Bocki's System-Tool 3.0"
-$mainform.Size = New-Object System.Drawing.Size(1050, 960)
+$mainform.Size = New-Object System.Drawing.Size(1000, 900)
 $mainform.StartPosition = "Manual"  # Manuelle Positionierung aktivieren
 
 # P/Invoke-Definitionen für die Fensterpositionierung
@@ -495,51 +493,6 @@ public struct RECT
     }
 }
 
-# Timer für die regelmäßige Positionierung
-$positioningTimer = New-Object System.Windows.Forms.Timer
-$positioningTimer.Interval = 2000  # Alle 2 Sekunden prüfen
-$script:lastGuiLeft = 0
-$script:lastGuiTop = 0
-
-# Event-Handler für Timer
-$positioningTimer.Add_Tick({
-        if ($mainform.Visible -and $mainform.WindowState -ne [System.Windows.Forms.FormWindowState]::Minimized) {
-            # Nur aktualisieren, wenn GUI-Position sich geändert hat
-            if ($script:lastGuiLeft -ne $mainform.Left -or $script:lastGuiTop -ne $mainform.Top) {
-                try {
-                    $script:lastGuiLeft = $mainform.Left
-                    $script:lastGuiTop = $mainform.Top
-                
-                    if (-not (Initialize-WindowPositioning)) { return }
-                
-                    # Konsolenfenster ermitteln
-                    $consoleHandle = [NativeMethods]::GetConsoleWindow()
-                    if ($consoleHandle -eq [IntPtr]::Zero) { return }
-                
-                    # Konsolenfenstergröße ermitteln
-                    $rect = New-Object RECT
-                    if (-not [NativeMethods]::GetWindowRect($consoleHandle, [ref]$rect)) { return }
-                
-                    $consoleWidth = $rect.Right - $rect.Left
-                    $consoleHeight = $rect.Bottom - $rect.Top
-                
-                    # Neue Position berechnen: PowerShell-Fenster links neben der GUI
-                    $newConsoleLeft = [Math]::Max(0, $mainform.Left - $consoleWidth - 10)
-                    $newConsoleTop = $mainform.Top
-                
-                    # Konsolenfenster neu positionieren
-                    [NativeMethods]::MoveWindow($consoleHandle, $newConsoleLeft, $newConsoleTop, $consoleWidth, $consoleHeight, $true)
-                
-                    # Debug-Ausgabe
-                    # Write-Host "PowerShell-Fenster wurde positioniert: Links=$newConsoleLeft, Oben=$newConsoleTop"
-                }
-                catch {
-                    # Fehler ignorieren
-                }
-            }
-        }
-    })
-
 # Initiale Positionierung
 function Position-MainForm {
     try {
@@ -568,11 +521,7 @@ function Position-MainForm {
         # Speichere initiale Position
         $script:lastGuiLeft = $mainform.Left
         $script:lastGuiTop = $mainform.Top
-        
-        # Timer starten
-        $positioningTimer.Start()
-        
-        # Write-Host "GUI-Fenster wurde positioniert: Links=$($mainform.Left), Oben=$($mainform.Top)"
+         
     }
     catch {
         Write-Host "Fehler bei der initialen Positionierung: $_" -ForegroundColor Red
@@ -585,20 +534,17 @@ Position-MainForm
 
 # Event-Handler für Formular-Schließen: Timer stoppen
 $mainform.Add_FormClosing({
-        if ($positioningTimer -and $positioningTimer.Enabled) {
-            $positioningTimer.Stop()
-            $positioningTimer.Dispose()
-        }
+     
     })
 
 $mainform.Font = New-Object System.Drawing.Font("Segoe UI", 10)
 $mainform.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::None  # Kein Rahmen
-$mainform.MinimumSize = New-Object System.Drawing.Size(1050, 950)
+$mainform.MinimumSize = New-Object System.Drawing.Size(1000, 850)
 $mainform.BackColor = [System.Drawing.Color]::FromArgb(235, 245, 255)
 
 # Benutzerdefinierte Titelleiste
 $titleBar = New-Object System.Windows.Forms.Panel
-$titleBar.Size = New-Object System.Drawing.Size(1050, 30)
+$titleBar.Size = New-Object System.Drawing.Size(1000, 30)
 $titleBar.BackColor = [System.Drawing.Color]::FromArgb(45, 45, 48)
 $titleBar.Dock = [System.Windows.Forms.DockStyle]::Top
 
@@ -667,7 +613,7 @@ $titleLabel.Add_MouseMove({
 $closeButton = New-Object System.Windows.Forms.Button
 $closeButton.Text = "×"
 $closeButton.Size = New-Object System.Drawing.Size(30, 30)
-$closeButton.Location = New-Object System.Drawing.Point(1020, 0)
+$closeButton.Location = New-Object System.Drawing.Point(970, 0)
 $closeButton.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 $closeButton.FlatAppearance.BorderSize = 0
 $closeButton.BackColor = [System.Drawing.Color]::FromArgb(45, 45, 48)
@@ -682,7 +628,7 @@ $titleBar.Controls.Add($closeButton)
 $infoButton = New-Object System.Windows.Forms.Button
 $infoButton.Text = "?"
 $infoButton.Size = New-Object System.Drawing.Size(30, 30)
-$infoButton.Location = New-Object System.Drawing.Point(960, 0)
+$infoButton.Location = New-Object System.Drawing.Point(910, 0)
 $infoButton.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 $infoButton.FlatAppearance.BorderSize = 0
 $infoButton.BackColor = [System.Drawing.Color]::FromArgb(45, 45, 48)
@@ -704,7 +650,7 @@ $titleBar.Controls.Add($infoButton)
 $themeButton = New-Object System.Windows.Forms.Button
 $themeButton.Text = "🌙"  # Mond-Symbol für dunkles Theme
 $themeButton.Size = New-Object System.Drawing.Size(30, 30)
-$themeButton.Location = New-Object System.Drawing.Point(930, 0)  # Links neben dem Info-Button
+$themeButton.Location = New-Object System.Drawing.Point(880, 0)  # Links neben dem Info-Button
 $themeButton.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 $themeButton.FlatAppearance.BorderSize = 0
 $themeButton.BackColor = [System.Drawing.Color]::FromArgb(45, 45, 48)
@@ -714,10 +660,10 @@ $themeButton.Add_Click({
         $isDarkMode = Set-Theme -mainform $mainform -header $header -outputBox $outputBox -themeButton $themeButton -tabControl $tabControl -mainTabControl $mainTabControl
         # Update button icon based on theme
         if ($isDarkMode) {
-            $this.Text = "☀️"  # Sonnensymbol für helles Theme
+            $this.Text = "☀️"  
         }
         else {
-            $this.Text = "🌙"  # Mondschein-Symbol für dunkles Theme
+            $this.Text = "🌙"  
         }
     })
 $themeButton.Add_MouseEnter({ $this.BackColor = [System.Drawing.Color]::FromArgb(70, 70, 75) })
@@ -728,7 +674,7 @@ $titleBar.Controls.Add($themeButton)
 $settingsButton = New-Object System.Windows.Forms.Button
 $settingsButton.Text = "⚙"
 $settingsButton.Size = New-Object System.Drawing.Size(30, 30)
-$settingsButton.Location = New-Object System.Drawing.Point(990, 0)
+$settingsButton.Location = New-Object System.Drawing.Point(940, 0)
 $settingsButton.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 $settingsButton.FlatAppearance.BorderSize = 0
 $settingsButton.BackColor = [System.Drawing.Color]::FromArgb(45, 45, 48)
@@ -884,10 +830,10 @@ $settingsButton.Add_Click({
         $numGpuThreshold.Minimum = 50
         $numGpuThreshold.Maximum = 100
         $numGpuThreshold.Increment = 5
-        $numGpuThreshold.Value = $script:settings.GpuThreshold  # Standardwert aus den Einstellungen
+        $numGpuThreshold.Value = $script:settings.GpuThreshold  
         $tabMonitoring.Controls.Add($numGpuThreshold)
         
-        # Benachrichtigungen aktivieren (Position anpassen, damit es nach der GPU-Warnschwelle kommt)
+        # Benachrichtigungen aktivieren 
         $chkEnableNotifications = New-Object System.Windows.Forms.CheckBox
         $chkEnableNotifications.Text = "Benachrichtigungen aktivieren"
         $chkEnableNotifications.Location = New-Object System.Drawing.Point(15, 180)
@@ -1724,7 +1670,7 @@ $mainform.Add_LocationChanged({
 # GroupBox für den Haupt-TabControl erstellen
 $gbMainTabControl = New-Object System.Windows.Forms.GroupBox
 $gbMainTabControl.Text = "Hauptfunktionen"
-$gbMainTabControl.Location = New-Object System.Drawing.Point(20, 125)  # Y-Position von 90 auf 95 geändert
+$gbMainTabControl.Location = New-Object System.Drawing.Point(5, 125)  # Y-Position von 90 auf 95 geändert
 $gbMainTabControl.Size = New-Object System.Drawing.Size(990, 330)
 $gbMainTabControl.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
 $gbMainTabControl.ForeColor = [System.Drawing.Color]::FromArgb(60, 60, 80)  # Dunkelblaugrau
@@ -1948,8 +1894,8 @@ $tblCleanup.Controls.Add($gbCleanupTemp)
 # Erstelle GroupBox für den TabControl
 $gbOutputTabs = New-Object System.Windows.Forms.GroupBox
 $gbOutputTabs.Text = "System-Informationen und Ausgabe"
-$gbOutputTabs.Location = New-Object System.Drawing.Point(20, 465)
-$gbOutputTabs.Size = New-Object System.Drawing.Size(990, 370)
+$gbOutputTabs.Location = New-Object System.Drawing.Point(5, 465)
+$gbOutputTabs.Size = New-Object System.Drawing.Size(990, 360)
 $gbOutputTabs.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
 $gbOutputTabs.ForeColor = [System.Drawing.Color]::FromArgb(60, 60, 80)  # Dunkelblaugrau
 $mainform.Controls.Add($gbOutputTabs)
@@ -2073,7 +2019,7 @@ public class TextProgressBar : ProgressBar
 
 # Erstelle die neue TextProgressBar anstelle der alten ProgressBar
 $progressBar = New-Object TextProgressBar
-$progressBar.Location = New-Object System.Drawing.Point(130, 855)
+$progressBar.Location = New-Object System.Drawing.Point(130, 835)
 $progressBar.Size = New-Object System.Drawing.Size(650, 30)
 $progressBar.Style = "Continuous"
 $progressBar.Minimum = 0
@@ -2708,7 +2654,7 @@ foreach ($button in $cleanupButtons) {
 # Neustart Button erstellen
 $btnRestart = New-Object System.Windows.Forms.Button
 $btnRestart.Text = "System Neustart"
-$btnRestart.Location = New-Object System.Drawing.Point(790, 855)
+$btnRestart.Location = New-Object System.Drawing.Point(790, 835)
 $btnRestart.Size = New-Object System.Drawing.Size(120, 30)
 $btnRestart.Add_Click({
         # Bestätigungsdialog anzeigen
@@ -3428,142 +3374,7 @@ function Start-CheckDISM {
     }
 }
 
-# ... existing code ...
 
-# Test-Button-Panel erstellen
-$testPanel = New-Object System.Windows.Forms.Panel
-$testPanel.Dock = [System.Windows.Forms.DockStyle]::Top
-$testPanel.Height = 30
-$testPanel.BackColor = "White"
-
-# Test-Buttons erstellen
-$testTypes = @{
-    "MRT-Test"      = "MRT"
-    "SFC-Test"      = "SFC"
-    "Memory-Test"   = "MemoryDiagnostic"
-    "Defender-Test" = "WindowsDefender"
-}
-
-$buttonWidth = 120
-$buttonSpacing = 10
-$currentX = 10
-
-foreach ($test in $testTypes.GetEnumerator()) {
-    $button = New-Object System.Windows.Forms.Button
-    $button.Text = $test.Key
-    $button.Width = $buttonWidth
-    $button.Location = New-Object System.Drawing.Point($currentX, 5)
-    $button.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
-    
-    # Test-Typ in einer Closure speichern
-    $testType = $test.Value
-    $button.Add_Click({
-            param($sender, $e)
-            $testType = $sender.Tag
-        
-            $result = Show-CustomMessageBox -message "Möchten Sie den $($sender.Text) durchführen?" `
-                -title "System-Test" `
-                -fontSize 12
-        
-            if ($result -eq "OK") {
-                Start-SystemTest -outputBox $outputBox -progressBar $progressBar -testType $testType
-            }
-        })
-    $button.Tag = $testType
-    
-    $testPanel.Controls.Add($button)
-    $currentX += $buttonWidth + $buttonSpacing
-}
-
-# Panel zur Form hinzufügen
-$form.Controls.Add($testPanel)
-
-# Test-Button im Tab "Tools" hinzufügen
-$tabTools = $tabControl.TabPages["tabTools"]  # Existierendes Tab "Tools" verwenden
-
-# Gruppe für Tests erstellen
-$groupTests = New-Object System.Windows.Forms.GroupBox
-$groupTests.Text = "System Tests"
-$groupTests.Location = New-Object System.Drawing.Point(10, 280)  # Position anpassen
-$groupTests.Size = New-Object System.Drawing.Size(760, 60)
-$groupTests.BackColor = [System.Drawing.Color]::White
-
-# Test-Buttons erstellen
-$testMRTButton = New-Object System.Windows.Forms.Button
-$testMRTButton.Text = "MRT-Test"
-$testMRTButton.Location = New-Object System.Drawing.Point(10, 20)
-$testMRTButton.Size = New-Object System.Drawing.Size(120, 30)
-$testMRTButton.BackColor = [System.Drawing.Color]::LightBlue
-$testMRTButton.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
-$testMRTButton.Add_Click({
-        $result = Show-CustomMessageBox -message "Möchten Sie den MRT-Test durchführen? Dies erstellt eine harmlose EICAR-Testdatei." `
-            -title "MRT-Test" `
-            -fontSize 12
-    
-        if ($result -eq "OK") {
-            # Tab wechseln
-            $tabControl.SelectedTab = $tabOutput
-            # Test starten
-            Start-SystemTest -outputBox $outputBox -progressBar $progressBar -testType "MRT"
-        }
-    })
-
-$testSFCButton = New-Object System.Windows.Forms.Button
-$testSFCButton.Text = "SFC-Test"
-$testSFCButton.Location = New-Object System.Drawing.Point(140, 20)
-$testSFCButton.Size = New-Object System.Drawing.Size(120, 30)
-$testSFCButton.BackColor = [System.Drawing.Color]::LightGreen
-$testSFCButton.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
-$testSFCButton.Add_Click({
-        $result = Show-CustomMessageBox -message "Möchten Sie den SFC-Test durchführen?" `
-            -title "SFC-Test" `
-            -fontSize 12
-    
-        if ($result -eq "OK") {
-            $tabControl.SelectedTab = $tabOutput
-            Start-SystemTest -outputBox $outputBox -progressBar $progressBar -testType "SFC"
-        }
-    })
-
-$testMemoryButton = New-Object System.Windows.Forms.Button
-$testMemoryButton.Text = "Memory-Test"
-$testMemoryButton.Location = New-Object System.Drawing.Point(270, 20)
-$testMemoryButton.Size = New-Object System.Drawing.Size(120, 30)
-$testMemoryButton.BackColor = [System.Drawing.Color]::LightYellow
-$testMemoryButton.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
-$testMemoryButton.Add_Click({
-        $result = Show-CustomMessageBox -message "Möchten Sie den Memory-Diagnostic-Test durchführen?" `
-            -title "Memory-Test" `
-            -fontSize 12
-    
-        if ($result -eq "OK") {
-            $tabControl.SelectedTab = $tabOutput
-            Start-SystemTest -outputBox $outputBox -progressBar $progressBar -testType "MemoryDiagnostic"
-        }
-    })
-
-$testDefenderButton = New-Object System.Windows.Forms.Button
-$testDefenderButton.Text = "Defender-Test"
-$testDefenderButton.Location = New-Object System.Drawing.Point(400, 20)
-$testDefenderButton.Size = New-Object System.Drawing.Size(120, 30)
-$testDefenderButton.BackColor = [System.Drawing.Color]::LightPink
-$testDefenderButton.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
-$testDefenderButton.Add_Click({
-        $result = Show-CustomMessageBox -message "Möchten Sie den Windows Defender Test durchführen?" `
-            -title "Defender-Test" `
-            -fontSize 12
-    
-        if ($result -eq "OK") {
-            $tabControl.SelectedTab = $tabOutput
-            Start-SystemTest -outputBox $outputBox -progressBar $progressBar -testType "WindowsDefender"
-        }
-    })
-
-# Buttons zur Gruppe hinzufügen
-$groupTests.Controls.AddRange(@($testMRTButton, $testSFCButton, $testMemoryButton, $testDefenderButton))
-
-# Gruppe zum Tab hinzufügen
-$tabTools.Controls.Add($groupTests)
 
 # Erstelle einen Schließen-Button auf dem Hauptformular
 $closeButton = New-Object System.Windows.Forms.Button

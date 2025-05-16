@@ -26,8 +26,8 @@ function Write-ColoredCenteredText {
         [string]$text,
         [string]$frameColor = "Green",
         [string]$textColor = "Red",
-        [int]$totalWidth = 90,
-        [int]$contentWidth = 88  # Breite innerhalb der Rahmenzeichen (║)
+        [int]$totalWidth = 80,
+        [int]$contentWidth = 78  # Breite innerhalb der Rahmenzeichen (║)
     )
     
     # Berechne die tatsächliche Textlänge
@@ -67,42 +67,42 @@ function Start-QuickMRT {
     $userName = $env:USERNAME
     $osInfo = (Get-CimInstance -ClassName Win32_OperatingSystem).Caption
     $dateTime = Get-Date -Format "dd.MM.yyyy HH:mm:ss"
-    $width = 90
+    $width = 80
 
         
     # Rahmen oben
-    Write-Host "╔════════════════════════════════════════════════════════════════════════════════════════╗" -ForegroundColor Green
+    Write-Host "╔══════════════════════════════════════════════════════════════════════════════╗" -ForegroundColor Green
     Write-ColoredCenteredText                             "Malware Removal Tool"                                         
-    Write-Host "╚════════════════════════════════════════════════════════════════════════════════════════╝" -ForegroundColor Green
+    Write-Host "╚══════════════════════════════════════════════════════════════════════════════╝" -ForegroundColor Green
     
     # ASCII-Art Logo
     Write-Host
     Write-Host
-    Write-Host '  .d88888b.           d8b          888              888b     d888 8888888b. 88888888888 ' -ForegroundColor Cyan
-    Write-Host ' d88P" "Y88b          Y8P          888              8888b   d8888 888   Y88b    888     ' -ForegroundColor Blue
-    Write-Host ' 888     888                       888              88888b.d88888 888    888    888     ' -ForegroundColor Cyan
-    Write-Host ' 888     888 888  888 888  .d8888b 888  888  88888  888Y88888P888 888   d88P    888     ' -ForegroundColor Blue
-    Write-Host ' 888     888 888  888 888 d88P"    888 .88P  88888  888 Y888P 888 8888888P"     888     ' -ForegroundColor Cyan
-    Write-Host ' 888 Q   888 888  888 888 888      888888K          888  Y8P  888 888 T88b      888     ' -ForegroundColor Blue
-    Write-Host ' Y88b. .d88P Y88b 888 888 Y88b.    888 "88b         888   "   888 888  T88b     888     ' -ForegroundColor Cyan
-    Write-Host '  "Y88888P"   "Y88888 888  "Y8888P 888  888         888       888 888   T88b    888     ' -ForegroundColor Blue
+    Write-Host ' .d88888b.           d8b          888        888b     d888 8888888b. 88888888888 ' -ForegroundColor Cyan
+    Write-Host 'd88P" "Y88b          Y8P          888        8888b   d8888 888   Y88b    888     ' -ForegroundColor Blue
+    Write-Host '888     888                       888        88888b.d88888 888    888    888     ' -ForegroundColor Cyan
+    Write-Host '888     888 888  888 888  .d8888b 888  888   888Y88888P888 888   d88P    888     ' -ForegroundColor Blue
+    Write-Host '888     888 888  888 888 d88P"    888 .88P   888 Y888P 888 8888888P"     888     ' -ForegroundColor Cyan
+    Write-Host '888 Q   888 888  888 888 888      888888K    888  Y8P  888 888 T88b      888     ' -ForegroundColor Blue
+    Write-Host 'Y88b. .d88P Y88b 888 888 Y88b.    888 "88b   888   "   888 888  T88b     888     ' -ForegroundColor Cyan
+    Write-Host ' "Y88888P"   "Y88888 888  "Y8888P 888  888   888       888 888   T88b    888     ' -ForegroundColor Blue
     Write-Host
     Write-Host
     # Rahmen für Systeminformationen
-    Write-Host "╔════════════════════════════════════════════════════════════════════════════════════════╗" -ForegroundColor Green
+    Write-Host "╔══════════════════════════════════════════════════════════════════════════════╗" -ForegroundColor Green
     Write-ColoredCenteredText                          "SYSTEMINFORMATIONEN"                                           
-    Write-Host "╠════════════════════════════════════════════════════════════════════════════════════════╣" -ForegroundColor Green
+    Write-Host "╠══════════════════════════════════════════════════════════════════════════════╣" -ForegroundColor Green
     # Systeminformationen
-    Write-Host "║                                                                                        ║" -ForegroundColor Green
+    Write-Host "║                                                                              ║" -ForegroundColor Green
     Write-Host "      ├─    Betriebssystem: $osInfo           "            -ForegroundColor Yellow                 
     Write-Host "      ├─    Computer:       $computerName     "            -ForegroundColor Yellow                                    
     Write-Host "      ├─    Benutzer:       $userName         "            -ForegroundColor Yellow                                    
     Write-Host "      └─    Datum und Zeit: $dateTime         "            -ForegroundColor Yellow                                  
-    Write-Host "║                                                                                        ║" -ForegroundColor Green
+    Write-Host "║                                                                              ║" -ForegroundColor Green
     
-    Write-Host "╠════════════════════════════════════════════════════════════════════════════════════════╣" -ForegroundColor Green
+    Write-Host "╠══════════════════════════════════════════════════════════════════════════════╣" -ForegroundColor Green
     Write-ColoredCenteredText "Malware Removal Tool Scan wird initialisiert..."
-    Write-Host "╚════════════════════════════════════════════════════════════════════════════════════════╝" -ForegroundColor Green
+    Write-Host "╚══════════════════════════════════════════════════════════════════════════════╝" -ForegroundColor Green
     
     # 3 Sekunden warten vor dem Start
     Start-Sleep -Seconds 3
@@ -483,41 +483,41 @@ function Start-FullMRT {
     $userName = $env:USERNAME
     $osInfo = (Get-CimInstance -ClassName Win32_OperatingSystem).Caption
     $dateTime = Get-Date -Format "dd.MM.yyyy HH:mm:ss"
-    $width = 100
+    $width = 80
         
     # Rahmen oben
      
-    Write-Host "╠══════════════════════════════════════════════════════════════════════════════════════════════════╣" -ForegroundColor Green
+    Write-Host "╠══════════════════════════════════════════════════════════════════════════════╣" -ForegroundColor Green
     Write-ColoredCenteredText                          "Malware Removal Tool    "
-    Write-Host "╚══════════════════════════════════════════════════════════════════════════════════════════════════╝" -ForegroundColor Green
+    Write-Host "╚══════════════════════════════════════════════════════════════════════════════╝" -ForegroundColor Green
     # ASCII-Art Logo
     Write-Host
     Write-Host
-    Write-Host ' 8888888888            888   888              888b     d888  8888888b.  88888888888 ' -ForegroundColor Cyan
-    Write-Host ' 888                   888   888              8888b   d8888  888   Y88b     888     ' -ForegroundColor Blue
-    Write-Host ' 888                   888   888              88888b.d88888  888    888     888     ' -ForegroundColor Cyan
-    Write-Host ' 8888888   888   888   888   888    888888    888Y88888P888  888   d88P     888     ' -ForegroundColor Blue
-    Write-Host ' 888       888   888   888   888    888888    888 Y888P 888  8888888P"      888     ' -ForegroundColor Cyan
-    Write-Host ' 888       888   888   888   888              888  Y8P  888  888 T88b       888     ' -ForegroundColor Blue
-    Write-Host ' 888       Y88b  888   888   888              888   "   888  888  T88b      888     ' -ForegroundColor Cyan
-    Write-Host ' 888        "Y888888   888   888              888       888  888   T88b     888     ' -ForegroundColor Blue
+    Write-Host ' 8888888888            888   888      888b     d888  8888888b.  88888888888 ' -ForegroundColor Cyan
+    Write-Host ' 888                   888   888      8888b   d8888  888   Y88b     888     ' -ForegroundColor Blue
+    Write-Host ' 888                   888   888      88888b.d88888  888    888     888     ' -ForegroundColor Cyan
+    Write-Host ' 8888888   888   888   888   888      888Y88888P888  888   d88P     888     ' -ForegroundColor Blue
+    Write-Host ' 888       888   888   888   888      888 Y888P 888  8888888P"      888     ' -ForegroundColor Cyan
+    Write-Host ' 888       888   888   888   888      888  Y8P  888  888 T88b       888     ' -ForegroundColor Blue
+    Write-Host ' 888       Y88b  888   888   888      888   "   888  888  T88b      888     ' -ForegroundColor Cyan
+    Write-Host ' 888        "Y888888   888   888      888       888  888   T88b     888     ' -ForegroundColor Blue
     Write-Host
     Write-Host
     # Rahmen für Systeminformationen
-    Write-Host "╔══════════════════════════════════════════════════════════════════════════════════════════════════╗" -ForegroundColor Green
+    Write-Host "╔══════════════════════════════════════════════════════════════════════════════╗" -ForegroundColor Green
     Write-ColoredCenteredText                                  "SYSTEMINFORMATIONEN"
-    Write-Host "╠══════════════════════════════════════════════════════════════════════════════════════════════════╣" -ForegroundColor Green
+    Write-Host "╠══════════════════════════════════════════════════════════════════════════════╣" -ForegroundColor Green
     # Systeminformationen
-    Write-Host "║                                                                                                  ║" -ForegroundColor Green
+    Write-Host "║                                                                              ║" -ForegroundColor Green
     Write-Host "      ├─    Betriebssystem: $osInfo           "            -ForegroundColor Yellow                 
     Write-Host "      ├─    Computer:       $computerName     "            -ForegroundColor Yellow                                    
     Write-Host "      ├─    Benutzer:       $userName         "            -ForegroundColor Yellow                                    
     Write-Host "      └─    Datum und Zeit: $dateTime         "            -ForegroundColor Yellow                                  
-    Write-Host "║                                                                                                  ║" -ForegroundColor Green
+    Write-Host "║                                                                              ║" -ForegroundColor Green
 
-    Write-Host "╠══════════════════════════════════════════════════════════════════════════════════════════════════╣" -ForegroundColor Green
+    Write-Host "╠══════════════════════════════════════════════════════════════════════════════╣" -ForegroundColor Green
     Write-ColoredCenteredText                          "Starte Full MRT Scan..."
-    Write-Host "╚══════════════════════════════════════════════════════════════════════════════════════════════════╝" -ForegroundColor Green
+    Write-Host "╚══════════════════════════════════════════════════════════════════════════════╝" -ForegroundColor Green
     
     # 3 Sekunden warten vor dem Start
     Start-Sleep -Seconds 3
@@ -658,48 +658,61 @@ function Start-MemoryDiagnostic {
     Clear-Host
     
     # Stelle sicher, dass die ProgressBar initialisiert ist
-    Ensure-ProgressBarInitialized -ProgressBar $progressBar
+    if ($progressBar -ne $null) {
+        try {
+            # ProgressBar-Eigenschaften setzen
+            $progressBar.Minimum = 0
+            $progressBar.Maximum = 100
+            $progressBar.Step = 1
+            $progressBar.Style = [System.Windows.Forms.ProgressBarStyle]::Continuous
+            $progressBar.Value = 0
+        }
+        catch {
+            Write-Host "Warnung: ProgressBar konnte nicht initialisiert werden: $_" -ForegroundColor Yellow
+            $progressBar = $null
+        }
+    }
     
     # Rahmen und Systeminformationen erstellen
     $computerName = $env:COMPUTERNAME
     $userName = $env:USERNAME
     $osInfo = (Get-CimInstance -ClassName Win32_OperatingSystem).Caption
     $dateTime = Get-Date -Format "dd.MM.yyyy HH:mm:ss"
-    $width = 100
+    $width = 80
     
     # Rahmen oben
-    Write-Host "╔══════════════════════════════════════════════════════════════════════════════════════════════════╗" -ForegroundColor Green
+    Write-Host "╔══════════════════════════════════════════════════════════════════════════════╗" -ForegroundColor Green
     Write-ColoredCenteredText                             "WINDOWS MEMORY DIAGNOSTIC TOOL"
-    Write-Host "╚══════════════════════════════════════════════════════════════════════════════════════════════════╝" -ForegroundColor Green
+    Write-Host "╚══════════════════════════════════════════════════════════════════════════════╝" -ForegroundColor Green
 
     # ASCII-Art Logo
     Write-Host
     Write-Host
-    Write-Host '   888b     d888  8888888b.    .d8888b.    .d8888b.   888    888  8888888888  8888888b.  ' -ForegroundColor Cyan
-    Write-Host '   8888b   d8888  888  "Y88b  d88P  Y88b  d88P  Y88b  888    888  888         888  "Y88b ' -ForegroundColor Blue
-    Write-Host '   88888b.d88888  888    888  Y88b.       888    888  888    888  888         888    888 ' -ForegroundColor Cyan
-    Write-Host '   888Y88888P888  888    888   "Y888b.    888         8888888888  8888888     888    888 ' -ForegroundColor Blue
-    Write-Host '   888 Y888P 888  888    888      "Y88b.  888         888    888  888         888    888 ' -ForegroundColor Cyan
-    Write-Host '   888  Y8P  888  888    888        "888  888    888  888    888  888         888    888 ' -ForegroundColor Blue
-    Write-Host '   888   "   888  888  .d88P  Y88b  d88P  Y88b  d88P  888    888  888         888  .d88P ' -ForegroundColor Cyan
-    Write-Host '   888       888  8888888P"    "Y8888P"    "Y8888P"   888    888  8888888888  8888888P"  ' -ForegroundColor Blue
+    Write-Host ' 888b     d888 8888888b.   .d8888b.   .d8888b.  888    888 8888888888 8888888b.  ' -ForegroundColor Cyan
+    Write-Host ' 8888b   d8888 888  "Y88b d88P  Y88b d88P  Y88b 888    888 888        888  "Y88b ' -ForegroundColor Blue
+    Write-Host ' 88888b.d88888 888    888 Y88b.      888    888 888    888 888        888    888 ' -ForegroundColor Cyan
+    Write-Host ' 888Y88888P888 888    888  "Y888b.   888        8888888888 8888888    888    888 ' -ForegroundColor Blue
+    Write-Host ' 888 Y888P 888 888    888     "Y88b. 888        888    888 888        888    888 ' -ForegroundColor Cyan
+    Write-Host ' 888  Y8P  888 888    888       "888 888    888 888    888 888        888    888 ' -ForegroundColor Blue
+    Write-Host ' 888   "   888 888  .d88P Y88b  d88P Y88b  d88P 888    888 888        888  .d88P ' -ForegroundColor Cyan
+    Write-Host ' 888       888 8888888P"   "Y8888P"   "Y8888P"  888    888 8888888888 8888888P"  ' -ForegroundColor Blue
     Write-Host
     Write-Host
     # Rahmen für Systeminformationen
-    Write-Host "╔══════════════════════════════════════════════════════════════════════════════════════════════════╗" -ForegroundColor Green
+    Write-Host "╔══════════════════════════════════════════════════════════════════════════════╗" -ForegroundColor Green
     Write-ColoredCenteredText                             "SYSTEMINFORMATIONEN"
-    Write-Host "╠══════════════════════════════════════════════════════════════════════════════════════════════════╣" -ForegroundColor Green
+    Write-Host "╠══════════════════════════════════════════════════════════════════════════════╣" -ForegroundColor Green
     # Systeminformationen
-    Write-Host "║                                                                                                  ║" -ForegroundColor Green
+    Write-Host "║                                                                              ║" -ForegroundColor Green
     Write-Host "      ├─    Betriebssystem: $osInfo           "            -ForegroundColor Yellow                 
     Write-Host "      ├─    Computer:       $computerName     "            -ForegroundColor Yellow                                    
     Write-Host "      ├─    Benutzer:       $userName         "            -ForegroundColor Yellow                                    
     Write-Host "      └─    Datum und Zeit: $dateTime         "            -ForegroundColor Yellow                                  
-    Write-Host "║                                                                                                  ║" -ForegroundColor Green
+    Write-Host "║                                                                              ║" -ForegroundColor Green
 
-    Write-Host "╠══════════════════════════════════════════════════════════════════════════════════════════════════╣" -ForegroundColor Green
+    Write-Host "╠══════════════════════════════════════════════════════════════════════════════╣" -ForegroundColor Green
     Write-ColoredCenteredText                             "Starte Windows Memory Diagnostic Tool..."
-    Write-Host "╚══════════════════════════════════════════════════════════════════════════════════════════════════╝" -ForegroundColor Green
+    Write-Host "╚══════════════════════════════════════════════════════════════════════════════╝" -ForegroundColor Green
 
     # 3 Sekunden warten vor dem Start
     Start-Sleep -Seconds 3
@@ -712,62 +725,116 @@ function Start-MemoryDiagnostic {
     $outputBox.AppendText("Zeitstempel: $(Get-Date -Format 'dd.MM.yyyy HH:mm:ss')`r`n`r`n")
     
     try {
-        # Memory Diagnostic starten
-        $outputBox.SelectionColor = [System.Drawing.Color]::Blue
-        $outputBox.AppendText("[>] Windows Memory Diagnostic wird gestartet...`r`n")
-        $outputBox.AppendText("    Bitte bestaetigen Sie den Neustart im Dialog.`r`n`r`n")
+        # Prüfen ob wir Administratorrechte haben
+        $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
         
-        # Fortschritt anzeigen
-        $progressBar.Value = 10
-        
-        # Log-Datei-Pfad definieren
-        $logPath = "$env:TEMP\memory_diagnostic.log"
-        
-        # Memory Diagnostic Prozess starten
-        $process = Start-Process -FilePath "mdsched.exe" -ArgumentList "/run" -NoNewWindow -PassThru -Wait -RedirectStandardOutput $logPath
-        $exitCode = $process.ExitCode
-        
-        # Fortschritt aktualisieren
-        $progressBar.Value = 90
-        
-        # Exit-Code auswerten
-        $outputBox.SelectionColor = [System.Drawing.Color]::Blue
-        $outputBox.AppendText("[i] Memory Diagnostic Ergebnis:`r`n")
-        
-        # Ergebnis in Datei speichern
-        $result = @{
-            Timestamp = Get-Date
-            ExitCode  = $exitCode
-            LogPath   = $logPath
+        if (-not $isAdmin) {
+            $outputBox.SelectionColor = [System.Drawing.Color]::Red
+            $outputBox.AppendText("[-] Fehler: Administratorrechte erforderlich!`r`n")
+            $outputBox.AppendText("[i] Bitte starten Sie das Tool als Administrator.`r`n")
+            return
         }
-        $result | ConvertTo-Json | Set-Content "$env:TEMP\memory_diagnostic_result.json"
-        
-        switch ($exitCode) {
-            0 {
-                $outputBox.SelectionColor = [System.Drawing.Color]::Green
-                $outputBox.AppendText("[+] Memory Diagnostic erfolgreich abgeschlossen. Keine Probleme gefunden.`r`n")
-            }
-            default {
-                $outputBox.SelectionColor = [System.Drawing.Color]::Red
-                $outputBox.AppendText("[-] Memory Diagnostic fehlgeschlagen mit Exit-Code: $exitCode`r`n")
-                $outputBox.AppendText("    Bitte ueberpruefen Sie die Log-Datei: $logPath`r`n")
+
+        # Prüfen ob ein Memory Diagnostic bereits geplant ist
+        $scheduledTask = Get-ScheduledTask -TaskName "MemoryDiagnostic" -ErrorAction SilentlyContinue
+        if ($scheduledTask) {
+            $outputBox.SelectionColor = [System.Drawing.Color]::Yellow
+            $outputBox.AppendText("[!] Ein Memory Diagnostic ist bereits geplant.`r`n")
+            $outputBox.AppendText("[i] Möchten Sie den geplanten Scan ausführen?`r`n")
+            
+            $result = [System.Windows.Forms.MessageBox]::Show(
+                "Ein Memory Diagnostic ist bereits geplant.`n`nMöchten Sie den Scan jetzt ausführen?",
+                "Memory Diagnostic geplant",
+                [System.Windows.Forms.MessageBoxButtons]::YesNo,
+                [System.Windows.Forms.MessageBoxIcon]::Question
+            )
+            
+            if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
+                Start-Process "mdsched.exe" -NoNewWindow
+                return
             }
         }
+
+        # Memory Diagnostic über die Windows API starten
+        $outputBox.SelectionColor = [System.Drawing.Color]::Green
+        $outputBox.AppendText("[+] Starte Windows Memory Diagnostic...`r`n")
         
-        # Log-Datei einlesen und anzeigen
-        if (Test-Path $logPath) {
-            $outputBox.SelectionColor = [System.Drawing.Color]::Gray
-            $outputBox.AppendText("`r`nLog-Datei Inhalt:`r`n")
-            $outputBox.AppendText((Get-Content $logPath -Raw))
+        # Marker-Datei erstellen, um nach dem Neustart zu erkennen, dass wir die Ergebnisse prüfen sollen
+        $markerFile = "$env:TEMP\memory_diagnostic_marker.txt"
+        Set-Content -Path $markerFile -Value (Get-Date -Format "yyyy-MM-dd HH:mm:ss")
+        
+        # Memory Diagnostic direkt starten
+        Start-Process "mdsched.exe" -NoNewWindow
+        $outputBox.AppendText("[i] Memory Diagnostic wurde gestartet.`r`n")
+        $outputBox.AppendText("[i] Bitte bestaetigen Sie den Neustart im Windows-Dialog.`r`n")
+    }
+    catch {
+        $outputBox.SelectionColor = [System.Drawing.Color]::Red
+        $outputBox.AppendText("[-] Fehler beim Starten des Memory Diagnostics: $_`r`n")
+    }
+    finally {
+        # ProgressBar zuruecksetzen
+        if ($progressBar -ne $null) {
+            try {
+                $progressBar.Value = 0
+            }
+            catch {
+                Write-Host "Warnung: ProgressBar-Reset fehlgeschlagen: $_" -ForegroundColor Yellow
+            }
+        }
+    }
+}
+
+# Neue Funktion zum Prüfen der Memory Diagnostic Ergebnisse
+function Get-MemoryDiagnosticResults {
+    param (
+        [System.Windows.Forms.RichTextBox]$outputBox
+    )
+    
+    try {
+        # Prüfen ob wir Administratorrechte haben
+        $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+        
+        if (-not $isAdmin) {
+            $outputBox.SelectionColor = [System.Drawing.Color]::Red
+            $outputBox.AppendText("[-] Fehler: Administratorrechte erforderlich!`r`n")
+            return
+        }
+
+        # Event Log nach Memory Diagnostic Ergebnissen durchsuchen
+        $events = Get-WinEvent -FilterHashtable @{
+            LogName      = 'System'
+            ProviderName = 'Microsoft-Windows-MemoryDiagnostics-Results'
+        } -MaxEvents 1 -ErrorAction SilentlyContinue
+
+        if ($events) {
+            $outputBox.SelectionColor = [System.Drawing.Color]::Blue
+            $outputBox.AppendText("`r`n[i] Memory Diagnostic Ergebnisse:`r`n")
+            
+            foreach ($event in $events) {
+                $outputBox.AppendText("Zeitpunkt: $($event.TimeCreated)`r`n")
+                
+                # Ergebnis auswerten
+                if ($event.Properties[0].Value -eq 0) {
+                    $outputBox.SelectionColor = [System.Drawing.Color]::Green
+                    $outputBox.AppendText("[+] Keine Speicherprobleme gefunden.`r`n")
+                }
+                else {
+                    $outputBox.SelectionColor = [System.Drawing.Color]::Red
+                    $outputBox.AppendText("[-] Speicherprobleme wurden gefunden!`r`n")
+                    $outputBox.AppendText("[i] Bitte überprüfen Sie Ihre RAM-Module.`r`n")
+                }
+            }
+        }
+        else {
+            $outputBox.SelectionColor = [System.Drawing.Color]::Yellow
+            $outputBox.AppendText("[!] Keine Memory Diagnostic Ergebnisse gefunden.`r`n")
+            $outputBox.AppendText("[i] Möglicherweise wurde noch kein Scan durchgeführt.`r`n")
         }
     }
     catch {
         $outputBox.SelectionColor = [System.Drawing.Color]::Red
-        $outputBox.AppendText("[-] Fehler beim Ausfuehren des Memory Diagnostics: $_`r`n")
-    }
-    finally {
-        # ProgressBar zuruecksetzen
-        $progressBar.Value = 0
+        $outputBox.AppendText("[-] Fehler beim Lesen der Memory Diagnostic Ergebnisse: $_`r`n")
     }
 }
 
@@ -778,7 +845,8 @@ function Start-SFCCheck {
         [System.Windows.Forms.ProgressBar]$progressBar
     )
     Clear-Host
-    
+    # outputBox zuruecksetzen
+    $outputBox.Clear()
     # Stelle sicher, dass die ProgressBar initialisiert ist
     Ensure-ProgressBarInitialized -ProgressBar $progressBar
     
@@ -787,41 +855,42 @@ function Start-SFCCheck {
     $userName = $env:USERNAME
     $osInfo = (Get-CimInstance -ClassName Win32_OperatingSystem).Caption
     $dateTime = Get-Date -Format "dd.MM.yyyy HH:mm:ss"
-    $width = 100
+    $width = 80
     
     # Rahmen oben
-    Write-Host "╔══════════════════════════════════════════════════════════════════════════════════════════════════╗" -ForegroundColor Green
+    Write-Host "╔══════════════════════════════════════════════════════════════════════════════╗" -ForegroundColor Green
     Write-ColoredCenteredText                             "SYSTEM FILE CHECKER"
-    Write-Host "╚══════════════════════════════════════════════════════════════════════════════════════════════════╝" -ForegroundColor Green
+    Write-Host "╚══════════════════════════════════════════════════════════════════════════════╝" -ForegroundColor Green
 
     # ASCII-Art Logo
     Write-Host
     Write-Host
-    Write-Host '  .d8888b.   888888888      d8888  8888888b.  88888888888      .d8888b.   8888888888   .d8888b.  ' -ForegroundColor Cyan
-    Write-Host ' d88P  Y88b     888        d88888  888   Y88b     888         d88P  Y88b  888         d88P  Y88b ' -ForegroundColor Blue
-    Write-Host ' Y88b.          888       d88P888  888    888     888         Y88b.       888         888    888 ' -ForegroundColor Cyan
-    Write-Host '  "Y888b.       888      d88P 888  888   d88P     888          "Y888b.    8888888     888        ' -ForegroundColor Blue
-    Write-Host '     "Y88b.     888     d88P  888  8888888P"      888             "Y88b.  888         888        ' -ForegroundColor Cyan
-    Write-Host '       "888     888    d88P   888  888 T88b       888               "888  888         888    888 ' -ForegroundColor Blue
-    Write-Host ' Y88b  d88P     888   d8888888888  888  T88b      888         Y88b  d88P  888         Y88b  d88P ' -ForegroundColor Cyan
-    Write-Host '  "Y8888P"      888  d88P     888  888   T88b     888          "Y8888P"   888          "Y8888P"  ' -ForegroundColor Blue
+    Write-Host '  .d8888b.  888                     888         .d8888b.  8888888888 .d8888b.  ' -ForegroundColor Cyan
+    Write-Host ' d88P  Y88b 888                     888        d88P  Y88b 888       d88P  Y88b ' -ForegroundColor Blue
+    Write-Host ' Y88b.      888                     888        Y88b.      888       888    888 ' -ForegroundColor Cyan
+    Write-Host ' Y88b.      888                     888        Y88b.      888       888    888 ' -ForegroundColor Cyan
+    Write-Host '  "Y888b.   888888  8888b.  888d888 888888      "Y888b.   8888888   888        ' -ForegroundColor Blue
+    Write-Host '     "Y88b. 888        "88b 888P"   888            "Y88b. 888       888        ' -ForegroundColor Cyan
+    Write-Host '       "888 888    .d888888 888     888              "888 888       888    888 ' -ForegroundColor Cyan
+    Write-Host ' Y88b  d88P Y88b.  888  888 888     Y88b.      Y88b  d88P 888       Y88b  d88P ' -ForegroundColor Blue
+    Write-Host '  "Y8888P"   "Y888 "Y888888 888      "Y888      "Y8888P"  888        "Y8888P"  ' -ForegroundColor Blue
     Write-Host
     Write-Host
     # Rahmen für Systeminformationen
-    Write-Host "╔══════════════════════════════════════════════════════════════════════════════════════════════════╗" -ForegroundColor Green
+    Write-Host "╔══════════════════════════════════════════════════════════════════════════════╗" -ForegroundColor Green
     Write-ColoredCenteredText                             "SYSTEMINFORMATIONEN"
-    Write-Host "╠══════════════════════════════════════════════════════════════════════════════════════════════════╣" -ForegroundColor Green
+    Write-Host "╠══════════════════════════════════════════════════════════════════════════════╣" -ForegroundColor Green
     # Systeminformationen
-    Write-Host "║                                                                                                  ║" -ForegroundColor Green
+    Write-Host "║                                                                              ║" -ForegroundColor Green
     Write-Host "      ├─    Betriebssystem: $osInfo           "            -ForegroundColor Yellow                 
     Write-Host "      ├─    Computer:       $computerName     "            -ForegroundColor Yellow                                    
     Write-Host "      ├─    Benutzer:       $userName         "            -ForegroundColor Yellow                                    
     Write-Host "      └─    Datum und Zeit: $dateTime         "            -ForegroundColor Yellow                                  
-    Write-Host "║                                                                                                  ║" -ForegroundColor Green
+    Write-Host "║                                                                              ║" -ForegroundColor Green
 
-    Write-Host "╠══════════════════════════════════════════════════════════════════════════════════════════════════╣" -ForegroundColor Green
+    Write-Host "╠══════════════════════════════════════════════════════════════════════════════╣" -ForegroundColor Green
     Write-ColoredCenteredText                             "Starte System File Checker..."
-    Write-Host "╚══════════════════════════════════════════════════════════════════════════════════════════════════╝" -ForegroundColor Green
+    Write-Host "╚══════════════════════════════════════════════════════════════════════════════╝" -ForegroundColor Green
 
     # 3 Sekunden warten vor dem Start von SFC
     Start-Sleep -Seconds 3
@@ -835,46 +904,38 @@ function Start-SFCCheck {
         # Fortschritt initialisieren
         $progressBar.Value = 0
         
-        # Temporäre Dateien für Ausgabe und Fehler erstellen
-        $outputFile = [System.IO.Path]::GetTempFileName()
-        $errorFile = [System.IO.Path]::GetTempFileName()
+        # Scan-Start Meldung in OutputBox
+        $outputBox.SelectionColor = [System.Drawing.Color]::Blue
+        $outputBox.AppendText("[>] SFC /scannow wird gestartet...`r`n")
+        $outputBox.AppendText("[>] Bitte warten Sie, während die Systemdateien überprüft werden...`r`n`r`n")
         
-        # SFC mit /scannow Parameter ausführen
-        $process = Start-Process -FilePath "sfc.exe" -ArgumentList "/scannow" -Wait -PassThru -NoNewWindow -RedirectStandardOutput $outputFile -RedirectStandardError $errorFile
+        Write-Host "`n[>] Starte SFC /scannow..." -ForegroundColor Yellow
         
-        # Ausgabe einlesen und anzeigen
-        if (Test-Path $outputFile) {
-            $output = Get-Content $outputFile -Raw
-            if ($output) {
-                $outputBox.SelectionColor = [System.Drawing.Color]::Gray
-                $outputBox.AppendText($output + "`r`n")
-            }
-            Remove-Item $outputFile -Force
-        }
-        
-        # Fehlerausgabe einlesen und anzeigen
-        if (Test-Path $errorFile) {
-            $errorOutput = Get-Content $errorFile -Raw
-            if ($errorOutput) {
-                $outputBox.SelectionColor = [System.Drawing.Color]::Red
-                $outputBox.AppendText($errorOutput + "`r`n")
-            }
-            Remove-Item $errorFile -Force
-        }
+        # SFC mit /scannow Parameter ausführen und Ausgabe direkt anzeigen
+        $process = Start-Process -FilePath "sfc.exe" -ArgumentList "/scannow" -Wait -PassThru -NoNewWindow
         
         # Fortschritt aktualisieren
         $progressBar.Value = 90
+        
+        Write-Host "`n" + ("═" * 70) -ForegroundColor Cyan
+        Write-Host "`n[i] Scan-Ergebnis:" -ForegroundColor Blue
         
         $outputBox.SelectionColor = [System.Drawing.Color]::Blue
         $outputBox.AppendText("`r`n[i] Scan-Ergebnis:`r`n")
         
         switch ($process.ExitCode) {
             0 {
+                Write-Host "    [✓] System-Dateien sind in Ordnung" -ForegroundColor Green
+                Write-Host "    [✓] Keine Reparaturen notwendig" -ForegroundColor Green
+                
                 $outputBox.SelectionColor = [System.Drawing.Color]::Green
                 $outputBox.AppendText("    [✓] System-Dateien sind in Ordnung`r`n")
                 $outputBox.AppendText("    [✓] Keine Reparaturen notwendig`r`n")
             }
             1 {
+                Write-Host "    [!] Beschädigte Dateien wurden gefunden und repariert" -ForegroundColor Orange
+                Write-Host "    [!] Ein Neustart wird empfohlen" -ForegroundColor Orange
+                
                 $outputBox.SelectionColor = [System.Drawing.Color]::Orange
                 $outputBox.AppendText("    [!] Beschädigte Dateien wurden gefunden und repariert`r`n")
                 $outputBox.AppendText("    [!] Ein Neustart wird empfohlen`r`n")
@@ -892,12 +953,19 @@ function Start-SFCCheck {
                 }
             }
             2 {
+                Write-Host "    [X] Beschädigte Dateien gefunden" -ForegroundColor Red
+                Write-Host "    [X] Reparatur nicht möglich" -ForegroundColor Red
+                Write-Host "    [i] Empfehlung: DISM-Reparatur durchführen" -ForegroundColor Yellow
+                
                 $outputBox.SelectionColor = [System.Drawing.Color]::Red
                 $outputBox.AppendText("    [X] Beschädigte Dateien gefunden`r`n")
                 $outputBox.AppendText("    [X] Reparatur nicht möglich`r`n")
                 $outputBox.AppendText("    [i] Empfehlung: DISM-Reparatur durchführen`r`n")
             }
             default {
+                Write-Host "    [] Unerwarteter Fehler (Code: $($process.ExitCode))" -ForegroundColor Red
+                Write-Host "    [i] Bitte Support kontaktieren" -ForegroundColor Yellow
+                
                 $outputBox.SelectionColor = [System.Drawing.Color]::Red
                 $outputBox.AppendText("    [] Unerwarteter Fehler (Code: $($process.ExitCode))`r`n")
                 $outputBox.AppendText("    [i] Bitte Support kontaktieren`r`n")
@@ -905,6 +973,7 @@ function Start-SFCCheck {
         }
     }
     catch {
+        Write-Host "`n[-] FEHLER: $_" -ForegroundColor Red
         $outputBox.SelectionColor = [System.Drawing.Color]::Red
         $outputBox.AppendText("`r`n[-] FEHLER: $_`r`n")
         return $false
@@ -914,6 +983,9 @@ function Start-SFCCheck {
         $progressBar.Value = 100
         
         # Abschluss-Zeitstempel
+        Write-Host "`nScan beendet: $(Get-Date -Format 'dd.MM.yyyy HH:mm:ss')" -ForegroundColor Gray
+        Write-Host "`n" + ("═" * 70) -ForegroundColor Cyan
+        
         $outputBox.SelectionColor = [System.Drawing.Color]::Gray
         $outputBox.AppendText("`r`nScan beendet: $(Get-Date -Format 'dd.MM.yyyy HH:mm:ss')`r`n")
         $outputBox.AppendText("═".PadRight(50, "═") + "`r`n")
@@ -938,4 +1010,4 @@ function Start-MRTTest {
 }
 
 # Export functions
-Export-ModuleMember -Function Start-QuickMRT, Start-FullMRT, Start-MemoryDiagnostic, Start-SFCCheck
+Export-ModuleMember -Function Start-QuickMRT, Start-FullMRT, Start-MemoryDiagnostic, Start-SFCCheck, Get-MemoryDiagnosticResults

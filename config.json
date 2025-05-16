@@ -10,8 +10,8 @@
     "ConfirmActions":  true,
     "SaveWindowSize":  true,
     "LogLevel":  "Standard",
-    "FontSize":  12,
+    "FontSize":  10,
     "AutoSaveLogs":  false,
-    "LogPath":  "C:\\Users\\Baldoin\\Desktop\\PowerShell_Gui_Tool\\TEST_Cursor_Tool\\Win_Gui_Module_BAT\\Logs",
+    "LogPath":  "C:\\Users\\Baldoin\\Nextcloud\\Programmierung\\Bockis-Win_Gui\\Logs",
     "ColorScheme":  "Hell (Light Mode)"
 }
