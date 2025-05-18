@@ -1,22 +1,7 @@
 ﻿# Win_Gui_Module.ps1 - Hauptskript für die PowerShell-GUI
 # Autor: Bocki 
 
-# Import required modules
-Import-Module "$PSScriptRoot\Modules\Core\Core.psm1" -Force
-Import-Module "$PSScriptRoot\Modules\Core\UI.psm1" -Force
-Import-Module "$PSScriptRoot\Modules\Core\ProgressBarTools.psm1" -Force
-Import-Module "$PSScriptRoot\Modules\Monitor\HardwareMonitorTools.psm1" -Force
-Import-Module "$PSScriptRoot\Modules\SystemInfo.psm1" -Force
-Import-Module "$PSScriptRoot\Modules\Tools\SystemTools.psm1" -Force
-Import-Module "$PSScriptRoot\Modules\Tools\CHKDSKTools.psm1" -Force
-Import-Module "$PSScriptRoot\Modules\Tools\NetworkTools.psm1" -Force
-Import-Module "$PSScriptRoot\Modules\Tools\CleanupTools.psm1" -Force
-Import-Module "$PSScriptRoot\Modules\ToolLibrary.psm1" -Force
-Import-Module "$PSScriptRoot\Modules\HardwareInfo.psm1" -Force
-Import-Module "$PSScriptRoot\Modules\Tools\DefenderTools.psm1" -Force
-Import-Module "$PSScriptRoot\Modules\Tools\WindowsUpdateTools.psm1" -Force
-Import-Module "$PSScriptRoot\Modules\DatabaseManager.psm1" -Force
-Import-Module "$PSScriptRoot\Modules\Tools\DISM-Tools.psm1" -Force
+
 
 # Globale Einstellungen
 $script:settings = @{
@@ -224,7 +209,7 @@ function Show-SystemToolLogo {
     Write-Host "       ██║   ██║   ██║██║   ██║██║     ╚════██║" -ForegroundColor $secondaryColor
     Write-Host "       ██║   ╚██████╔╝╚██████╔╝███████╗███████║" -ForegroundColor $secondaryColor
     Write-Host "       ╚═╝    ╚═════╝  ╚═════╝ ╚══════╝╚══════╝" -ForegroundColor $secondaryColor
-    Write-Host "`n`n                  Version 3.0 - PowerShell Edition" -ForegroundColor $accentColor
+    Write-Host "`n`n                  Version 3.1 - PowerShell Edition" -ForegroundColor $accentColor
     Write-Host "                      Entwickelt von Bocki" -ForegroundColor $accentColor
 
     # Trennlinie
@@ -275,7 +260,7 @@ $moduleOrder = @(
     'Monitor\HardwareMonitorTools ', # Hardware-Monitor-Tools
     'SystemInfo                   ', # System-Informationen
     'Tools\SystemTools            ', # System-Tools
-    'Tools\DISM-Tools              ', # Festplatten-Tools
+    'Tools\DISM-Tools             ', # Festplatten-Tools
     'Tools\CHKDSKTools            ', # CHKDSK-Tools
     'Tools\NetworkTools           ', # Netzwerk-Tools
     'Tools\CleanupTools           ', # Bereinigungs-Tools
@@ -636,7 +621,7 @@ $infoButton.ForeColor = [System.Drawing.Color]::White
 $infoButton.Font = New-Object System.Drawing.Font("Segoe UI", 12)
 $infoButton.Add_Click({
         [System.Windows.Forms.MessageBox]::Show(
-            "Bocki's System-Tool 3.0`n`nEntwickelt von Bocki`nVersion: 3.0`n`nEin umfassendes Werkzeug für System-Wartung und -Diagnose.",
+            "Bocki's System-Tool 3.1`n`nEntwickelt von Bocki`nVersion: 3.1`n`nEin umfassendes Werkzeug für System-Wartung und -Diagnose.",
             "Über System-Tool",
             [System.Windows.Forms.MessageBoxButtons]::OK,
             [System.Windows.Forms.MessageBoxIcon]::Information
@@ -2895,7 +2880,7 @@ function Get-ToolInfo {
     $infoBox.SelectionColor = [System.Drawing.Color]::Blue
     $infoBox.AppendText("ALLGEMEINE INFORMATIONEN:`r`n")
     $infoBox.SelectionColor = [System.Drawing.Color]::Black
-    $infoBox.AppendText("* Version: 1.0.0`r`n")
+    $infoBox.AppendText("* Version: 3.1.0`r`n")
     $infoBox.AppendText("* Entwickler: IT-Support`r`n")
     $infoBox.AppendText("* Letzte Aktualisierung: 01.03.2024`r`n")
     
@@ -3394,184 +3379,6 @@ $mainform.Controls.Add($closeButton)
 $script:cpuDebugEnabled = $false
 $script:gpuDebugEnabled = $false
 $script:ramDebugEnabled = $false
-
-# Schwellenwerte für die Hardware-Überwachung
-$script:cpuThreshold = 90  # Standard-CPU-Schwellenwert (wird durch Einstellungen überschrieben)
-$script:gpuThreshold = 80  # Standard-GPU-Schwellenwert (wird durch Einstellungen überschrieben)
-$script:ramThreshold = 85  # Standard-RAM-Schwellenwert (wird durch Einstellungen überschrieben)
-
-# Update-Funktion für Hardware-Überwachung erweitern, um GPU-Schwellenwerte zu berücksichtigen
-# Diese Funktion sollte bereits im HardwareMonitorTools.psm1 existieren, aber wir fügen hier einen Hinweis ein
-# Wir werden die Variablen hier definieren, damit sie global verfügbar sind
-
-# Beispiel für eine erweiterte Update-Funktion:
-function Update-HardwareInfo {
-    param (
-        [System.Windows.Forms.Label]$cpuLabel,
-        [System.Windows.Forms.Label]$gpuLabel,
-        [System.Windows.Forms.Label]$ramLabel
-    )
-    
-    try {
-        # CPU-Auslastung abrufen
-        $cpuLoad = Get-CpuLoad
-        $cpuTemp = Get-CpuTemperature
-        
-        # GPU-Auslastung abrufen
-        $gpuLoad = Get-GpuLoad
-        $gpuTemp = Get-GpuTemperature
-        
-        # RAM-Auslastung abrufen
-        $ramLoad = Get-RamLoad
-        
-        # CPU-Anzeige aktualisieren
-        $cpuLabel.Text = "Auslastung: $cpuLoad% | Temp: $cpuTemp°C"
-        # Farbe basierend auf Schwellenwert ändern
-        if ($cpuLoad -ge $script:cpuThreshold) {
-            $cpuLabel.ForeColor = [System.Drawing.Color]::Red
-        }
-        else {
-            $cpuLabel.ForeColor = [System.Drawing.Color]::FromArgb(0, 70, 140)  # Dunkelblau
-        }
-        
-        # GPU-Anzeige aktualisieren
-        $gpuLabel.Text = "Auslastung: $gpuLoad% | Temp: $gpuTemp°C"
-        # Farbe basierend auf Schwellenwert ändern
-        if ($gpuLoad -ge $script:gpuThreshold) {
-            $gpuLabel.ForeColor = [System.Drawing.Color]::Red
-        }
-        else {
-            $gpuLabel.ForeColor = [System.Drawing.Color]::FromArgb(0, 100, 0)  # Dunkelgrün
-        }
-        
-        # RAM-Anzeige aktualisieren
-        $ramLabel.Text = "Auslastung: $ramLoad%"
-        # Farbe basierend auf Schwellenwert ändern
-        if ($ramLoad -ge $script:ramThreshold) {
-            $ramLabel.ForeColor = [System.Drawing.Color]::Red
-        }
-        else {
-            $ramLabel.ForeColor = [System.Drawing.Color]::FromArgb(128, 0, 128)  # Lila
-        }
-        
-        # Debug-Modus-Anzeigen aktualisieren, falls aktiviert
-        if ($script:cpuDebugEnabled) {
-            Write-Host "CPU-Debug: Auslastung: $cpuLoad%, Temperatur: $cpuTemp°C, Schwellenwert: $script:cpuThreshold%"
-        }
-        
-        if ($script:gpuDebugEnabled) {
-            Write-Host "GPU-Debug: Auslastung: $gpuLoad%, Temperatur: $gpuTemp°C, Schwellenwert: $script:gpuThreshold%"
-        }
-        
-        if ($script:ramDebugEnabled) {
-            Write-Host "RAM-Debug: Auslastung: $ramLoad%, Schwellenwert: $script:ramThreshold%"
-        }
-        
-        # Benachrichtigungen anzeigen, wenn aktiviert und Schwellenwerte überschritten
-        if ($script:settings.EnableNotifications) {
-            if ($cpuLoad -ge $script:cpuThreshold -and -not $script:cpuNotificationShown) {
-                $script:cpuNotificationShown = $true
-                Show-Notification -Title "CPU-Warnung" -Message "CPU-Auslastung: $cpuLoad% (Schwellenwert: $script:cpuThreshold%)"
-            }
-            elseif ($cpuLoad -lt $script:cpuThreshold) {
-                $script:cpuNotificationShown = $false
-            }
-            
-            if ($gpuLoad -ge $script:gpuThreshold -and -not $script:gpuNotificationShown) {
-                $script:gpuNotificationShown = $true
-                Show-Notification -Title "GPU-Warnung" -Message "GPU-Auslastung: $gpuLoad% (Schwellenwert: $script:gpuThreshold%)"
-            }
-            elseif ($gpuLoad -lt $script:gpuThreshold) {
-                $script:gpuNotificationShown = $false
-            }
-            
-            if ($ramLoad -ge $script:ramThreshold -and -not $script:ramNotificationShown) {
-                $script:ramNotificationShown = $true
-                Show-Notification -Title "RAM-Warnung" -Message "RAM-Auslastung: $ramLoad% (Schwellenwert: $script:ramThreshold%)"
-            }
-            elseif ($ramLoad -lt $script:ramThreshold) {
-                $script:ramNotificationShown = $false
-            }
-        }
-    }
-    catch {
-        Write-Host "Fehler bei der Hardware-Überwachung: $_" -ForegroundColor Red
-    }
-}
-
-# Benachrichtigungsfunktion
-function Show-Notification {
-    param (
-        [string]$Title,
-        [string]$Message
-    )
-    
-    try {
-        # Windows 10 Benachrichtigung mit PowerShell
-        $path = "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Notifications\Settings"
-        $app = "Windows.SystemToast.Notification"
-        
-        if (-not (Test-Path "$path\$app")) {
-            New-Item -Path "$path\$app" -Force | Out-Null
-            New-ItemProperty -Path "$path\$app" -Name "ShowInActionCenter" -Value 1 -PropertyType DWORD -Force | Out-Null
-        }
-        
-        [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
-        [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] | Out-Null
-        
-        $template = [Windows.UI.Notifications.ToastTemplateType]::ToastText02
-        $xml = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent($template)
-        
-        $text = $xml.GetElementsByTagName("text")
-        $text[0].AppendChild($xml.CreateTextNode($Title)) | Out-Null
-        $text[1].AppendChild($xml.CreateTextNode($Message)) | Out-Null
-        
-        $toast = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($app)
-        $toast.Show($xml)
-    }
-    catch {
-        # Fallback auf einfache MessageBox, wenn Windows-Benachrichtigungen nicht verfügbar
-        # Aber nur wenn es nicht zu viele sind, um Spam zu vermeiden
-        if ($script:settings.LogLevel -eq "Debug" -or $script:settings.LogLevel -eq "Detailliert") {
-            [System.Windows.Forms.MessageBox]::Show($Message, $Title, [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning)
-        }
-    }
-}
-
-# Initialisierung der Debug-Variablen
-$script:cpuDebugEnabled = $false
-$script:gpuDebugEnabled = $false
-$script:ramDebugEnabled = $false
-
-# Funktion zum Setzen des Hardware-Debug-Modus
-function Set-HardwareDebugMode {
-    param(
-        [Parameter(Mandatory = $true)]
-        [ValidateSet('CPU', 'GPU', 'RAM')]
-        [string]$Component,
-        
-        [Parameter(Mandatory = $true)]
-        [bool]$Enabled
-    )
-    
-    switch ($Component) {
-        'CPU' {
-            $script:cpuDebugEnabled = $Enabled
-            $statusText = if ($Enabled) { "Aktiviert" } else { "Deaktiviert" }
-            Write-Host "CPU Debug-Modus: $statusText"
-        }
-        'GPU' {
-            $script:gpuDebugEnabled = $Enabled
-            $statusText = if ($Enabled) { "Aktiviert" } else { "Deaktiviert" }
-            Write-Host "GPU Debug-Modus: $statusText"
-        }
-        'RAM' {
-            $script:ramDebugEnabled = $Enabled
-            $statusText = if ($Enabled) { "Aktiviert" } else { "Deaktiviert" }
-            Write-Host "RAM Debug-Modus: $statusText"
-        }
-    }
-}
 
 # Schwellenwerte für die Hardware-Überwachung
 $script:cpuThreshold = 90  # Standard-CPU-Schwellenwert (wird durch Einstellungen überschrieben)

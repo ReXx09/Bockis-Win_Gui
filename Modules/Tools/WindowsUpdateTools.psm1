@@ -8,65 +8,6 @@ $Global:SystemToolConfig.Tools["WindowsUpdate"] = @{
     Description   = "Windows Update"
 }
 
-function Write-WrappedText {
-    param(
-        [string]$text,
-        [int]$maxWidth = 100,
-        [string]$foregroundColor = "White"
-    )
-
-    # Teile den Text in Wörter auf
-    $words = $text -split '\s+'
-    $currentLine = ""
-    
-    foreach ($word in $words) {
-        # Prüfe, ob das Wort zur aktuellen Zeile hinzugefügt werden kann
-        if (($currentLine.Length + $word.Length + 1) -le $maxWidth) {
-            # Füge Leerzeichen hinzu, wenn die Zeile nicht leer ist
-            if ($currentLine.Length -gt 0) {
-                $currentLine += " "
-            }
-            $currentLine += $word
-        }
-        else {
-            # Gib die aktuelle Zeile aus und starte eine neue Zeile
-            Write-Host $currentLine -ForegroundColor $foregroundColor
-            $currentLine = $word
-        }
-    }
-    
-    # Gib die letzte Zeile aus, falls vorhanden
-    if ($currentLine.Length -gt 0) {
-        Write-Host $currentLine -ForegroundColor $foregroundColor
-    }
-}
-
-#Berechnung, Text und Rahmenfarbe
-function Write-ColoredCenteredText {
-    param(
-        [string]$text,
-        [string]$frameColor = "Green",
-        [string]$textColor = "Red",
-        [int]$totalWidth = 100,
-        [int]$contentWidth = 98  # Breite innerhalb der Rahmenzeichen (║)
-    )
-    
-    # Berechne die tatsächliche Textlänge
-    $textLength = $text.Length
-    
-    # Berechne die Anzahl der benötigten Leerzeichen für perfekte Zentrierung
-    $totalSpaces = $contentWidth - $textLength
-    $leftSpaces = [math]::Floor($totalSpaces / 2)
-    $rightSpaces = $totalSpaces - $leftSpaces
-    
-    # Erstelle den formatierten Text mit exakter Anzahl von Leerzeichen
-    Write-Host "║" -NoNewline -ForegroundColor $frameColor
-    Write-Host (" " * $leftSpaces) -NoNewline
-    Write-Host $text -NoNewline -ForegroundColor $textColor
-    Write-Host (" " * $rightSpaces) -NoNewline
-    Write-Host "║" -ForegroundColor $frameColor
-}
-
 # Function to start Windows Update and show status
 function Start-WindowsUpdate {
     param(
@@ -83,13 +24,13 @@ function Start-WindowsUpdate {
     $userName = $env:USERNAME
     $osInfo = (Get-CimInstance -ClassName Win32_OperatingSystem).Caption
     $dateTime = Get-Date -Format "dd.MM.yyyy HH:mm:ss"
-    $width = 100
+    $width = 80
 
         
     # Rahmen oben
-    Write-Host "╔══════════════════════════════════════════════════════════════════════════════════════════════════╗" -ForegroundColor Green
+    Write-Host "╔══════════════════════════════════════════════════════════════════════════════╗" -ForegroundColor Green
     Write-ColoredCenteredText                              "Windows Update"                                          
-    Write-Host "╚══════════════════════════════════════════════════════════════════════════════════════════════════╝" -ForegroundColor Green
+    Write-Host "╚══════════════════════════════════════════════════════════════════════════════╝" -ForegroundColor Green
     
 
     
@@ -123,20 +64,20 @@ function Start-WindowsUpdate {
 
 
     # Rahmen für Systeminformationen
-    Write-Host "╔══════════════════════════════════════════════════════════════════════════════════════════════════╗" -ForegroundColor Green
+    Write-Host "╔══════════════════════════════════════════════════════════════════════════════╗" -ForegroundColor Green
     Write-ColoredCenteredText                          "SYSTEMINFORMATIONEN"                                           
-    Write-Host "╠══════════════════════════════════════════════════════════════════════════════════════════════════╣" -ForegroundColor Green
+    Write-Host "╠══════════════════════════════════════════════════════════════════════════════╣" -ForegroundColor Green
     # Systeminformationen
-    Write-Host "║                                                                                                  ║" -ForegroundColor Green
+    Write-Host "║                                                                              ║" -ForegroundColor Green
     Write-Host "      ├─    Betriebssystem: $osInfo           "            -ForegroundColor Yellow                 
     Write-Host "      ├─    Computer:       $computerName     "            -ForegroundColor Yellow                                    
     Write-Host "      ├─    Benutzer:       $userName         "            -ForegroundColor Yellow                                    
     Write-Host "      └─    Datum und Zeit: $dateTime         "            -ForegroundColor Yellow                                  
-    Write-Host "║                                                                                                  ║" -ForegroundColor Green
+    Write-Host "║                                                                              ║" -ForegroundColor Green
     
-    Write-Host "╠══════════════════════════════════════════════════════════════════════════════════════════════════╣" -ForegroundColor Green
+    Write-Host "╠══════════════════════════════════════════════════════════════════════════════╣" -ForegroundColor Green
     Write-ColoredCenteredText "Windows Update wird initialisiert..."
-    Write-Host "╚══════════════════════════════════════════════════════════════════════════════════════════════════╝" -ForegroundColor Green
+    Write-Host "╚══════════════════════════════════════════════════════════════════════════════╝" -ForegroundColor Green
     
     # 3 Sekunden warten vor dem Start
     Start-Sleep -Seconds 3
@@ -419,4 +360,4 @@ function Install-AvailableWindowsUpdates {
 }
 
 # Export functions
-Export-ModuleMember -Function Start-WindowsUpdate, Get-WindowsUpdateStatus, Install-AvailableWindowsUpdates 
+Export-ModuleMember -Function Start-WindowsUpdate, Get-WindowsUpdateStatus, Install-AvailableWindowsUpdates
