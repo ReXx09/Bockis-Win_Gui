@@ -1,4 +1,4 @@
-# Windows System-Tool GUI 3.0
+# Windows System-Tool GUI 3.1
 
 Ein leistungsfähiges PowerShell-basiertes Verwaltungstool mit grafischer Benutzeroberfläche für Windows-Systeme.
 
@@ -55,22 +55,36 @@ powershell.exe -ExecutionPolicy Bypass -File "Win_Gui_Module.ps1"
 ## 📂 Verzeichnisstruktur
 
 ```
-Win_Gui_Module_BAT/
+Bockis-Win_Gui/
 ├── Modules/
-│   ├── Core.psm1
-│   ├── UI.psm1
-│   ├── ProgressBarTools.psm1
+│   ├── Core/
+│   │   ├── Core.psm1
+│   │   ├── UI.psm1
+│   │   ├── ProgressBarTools.psm1
+│   │   └── Settings.psm1
+│   ├── Monitor/
+│   │   └── HardwareMonitorTools.psm1
+│   ├── Tools/
+│   │   ├── SystemTools.psm1
+│   │   ├── DISM-Tools.psm1
+│   │   ├── CHKDSKTools.psm1
+│   │   ├── NetworkTools.psm1
+│   │   ├── CleanupTools.psm1
+│   │   ├── DefenderTools.psm1
+│   │   └── WindowsUpdateTools.psm1
+│   ├── DatabaseManager.psm1
 │   ├── SystemInfo.psm1
-│   ├── SystemTools.psm1
-│   ├── DiskTools.psm1
-│   ├── CHKDSKTools.psm1
-│   ├── NetworkTools.psm1
-│   ├── CleanupTools.psm1
-│   ├── ToolLibrary.psm1
-│   └── HardwareInfo.psm1
+│   ├── HardwareInfo.psm1
+│   └── ToolLibrary.psm1
 ├── Lib/
-│   └── LibreHardwareMonitorLib.dll
+│   ├── HidSharp.dll
+│   ├── iCUESDK.x64_2019.dll
+│   ├── LibHardwareMonitor.dll
+│   ├── LibreHardwareMonitorLib.dll
+│   ├── LibreHardwareMonitorLib.sys
+│   └── System.Data.SQLite.dll
 ├── Win_Gui_Module.ps1
+├── config.json
 └── README.md
 ```
 
@@ -109,8 +123,9 @@ Win_Gui_Module_BAT/
 - Modernes, übersichtliches Design
 - Hell-/Dunkel-Modus
 - Tab-basierte Navigation
-- Fortschrittsanzeige
+- Fortschrittsanzeige mit integriertem Status
 - Detaillierte Statusmeldungen
+- Echtzeit-Hardware-Überwachung
 
 ## ⚠️ Wichtige Hinweise
 
@@ -128,6 +143,13 @@ Bei Problemen:
 4. Kontaktieren Sie den Support
 
 ## 📋 Changelog
+
+### Version 3.1
+- Verbesserte Benutzeroberfläche
+- Optimierter Hardware-Monitor
+- Erweiterte Systemdiagnose
+- Verbesserte Schließroutine
+- Bug-Fixes und Stabilitätsverbesserungen
 
 ### Version 3.0.0
 - Neue Benutzeroberfläche
@@ -154,4 +176,4 @@ Dieses Tool ist unter der MIT-Lizenz veröffentlicht.
 
 ---
 
-*Entwickelt von Bocki* 
+*Entwickelt von Bocki*

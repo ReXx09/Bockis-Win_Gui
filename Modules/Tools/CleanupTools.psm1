@@ -8,201 +8,187 @@ function Start-DiskCleanup {
         [System.Windows.Forms.ProgressBar]$progressBar
     )
     
-    # Bestätigungsdialog anzeigen
-    $result = [System.Windows.Forms.MessageBox]::Show(
-        "Eine schnelle Bereinigung wird für alle Laufwerke gestartet. Dies entfernt gängige temporäre Dateien. Möchten Sie fortfahren?",
-        "Schnelle Datenträgerbereinigung",
-        [System.Windows.Forms.MessageBoxButtons]::YesNo,
-        [System.Windows.Forms.MessageBoxIcon]::Question
-    )
+    try {
+        # OutputBox und ProgressBar zurücksetzen
+        $outputBox.Clear()
+        if ($null -ne $progressBar) {
+            $progressBar.Value = 0
+        }
+        else {
+            $outputBox.AppendText("Warnung: ProgressBar nicht verfügbar.`r`n")
+        }
 
-    if ($result -eq "Yes") {
-        try {
-            # OutputBox und ProgressBar zurücksetzen
-            $outputBox.Clear()
-            if ($null -ne $progressBar) {
-                $progressBar.Value = 0
-            }
-            else {
-                $outputBox.AppendText("Warnung: ProgressBar nicht verfügbar.`r`n")
-            }
+        # Verfügbare Laufwerke ermitteln (nur feste Laufwerke)
+        $drives = Get-WmiObject Win32_LogicalDisk | Where-Object { $_.DriveType -eq 3 } | Select-Object -ExpandProperty DeviceID
+        $totalDrives = $drives.Count
+        $currentDriveIndex = 0
+        $totalFreedSpace = 0
+        $totalFilesRemoved = 0
+        $totalSkippedFiles = 0
 
-            # Verfügbare Laufwerke ermitteln (nur feste Laufwerke)
-            $drives = Get-WmiObject Win32_LogicalDisk | Where-Object { $_.DriveType -eq 3 } | Select-Object -ExpandProperty DeviceID
-            $totalDrives = $drives.Count
-            $currentDriveIndex = 0
-            $totalFreedSpace = 0
-            $totalFilesRemoved = 0
-            $totalSkippedFiles = 0
+        $outputBox.SelectionColor = [System.Drawing.Color]::Blue
+        $outputBox.AppendText("Schnelle Datenträgerbereinigung wird gestartet...`r`n")
+        $outputBox.AppendText(("-" * 60) + "`r`n")
 
-            $outputBox.SelectionColor = [System.Drawing.Color]::Blue
-            $outputBox.AppendText("Schnelle Datenträgerbereinigung wird gestartet...`r`n")
-            $outputBox.AppendText(("-" * 60) + "`r`n")
+        # Quick-Cleanup-Pfade definieren (ähnlich dem Referenzskript)
+        $cleanupPaths = @(
+            @{ Name = "Windows Temp"; PathPattern = "Windows\Temp\*" },
+            @{ Name = "Benutzer Temp"; PathPattern = "Users\*\AppData\Local\Temp\*" },
+            @{ Name = "Windows Update Cache"; PathPattern = "Windows\SoftwareDistribution\Download\*" },
+            @{ Name = "Prefetch"; PathPattern = "Windows\Prefetch\*" },
+            @{ Name = "Internet Cache (IE/Edge Legacy)"; PathPattern = "Users\*\AppData\Local\Microsoft\Windows\INetCache\*" },
+            @{ Name = "Thumbnail Cache"; PathPattern = "Users\*\AppData\Local\Microsoft\Windows\Explorer\thumbcache_*.db" },
+            @{ Name = "Chrome Cache"; PathPattern = "Users\*\AppData\Local\Google\Chrome\User Data\Default\Cache\*" },
+            @{ Name = "Firefox Cache"; PathPattern = "Users\*\AppData\Local\Mozilla\Firefox\Profiles\*\cache2\*" },
+            @{ Name = "Edge Cache"; PathPattern = "Users\*\AppData\Local\Microsoft\Edge\User Data\Default\Cache\*" }
+        )
 
-            # Quick-Cleanup-Pfade definieren (ähnlich dem Referenzskript)
-            $cleanupPaths = @(
-                @{ Name = "Windows Temp"; PathPattern = "Windows\Temp\*" },
-                @{ Name = "Benutzer Temp"; PathPattern = "Users\*\AppData\Local\Temp\*" },
-                @{ Name = "Windows Update Cache"; PathPattern = "Windows\SoftwareDistribution\Download\*" },
-                @{ Name = "Prefetch"; PathPattern = "Windows\Prefetch\*" },
-                @{ Name = "Internet Cache (IE/Edge Legacy)"; PathPattern = "Users\*\AppData\Local\Microsoft\Windows\INetCache\*" },
-                @{ Name = "Thumbnail Cache"; PathPattern = "Users\*\AppData\Local\Microsoft\Windows\Explorer\thumbcache_*.db" },
-                @{ Name = "Chrome Cache"; PathPattern = "Users\*\AppData\Local\Google\Chrome\User Data\Default\Cache\*" },
-                @{ Name = "Firefox Cache"; PathPattern = "Users\*\AppData\Local\Mozilla\Firefox\Profiles\*\cache2\*" },
-                @{ Name = "Edge Cache"; PathPattern = "Users\*\AppData\Local\Microsoft\Edge\User Data\Default\Cache\*" }
-            )
+        # Dienste stoppen, die Dateien sperren könnten (optional, mit Vorsicht verwenden)
+        # Stop-Service BITS -ErrorAction SilentlyContinue
+        # Stop-Service wuauserv -ErrorAction SilentlyContinue
 
-            # Dienste stoppen, die Dateien sperren könnten (optional, mit Vorsicht verwenden)
-            # Stop-Service BITS -ErrorAction SilentlyContinue
-            # Stop-Service wuauserv -ErrorAction SilentlyContinue
-
-            foreach ($drive in $drives) {
-                $currentDriveIndex++
-                $driveLetter = $drive # z.B. "C:"
+        foreach ($drive in $drives) {
+            $currentDriveIndex++
+            $driveLetter = $drive # z.B. "C:"
                 
-                # Sicherstellen, dass der Laufwerksbuchstabe korrekt formatiert ist
-                if ($driveLetter -match "^([A-Za-z]):.*$") {
-                    $driveLetter = $matches[1] + ":"
+            # Sicherstellen, dass der Laufwerksbuchstabe korrekt formatiert ist
+            if ($driveLetter -match "^([A-Za-z]):.*$") {
+                $driveLetter = $matches[1] + ":"
+            }
+                
+            $driveFreedSpace = 0
+            $driveFilesRemoved = 0
+            $driveSkippedFiles = 0
+
+            $outputBox.SelectionColor = [System.Drawing.Color]::DarkBlue
+            $outputBox.AppendText("`r`n>>> Bereinige Laufwerk ${driveLetter}... ($currentDriveIndex von $totalDrives)`r`n")
+
+            $pathCount = $cleanupPaths.Count
+            $currentPathIndex = 0
+
+            foreach ($cleanupItem in $cleanupPaths) {
+                $currentPathIndex++
+                    
+                # Korrigierte Pfadkonstruktion
+                $fullPath = if ($cleanupItem.PathPattern.StartsWith("\")) {
+                    "$driveLetter$($cleanupItem.PathPattern)"
                 }
-                
-                $driveFreedSpace = 0
-                $driveFilesRemoved = 0
-                $driveSkippedFiles = 0
-
-                $outputBox.SelectionColor = [System.Drawing.Color]::DarkBlue
-                $outputBox.AppendText("`r`n>>> Bereinige Laufwerk ${driveLetter}... ($currentDriveIndex von $totalDrives)`r`n")
-
-                $pathCount = $cleanupPaths.Count
-                $currentPathIndex = 0
-
-                foreach ($cleanupItem in $cleanupPaths) {
-                    $currentPathIndex++
+                else {
+                    "$driveLetter\$($cleanupItem.PathPattern)"
+                }
                     
-                    # Korrigierte Pfadkonstruktion
-                    $fullPath = if ($cleanupItem.PathPattern.StartsWith("\")) {
-                        "$driveLetter$($cleanupItem.PathPattern)"
-                    }
-                    else {
-                        "$driveLetter\$($cleanupItem.PathPattern)"
-                    }
-                    
-                    # ProgressBar aktualisieren
-                    if ($null -ne $progressBar) {
-                        $progressValue = [int](($currentDriveIndex - 1) / $totalDrives * 100 + ($currentPathIndex / $pathCount) * (100 / $totalDrives))
-                        $progressBar.Value = [Math]::Min(100, $progressValue)
-                    }
+                # ProgressBar aktualisieren
+                if ($null -ne $progressBar) {
+                    $progressValue = [int](($currentDriveIndex - 1) / $totalDrives * 100 + ($currentPathIndex / $pathCount) * (100 / $totalDrives))
+                    $progressBar.Value = [Math]::Min(100, $progressValue)
+                }
 
-                    $outputBox.SelectionColor = [System.Drawing.Color]::Gray
-                    $outputBox.AppendText("  -> $($cleanupItem.Name)... ")
-                    [System.Windows.Forms.Application]::DoEvents() # UI aktualisieren
+                $outputBox.SelectionColor = [System.Drawing.Color]::Gray
+                $outputBox.AppendText("  -> $($cleanupItem.Name)... ")
+                [System.Windows.Forms.Application]::DoEvents() # UI aktualisieren
 
-                    $filesToDelete = @()
-                    try {
-                        # Get-ChildItem mit -Force, um versteckte/Systemdateien zu berücksichtigen
-                        $filesToDelete = Get-ChildItem -Path $fullPath -Recurse -File -Force -ErrorAction SilentlyContinue
-                    }
-                    catch {
-                        $outputBox.SelectionColor = [System.Drawing.Color]::Orange
-                        $outputBox.AppendText("[Zugriffsfehler]`r`n")
-                        continue # Nächster Pfad
-                    }
+                $filesToDelete = @()
+                try {
+                    # Get-ChildItem mit -Force, um versteckte/Systemdateien zu berücksichtigen
+                    $filesToDelete = Get-ChildItem -Path $fullPath -Recurse -File -Force -ErrorAction SilentlyContinue
+                }
+                catch {
+                    $outputBox.SelectionColor = [System.Drawing.Color]::Orange
+                    $outputBox.AppendText("[Zugriffsfehler]`r`n")
+                    continue # Nächster Pfad
+                }
 
-                    if ($filesToDelete -and $filesToDelete.Count -gt 0) {
-                        # Vor dem Löschen die tatsächliche Größe berechnen
-                        $currentPathSize = ($filesToDelete | Measure-Object -Property Length -Sum).Sum
-                        $currentPathCount = $filesToDelete.Count
-                        $removedCountInPath = 0
-                        $sizeRemovedInPath = 0
-                        $skippedCountInPath = 0
+                if ($filesToDelete -and $filesToDelete.Count -gt 0) {
+                    # Vor dem Löschen die tatsächliche Größe berechnen
+                    $currentPathSize = ($filesToDelete | Measure-Object -Property Length -Sum).Sum
+                    $currentPathCount = $filesToDelete.Count
+                    $removedCountInPath = 0
+                    $sizeRemovedInPath = 0
+                    $skippedCountInPath = 0
 
-                        foreach ($file in $filesToDelete) {
-                            try {
-                                $fileSize = $file.Length
-                                Remove-Item -Path $file.FullName -Force -ErrorAction Stop
-                                $removedCountInPath++
-                                $sizeRemovedInPath += $fileSize
-                            }
-                            catch {
-                                # Datei konnte nicht gelöscht werden (wahrscheinlich gesperrt)
-                                $skippedCountInPath++
-                            }
+                    foreach ($file in $filesToDelete) {
+                        try {
+                            $fileSize = $file.Length
+                            Remove-Item -Path $file.FullName -Force -ErrorAction Stop
+                            $removedCountInPath++
+                            $sizeRemovedInPath += $fileSize
                         }
+                        catch {
+                            # Datei konnte nicht gelöscht werden (wahrscheinlich gesperrt)
+                            $skippedCountInPath++
+                        }
+                    }
 
-                        if ($removedCountInPath -gt 0) {
-                            $driveFreedSpace += $sizeRemovedInPath
-                            $driveFilesRemoved += $removedCountInPath
-                            $driveSkippedFiles += $skippedCountInPath
+                    if ($removedCountInPath -gt 0) {
+                        $driveFreedSpace += $sizeRemovedInPath
+                        $driveFilesRemoved += $removedCountInPath
+                        $driveSkippedFiles += $skippedCountInPath
                             
-                            $outputBox.SelectionColor = [System.Drawing.Color]::Green
-                            $outputBox.AppendText("($removedCountInPath Dateien / $(Format-FileSize $sizeRemovedInPath)) entfernt")
+                        $outputBox.SelectionColor = [System.Drawing.Color]::Green
+                        $outputBox.AppendText("($removedCountInPath Dateien / $(Format-FileSize $sizeRemovedInPath)) entfernt")
                             
-                            if ($skippedCountInPath -gt 0) {
-                                $outputBox.SelectionColor = [System.Drawing.Color]::Orange
-                                $outputBox.AppendText(" ($skippedCountInPath übersprungen)")
-                            }
-                            $outputBox.AppendText("`r`n")
+                        if ($skippedCountInPath -gt 0) {
+                            $outputBox.SelectionColor = [System.Drawing.Color]::Orange
+                            $outputBox.AppendText(" ($skippedCountInPath übersprungen)")
                         }
-                        else {
-                            $outputBox.SelectionColor = [System.Drawing.Color]::DarkGray
-                            $outputBox.AppendText("(Keine Dateien entfernt/gelöscht)`r`n")
-                        }
+                        $outputBox.AppendText("`r`n")
                     }
                     else {
                         $outputBox.SelectionColor = [System.Drawing.Color]::DarkGray
-                        $outputBox.AppendText("(Keine Dateien gefunden)`r`n")
+                        $outputBox.AppendText("(Keine Dateien entfernt/gelöscht)`r`n")
                     }
-                    [System.Windows.Forms.Application]::DoEvents() # UI aktualisieren
-                } # Ende Pfade pro Laufwerk
-
-                $totalFreedSpace += $driveFreedSpace
-                $totalFilesRemoved += $driveFilesRemoved
-                $totalSkippedFiles += $driveSkippedFiles
-                
-                $outputBox.SelectionColor = [System.Drawing.Color]::DarkGreen
-                $outputBox.AppendText("-> Laufwerk ${driveLetter}: $driveFilesRemoved Dateien entfernt ($(Format-FileSize $driveFreedSpace))")
-                
-                if ($driveSkippedFiles -gt 0) {
-                    $outputBox.SelectionColor = [System.Drawing.Color]::Orange
-                    $outputBox.AppendText(", $driveSkippedFiles übersprungen")
                 }
+                else {
+                    $outputBox.SelectionColor = [System.Drawing.Color]::DarkGray
+                    $outputBox.AppendText("(Keine Dateien gefunden)`r`n")
+                }
+                [System.Windows.Forms.Application]::DoEvents() # UI aktualisieren
+            } # Ende Pfade pro Laufwerk
+
+            $totalFreedSpace += $driveFreedSpace
+            $totalFilesRemoved += $driveFilesRemoved
+            $totalSkippedFiles += $driveSkippedFiles
                 
-                $outputBox.AppendText("`r`n")
-                $outputBox.AppendText(("-" * 50) + "`r`n")
-
-                # Nach jedem Laufwerk die Änderungen sofort anzeigen
-                [System.Windows.Forms.Application]::DoEvents()
-            } # Ende Laufwerke
-
-            # Abschlussmeldung
-            if ($null -ne $progressBar) {
-                $progressBar.Value = 100
-            }
-            $outputBox.SelectionColor = [System.Drawing.Color]::Green
-            $outputBox.AppendText("`r`n================================================`r`n")
-            $outputBox.AppendText("✅ Schnelle Datenträgerbereinigung abgeschlossen!`r`n")
-            $outputBox.AppendText("   Insgesamt entfernt: $totalFilesRemoved Dateien`r`n")
-            $outputBox.AppendText("   Insgesamt freigegeben: $(Format-FileSize $totalFreedSpace)`r`n")
-            
-            if ($totalSkippedFiles -gt 0) {
+            $outputBox.SelectionColor = [System.Drawing.Color]::DarkGreen
+            $outputBox.AppendText("-> Laufwerk ${driveLetter}: $driveFilesRemoved Dateien entfernt ($(Format-FileSize $driveFreedSpace))")
+                
+            if ($driveSkippedFiles -gt 0) {
                 $outputBox.SelectionColor = [System.Drawing.Color]::Orange
-                $outputBox.AppendText("   Übersprungene Dateien: $totalSkippedFiles (in Verwendung)`r`n")
-                $outputBox.SelectionColor = [System.Drawing.Color]::Green
+                $outputBox.AppendText(", $driveSkippedFiles übersprungen")
             }
-            
-            $outputBox.AppendText("================================================`r`n")
+                
+            $outputBox.AppendText("`r`n")
+            $outputBox.AppendText(("-" * 50) + "`r`n")
 
+            # Nach jedem Laufwerk die Änderungen sofort anzeigen
+            [System.Windows.Forms.Application]::DoEvents()
+        } # Ende Laufwerke
+
+        # Abschlussmeldung
+        if ($null -ne $progressBar) {
+            $progressBar.Value = 100
         }
-        catch {
-            $outputBox.SelectionColor = [System.Drawing.Color]::Red
-            $outputBox.AppendText("`r`n❌ FEHLER während der Bereinigung: $($_.Exception.Message)`r`n")
-            if ($null -ne $progressBar) {
-                $progressBar.Value = 0 # Oder auf einen Fehlerwert setzen
-            }
+        $outputBox.SelectionColor = [System.Drawing.Color]::Green
+        $outputBox.AppendText("`r`n================================================`r`n")
+        $outputBox.AppendText("✅ Schnelle Datenträgerbereinigung abgeschlossen!`r`n")
+        $outputBox.AppendText("   Insgesamt entfernt: $totalFilesRemoved Dateien`r`n")
+        $outputBox.AppendText("   Insgesamt freigegeben: $(Format-FileSize $totalFreedSpace)`r`n")
+            
+        if ($totalSkippedFiles -gt 0) {
+            $outputBox.SelectionColor = [System.Drawing.Color]::Orange
+            $outputBox.AppendText("   Übersprungene Dateien: $totalSkippedFiles (in Verwendung)`r`n")
+            $outputBox.SelectionColor = [System.Drawing.Color]::Green
         }
+            
+        $outputBox.AppendText("================================================`r`n")
+
     }
-    else {
-        $outputBox.SelectionColor = [System.Drawing.Color]::Gray
-        $outputBox.AppendText("Schnelle Datenträgerbereinigung wurde abgebrochen.`r`n")
+    catch {
+        $outputBox.SelectionColor = [System.Drawing.Color]::Red
+        $outputBox.AppendText("`r`n❌ FEHLER während der Bereinigung: $($_.Exception.Message)`r`n")
+        if ($null -ne $progressBar) {
+            $progressBar.Value = 0 # Oder auf einen Fehlerwert setzen
+        }
     }
 
     # Farbe zurücksetzen
@@ -262,127 +248,119 @@ function Start-TempFilesCleanup {
         [System.Windows.Forms.ProgressBar]$progressBar
     )
     
-    $result = Show-CustomMessageBox -message "Temporäre Dateien werden gelöscht. Möchten Sie fortfahren?" -title "Temp-Dateien löschen" -fontSize 16
+    # outputBox zurücksetzen
+    $outputBox.Clear()
+    $outputBox.SelectionColor = [System.Drawing.Color]::DarkBlue
+    $outputBox.AppendText("Starte Bereinigung temporärer Dateien...`r`n`r`n")
     
-    if ($result -eq "OK") {
-        # outputBox zurücksetzen
-        $outputBox.Clear()
-        $outputBox.SelectionColor = [System.Drawing.Color]::DarkBlue
-        $outputBox.AppendText("Starte Bereinigung temporärer Dateien...`r`n`r`n")
+    # ProgressBar zurücksetzen falls vorhanden
+    if ($null -ne $progressBar) {
+        $progressBar.Value = 0
+    }
+    
+    try {
+        # Liste der zu bereinigenden Verzeichnisse
+        $tempFolders = @(
+            [System.IO.Path]::GetTempPath(),
+            "$env:USERPROFILE\AppData\Local\Temp",
+            "$env:WINDIR\Temp"
+        )
         
-        # ProgressBar zurücksetzen falls vorhanden
-        if ($null -ne $progressBar) {
-            $progressBar.Value = 0
-        }
+        # Statistische Variablen initialisieren
+        $totalFiles = 0
+        $deletedFiles = 0
+        $totalSize = 0
+        $currentFolderIndex = 0
+        $totalFolders = $tempFolders.Count
         
-        try {
-            # Liste der zu bereinigenden Verzeichnisse
-            $tempFolders = @(
-                [System.IO.Path]::GetTempPath(),
-                "$env:USERPROFILE\AppData\Local\Temp",
-                "$env:WINDIR\Temp"
-            )
+        # Benutzerdefinierte Pfade hinzufügen
+        $cleanupSettings = Get-CleanupSettings
+        $customPaths = $cleanupSettings.CustomPaths
+        
+        if ($customPaths.Count -gt 0) {
+            $outputBox.SelectionColor = [System.Drawing.Color]::Blue
+            $outputBox.AppendText("Zusätzliche benutzerdefinierte Pfade werden bereinigt...\r\n")
             
-            # Statistische Variablen initialisieren
-            $totalFiles = 0
-            $deletedFiles = 0
-            $totalSize = 0
-            $currentFolderIndex = 0
-            $totalFolders = $tempFolders.Count
-            
-            # Benutzerdefinierte Pfade hinzufügen
-            $cleanupSettings = Get-CleanupSettings
-            $customPaths = $cleanupSettings.CustomPaths
-            
-            if ($customPaths.Count -gt 0) {
-                $outputBox.SelectionColor = [System.Drawing.Color]::Blue
-                $outputBox.AppendText("Zusätzliche benutzerdefinierte Pfade werden bereinigt...\r\n")
-                
-                foreach ($path in $customPaths) {
-                    if (Test-Path $path) {
-                        # Prüfen, ob der Pfad nicht ausgeschlossen ist
-                        if (-not (Test-PathExcluded -Path $path)) {
-                            try {
-                                $outputBox.SelectionColor = [System.Drawing.Color]::Black
-                                $outputBox.AppendText("Bereinige $path...\r\n")
-                                
-                                # Dateien im benutzerdefinierten Pfad löschen
-                                Get-ChildItem -Path $path -File -Recurse -ErrorAction SilentlyContinue | 
-                                Where-Object { -not (Test-PathExcluded -Path $_.FullName) } | 
-                                Remove-Item -Force -ErrorAction SilentlyContinue
-                                
-                                $outputBox.SelectionColor = [System.Drawing.Color]::Green
-                                $outputBox.AppendText("Benutzerdefinierter Pfad bereinigt: $path\r\n")
-                            }
-                            catch {
-                                $outputBox.SelectionColor = [System.Drawing.Color]::Red
-                                $outputBox.AppendText("Fehler beim Bereinigen von " + $path + ": " + $_ + "\r\n")
-                            }
+            foreach ($path in $customPaths) {
+                if (Test-Path $path) {
+                    # Prüfen, ob der Pfad nicht ausgeschlossen ist
+                    if (-not (Test-PathExcluded -Path $path)) {
+                        try {
+                            $outputBox.SelectionColor = [System.Drawing.Color]::Black
+                            $outputBox.AppendText("Bereinige $path...\r\n")
+                            
+                            # Dateien im benutzerdefinierten Pfad löschen
+                            Get-ChildItem -Path $path -File -Recurse -ErrorAction SilentlyContinue | 
+                            Where-Object { -not (Test-PathExcluded -Path $_.FullName) } | 
+                            Remove-Item -Force -ErrorAction SilentlyContinue
+                            
+                            $outputBox.SelectionColor = [System.Drawing.Color]::Green
+                            $outputBox.AppendText("Benutzerdefinierter Pfad bereinigt: $path\r\n")
                         }
-                        else {
-                            $outputBox.SelectionColor = [System.Drawing.Color]::Gray
-                            $outputBox.AppendText("Überspringe ausgeschlossenen Pfad: $path\r\n")
+                        catch {
+                            $outputBox.SelectionColor = [System.Drawing.Color]::Red
+                            $outputBox.AppendText("Fehler beim Bereinigen von " + $path + ": " + $_ + "\r\n")
                         }
                     }
                     else {
-                        $outputBox.SelectionColor = [System.Drawing.Color]::Yellow
-                        $outputBox.AppendText("Benutzerdefinierter Pfad nicht gefunden: $path\r\n")
+                        $outputBox.SelectionColor = [System.Drawing.Color]::Gray
+                        $outputBox.AppendText("Überspringe ausgeschlossenen Pfad: $path\r\n")
                     }
                 }
-            }
-            
-            # Durchlaufe alle Temp-Ordner
-            foreach ($folder in $tempFolders) {
-                $currentFolderIndex++
-                
-                # Aktualisiere ProgressBar
-                if ($null -ne $progressBar) {
-                    $progressBar.Value = [int](($currentFolderIndex - 1) / $totalFolders * 100)
+                else {
+                    $outputBox.SelectionColor = [System.Drawing.Color]::Yellow
+                    $outputBox.AppendText("Benutzerdefinierter Pfad nicht gefunden: $path\r\n")
                 }
-                
-                $outputBox.SelectionColor = [System.Drawing.Color]::Blue
-                $outputBox.AppendText("Untersuche Ordner: $folder`r`n")
-                
-                # Überprüfe, ob der Ordner existiert
-                if (Test-Path -Path $folder) {
-                    $files = Get-ChildItem -Path $folder -Recurse -File -ErrorAction SilentlyContinue
-                    
-                    # Ermittle Anzahl der Dateien und Gesamtgröße
-                    $folderFiles = $files.Count
-                    $folderSize = 0
-                    if ($files) {
-                        $folderSize = ($files | Measure-Object -Property Length -Sum).Sum / 1MB
-                        $folderSize = [Math]::Round($folderSize, 2)
-                    }
-                    
-                    $outputBox.SelectionColor = [System.Drawing.Color]::Black
-                    $outputBox.AppendText("  Gefunden: $folderFiles Dateien ($folderSize MB)`r`n")
-                }
-                
-                $outputBox.AppendText("`r`n")
             }
-            
-            # Aktualisiere ProgressBar auf 100%
-            if ($null -ne $progressBar) {
-                $progressBar.Value = 100
-            }
-            
-            # Erfolgsnotiz
-            $outputBox.SelectionColor = [System.Drawing.Color]::Green
-            $outputBox.AppendText("`r`nBereinigung temporärer Dateien erfolgreich abgeschlossen.`r`n")
-        }
-        catch {
-            $outputBox.SelectionColor = [System.Drawing.Color]::Red
-            $outputBox.AppendText("[-] Fehler bei der Bereinigung: " + $_ + "`r`n")
         }
         
-        # Farbe zurücksetzen
-        $outputBox.SelectionColor = $outputBox.ForeColor
+        # Durchlaufe alle Temp-Ordner
+        foreach ($folder in $tempFolders) {
+            $currentFolderIndex++
+            
+            # Aktualisiere ProgressBar
+            if ($null -ne $progressBar) {
+                $progressBar.Value = [int](($currentFolderIndex - 1) / $totalFolders * 100)
+            }
+            
+            $outputBox.SelectionColor = [System.Drawing.Color]::Blue
+            $outputBox.AppendText("Untersuche Ordner: $folder`r`n")
+            
+            # Überprüfe, ob der Ordner existiert
+            if (Test-Path -Path $folder) {
+                $files = Get-ChildItem -Path $folder -Recurse -File -ErrorAction SilentlyContinue
+                
+                # Ermittle Anzahl der Dateien und Gesamtgröße
+                $folderFiles = $files.Count
+                $folderSize = 0
+                if ($files) {
+                    $folderSize = ($files | Measure-Object -Property Length -Sum).Sum / 1MB
+                    $folderSize = [Math]::Round($folderSize, 2)
+                }
+                
+                $outputBox.SelectionColor = [System.Drawing.Color]::Black
+                $outputBox.AppendText("  Gefunden: $folderFiles Dateien ($folderSize MB)`r`n")
+            }
+            
+            $outputBox.AppendText("`r`n")
+        }
+        
+        # Aktualisiere ProgressBar auf 100%
+        if ($null -ne $progressBar) {
+            $progressBar.Value = 100
+        }
+        
+        # Erfolgsnotiz
+        $outputBox.SelectionColor = [System.Drawing.Color]::Green
+        $outputBox.AppendText("`r`nBereinigung temporärer Dateien erfolgreich abgeschlossen.`r`n")
     }
-    else {
-        $outputBox.SelectionColor = [System.Drawing.Color]::Gray
-        $outputBox.AppendText("Bereinigung temporärer Dateien wurde abgebrochen.`r`n")
+    catch {
+        $outputBox.SelectionColor = [System.Drawing.Color]::Red
+        $outputBox.AppendText("[-] Fehler bei der Bereinigung: " + $_ + "`r`n")
     }
+    
+    # Farbe zurücksetzen
+    $outputBox.SelectionColor = $outputBox.ForeColor
 }
 
 # Erweiterte Funktion für temporäre Dateien
@@ -1005,16 +983,7 @@ function Start-TempFilesCleanupAdvanced {
                     return
                 }
                 
-                # Bestätigung einholen
-                $confirmResult = [System.Windows.Forms.MessageBox]::Show(
-                    "Möchten Sie die ausgewählten temporären Dateien wirklich löschen? Dies kann nicht rückgängig gemacht werden.",
-                    "Bereinigung bestätigen",
-                    [System.Windows.Forms.MessageBoxButtons]::YesNo,
-                    [System.Windows.Forms.MessageBoxIcon]::Question)
-                
-                if ($confirmResult -eq [System.Windows.Forms.DialogResult]::No) {
-                    return
-                }
+                # Bestätigungsdialog entfernt, um Benutzererfahrung zu optimieren
                 
                 # ProgressBar zurücksetzen
                 if ($progressBar) {
@@ -1140,16 +1109,9 @@ function Start-TempFilesCleanupAdvanced {
                 # Cursor zurücksetzen
                 $cleanupForm.Cursor = [System.Windows.Forms.Cursors]::Default
                 
-                # Option zum Dialog schließen anbieten
-                $closeResult = [System.Windows.Forms.MessageBox]::Show(
-                    "Die Bereinigung wurde abgeschlossen. Möchten Sie diesen Dialog schließen?",
-                    "Bereinigung abgeschlossen",
-                    [System.Windows.Forms.MessageBoxButtons]::YesNo,
-                    [System.Windows.Forms.MessageBoxIcon]::Information)
-                
-                if ($closeResult -eq [System.Windows.Forms.DialogResult]::Yes) {
-                    $cleanupForm.Close()
-                }
+                # Dialog zum Schließen entfernt, um Benutzererfahrung zu optimieren
+                # Formular automatisch schließen
+                $cleanupForm.Close()
             })
         $cleanupForm.Controls.Add($okButton)
 

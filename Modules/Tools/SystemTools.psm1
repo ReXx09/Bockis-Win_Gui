@@ -20,32 +20,6 @@ function Ensure-ProgressBarInitialized {
     }
 }
 
-#Berechnung, Text und Rahmenfarbe
-function Write-ColoredCenteredText {
-    param(
-        [string]$text,
-        [string]$frameColor = "Green",
-        [string]$textColor = "Red",
-        [int]$totalWidth = 80,
-        [int]$contentWidth = 78  # Breite innerhalb der Rahmenzeichen (║)
-    )
-    
-    # Berechne die tatsächliche Textlänge
-    $textLength = $text.Length
-    
-    # Berechne die Anzahl der benötigten Leerzeichen für perfekte Zentrierung
-    $totalSpaces = $contentWidth - $textLength
-    $leftSpaces = [math]::Floor($totalSpaces / 2)
-    $rightSpaces = $totalSpaces - $leftSpaces
-    
-    # Erstelle den formatierten Text mit exakter Anzahl von Leerzeichen
-    Write-Host "║" -NoNewline -ForegroundColor $frameColor
-    Write-Host (" " * $leftSpaces) -NoNewline
-    Write-Host $text -NoNewline -ForegroundColor $textColor
-    Write-Host (" " * $rightSpaces) -NoNewline
-    Write-Host "║" -ForegroundColor $frameColor
-}
-
 # Function to run MRT Quick Scan
 function Start-QuickMRT {
     param (
@@ -167,33 +141,62 @@ function Start-QuickMRT {
         # Startzeit für den Scan
         $startTime = Get-Date
         
-        # Geschätzte Scan-Dauer (5 Minuten typisch)
-        $estimatedDuration = New-TimeSpan -Minutes 5
+        # Geschätzte Scan-Dauer (realistischere Dauer von 2 Minuten für Quick Scan)
+        $estimatedDuration = New-TimeSpan -Minutes 1
         
         # Timeout für den Scan festlegen (15 Minuten)
-        $timeoutDuration = New-TimeSpan -Minutes 15
+        $timeoutDuration = New-TimeSpan -Minutes 10
         $hasTimedOut = $false
         
-        # Phasen des Scans definieren
+        # Animationszeichen für Fortschritt
+        $progressChars = @('|', '/', '-', '\')
+        
+        # Phasen des Scans definieren - mit angepassten Fortschrittsprozenten
         $scanPhases = @(
-            @{ Name = "Initialisierung"; Progress = 10; Color = [System.Drawing.Color]::DarkBlue },
-            @{ Name = "Überprüfung von Systemdateien"; Progress = 30; Color = [System.Drawing.Color]::Blue },
-            @{ Name = "Suche nach Malware-Mustern"; Progress = 50; Color = [System.Drawing.Color]::Blue },
-            @{ Name = "Überprüfung kritischer Bereiche"; Progress = 70; Color = [System.Drawing.Color]::DarkGreen },
-            @{ Name = "Finale Überprüfungen"; Progress = 90; Color = [System.Drawing.Color]::Green }
+            @{ Name = "Initialisierung"; Progress = 5; Color = [System.Drawing.Color]::DarkBlue; TimeWeight = 0.1 },
+            @{ Name = "Überprüfung von Systemdateien"; Progress = 25; Color = [System.Drawing.Color]::Blue; TimeWeight = 0.25 },
+            @{ Name = "Suche nach Malware-Mustern"; Progress = 50; Color = [System.Drawing.Color]::Blue; TimeWeight = 0.35 },
+            @{ Name = "Überprüfung kritischer Bereiche"; Progress = 75; Color = [System.Drawing.Color]::DarkGreen; TimeWeight = 0.2 },
+            @{ Name = "Finale Überprüfungen"; Progress = 95; Color = [System.Drawing.Color]::Green; TimeWeight = 0.1 }
         )
         
-        # Interval zwischen Phasen berechnen
-        $phaseInterval = $estimatedDuration.TotalSeconds / $scanPhases.Count
+        # Gewichtete Phasenintervalle berechnen
+        # Alternative Berechnung des totalWeight, um Property-Fehler zu vermeiden
+        $totalWeight = 0
+        foreach ($phase in $scanPhases) {
+            $totalWeight += $phase.TimeWeight
+        }
+        $phaseIntervals = @()
+        $cumulativeTime = 0
+        
+        foreach ($phase in $scanPhases) {
+            $intervalSeconds = ($phase.TimeWeight / $totalWeight) * $estimatedDuration.TotalSeconds
+            $cumulativeTime += $intervalSeconds
+            $phaseIntervals += $cumulativeTime
+        }
         
         # Aktuelle Phase
         $currentPhase = -1 # Anfangswert, damit erste Phase als Änderung erkannt wird
+        $progressIndex = 0  # Index für die Animationszeichen
+        
+        # Fortschrittsanzeige: Scan wird gestartet
+        Write-Host "     [>] Scan wird gestartet. Bitte warten... (Dies kann einige Minuten dauern)" -ForegroundColor Yellow
+        Write-Host "     [>] Scan läuft | Dauer: 00:00 " -NoNewline -ForegroundColor Yellow
         
         while (-not $process.HasExited) {
             $elapsedTime = (Get-Date) - $startTime
+            $formattedTime = "{0:mm}:{0:ss}" -f $elapsedTime
+            
+            # Animationszeichen rotieren und Dauer anzeigen
+            $progressChar = $progressChars[$progressIndex]
+            $progressIndex = ($progressIndex + 1) % $progressChars.Length
+            
+            # Fortschrittsanzeige mit Zeitdauer aktualisieren
+            Write-Host "`r     [>] Scan läuft $progressChar Dauer: $formattedTime " -NoNewline -ForegroundColor Yellow
             
             # Timeout-Prüfung
             if ($elapsedTime -gt $timeoutDuration) {
+                Write-Host "" # Neue Zeile nach Animation
                 $outputBox.SelectionColor = [System.Drawing.Color]::Red
                 $outputBox.AppendText("[!] Timeout: Der Scan dauert länger als erwartet und wird beendet.`r`n")
                 
@@ -210,10 +213,22 @@ function Start-QuickMRT {
                 break
             }
             
-            $timeProgress = ($elapsedTime.TotalSeconds / $estimatedDuration.TotalSeconds) * 100
-            
             # Phase basierend auf verstrichener Zeit berechnen
-            $expectedPhase = [Math]::Min([Math]::Floor($elapsedTime.TotalSeconds / $phaseInterval), $scanPhases.Count - 1)
+            $timeProgress = $elapsedTime.TotalSeconds
+            $expectedPhase = -1
+            
+            # Ermitteln der aktuellen Phase anhand der verstrichenen Zeit
+            for ($i = 0; $i -lt $phaseIntervals.Count; $i++) {
+                if ($timeProgress -le $phaseIntervals[$i]) {
+                    $expectedPhase = $i
+                    break
+                }
+            }
+            
+            # Wenn wir über alle definierten Intervalle hinaus sind, bleiben wir bei der letzten Phase
+            if ($expectedPhase -eq -1) {
+                $expectedPhase = $scanPhases.Count - 1
+            }
             
             # Wenn eine neue Phase erreicht wurde
             if ($expectedPhase -gt $currentPhase) {
@@ -221,14 +236,34 @@ function Start-QuickMRT {
                 $outputBox.SelectionColor = [System.Drawing.Color]::Blue
                 $outputBox.AppendText("[>] Phase: $($scanPhases[$currentPhase].Name)`r`n")
                                                 
-                Write-Host "            ├─ Phase: $($scanPhases[$currentPhase].Name)"
-               
                 
-
+                Write-Host "   ├─ Phase: $($scanPhases[$currentPhase].Name)" -ForegroundColor Cyan
+               
                 Update-ProgressStatus -StatusText "MRT Quick-Scan: $($scanPhases[$currentPhase].Name)" `
                     -ProgressValue $scanPhases[$currentPhase].Progress `
                     -TextColor $scanPhases[$currentPhase].Color `
                     -progressBarParam $progressBar
+            }
+            
+            # Feinerer Fortschritt innerhalb einer Phase berechnen
+            if ($currentPhase -lt $scanPhases.Count - 1) {
+                $phaseStartTime = if ($currentPhase -eq 0) { 0 } else { $phaseIntervals[$currentPhase - 1] }
+                $phaseEndTime = $phaseIntervals[$currentPhase]
+                $phaseDuration = $phaseEndTime - $phaseStartTime
+                $phaseElapsedTime = $timeProgress - $phaseStartTime
+                
+                if ($phaseDuration -gt 0) {
+                    $phaseProgress = [Math]::Min($phaseElapsedTime / $phaseDuration, 1.0)
+                    $prevProgress = if ($currentPhase -eq 0) { 0 } else { $scanPhases[$currentPhase - 1].Progress }
+                    $nextProgress = $scanPhases[$currentPhase].Progress
+                    $currentProgress = $prevProgress + ($nextProgress - $prevProgress) * $phaseProgress
+                    
+                    # Fortschrittsbalken mit feinerem Fortschritt aktualisieren
+                    Update-ProgressStatus -StatusText "MRT Quick-Scan: $($scanPhases[$currentPhase].Name)" `
+                        -ProgressValue ([int]$currentProgress) `
+                        -TextColor $scanPhases[$currentPhase].Color `
+                        -progressBarParam $progressBar
+                }
             }
             
             # Log-Datei auf Fehler überprüfen
@@ -245,6 +280,14 @@ function Start-QuickMRT {
             
             Start-Sleep -Milliseconds 250
         }
+        
+        # Neue Zeile nach Animation
+        Write-Host "" 
+        
+        # Zeige die Gesamtdauer des Scans an
+        $totalScanTime = (Get-Date) - $startTime
+        $formattedTotalTime = "{0:mm}:{0:ss}" -f $totalScanTime
+        Write-Host "     [√] Scan abgeschlossen. Gesamtdauer: $formattedTotalTime" -ForegroundColor Green
         
         # Warte auf Prozessende und hole Exit-Code
         $process.WaitForExit()
@@ -478,7 +521,7 @@ function Start-FullMRT {
         Initialize-ProgressComponents -ProgressBar $progressBar -StatusLabel $null
     }
     
-    # Rahmen und Systeminformationen erstellen
+    # Essentielle Informationen sammeln
     $computerName = $env:COMPUTERNAME
     $userName = $env:USERNAME
     $osInfo = (Get-CimInstance -ClassName Win32_OperatingSystem).Caption
@@ -529,16 +572,14 @@ function Start-FullMRT {
        
     $outputBox.AppendText("[>] MRT Full Scan wird gestartet...`r`n")
     
+          
     Write-Host
     Write-Host
-    Write-Host "=".PadRight(60, "=") -ForegroundColor Green
+    Write-Host "     [i] Bitte warten bis der Scan abgeschlossen ist !!!" -ForegroundColor Red
     Write-Host
-    Write-Host "[>] MRT Full Scan wird gestartet..." -ForegroundColor Yellow
+    Write-Host "`n" + ("═" * 70) -ForegroundColor Cyan 
     Write-Host
-    Write-Host "[>] Bitte warten bis der Scan abgeschlossen ist !!!" -ForegroundColor Yellow
-    Write-Host
-    Write-Host "=".PadRight(60, "=") -ForegroundColor Green  
-    Write-Host
+    Write-Host "     [ Bitte starten Sie den Scan in der ... ]" -ForegroundColor $secondaryColor
 
     # MRT-Prozess starten und Exit-Code erfassen
     try {
@@ -902,7 +943,11 @@ function Start-SFCCheck {
     
     try {
         # Fortschritt initialisieren
-        $progressBar.Value = 0
+        if ($progressBar) {
+            $progressBar.Value = 10
+            $progressBar.CustomText = "SFC Scan wird initialisiert..."
+            $progressBar.TextColor = [System.Drawing.Color]::DarkBlue
+        }
         
         # Scan-Start Meldung in OutputBox
         $outputBox.SelectionColor = [System.Drawing.Color]::Blue
@@ -911,11 +956,20 @@ function Start-SFCCheck {
         
         Write-Host "`n[>] Starte SFC /scannow..." -ForegroundColor Yellow
         
+        # Fortschritt aktualisieren vor dem Start des Scans
+        if ($progressBar) {
+            $progressBar.Value = 20
+            $progressBar.CustomText = "SFC Scan wird gestartet..."
+        }
+        
         # SFC mit /scannow Parameter ausführen und Ausgabe direkt anzeigen
         $process = Start-Process -FilePath "sfc.exe" -ArgumentList "/scannow" -Wait -PassThru -NoNewWindow
         
-        # Fortschritt aktualisieren
-        $progressBar.Value = 90
+        # Fortschritt aktualisieren nach Abschluss des Scans
+        if ($progressBar) {
+            $progressBar.Value = 80
+            $progressBar.CustomText = "Scan abgeschlossen, analysiere Ergebnisse..."
+        }
         
         Write-Host "`n" + ("═" * 70) -ForegroundColor Cyan
         Write-Host "`n[i] Scan-Ergebnis:" -ForegroundColor Blue
@@ -931,6 +985,13 @@ function Start-SFCCheck {
                 $outputBox.SelectionColor = [System.Drawing.Color]::Green
                 $outputBox.AppendText("    [✓] System-Dateien sind in Ordnung`r`n")
                 $outputBox.AppendText("    [✓] Keine Reparaturen notwendig`r`n")
+                
+                # Fortschritt aktualisieren mit positivem Ergebnis
+                if ($progressBar) {
+                    $progressBar.Value = 100
+                    $progressBar.CustomText = "System-Dateien in Ordnung"
+                    $progressBar.TextColor = [System.Drawing.Color]::Green
+                }
             }
             1 {
                 Write-Host "    [!] Beschädigte Dateien wurden gefunden und repariert" -ForegroundColor Orange
@@ -939,6 +1000,13 @@ function Start-SFCCheck {
                 $outputBox.SelectionColor = [System.Drawing.Color]::Orange
                 $outputBox.AppendText("    [!] Beschädigte Dateien wurden gefunden und repariert`r`n")
                 $outputBox.AppendText("    [!] Ein Neustart wird empfohlen`r`n")
+                
+                # Fortschritt aktualisieren mit Warnhinweis
+                if ($progressBar) {
+                    $progressBar.Value = 100
+                    $progressBar.CustomText = "Reparaturen durchgeführt - Neustart empfohlen"
+                    $progressBar.TextColor = [System.Drawing.Color]::Orange
+                }
                 
                 # Neustart-Dialog
                 $result = [System.Windows.Forms.MessageBox]::Show(
@@ -961,6 +1029,31 @@ function Start-SFCCheck {
                 $outputBox.AppendText("    [X] Beschädigte Dateien gefunden`r`n")
                 $outputBox.AppendText("    [X] Reparatur nicht möglich`r`n")
                 $outputBox.AppendText("    [i] Empfehlung: DISM-Reparatur durchführen`r`n")
+                
+                # Fortschritt aktualisieren mit Fehlermeldung
+                if ($progressBar) {
+                    $progressBar.Value = 100
+                    $progressBar.CustomText = "Reparatur nicht möglich - DISM empfohlen"
+                    $progressBar.TextColor = [System.Drawing.Color]::Red
+                }
+                
+                # Frage, ob DISM ausgeführt werden soll
+                $result = [System.Windows.Forms.MessageBox]::Show(
+                    "Beschädigte Dateien wurden gefunden, die nicht repariert werden können.`n`nMöchten Sie jetzt eine DISM-Reparatur durchführen?",
+                    "DISM-Reparatur empfohlen",
+                    [System.Windows.Forms.MessageBoxButtons]::YesNo,
+                    [System.Windows.Forms.MessageBoxIcon]::Question
+                )
+                
+                if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
+                    # Tab Control für Ausgabe aufrufen (falls nötig)
+                    $outputBox.Clear()
+                    $outputBox.SelectionColor = [System.Drawing.Color]::Blue
+                    $outputBox.AppendText("Starte DISM Restore Health...`r`n")
+                    
+                    # DISM Restore Health ausführen
+                    Start-RestoreDISM -outputBox $outputBox -progressBar $progressBar
+                }
             }
             default {
                 Write-Host "    [] Unerwarteter Fehler (Code: $($process.ExitCode))" -ForegroundColor Red
@@ -969,6 +1062,13 @@ function Start-SFCCheck {
                 $outputBox.SelectionColor = [System.Drawing.Color]::Red
                 $outputBox.AppendText("    [] Unerwarteter Fehler (Code: $($process.ExitCode))`r`n")
                 $outputBox.AppendText("    [i] Bitte Support kontaktieren`r`n")
+                
+                # Fortschritt aktualisieren mit Fehlermeldung
+                if ($progressBar) {
+                    $progressBar.Value = 100
+                    $progressBar.CustomText = "Unerwarteter Fehler aufgetreten"
+                    $progressBar.TextColor = [System.Drawing.Color]::Red
+                }
             }
         }
     }
@@ -976,11 +1076,26 @@ function Start-SFCCheck {
         Write-Host "`n[-] FEHLER: $_" -ForegroundColor Red
         $outputBox.SelectionColor = [System.Drawing.Color]::Red
         $outputBox.AppendText("`r`n[-] FEHLER: $_`r`n")
+        
+        # Bei Fehler: ProgressBar rot einfärben
+        if ($progressBar) {
+            $progressBar.Value = 100
+            $progressBar.CustomText = "Fehler beim Ausführen des SFC-Scans"
+            $progressBar.TextColor = [System.Drawing.Color]::Red
+        }
+        
         return $false
     }
     finally {
-        # Fortschritt abschließen
-        $progressBar.Value = 100
+        # Falls noch nicht auf 100%, jetzt abschließen
+        if ($progressBar -and $progressBar.Value -ne 100) {
+            $progressBar.Value = 100
+            if ($progressBar.TextColor -ne [System.Drawing.Color]::Red -and 
+                $progressBar.TextColor -ne [System.Drawing.Color]::Orange) {
+                $progressBar.CustomText = "SFC-Scan abgeschlossen"
+                $progressBar.TextColor = [System.Drawing.Color]::Green
+            }
+        }
         
         # Abschluss-Zeitstempel
         Write-Host "`nScan beendet: $(Get-Date -Format 'dd.MM.yyyy HH:mm:ss')" -ForegroundColor Gray

@@ -1,157 +1,40 @@
 ﻿# Win_Gui_Module.ps1 - Hauptskript für die PowerShell-GUI
 # Autor: Bocki 
 
-# Import required modules
-Import-Module "$PSScriptRoot\Modules\Core\Core.psm1" -Force
-Import-Module "$PSScriptRoot\Modules\Core\UI.psm1" -Force
-Import-Module "$PSScriptRoot\Modules\Core\ProgressBarTools.psm1" -Force
-Import-Module "$PSScriptRoot\Modules\Monitor\HardwareMonitorTools.psm1" -Force
-Import-Module "$PSScriptRoot\Modules\SystemInfo.psm1" -Force
-Import-Module "$PSScriptRoot\Modules\Tools\SystemTools.psm1" -Force
-Import-Module "$PSScriptRoot\Modules\Tools\CHKDSKTools.psm1" -Force
-Import-Module "$PSScriptRoot\Modules\Tools\NetworkTools.psm1" -Force
-Import-Module "$PSScriptRoot\Modules\Tools\CleanupTools.psm1" -Force
-Import-Module "$PSScriptRoot\Modules\ToolLibrary.psm1" -Force
-Import-Module "$PSScriptRoot\Modules\HardwareInfo.psm1" -Force
-Import-Module "$PSScriptRoot\Modules\Tools\DefenderTools.psm1" -Force
-Import-Module "$PSScriptRoot\Modules\Tools\WindowsUpdateTools.psm1" -Force
-Import-Module "$PSScriptRoot\Modules\DatabaseManager.psm1" -Force
-Import-Module "$PSScriptRoot\Modules\Tools\DISM-Tools.psm1" -Force
+# Settings-Modul importieren
+Import-Module "$PSScriptRoot\Modules\Core\Settings.psm1" -Force
 
-# Globale Einstellungen
-$script:settings = @{
-    FontSize            = 10
-    ColorScheme         = "Standard"
-    SaveWindowSize      = $true
-    UpdateInterval      = 1000
-    CpuThreshold        = 90
-    RamThreshold        = 85
-    GpuThreshold        = 80  
-    EnableNotifications = $true
-    LogLevel            = "Standard"
-    AutoSaveLogs        = $false
-    LogPath             = "$PSScriptRoot\Logs"
-    ConfirmActions      = $true
-    AdvancedCleanup     = $false
-    CheckUpdates        = $true
-    ShowSplash          = $true
-}
+# Globale Einstellungen - werden vom Settings-Modul verwaltet
+$script:settings = $null
 
 # Laden der Einstellungen aus der Konfigurationsdatei, falls vorhanden
-function Load-Settings {
+function Import-Settings {
     $settingsFilePath = "$PSScriptRoot\config.json"
-    if (Test-Path $settingsFilePath) {
-        try {
-            $loadedSettings = Get-Content -Path $settingsFilePath -Raw | ConvertFrom-Json
-            
-            # Übertrage die geladenen Einstellungen in das globale Settings-Objekt
-            foreach ($property in $loadedSettings.PSObject.Properties) {
-                $script:settings[$property.Name] = $property.Value
-            }
-            
-            Write-Host "Einstellungen wurden aus $settingsFilePath geladen." -ForegroundColor Green
-            return $true
-        }
-        catch {
-            Write-Host "Fehler beim Laden der Einstellungen: $_" -ForegroundColor Red
-            return $false
-        }
-    }
-    else {
-        Write-Host "Keine Konfigurationsdatei gefunden, Standard-Einstellungen werden verwendet." -ForegroundColor Yellow
-        return $false
-    }
+    
+    # Setze die globalen Einstellungen durch Aufruf der Funktion aus dem Settings-Modul
+    return Import-SystemToolSettings -ConfigPath $settingsFilePath
 }
 
 # Einstellungen beim Programmstart laden
-Load-Settings
+Import-Settings
 
 # Einstellungen auf die Benutzeroberfläche anwenden
-function Apply-Settings {
-    # Sicherheitsüberprüfung, dass die notwendigen Steuerelemente vorhanden sind
-    if ($null -eq $outputBox -or $null -eq $mainform) {
-        Write-Host "Kann Einstellungen nicht anwenden, da Steuerelemente noch nicht initialisiert sind." -ForegroundColor Yellow
-        return $false
-    }
-    
-    try {
-        # 1. Schriftgröße
-        if ($script:settings.FontSize -ne $null -and [int]$script:settings.FontSize -gt 0) {
-            $newFontSize = [int]$script:settings.FontSize
-            $outputBox.Font = New-Object System.Drawing.Font($outputBox.Font.FontFamily, $newFontSize)
-            
-            # Wenn weitere RichTextBoxes vorhanden sind, auch dort Schriftgröße anpassen
-            if ($null -ne $hardwareInfoBox) {
-                $hardwareInfoBox.Font = New-Object System.Drawing.Font($hardwareInfoBox.Font.FontFamily, $newFontSize)
-            }
-            if ($null -ne $systemStatusBox) {
-                $systemStatusBox.Font = New-Object System.Drawing.Font($systemStatusBox.Font.FontFamily, $newFontSize)
-            }
-            if ($null -ne $toolInfoBox) {
-                $toolInfoBox.Font = New-Object System.Drawing.Font($toolInfoBox.Font.FontFamily, $newFontSize)
-            }
-            if ($null -ne $toolDownloadsBox) {
-                $toolDownloadsBox.Font = New-Object System.Drawing.Font($toolDownloadsBox.Font.FontFamily, $newFontSize)
-            }
-        }
-        
-        # 2. Farbschema
-        if ($script:settings.ColorScheme -ne $null) {
-            $isDarkMode = $mainform.BackColor -eq [System.Drawing.Color]::FromArgb(28, 30, 36)
-            
-            switch ($script:settings.ColorScheme) {
-                "Dunkel (Dark Mode)" {
-                    if (-not $isDarkMode -and $null -ne $themeButton) {
-                        $themeButton.PerformClick()  # Wechselt zum Dark Mode
-                    }
-                }
-                "Hell (Light Mode)" {
-                    if ($isDarkMode -and $null -ne $themeButton) {
-                        $themeButton.PerformClick()  # Wechselt zum Light Mode
-                    }
-                }
-                "Blau" {
-                    # Blaues Farbschema anwenden
-                    if ($null -ne $mainform) { $mainform.BackColor = [System.Drawing.Color]::FromArgb(220, 230, 250) }
-                    if ($null -ne $tabSystem) { $tabSystem.BackColor = [System.Drawing.Color]::FromArgb(200, 220, 255) }
-                    if ($null -ne $tabDisk) { $tabDisk.BackColor = [System.Drawing.Color]::FromArgb(210, 225, 250) }
-                    if ($null -ne $tabNetwork) { $tabNetwork.BackColor = [System.Drawing.Color]::FromArgb(220, 230, 245) }
-                    if ($null -ne $tabCleanup) { $tabCleanup.BackColor = [System.Drawing.Color]::FromArgb(230, 235, 240) }
-                }
-                "Grün" {
-                    # Grünes Farbschema anwenden
-                    if ($null -ne $mainform) { $mainform.BackColor = [System.Drawing.Color]::FromArgb(230, 245, 230) }
-                    if ($null -ne $tabSystem) { $tabSystem.BackColor = [System.Drawing.Color]::FromArgb(210, 250, 210) }
-                    if ($null -ne $tabDisk) { $tabDisk.BackColor = [System.Drawing.Color]::FromArgb(220, 245, 220) }
-                    if ($null -ne $tabNetwork) { $tabNetwork.BackColor = [System.Drawing.Color]::FromArgb(230, 240, 230) }
-                    if ($null -ne $tabCleanup) { $tabCleanup.BackColor = [System.Drawing.Color]::FromArgb(240, 235, 240) }
-                }
-            }
-        }
-        
-        # 3. Hardware Monitor Update-Intervall anpassen, falls vorhanden
-        if ($null -ne $script:hardwareTimer -and $script:settings.UpdateInterval -ne $null) {
-            $script:hardwareTimer.Interval = [int]$script:settings.UpdateInterval
-        }
-        
-        # 4. Schwellenwerte für Hardware-Überwachung
-        if ($script:settings.CpuThreshold -ne $null) {
-            $script:cpuThreshold = [int]$script:settings.CpuThreshold
-        }
-        if ($script:settings.RamThreshold -ne $null) {
-            $script:ramThreshold = [int]$script:settings.RamThreshold
-        }
-        if ($script:settings.GpuThreshold -ne $null) {
-            # GPU-Schwellenwert hinzufügen
-            $script:gpuThreshold = [int]$script:settings.GpuThreshold
-        }
-        
-        Write-Host "`r[+] Einstellungen wurden erfolgreich angewendet." -ForegroundColor Green
-        return $true
-    }
-    catch {
-        Write-Host "`r[!] Fehler beim Anwenden der Einstellungen: $_" -ForegroundColor Red
-        return $false
+function Update-Settings {
+    # Diese Funktion ruft nur noch die entsprechende Funktion im Settings-Modul auf
+    # und übergibt die UI-Elemente
+    return Update-SystemToolUI -UIElements @{
+        OutputBox        = $outputBox
+        MainForm         = $mainform
+        HardwareInfoBox  = $hardwareInfoBox
+        SystemStatusBox  = $systemStatusBox
+        ToolInfoBox      = $toolInfoBox
+        ToolDownloadsBox = $toolDownloadsBox
+        HardwareTimer    = $script:hardwareTimer
+        ThemeButton      = $themeButton
+        TabSystem        = $tabSystem
+        TabDisk          = $tabDisk
+        TabNetwork       = $tabNetwork
+        TabCleanup       = $tabCleanup
     }
 }
 
@@ -212,19 +95,19 @@ function Show-SystemToolLogo {
     $accentColor = [System.ConsoleColor]::Green
 
     Write-Host
-    Write-Host "    ███████╗██╗   ██╗███████╗████████╗███████╗███╗   ███╗" -ForegroundColor $primaryColor
-    Write-Host "    ██╔════╝╚██╗ ██╔╝██╔════╝╚══██╔══╝██╔════╝████╗ ████║" -ForegroundColor $primaryColor
-    Write-Host "    ███████╗ ╚████╔╝ ███████╗   ██║   █████╗  ██╔████╔██║" -ForegroundColor $primaryColor
-    Write-Host "    ╚════██║  ╚██╔╝  ╚════██║   ██║   ██╔══╝  ██║╚██╔╝██║" -ForegroundColor $primaryColor
-    Write-Host "    ███████║   ██║   ███████║   ██║   ███████╗██║ ╚═╝ ██║" -ForegroundColor $primaryColor
-    Write-Host "    ╚══════╝   ╚═╝   ╚══════╝   ╚═╝   ╚══════╝╚═╝     ╚═╝" -ForegroundColor $primaryColor
-    Write-Host "    ████████╗ ██████╗  ██████╗ ██╗     ███████╗" -ForegroundColor $secondaryColor
-    Write-Host "    ╚══██╔══╝██╔═══██╗██╔═══██╗██║     ██╔════╝" -ForegroundColor $secondaryColor
-    Write-Host "       ██║   ██║   ██║██║   ██║██║     ███████╗" -ForegroundColor $secondaryColor
-    Write-Host "       ██║   ██║   ██║██║   ██║██║     ╚════██║" -ForegroundColor $secondaryColor
-    Write-Host "       ██║   ╚██████╔╝╚██████╔╝███████╗███████║" -ForegroundColor $secondaryColor
-    Write-Host "       ╚═╝    ╚═════╝  ╚═════╝ ╚══════╝╚══════╝" -ForegroundColor $secondaryColor
-    Write-Host "`n`n                  Version 3.0 - PowerShell Edition" -ForegroundColor $accentColor
+    Write-Host " `t   ███████╗██╗   ██╗███████╗████████╗███████╗███╗   ███╗" -ForegroundColor $primaryColor
+    Write-Host " `t   ██╔════╝╚██╗ ██╔╝██╔════╝╚══██╔══╝██╔════╝████╗ ████║" -ForegroundColor $primaryColor
+    Write-Host " `t   ███████╗ ╚████╔╝ ███████╗   ██║   █████╗  ██╔████╔██║" -ForegroundColor $primaryColor
+    Write-Host " `t   ╚════██║  ╚██╔╝  ╚════██║   ██║   ██╔══╝  ██║╚██╔╝██║" -ForegroundColor $primaryColor
+    Write-Host " `t   ███████║   ██║   ███████║   ██║   ███████╗██║ ╚═╝ ██║" -ForegroundColor $primaryColor
+    Write-Host " `t   ╚══════╝   ╚═╝   ╚══════╝   ╚═╝   ╚══════╝╚═╝     ╚═╝" -ForegroundColor $primaryColor
+    Write-Host " `t   ████████╗ ██████╗  ██████╗ ██╗     ███████╗" -ForegroundColor $secondaryColor
+    Write-Host " `t   ╚══██╔══╝██╔═══██╗██╔═══██╗██║     ██╔════╝" -ForegroundColor $secondaryColor
+    Write-Host " `t      ██║   ██║   ██║██║   ██║██║     ███████╗" -ForegroundColor $secondaryColor
+    Write-Host " `t      ██║   ██║   ██║██║   ██║██║     ╚════██║" -ForegroundColor $secondaryColor
+    Write-Host " `t      ██║   ╚██████╔╝╚██████╔╝███████╗███████║" -ForegroundColor $secondaryColor
+    Write-Host " `t      ╚═╝    ╚═════╝  ╚═════╝ ╚══════╝╚══════╝" -ForegroundColor $secondaryColor
+    Write-Host "`n`n                  Version 3.1 - PowerShell Edition" -ForegroundColor $accentColor
     Write-Host "                      Entwickelt von Bocki" -ForegroundColor $accentColor
 
     # Trennlinie
@@ -275,7 +158,7 @@ $moduleOrder = @(
     'Monitor\HardwareMonitorTools ', # Hardware-Monitor-Tools
     'SystemInfo                   ', # System-Informationen
     'Tools\SystemTools            ', # System-Tools
-    'Tools\DISM-Tools              ', # Festplatten-Tools
+    'Tools\DISM-Tools             ', # Festplatten-Tools
     'Tools\CHKDSKTools            ', # CHKDSK-Tools
     'Tools\NetworkTools           ', # Netzwerk-Tools
     'Tools\CleanupTools           ', # Bereinigungs-Tools
@@ -398,8 +281,7 @@ if ($missingModules.Count -gt 0) {
 
 # PowerShell-Fenster anpassen - mit Fehlerbehandlung
 try {
-    # Aktuelle Fenstergröße abrufen
-    $currentWindowSize = $Host.UI.RawUI.WindowSize
+    # Aktuelle Fenstergröße abrufen (nicht direkt verwendet, aber für Debugging nützlich)
     $currentBufferSize = $Host.UI.RawUI.BufferSize
     
     # Neue Fenstergröße setzen (nicht größer als der aktuelle Puffer)
@@ -423,12 +305,8 @@ catch {
     Write-Host "Hinweis: Konnte PowerShell-Fenster nicht anpassen: $_" -ForegroundColor Yellow
 }
 
-# Definiere Statuswerte
-$STATUS_SUCCESS = 0
-$STATUS_MODULE_ERROR = 1
-
 # Status-Variable initialisieren
-$moduleLadingStatus = $STATUS_SUCCESS
+# Status-Konstanten und Initialisierung entfernt, da nicht verwendet
 
 
 # Trennlinie
@@ -465,12 +343,27 @@ public static class NativeMethods
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool SetForegroundWindow(IntPtr hWnd);
-    
+
     [DllImport("user32.dll")]
     public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
     
     // ShowWindow-Befehle
     public const int SW_RESTORE = 9;
+    
+    // Funktion zum Finden aller Fenster
+    [DllImport("user32.dll")]
+    public static extern bool EnumWindows(EnumWindowsProc enumProc, IntPtr lParam);
+    
+    // Delegate für die Callback-Funktion
+    public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+    
+    // Funktion zum Ermitteln des Fenstertitels
+    [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+    public static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder lpString, int nMaxCount);
+    
+    // Funktion zum Ermitteln, ob ein Fenster sichtbar ist
+    [DllImport("user32.dll")]
+    public static extern bool IsWindowVisible(IntPtr hWnd);
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -493,35 +386,167 @@ public struct RECT
     }
 }
 
+# Funktion zum Suchen von PowerShell-Fenstern
+function Find-PowerShellWindow {
+    if (-not (Initialize-WindowPositioning)) {
+        # Debug-Meldung entfernt
+        return [IntPtr]::Zero
+    }
+    
+    try {
+        # Zuerst versuchen wir die Standard GetConsoleWindow-Methode
+        $consoleHandle = [NativeMethods]::GetConsoleWindow()
+        if ($consoleHandle -ne [IntPtr]::Zero) {
+            # Debug-Meldung entfernt
+            return $consoleHandle
+        }
+
+        # Sammle alle Window-Handles in dieser Liste
+        $script:windowList = New-Object System.Collections.Generic.List[IntPtr]
+        $script:psWindowHandle = [IntPtr]::Zero
+        
+        # Definiere eine Callback-Funktion für die Aufzählung
+        $callbackScript = {
+            param($hwnd, $lParam)
+            
+            # Prüfen, ob das Fenster sichtbar ist
+            if (-not [NativeMethods]::IsWindowVisible($hwnd)) {
+                return $true  # Weiter zum nächsten Fenster
+            }
+            
+            # Den Fenstertitel abrufen
+            $sb = New-Object System.Text.StringBuilder(256)
+            [void][NativeMethods]::GetWindowText($hwnd, $sb, $sb.Capacity)
+            $windowTitle = $sb.ToString()
+            
+            # Wenn der Titel Powershell, pwsh oder System-Tool enthält, haben wir es
+            if ($windowTitle -match "PowerShell|pwsh|Windows PowerShell|System Tools") {
+                # Debug-Meldung entfernt
+                $script:psWindowHandle = $hwnd
+                return $false  # Stoppe die Enumeration
+            }
+            
+            # Fensterhandle zur Liste hinzufügen für spätere Verwendung
+            $script:windowList.Add($hwnd)
+            
+            return $true  # Weiter zum nächsten Fenster
+        }
+        
+        # Delegate erstellen, der bis zum GC erhalten bleibt
+        $enumWindowsCallback = [NativeMethods+EnumWindowsProc]$callbackScript
+        
+        # Alle Fenster auflisten
+        [NativeMethods]::EnumWindows($enumWindowsCallback, [IntPtr]::Zero)
+        
+        # Prüfen, ob wir ein PowerShell-Fenster gefunden haben
+        if ($script:psWindowHandle -ne [IntPtr]::Zero) {
+            return $script:psWindowHandle
+        }
+        
+        # Keine PowerShell-Fenster gefunden
+        # Debug-Meldung entfernt
+        return [IntPtr]::Zero
+    }
+    catch {
+        # Debug-Meldung entfernt
+        return [IntPtr]::Zero
+    }
+}
+
 # Initiale Positionierung
-function Position-MainForm {
+function Set-WindowPosition {
     try {
         if (-not (Initialize-WindowPositioning)) {
             $mainform.StartPosition = "CenterScreen"
             return
         }
         
-        # Konsolenfenster ermitteln
-        $consoleHandle = [NativeMethods]::GetConsoleWindow()
+        # Holen der aktuellen Einstellungen aus dem Modul
+        $settings = Get-SystemToolSettings
+        
+        # Wenn Fenstergröße und -position gespeichert werden sollen und die gespeicherten Werte gültig sind
+        if ($settings.SaveWindowSize -and 
+            $settings.WindowWidth -gt 0 -and 
+            $settings.WindowHeight -gt 0) {
+            
+            # Setze die gespeicherte Fenstergröße
+            $mainform.Size = New-Object System.Drawing.Size($settings.WindowWidth, $settings.WindowHeight)
+            
+            # Wenn die Position ebenfalls gespeichert wurde
+            if ($settings.WindowLeft -gt 0 -and $settings.WindowTop -gt 0) {
+                # Stelle sicher, dass das Fenster auf dem Bildschirm sichtbar ist
+                $screenWidth = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea.Width
+                $screenHeight = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea.Height
+                
+                $left = [Math]::Min($settings.WindowLeft, $screenWidth - 100)
+                $top = [Math]::Min($settings.WindowTop, $screenHeight - 100)
+                
+                $mainform.Location = New-Object System.Drawing.Point($left, $top)
+                
+                # Speichere initiale Position
+                $script:lastGuiLeft = $mainform.Left
+                $script:lastGuiTop = $mainform.Top
+                
+                return
+            }
+        }
+        
+        # Wenn keine gespeicherten Werte verwendet werden oder diese ungültig sind,
+        # positioniere das Fenster neben dem Konsolenfenster wie bisher
+        $consoleHandle = Find-PowerShellWindow
+        
+        # Prüfen, ob das Konsolenfenster gefunden wurde
         if ($consoleHandle -eq [IntPtr]::Zero) {
+            # Debug-Meldung entfernt
             $mainform.StartPosition = "CenterScreen"
             return
         }
+        
+        # Konsolenfenster in den Vordergrund bringen, um sicherzustellen, dass es sichtbar ist
+        [NativeMethods]::ShowWindow($consoleHandle, [NativeMethods]::SW_RESTORE)
+        [NativeMethods]::SetForegroundWindow($consoleHandle)
+        
+        # Warten, um sicherzustellen, dass Windows Zeit hat, das Fenster anzuzeigen
+        Start-Sleep -Milliseconds 200
         
         # Konsolenfenstergröße ermitteln
         $rect = New-Object RECT
         if (-not [NativeMethods]::GetWindowRect($consoleHandle, [ref]$rect)) {
+            # Debug-Meldung entfernt
             $mainform.StartPosition = "CenterScreen"
             return
         }
         
+        # Fenstergröße und Position ausgeben (für Debugging)
+        # Debug-Meldung entfernt
+        
         # GUI-Fenster rechts neben dem Konsolenfenster positionieren
-        $mainform.Location = New-Object System.Drawing.Point(($rect.Right + 10), $rect.Top)
+        $guiLeft = $rect.Right + 10
+        $guiTop = $rect.Top
+        
+        # Prüfen, ob die Position auf dem Bildschirm sichtbar ist
+        $screenWidth = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea.Width
+        $screenHeight = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea.Height
+        
+        if ($guiLeft + $mainform.Width -gt $screenWidth) {
+            # Wenn das GUI-Fenster rechts nicht mehr auf den Bildschirm passt, 
+            # platziere es unter dem Konsolenfenster
+            $guiLeft = $rect.Left
+            $guiTop = $rect.Bottom + 10
+            
+            # Wenn auch das nicht passt, dann zentriere es
+            if ($guiTop + $mainform.Height -gt $screenHeight) {
+                $mainform.StartPosition = "CenterScreen"
+                return
+            }
+        }
+        
+        # Debug-Meldung entfernt
+        $mainform.Location = New-Object System.Drawing.Point($guiLeft, $guiTop)
         
         # Speichere initiale Position
         $script:lastGuiLeft = $mainform.Left
         $script:lastGuiTop = $mainform.Top
-         
     }
     catch {
         Write-Host "Fehler bei der initialen Positionierung: $_" -ForegroundColor Red
@@ -530,12 +555,7 @@ function Position-MainForm {
 }
 
 # GUI-Fenster positionieren
-Position-MainForm
-
-# Event-Handler für Formular-Schließen: Timer stoppen
-$mainform.Add_FormClosing({
-     
-    })
+Set-WindowPosition
 
 $mainform.Font = New-Object System.Drawing.Font("Segoe UI", 10)
 $mainform.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::None  # Kein Rahmen
@@ -565,7 +585,7 @@ $header = $titleLabel
 
 # Event-Handler für das Verschieben des Fensters
 $titleBar.Add_MouseDown({
-        param($sender, $e)
+        param($eventSender, $e)
         if ($e.Button -eq [System.Windows.Forms.MouseButtons]::Left) {
             $script:mouseOffset = New-Object System.Drawing.Point(
                 - $e.X,
@@ -575,7 +595,7 @@ $titleBar.Add_MouseDown({
     })
 
 $titleBar.Add_MouseMove({
-        param($sender, $e)
+        param($eventSender, $e)
         if ($e.Button -eq [System.Windows.Forms.MouseButtons]::Left) {
             $mousePos = [System.Windows.Forms.Control]::MousePosition
             $newLocation = New-Object System.Drawing.Point(
@@ -588,17 +608,17 @@ $titleBar.Add_MouseMove({
 
 # Auch das Label zum Verschieben nutzen
 $titleLabel.Add_MouseDown({
-        param($sender, $e)
+        param($eventSender, $e)
         if ($e.Button -eq [System.Windows.Forms.MouseButtons]::Left) {
             $script:mouseOffset = New-Object System.Drawing.Point(
-                - ($e.X + $sender.Left),
-                - ($e.Y + $sender.Top)
+                - ($e.X + $eventSender.Left),
+                - ($e.Y + $eventSender.Top)
             )
         }
     })
 
 $titleLabel.Add_MouseMove({
-        param($sender, $e)
+        param($eventSender, $e)
         if ($e.Button -eq [System.Windows.Forms.MouseButtons]::Left) {
             $mousePos = [System.Windows.Forms.Control]::MousePosition
             $newLocation = New-Object System.Drawing.Point(
@@ -636,7 +656,7 @@ $infoButton.ForeColor = [System.Drawing.Color]::White
 $infoButton.Font = New-Object System.Drawing.Font("Segoe UI", 12)
 $infoButton.Add_Click({
         [System.Windows.Forms.MessageBox]::Show(
-            "Bocki's System-Tool 3.0`n`nEntwickelt von Bocki`nVersion: 3.0`n`nEin umfassendes Werkzeug für System-Wartung und -Diagnose.",
+            "Bocki's System-Tool 3.1`n`nEntwickelt von Bocki`nVersion: 3.1`n`nEin umfassendes Werkzeug für System-Wartung und -Diagnose.",
             "Über System-Tool",
             [System.Windows.Forms.MessageBoxButtons]::OK,
             [System.Windows.Forms.MessageBoxIcon]::Information
@@ -681,427 +701,8 @@ $settingsButton.BackColor = [System.Drawing.Color]::FromArgb(45, 45, 48)
 $settingsButton.ForeColor = [System.Drawing.Color]::White
 $settingsButton.Font = New-Object System.Drawing.Font("Segoe UI", 12)
 $settingsButton.Add_Click({
-        # Logik für das Einstellungsmenü
-        $settingsForm = New-Object System.Windows.Forms.Form
-        $settingsForm.Text = "Einstellungen"
-        $settingsForm.Size = New-Object System.Drawing.Size(550, 450)
-        $settingsForm.StartPosition = "CenterParent"
-        $settingsForm.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedDialog
-        $settingsForm.MaximizeBox = $false
-        $settingsForm.MinimizeBox = $false
-        
-        # Prüfen, ob wir im Dark Mode sind
-        $isDarkMode = $mainform.BackColor -eq [System.Drawing.Color]::FromArgb(28, 30, 36)
-        
-        # Farben anpassen
-        if ($isDarkMode) {
-            $settingsForm.BackColor = [System.Drawing.Color]::FromArgb(35, 37, 43)
-            $textColor = [System.Drawing.Color]::FromArgb(220, 220, 220)
-        }
-        else {
-            $settingsForm.BackColor = [System.Drawing.Color]::FromArgb(240, 240, 240)
-            $textColor = [System.Drawing.Color]::Black
-        }
-        
-        # TabControl für Einstellungskategorien
-        $settingsTabControl = New-Object System.Windows.Forms.TabControl
-        $settingsTabControl.Location = New-Object System.Drawing.Point(10, 10)
-        $settingsTabControl.Size = New-Object System.Drawing.Size(520, 360)
-        $settingsTabControl.Font = New-Object System.Drawing.Font("Segoe UI", 9)
-        
-        # Farbschema anpassen
-        if ($isDarkMode) {
-            $settingsTabControl.BackColor = [System.Drawing.Color]::FromArgb(45, 47, 53)
-        }
-        
-        # Tab 1: Anzeige-Einstellungen
-        $tabDisplay = New-Object System.Windows.Forms.TabPage
-        $tabDisplay.Text = "Anzeige"
-        $tabDisplay.BackColor = $settingsForm.BackColor
-        
-        # Schriftgröße Einstellung
-        $lblFontSize = New-Object System.Windows.Forms.Label
-        $lblFontSize.Text = "Schriftgröße:"
-        $lblFontSize.Location = New-Object System.Drawing.Point(15, 20)
-        $lblFontSize.Size = New-Object System.Drawing.Size(120, 25)
-        $lblFontSize.ForeColor = $textColor
-        $tabDisplay.Controls.Add($lblFontSize)
-        
-        $cmbFontSize = New-Object System.Windows.Forms.ComboBox
-        $cmbFontSize.Location = New-Object System.Drawing.Point(150, 20)
-        $cmbFontSize.Size = New-Object System.Drawing.Size(70, 25)
-        $cmbFontSize.DropDownStyle = [System.Windows.Forms.ComboBoxStyle]::DropDownList
-        @(8, 9, 10, 11, 12, 14) | ForEach-Object { $cmbFontSize.Items.Add($_) }
-        $cmbFontSize.SelectedItem = 10  # Standardwert
-        $tabDisplay.Controls.Add($cmbFontSize)
-        
-        # Fenstergröße speichern
-        $chkSaveWindowSize = New-Object System.Windows.Forms.CheckBox
-        $chkSaveWindowSize.Text = "Fenstergröße und Position speichern"
-        $chkSaveWindowSize.Location = New-Object System.Drawing.Point(15, 60)
-        $chkSaveWindowSize.Size = New-Object System.Drawing.Size(300, 25)
-        $chkSaveWindowSize.ForeColor = $textColor
-        $chkSaveWindowSize.Checked = $true
-        $tabDisplay.Controls.Add($chkSaveWindowSize)
-        
-        # Farbschema Einstellung
-        $lblColorScheme = New-Object System.Windows.Forms.Label
-        $lblColorScheme.Text = "Farbschema:"
-        $lblColorScheme.Location = New-Object System.Drawing.Point(15, 100)
-        $lblColorScheme.Size = New-Object System.Drawing.Size(120, 25)
-        $lblColorScheme.ForeColor = $textColor
-        $tabDisplay.Controls.Add($lblColorScheme)
-        
-        $cmbColorScheme = New-Object System.Windows.Forms.ComboBox
-        $cmbColorScheme.Location = New-Object System.Drawing.Point(150, 100)
-        $cmbColorScheme.Size = New-Object System.Drawing.Size(150, 25)
-        $cmbColorScheme.DropDownStyle = [System.Windows.Forms.ComboBoxStyle]::DropDownList
-        @("Standard", "Dunkel (Dark Mode)", "Hell (Light Mode)", "Blau", "Grün") | ForEach-Object { $cmbColorScheme.Items.Add($_) }
-        $cmbColorScheme.SelectedItem = if ($isDarkMode) { "Dunkel (Dark Mode)" } else { "Hell (Light Mode)" }
-        $tabDisplay.Controls.Add($cmbColorScheme)
-        
-        # Tab 2: Systemüberwachung
-        $tabMonitoring = New-Object System.Windows.Forms.TabPage
-        $tabMonitoring.Text = "Überwachung"
-        $tabMonitoring.BackColor = $settingsForm.BackColor
-        
-        # Update-Intervall für Hardware-Überwachung
-        $lblUpdateInterval = New-Object System.Windows.Forms.Label
-        $lblUpdateInterval.Text = "Update-Intervall (ms):"
-        $lblUpdateInterval.Location = New-Object System.Drawing.Point(15, 20)
-        $lblUpdateInterval.Size = New-Object System.Drawing.Size(150, 25)
-        $lblUpdateInterval.ForeColor = $textColor
-        $tabMonitoring.Controls.Add($lblUpdateInterval)
-        
-        $numUpdateInterval = New-Object System.Windows.Forms.NumericUpDown
-        $numUpdateInterval.Location = New-Object System.Drawing.Point(180, 20)
-        $numUpdateInterval.Size = New-Object System.Drawing.Size(100, 25)
-        $numUpdateInterval.Minimum = 500
-        $numUpdateInterval.Maximum = 10000
-        $numUpdateInterval.Increment = 100
-        $numUpdateInterval.Value = 1000  # Standardwert
-        $tabMonitoring.Controls.Add($numUpdateInterval)
-        
-        # CPU-Warnschwelle
-        $lblCpuThreshold = New-Object System.Windows.Forms.Label
-        $lblCpuThreshold.Text = "CPU-Warnschwelle (%):"
-        $lblCpuThreshold.Location = New-Object System.Drawing.Point(15, 60)
-        $lblCpuThreshold.Size = New-Object System.Drawing.Size(150, 25)
-        $lblCpuThreshold.ForeColor = $textColor
-        $tabMonitoring.Controls.Add($lblCpuThreshold)
-        
-        $numCpuThreshold = New-Object System.Windows.Forms.NumericUpDown
-        $numCpuThreshold.Location = New-Object System.Drawing.Point(180, 60)
-        $numCpuThreshold.Size = New-Object System.Drawing.Size(100, 25)
-        $numCpuThreshold.Minimum = 50
-        $numCpuThreshold.Maximum = 100
-        $numCpuThreshold.Increment = 5
-        $numCpuThreshold.Value = 90  # Standardwert
-        $tabMonitoring.Controls.Add($numCpuThreshold)
-        
-        # RAM-Warnschwelle
-        $lblRamThreshold = New-Object System.Windows.Forms.Label
-        $lblRamThreshold.Text = "RAM-Warnschwelle (%):"
-        $lblRamThreshold.Location = New-Object System.Drawing.Point(15, 100)
-        $lblRamThreshold.Size = New-Object System.Drawing.Size(150, 25)
-        $lblRamThreshold.ForeColor = $textColor
-        $tabMonitoring.Controls.Add($lblRamThreshold)
-        
-        $numRamThreshold = New-Object System.Windows.Forms.NumericUpDown
-        $numRamThreshold.Location = New-Object System.Drawing.Point(180, 100)
-        $numRamThreshold.Size = New-Object System.Drawing.Size(100, 25)
-        $numRamThreshold.Minimum = 50
-        $numRamThreshold.Maximum = 100
-        $numRamThreshold.Increment = 5
-        $numRamThreshold.Value = 85  # Standardwert
-        $tabMonitoring.Controls.Add($numRamThreshold)
-        
-        # GPU-Warnschwelle (nach der RAM-Warnschwelle hinzufügen)
-        $lblGpuThreshold = New-Object System.Windows.Forms.Label
-        $lblGpuThreshold.Text = "GPU-Warnschwelle (%):"
-        $lblGpuThreshold.Location = New-Object System.Drawing.Point(15, 140)
-        $lblGpuThreshold.Size = New-Object System.Drawing.Size(150, 25)
-        $lblGpuThreshold.ForeColor = $textColor
-        $tabMonitoring.Controls.Add($lblGpuThreshold)
-
-        $numGpuThreshold = New-Object System.Windows.Forms.NumericUpDown
-        $numGpuThreshold.Location = New-Object System.Drawing.Point(180, 140)
-        $numGpuThreshold.Size = New-Object System.Drawing.Size(100, 25)
-        $numGpuThreshold.Minimum = 50
-        $numGpuThreshold.Maximum = 100
-        $numGpuThreshold.Increment = 5
-        $numGpuThreshold.Value = $script:settings.GpuThreshold  
-        $tabMonitoring.Controls.Add($numGpuThreshold)
-        
-        # Benachrichtigungen aktivieren 
-        $chkEnableNotifications = New-Object System.Windows.Forms.CheckBox
-        $chkEnableNotifications.Text = "Benachrichtigungen aktivieren"
-        $chkEnableNotifications.Location = New-Object System.Drawing.Point(15, 180)
-        $chkEnableNotifications.Size = New-Object System.Drawing.Size(300, 25)
-        $chkEnableNotifications.ForeColor = $textColor
-        $chkEnableNotifications.Checked = $script:settings.EnableNotifications
-        $tabMonitoring.Controls.Add($chkEnableNotifications)
-        
-        # Tab 3: Logs & Berichte
-        $tabLogs = New-Object System.Windows.Forms.TabPage
-        $tabLogs.Text = "Logs & Berichte"
-        $tabLogs.BackColor = $settingsForm.BackColor
-        
-        # Log-Detailgrad
-        $lblLogLevel = New-Object System.Windows.Forms.Label
-        $lblLogLevel.Text = "Log-Detailgrad:"
-        $lblLogLevel.Location = New-Object System.Drawing.Point(15, 20)
-        $lblLogLevel.Size = New-Object System.Drawing.Size(120, 25)
-        $lblLogLevel.ForeColor = $textColor
-        $tabLogs.Controls.Add($lblLogLevel)
-        
-        $cmbLogLevel = New-Object System.Windows.Forms.ComboBox
-        $cmbLogLevel.Location = New-Object System.Drawing.Point(150, 20)
-        $cmbLogLevel.Size = New-Object System.Drawing.Size(150, 25)
-        $cmbLogLevel.DropDownStyle = [System.Windows.Forms.ComboBoxStyle]::DropDownList
-        @("Minimal", "Standard", "Detailliert", "Debug") | ForEach-Object { $cmbLogLevel.Items.Add($_) }
-        $cmbLogLevel.SelectedItem = "Standard"  # Standardwert
-        $tabLogs.Controls.Add($cmbLogLevel)
-        
-        # Automatisches Speichern
-        $chkAutoSaveLogs = New-Object System.Windows.Forms.CheckBox
-        $chkAutoSaveLogs.Text = "Logs automatisch speichern"
-        $chkAutoSaveLogs.Location = New-Object System.Drawing.Point(15, 60)
-        $chkAutoSaveLogs.Size = New-Object System.Drawing.Size(300, 25)
-        $chkAutoSaveLogs.ForeColor = $textColor
-        $chkAutoSaveLogs.Checked = $false
-        $tabLogs.Controls.Add($chkAutoSaveLogs)
-        
-        # Log-Speicherort
-        $lblLogPath = New-Object System.Windows.Forms.Label
-        $lblLogPath.Text = "Log-Speicherort:"
-        $lblLogPath.Location = New-Object System.Drawing.Point(15, 100)
-        $lblLogPath.Size = New-Object System.Drawing.Size(120, 25)
-        $lblLogPath.ForeColor = $textColor
-        $tabLogs.Controls.Add($lblLogPath)
-        
-        $txtLogPath = New-Object System.Windows.Forms.TextBox
-        $txtLogPath.Location = New-Object System.Drawing.Point(150, 100)
-        $txtLogPath.Size = New-Object System.Drawing.Size(250, 25)
-        $txtLogPath.Text = "$PSScriptRoot\Logs"  # Standardwert
-        $tabLogs.Controls.Add($txtLogPath)
-        
-        $btnBrowseLogPath = New-Object System.Windows.Forms.Button
-        $btnBrowseLogPath.Text = "..."
-        $btnBrowseLogPath.Location = New-Object System.Drawing.Point(410, 100)
-        $btnBrowseLogPath.Size = New-Object System.Drawing.Size(30, 25)
-        $btnBrowseLogPath.Add_Click({
-                $folderBrowser = New-Object System.Windows.Forms.FolderBrowserDialog
-                $folderBrowser.Description = "Log-Verzeichnis auswählen"
-                $folderBrowser.SelectedPath = $txtLogPath.Text
-                if ($folderBrowser.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
-                    $txtLogPath.Text = $folderBrowser.SelectedPath
-                }
-            })
-        $tabLogs.Controls.Add($btnBrowseLogPath)
-        
-        # Tab 4: Programmverhalten
-        $tabBehavior = New-Object System.Windows.Forms.TabPage
-        $tabBehavior.Text = "Verhalten"
-        $tabBehavior.BackColor = $settingsForm.BackColor
-        
-        # Bestätigungsdialoge
-        $chkConfirmActions = New-Object System.Windows.Forms.CheckBox
-        $chkConfirmActions.Text = "Aktionen bestätigen (empfohlen)"
-        $chkConfirmActions.Location = New-Object System.Drawing.Point(15, 20)
-        $chkConfirmActions.Size = New-Object System.Drawing.Size(300, 25)
-        $chkConfirmActions.ForeColor = $textColor
-        $chkConfirmActions.Checked = $true
-        $tabBehavior.Controls.Add($chkConfirmActions)
-        
-        # Erweiterte Temp-Dateien-Bereinigung als Standard
-        $chkAdvancedCleanup = New-Object System.Windows.Forms.CheckBox
-        $chkAdvancedCleanup.Text = "Standardmäßig erweiterte Temp-Bereinigung verwenden"
-        $chkAdvancedCleanup.Location = New-Object System.Drawing.Point(15, 60)
-        $chkAdvancedCleanup.Size = New-Object System.Drawing.Size(350, 25)
-        $chkAdvancedCleanup.ForeColor = $textColor
-        $chkAdvancedCleanup.Checked = $false
-        $tabBehavior.Controls.Add($chkAdvancedCleanup)
-        
-        # Automatisch auf Updates prüfen
-        $chkCheckUpdates = New-Object System.Windows.Forms.CheckBox
-        $chkCheckUpdates.Text = "Automatisch auf Programm-Updates prüfen"
-        $chkCheckUpdates.Location = New-Object System.Drawing.Point(15, 100)
-        $chkCheckUpdates.Size = New-Object System.Drawing.Size(350, 25)
-        $chkCheckUpdates.ForeColor = $textColor
-        $chkCheckUpdates.Checked = $true
-        $tabBehavior.Controls.Add($chkCheckUpdates)
-        
-        # Splash-Screen anzeigen
-        $chkShowSplash = New-Object System.Windows.Forms.CheckBox
-        $chkShowSplash.Text = "Startbildschirm anzeigen"
-        $chkShowSplash.Location = New-Object System.Drawing.Point(15, 140)
-        $chkShowSplash.Size = New-Object System.Drawing.Size(350, 25)
-        $chkShowSplash.ForeColor = $textColor
-        $chkShowSplash.Checked = $true
-        $tabBehavior.Controls.Add($chkShowSplash)
-        
-        # Tab 5: System
-        $tabSystem_Settings = New-Object System.Windows.Forms.TabPage
-        $tabSystem_Settings.Text = "System"
-        $tabSystem_Settings.BackColor = $settingsForm.BackColor
-        
-        # Überschrift für System-Wartung
-        $lblSystemMaintenance = New-Object System.Windows.Forms.Label
-        $lblSystemMaintenance.Text = "System-Wartung"
-        $lblSystemMaintenance.Location = New-Object System.Drawing.Point(15, 20)
-        $lblSystemMaintenance.Size = New-Object System.Drawing.Size(300, 25)
-        $lblSystemMaintenance.ForeColor = $textColor
-        $lblSystemMaintenance.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
-        $tabSystem_Settings.Controls.Add($lblSystemMaintenance)
-        
-        # Defender Dienst Neustart Button im System-Tab
-        $btnRestartDefenderSettings = New-Object System.Windows.Forms.Button
-        $btnRestartDefenderSettings.Text = "Defender Dienst Neustart"
-        $btnRestartDefenderSettings.Location = New-Object System.Drawing.Point(15, 50)
-        $btnRestartDefenderSettings.Size = New-Object System.Drawing.Size(200, 35)
-        $btnRestartDefenderSettings.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
-        $btnRestartDefenderSettings.ForeColor = $textColor
-        $btnRestartDefenderSettings.Add_Click({
-                $settingsForm.Hide()  # Verstecke Einstellungsfenster während der Operation
-                Switch-ToOutputTab -TabControl $tabControl
-                $outputBox.Clear()
-                Update-ProgressStatus -StatusText "Windows Defender-Dienst Neustart wird vorbereitet..." -ProgressValue 0 -TextColor ([System.Drawing.Color]::DarkBlue)
-                Restart-DefenderService -outputBox $outputBox -TabControl $tabControl -progressBar $progressBar -MainForm $mainform
-                $settingsForm.Show()  # Zeige Einstellungsfenster wieder an
-            })
-        $tabSystem_Settings.Controls.Add($btnRestartDefenderSettings)
-        
-        # Beschreibungstext für den Button
-        $lblRestartDefenderDesc = New-Object System.Windows.Forms.Label
-        $lblRestartDefenderDesc.Text = "Startet Windows Defender-Dienste neu, wenn MRT-Scans hängen oder Probleme auftreten."
-        $lblRestartDefenderDesc.Location = New-Object System.Drawing.Point(15, 90)
-        $lblRestartDefenderDesc.Size = New-Object System.Drawing.Size(450, 40)
-        $lblRestartDefenderDesc.ForeColor = $textColor
-        $tabSystem_Settings.Controls.Add($lblRestartDefenderDesc)
-        
-        # Tabs zum TabControl hinzufügen
-        $settingsTabControl.TabPages.Add($tabDisplay)
-        $settingsTabControl.TabPages.Add($tabMonitoring)
-        $settingsTabControl.TabPages.Add($tabLogs)
-        $settingsTabControl.TabPages.Add($tabBehavior)
-        $settingsTabControl.TabPages.Add($tabSystem_Settings)
-        
-        # TabControl zum Formular hinzufügen
-        $settingsForm.Controls.Add($settingsTabControl)
-        
-        # OK-Button
-        $btnOK = New-Object System.Windows.Forms.Button
-        $btnOK.Text = "OK"
-        $btnOK.Location = New-Object System.Drawing.Point(354, 380)
-        $btnOK.Size = New-Object System.Drawing.Size(80, 30)
-        $btnOK.Add_Click({
-                # Einstellungen anwenden und speichern
-                $script:settings = @{
-                    FontSize            = $cmbFontSize.SelectedItem
-                    ColorScheme         = $cmbColorScheme.SelectedItem
-                    SaveWindowSize      = $chkSaveWindowSize.Checked
-                    UpdateInterval      = $numUpdateInterval.Value
-                    CpuThreshold        = $numCpuThreshold.Value
-                    RamThreshold        = $numRamThreshold.Value
-                    GpuThreshold        = $numGpuThreshold.Value  # GPU-Schwellenwert hinzufügen
-                    EnableNotifications = $chkEnableNotifications.Checked
-                    LogLevel            = $cmbLogLevel.SelectedItem
-                    AutoSaveLogs        = $chkAutoSaveLogs.Checked
-                    LogPath             = $txtLogPath.Text
-                    ConfirmActions      = $chkConfirmActions.Checked
-                    AdvancedCleanup     = $chkAdvancedCleanup.Checked
-                    CheckUpdates        = $chkCheckUpdates.Checked
-                    ShowSplash          = $chkShowSplash.Checked
-                }
-                
-                # Einstellungen direkt anwenden
-                
-                # 1. Schriftgröße
-                $newFontSize = [int]$script:settings.FontSize
-                $outputBox.Font = New-Object System.Drawing.Font($outputBox.Font.FontFamily, $newFontSize)
-                $hardwareInfoBox.Font = New-Object System.Drawing.Font($hardwareInfoBox.Font.FontFamily, $newFontSize)
-                $systemStatusBox.Font = New-Object System.Drawing.Font($systemStatusBox.Font.FontFamily, $newFontSize)
-                $toolInfoBox.Font = New-Object System.Drawing.Font($toolInfoBox.Font.FontFamily, $newFontSize)
-                $toolDownloadsBox.Font = New-Object System.Drawing.Font($toolDownloadsBox.Font.FontFamily, $newFontSize)
-                
-                # 2. Farbschema
-                switch ($script:settings.ColorScheme) {
-                    "Dunkel (Dark Mode)" {
-                        if (-not $isDarkMode) {
-                            $themeButton.PerformClick()  # Wechselt zum Dark Mode
-                        }
-                    }
-                    "Hell (Light Mode)" {
-                        if ($isDarkMode) {
-                            $themeButton.PerformClick()  # Wechselt zum Light Mode
-                        }
-                    }
-                    "Blau" {
-                        # Blaues Farbschema anwenden
-                        $mainform.BackColor = [System.Drawing.Color]::FromArgb(220, 230, 250)
-                        $tabSystem.BackColor = [System.Drawing.Color]::FromArgb(200, 220, 255)
-                        $tabDisk.BackColor = [System.Drawing.Color]::FromArgb(210, 225, 250)
-                        $tabNetwork.BackColor = [System.Drawing.Color]::FromArgb(220, 230, 245)
-                        $tabCleanup.BackColor = [System.Drawing.Color]::FromArgb(230, 235, 240)
-                    }
-                    "Grün" {
-                        # Grünes Farbschema anwenden
-                        $mainform.BackColor = [System.Drawing.Color]::FromArgb(230, 245, 230)
-                        $tabSystem.BackColor = [System.Drawing.Color]::FromArgb(210, 250, 210)
-                        $tabDisk.BackColor = [System.Drawing.Color]::FromArgb(220, 245, 220)
-                        $tabNetwork.BackColor = [System.Drawing.Color]::FromArgb(230, 240, 230)
-                        $tabCleanup.BackColor = [System.Drawing.Color]::FromArgb(240, 235, 240)
-                    }
-                }
-                
-                # 3. Hardware Monitor Update-Intervall anpassen, falls vorhanden
-                if ($script:hardwareTimer -ne $null) {
-                    $script:hardwareTimer.Interval = [int]$script:settings.UpdateInterval
-                }
-                
-                # 4. Schwellenwerte für Hardware-Überwachung
-                $script:cpuThreshold = [int]$script:settings.CpuThreshold
-                $script:ramThreshold = [int]$script:settings.RamThreshold
-                $script:gpuThreshold = [int]$script:settings.GpuThreshold  # GPU-Schwellenwert hinzufügen
-                
-                # Einstellungen in Konfigurationsdatei speichern
-                $settingsFilePath = "$PSScriptRoot\config.json"
-                try {
-                    $script:settings | ConvertTo-Json | Out-File -FilePath $settingsFilePath -Encoding UTF8
-                }
-                catch {
-                    Write-Host "Fehler beim Speichern der Einstellungen: $_" -ForegroundColor Red
-                }
-                
-                # Ausgabe in der OutputBox
-                $outputBox.SelectionColor = [System.Drawing.Color]::Green
-                $outputBox.AppendText("`r`nEinstellungen wurden aktualisiert und angewendet:`r`n")
-                $outputBox.SelectionColor = [System.Drawing.Color]::Black
-                $outputBox.AppendText("- Schriftgröße: $($script:settings.FontSize)`r`n")
-                $outputBox.AppendText("- Farbschema: $($script:settings.ColorScheme)`r`n")
-                $outputBox.AppendText("- Update-Intervall: $($script:settings.UpdateInterval) ms`r`n")
-                $outputBox.AppendText("- CPU-Warnschwelle: $($script:settings.CpuThreshold)%`r`n")
-                $outputBox.AppendText("- RAM-Warnschwelle: $($script:settings.RamThreshold)%`r`n")
-                $outputBox.AppendText("- GPU-Warnschwelle: $($script:settings.GpuThreshold)%`r`n")  # GPU-Schwellenwert zur Ausgabe hinzufügen
-                $outputBox.AppendText("- Log-Level: $($script:settings.LogLevel)`r`n")
-                $outputBox.AppendText("- Einstellungen wurden in $settingsFilePath gespeichert.`r`n")
-                
-                # Formular schließen
-                $settingsForm.Close()
-            })
-        $settingsForm.Controls.Add($btnOK)
-        
-        # Abbrechen-Button
-        $btnCancel = New-Object System.Windows.Forms.Button
-        $btnCancel.Text = "Abbrechen"
-        $btnCancel.Location = New-Object System.Drawing.Point(450, 380)
-        $btnCancel.Size = New-Object System.Drawing.Size(80, 30)
-        $btnCancel.Add_Click({ $settingsForm.Close() })
-        $settingsForm.Controls.Add($btnCancel)
-        
-        # Formular anzeigen
-        $settingsForm.ShowDialog()
+        # Verwende die Funktion aus dem Settings-Modul, um den Einstellungsdialog anzuzeigen
+        Show-SettingsDialog -MainForm $mainform -OutputBox $outputBox -ThemeButton $themeButton -TabControl $tabControl -MainTabControl $mainTabControl
     })
 $settingsButton.Add_MouseEnter({ $this.BackColor = [System.Drawing.Color]::FromArgb(70, 70, 75) })
 $settingsButton.Add_MouseLeave({ $this.BackColor = [System.Drawing.Color]::FromArgb(45, 45, 48) })
@@ -1111,6 +712,7 @@ $titleBar.Controls.Add($settingsButton)
 $mainform.Controls.Add($titleBar)
 
 # Fenster verschiebbar machen
+# $lastLocation wird in den Event-Handlern verwendet, auch wenn der Linter das nicht erkennt
 $lastLocation = $null
 $titleBar.Add_MouseDown({
         $lastLocation = [System.Windows.Forms.Cursor]::Position
@@ -1138,7 +740,7 @@ $titleBar.Add_MouseUp({
 # Hintergrund-Panel für die Hardware-Monitore
 $monitorBackgroundPanel = New-Object System.Windows.Forms.Panel
 $monitorBackgroundPanel.Location = New-Object System.Drawing.Point(0, 30)  # Von 20 auf 30 geändert
-$monitorBackgroundPanel.Size = New-Object System.Drawing.Size(1050, 85)
+$monitorBackgroundPanel.Size = New-Object System.Drawing.Size(1000, 85)
 $monitorBackgroundPanel.BackColor = [System.Drawing.Color]::FromArgb(220, 230, 240)  
 $monitorBackgroundPanel.BackColor = [System.Drawing.Color]::BurlyWood
 $mainform.Controls.Add($monitorBackgroundPanel)
@@ -1147,7 +749,7 @@ $monitorBackgroundPanel.SendToBack()  # Panel in den Hintergrund schicken
 # Separate Panels für CPU, GPU und RAM direkt auf dem Hauptformular
 $gbCPU = New-Object System.Windows.Forms.Panel
 $gbCPU.Location = New-Object System.Drawing.Point(1, 35)  # Von 5 auf 35 geändert
-$gbCPU.Size = New-Object System.Drawing.Size(352, 75)   
+$gbCPU.Size = New-Object System.Drawing.Size(340, 75)   
 $gbCPU.BackColor = [System.Drawing.Color]::FromArgb(245, 245, 250)  # Noch helleres Grau
 $gbCPU.BackColor = [System.Drawing.Color]::Green 
 $mainform.Controls.Add($gbCPU)
@@ -1157,14 +759,14 @@ $gbCPU.BringToFront()  # CPU-Panel in den Vordergrund
 $lblCPUTitle = New-Object System.Windows.Forms.Label
 $lblCPUTitle.Text = "CPU wird erkannt..."  # Wird später dynamisch aktualisiert
 $lblCPUTitle.Location = New-Object System.Drawing.Point(0, 0)
-$lblCPUTitle.Size = New-Object System.Drawing.Size(352, 20)
+$lblCPUTitle.Size = New-Object System.Drawing.Size(340, 20)
 $lblCPUTitle.Font = New-Object System.Drawing.Font("Segoe UI", 9)
 $lblCPUTitle.BackColor = [System.Drawing.Color]::Lavender
 $gbCPU.Controls.Add($lblCPUTitle)
 
 $gbGPU = New-Object System.Windows.Forms.Panel
-$gbGPU.Location = New-Object System.Drawing.Point(354, 35)   # Von 5 auf 35 geändert
-$gbGPU.Size = New-Object System.Drawing.Size(350, 75)   
+$gbGPU.Location = New-Object System.Drawing.Point(341, 35)   # Von 5 auf 35 geändert
+$gbGPU.Size = New-Object System.Drawing.Size(340, 75)   
 $gbGPU.BackColor = [System.Drawing.Color]::FromArgb(245, 245, 250)  # Noch helleres Grau
 $gbGPU.BackColor = [System.Drawing.Color]::Yellow 
 $mainform.Controls.Add($gbGPU)
@@ -1174,14 +776,14 @@ $gbGPU.BringToFront()  # GPU-Panel in den Vordergrund
 $lblGPUTitle = New-Object System.Windows.Forms.Label
 $lblGPUTitle.Text = "GPU wird erkannt..."  # Wird später dynamisch aktualisiert
 $lblGPUTitle.Location = New-Object System.Drawing.Point(0, 0)
-$lblGPUTitle.Size = New-Object System.Drawing.Size(350, 20)
+$lblGPUTitle.Size = New-Object System.Drawing.Size(340, 20)
 $lblGPUTitle.Font = New-Object System.Drawing.Font("Segoe UI", 9)
 $lblGPUTitle.BackColor = [System.Drawing.Color]::Lavender
 $gbGPU.Controls.Add($lblGPUTitle)
 
 $gbRAM = New-Object System.Windows.Forms.Panel
-$gbRAM.Location = New-Object System.Drawing.Point(705, 35)   # Von 5 auf 35 geändert
-$gbRAM.Size = New-Object System.Drawing.Size(350, 75)   
+$gbRAM.Location = New-Object System.Drawing.Point(681, 35)   # Von 5 auf 35 geändert
+$gbRAM.Size = New-Object System.Drawing.Size(345, 75)   
 $gbRAM.BackColor = [System.Drawing.Color]::FromArgb(245, 245, 250)  # Noch helleres Grau
 $gbRAM.BackColor = [System.Drawing.Color]::Red
 $mainform.Controls.Add($gbRAM)
@@ -1468,7 +1070,7 @@ Maximale Einträge: 100
 }
 
 # Funktion zum Verwalten der Log-Datei
-function Manage-LogFile {
+function Update-LogFile {
     param(
         [string]$Message,
         [switch]$IsError
@@ -1500,8 +1102,10 @@ function Manage-LogFile {
     }
 }
 
-# Initialisiere Log-Datei beim Start
-Initialize-LogFile
+# Initialisiere Log-Datei NICHT mehr beim Start, sondern nur noch bei Bedarf
+# So wird die Log-Datei nicht bei jedem Start überschrieben, sondern nur
+# wenn sie nicht existiert oder die maximale Größe überschritten wird
+# Initialize-LogFile
 
 # Funktion zum sicheren Schließen des Formulars
 function Close-FormSafely {
@@ -1518,10 +1122,12 @@ function Close-FormSafely {
         # Flag setzen, dass wir im Schließvorgang sind
         $script:isClosing = $true
         Write-Host "Close-FormSafely: Schließvorgang wird gestartet..."
+        Update-LogFile -Message "Close-FormSafely: Schließvorgang gestartet"
         
         # Hardware-Monitoring stoppen
-        if ($script:hardwareTimer -ne $null) {
+        if ($null -ne $script:hardwareTimer) {
             Write-Host "Close-FormSafely: Stoppe Hardware-Timer..."
+            Update-LogFile -Message "Close-FormSafely: Hardware-Timer gestoppt"
             $script:hardwareTimer.Stop()
             $script:hardwareTimer.Dispose()
             $script:hardwareTimer = $null
@@ -1529,24 +1135,28 @@ function Close-FormSafely {
         
         # Controls deaktivieren
         Write-Host "Close-FormSafely: Deaktiviere Controls..."
+        Update-LogFile -Message "Close-FormSafely: Controls deaktiviert"
         $Form.SuspendLayout()
         foreach ($control in $Form.Controls) {
-            if ($control -ne $null) {
+            if ($null -ne $control) {
                 $control.Enabled = $false
             }
         }
         
         # Garbage Collection
         Write-Host "Close-FormSafely: Führe Garbage Collection durch..."
+        Update-LogFile -Message "Close-FormSafely: Garbage Collection durchgeführt"
         [System.GC]::Collect()
         [System.GC]::WaitForPendingFinalizers()
         
         # Direktes Beenden der Anwendung
         Write-Host "Close-FormSafely: Beende Anwendung..."
+        Update-LogFile -Message "Close-FormSafely: Anwendung wird beendet"
         [System.Environment]::Exit(0)
     }
     catch {
         Write-Warning "Close-FormSafely: Fehler beim Schließen: $_"
+        Update-LogFile -Message "Close-FormSafely: Fehler beim Schließen: $_" -IsError
         # Notfall-Beendigung
         [System.Environment]::Exit(0)
     }
@@ -1554,26 +1164,34 @@ function Close-FormSafely {
 
 # Event-Handler für FormClosing
 $mainform.Add_FormClosing({
-        param($sender, $e)
+        param($formSender, $e)
     
         # Protokollieren des Schließversuchs
         Write-Host "Schließvorgang wird gestartet..."
+        # Log-Eintrag für Schließvorgang
+        Update-LogFile -Message "Anwendung wird geschlossen"
     
         # Wenn wir bereits im Schließvorgang sind, nicht erneut durchführen
         if ($script:isClosing) {
             return
         }
     
+        # Fenstergröße und Position speichern mit der Funktion aus dem Settings-Modul
+        Export-WindowPosition -MainForm $mainform -ConfigPath "$PSScriptRoot\config.json"
+        Update-LogFile -Message "Fensterposition wurde gespeichert"
+        
         # Schließvorgang verhindern für normale Verarbeitung
         $e.Cancel = $true
     
         try {
             # Flag setzen, dass wir im Schließvorgang sind
             $script:isClosing = $true
+            Update-LogFile -Message "Schließvorgang initiiert"
         
             # Hardware-Monitoring stoppen
-            if ($script:hardwareTimer -ne $null) {
+            if ($null -ne $script:hardwareTimer) {
                 Write-Host "Stoppe Hardware-Timer..."
+                Update-LogFile -Message "Hardware-Timer wurde gestoppt"
                 $script:hardwareTimer.Stop()
                 $script:hardwareTimer.Dispose()
                 $script:hardwareTimer = $null
@@ -1581,24 +1199,27 @@ $mainform.Add_FormClosing({
         
             # Controls deaktivieren
             Write-Host "Deaktiviere Controls..."
-            $sender.SuspendLayout()
-            foreach ($control in $sender.Controls) {
-                if ($control -ne $null) {
+            $formSender.SuspendLayout()
+            foreach ($control in $formSender.Controls) {
+                if ($null -ne $control) {
                     $control.Enabled = $false
                 }
             }
         
             # Garbage Collection
             Write-Host "Führe Garbage Collection durch..."
+            Update-LogFile -Message "Garbage Collection durchgeführt"
             [System.GC]::Collect()
             [System.GC]::WaitForPendingFinalizers()
         
             # Direktes Beenden mit System.Environment.Exit(0)
             Write-Host "Beende Anwendung..."
+            Update-LogFile -Message "Anwendung wurde ordnungsgemäß beendet"
             [System.Environment]::Exit(0)
         }
         catch {
             Write-Warning "Fehler beim Schließen: $_"
+            Update-LogFile -Message "Fehler beim Schließen: $_" -IsError
             # Notfall-Beendigung
             [System.Environment]::Exit(0)
         }
@@ -1670,8 +1291,8 @@ $mainform.Add_LocationChanged({
 # GroupBox für den Haupt-TabControl erstellen
 $gbMainTabControl = New-Object System.Windows.Forms.GroupBox
 $gbMainTabControl.Text = "Hauptfunktionen"
-$gbMainTabControl.Location = New-Object System.Drawing.Point(5, 125)  # Y-Position von 90 auf 95 geändert
-$gbMainTabControl.Size = New-Object System.Drawing.Size(990, 330)
+$gbMainTabControl.Location = New-Object System.Drawing.Point(5, 120)  # Y-Position von 90 auf 95 geändert
+$gbMainTabControl.Size = New-Object System.Drawing.Size(990, 300)
 $gbMainTabControl.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
 $gbMainTabControl.ForeColor = [System.Drawing.Color]::FromArgb(60, 60, 80)  # Dunkelblaugrau
 $mainform.Controls.Add($gbMainTabControl)
@@ -1679,7 +1300,7 @@ $mainform.Controls.Add($gbMainTabControl)
 # Erstelle einen Haupt-TabControl für die Funktionsgruppen
 $mainTabControl = New-Object System.Windows.Forms.TabControl
 $mainTabControl.Location = New-Object System.Drawing.Point(10, 20)
-$mainTabControl.Size = New-Object System.Drawing.Size(970, 300)
+$mainTabControl.Size = New-Object System.Drawing.Size(970, 270)
 $mainTabControl.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
 $mainTabControl.SelectedIndex = 0
 $mainTabControl.BackColor = [System.Drawing.Color]::FromArgb(245, 245, 250)  # Sehr helles Blaugrau
@@ -1687,8 +1308,7 @@ $mainTabControl.Padding = New-Object System.Drawing.Point(12, 4)
 $mainTabControl.ItemSize = New-Object System.Drawing.Size(120, 30)
 $gbMainTabControl.Controls.Add($mainTabControl)
 
-# Gemeinsame Hintergrundfarbe für alle Tabs
-$tabBackColor = [System.Drawing.Color]::FromArgb(240, 240, 245)  # Sehr helles Blaugrau
+# Gemeinsame Hintergrundfarbe für alle Tabs entfernt (nicht verwendet)
 
 # Farbdefinitionen für die Haupttabs
 $tabSystemColor = [System.Drawing.Color]::FromArgb(235, 245, 251)  # Hellblau
@@ -1833,59 +1453,59 @@ $tabCleanup.Controls.Add($tblCleanup)
 # GroupBoxes für System-Tab erstellen
 $gbSystemSecurity = New-Object System.Windows.Forms.GroupBox
 $gbSystemSecurity.Text = "System & Sicherheit"
-$gbSystemSecurity.Location = New-Object System.Drawing.Point(30, 30)
-$gbSystemSecurity.Size = New-Object System.Drawing.Size(440, 220)
+$gbSystemSecurity.Location = New-Object System.Drawing.Point(30, 15)
+$gbSystemSecurity.Size = New-Object System.Drawing.Size(440, 200)
 $tblSystem.Controls.Add($gbSystemSecurity)
 
 $gbSystemMaintenance = New-Object System.Windows.Forms.GroupBox
 $gbSystemMaintenance.Text = "System-Wartung"
-$gbSystemMaintenance.Location = New-Object System.Drawing.Point(500, 30)
+$gbSystemMaintenance.Location = New-Object System.Drawing.Point(500, 15)
 $gbSystemMaintenance.Size = New-Object System.Drawing.Size(440, 95)
 $tblSystem.Controls.Add($gbSystemMaintenance)
 
 # GroupBoxes für Disk-Tab erstellen
 $gbDiskCheck = New-Object System.Windows.Forms.GroupBox
 $gbDiskCheck.Text = "Festplatten-Prüfung"
-$gbDiskCheck.Location = New-Object System.Drawing.Point(30, 155)
+$gbDiskCheck.Location = New-Object System.Drawing.Point(30, 120)
 $gbDiskCheck.Size = New-Object System.Drawing.Size(440, 95)
 $tblDisk.Controls.Add($gbDiskCheck)
 
 $gbDiskRepair = New-Object System.Windows.Forms.GroupBox
 $gbDiskRepair.Text = "System-Reparatur (DISM)"
-$gbDiskRepair.Location = New-Object System.Drawing.Point(500, 30)
-$gbDiskRepair.Size = New-Object System.Drawing.Size(440, 220)
+$gbDiskRepair.Location = New-Object System.Drawing.Point(500, 15)
+$gbDiskRepair.Size = New-Object System.Drawing.Size(440, 200)
 $tblDisk.Controls.Add($gbDiskRepair)
 
 # Neue GroupBox für Diagnose im Disk-Tab
 $gbDiagnostics = New-Object System.Windows.Forms.GroupBox
 $gbDiagnostics.Text = "Diagnose"
-$gbDiagnostics.Location = New-Object System.Drawing.Point(30, 30)
+$gbDiagnostics.Location = New-Object System.Drawing.Point(30, 15)
 $gbDiagnostics.Size = New-Object System.Drawing.Size(440, 95)
 $tblDisk.Controls.Add($gbDiagnostics)
 
 # GroupBoxes für Network-Tab erstellen
 $gbNetworkDiagnostics = New-Object System.Windows.Forms.GroupBox
 $gbNetworkDiagnostics.Text = "Netzwerk-Diagnose"
-$gbNetworkDiagnostics.Location = New-Object System.Drawing.Point(30, 30)
+$gbNetworkDiagnostics.Location = New-Object System.Drawing.Point(30, 15)
 $gbNetworkDiagnostics.Size = New-Object System.Drawing.Size(440, 95)
 $tblNetwork.Controls.Add($gbNetworkDiagnostics)
 
 $gbNetworkRepair = New-Object System.Windows.Forms.GroupBox
 $gbNetworkRepair.Text = "Netzwerk-Reparatur"
-$gbNetworkRepair.Location = New-Object System.Drawing.Point(500, 30)
+$gbNetworkRepair.Location = New-Object System.Drawing.Point(500, 15)
 $gbNetworkRepair.Size = New-Object System.Drawing.Size(440, 95)
 $tblNetwork.Controls.Add($gbNetworkRepair)
 
 # GroupBoxes für Cleanup-Tab erstellen
 $gbCleanupSystem = New-Object System.Windows.Forms.GroupBox
 $gbCleanupSystem.Text = "System-Bereinigung"
-$gbCleanupSystem.Location = New-Object System.Drawing.Point(30, 30)
+$gbCleanupSystem.Location = New-Object System.Drawing.Point(30, 15)
 $gbCleanupSystem.Size = New-Object System.Drawing.Size(440, 95)
 $tblCleanup.Controls.Add($gbCleanupSystem)
 
 $gbCleanupTemp = New-Object System.Windows.Forms.GroupBox
 $gbCleanupTemp.Text = "Temporäre Dateien"
-$gbCleanupTemp.Location = New-Object System.Drawing.Point(500, 30)
+$gbCleanupTemp.Location = New-Object System.Drawing.Point(500, 15)
 $gbCleanupTemp.Size = New-Object System.Drawing.Size(440, 95)
 $tblCleanup.Controls.Add($gbCleanupTemp)
 
@@ -1894,7 +1514,7 @@ $tblCleanup.Controls.Add($gbCleanupTemp)
 # Erstelle GroupBox für den TabControl
 $gbOutputTabs = New-Object System.Windows.Forms.GroupBox
 $gbOutputTabs.Text = "System-Informationen und Ausgabe"
-$gbOutputTabs.Location = New-Object System.Drawing.Point(5, 465)
+$gbOutputTabs.Location = New-Object System.Drawing.Point(5, 430)
 $gbOutputTabs.Size = New-Object System.Drawing.Size(990, 360)
 $gbOutputTabs.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
 $gbOutputTabs.ForeColor = [System.Drawing.Color]::FromArgb(60, 60, 80)  # Dunkelblaugrau
@@ -2019,7 +1639,7 @@ public class TextProgressBar : ProgressBar
 
 # Erstelle die neue TextProgressBar anstelle der alten ProgressBar
 $progressBar = New-Object TextProgressBar
-$progressBar.Location = New-Object System.Drawing.Point(130, 835)
+$progressBar.Location = New-Object System.Drawing.Point(190, 795)
 $progressBar.Size = New-Object System.Drawing.Size(650, 30)
 $progressBar.Style = "Continuous"
 $progressBar.Minimum = 0
@@ -2380,10 +2000,9 @@ $btnSFC.Location = New-Object System.Drawing.Point(30, 25)
 $btnSFC.Add_Click({
         Switch-ToOutputTab -TabControl $tabControl
         # Status auf "SFC Check läuft..." setzen
-        Update-ProgressStatus -StatusText "SFC Check läuft..." -ProgressValue 0 -TextColor ([System.Drawing.Color]::DarkBlue)
+        Update-ProgressStatus -StatusText "SFC Check wird initialisiert..." -ProgressValue 0 -TextColor ([System.Drawing.Color]::DarkBlue)
         Start-SFCCheck -outputBox $outputBox -progressBar $progressBar
-        # Nach dem Check Status auf "Fertig" setzen
-        Update-ProgressStatus -StatusText "Fertig" -ProgressValue 100 -TextColor ([System.Drawing.Color]::Green)
+        # Nach dem Check Status prüfen - wird jetzt von der Start-SFCCheck-Funktion übernommen
     })
 $gbSystemMaintenance.Controls.Add($btnSFC)
 
@@ -2413,7 +2032,7 @@ $btnWinUpdate.Add_Click({
         Update-ProgressStatus -StatusText "Windows Update wird gestartet..." -ProgressValue 0 -TextColor ([System.Drawing.Color]::DarkBlue)
         try {
             # Rufe die Modulfunktionen auf
-            Start-WindowsUpdate -outputBox $outputBox -TabControl $tabControl
+            Start-WindowsUpdate -outputBox $outputBox -TabControl $tabControl -progressBar $progressBar -MainForm $mainform
             
             # Suche nach Updates
             $updateSession = New-Object -ComObject Microsoft.Update.Session
@@ -2421,12 +2040,12 @@ $btnWinUpdate.Add_Click({
             $searchResult = $updateSearcher.Search("IsInstalled=0 AND IsHidden=0")
             
             # Zeige Update-Status an
-            Get-WindowsUpdateStatus -outputBox $outputBox
+            Get-WindowsUpdateStatus -outputBox $outputBox -progressBar $progressBar
             
             # Nur installieren wenn Updates gefunden wurden
             if ($searchResult.Updates.Count -gt 0) {
                 # Automatisch Updates installieren
-                Update-ProgressStatus -StatusText "Updates werden installiert..." -ProgressValue 0 -TextColor ([System.Drawing.Color]::DarkBlue)
+                Update-ProgressStatus -StatusText "Updates werden installiert..." -ProgressValue 50 -TextColor ([System.Drawing.Color]::DarkBlue)
                 Install-AvailableWindowsUpdates -outputBox $outputBox -progressBar $progressBar
                 # Nach der Installation Status auf "Fertig" setzen
                 Update-ProgressStatus -StatusText "Fertig" -ProgressValue 100 -TextColor ([System.Drawing.Color]::Green)
@@ -2434,12 +2053,42 @@ $btnWinUpdate.Add_Click({
             else {
                 Update-ProgressStatus -StatusText "Keine Updates verfügbar" -ProgressValue 100 -TextColor ([System.Drawing.Color]::Green)
             }
+            
+            # Nach dem Scan: Nutzer fragen, ob das Windows-Update-Fenster geöffnet werden soll
+            $result = [System.Windows.Forms.MessageBox]::Show(
+                "Möchten Sie die Windows Update Einstellungen öffnen?",
+                "Windows Update öffnen",
+                [System.Windows.Forms.MessageBoxButtons]::YesNo,
+                [System.Windows.Forms.MessageBoxIcon]::Question
+            )
+            if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
+                Start-Process "ms-settings:windowsupdate"
+            }
         }
         catch {
             Write-ToolLog -ToolName "WindowsUpdate" `
                 -Message "Fehler beim Starten oder Installieren von Windows Update: $_" `
                 -OutputBox $outputBox `
                 -Color ([System.Drawing.Color]::Red)
+                
+            # Bei Fehler: ProgressBar rot einfärben
+            Update-ProgressStatus -StatusText "Fehler bei Windows Update" -ProgressValue 100 -TextColor ([System.Drawing.Color]::Red)
+            
+            # Versuche zusätzliche Fehlerinformationen zu sammeln
+            try {
+                $wuauserv = Get-Service -Name "wuauserv"
+                Write-ToolLog -ToolName "WindowsUpdate" `
+                    -Message "Windows Update Dienst Status: $($wuauserv.Status)" `
+                    -OutputBox $outputBox `
+                    -Color ([System.Drawing.Color]::Yellow)
+            }
+            catch {
+                Write-ToolLog -ToolName "WindowsUpdate" `
+                    -Message "Konnte den Status des Windows Update Dienstes nicht abrufen: $_" `
+                    -OutputBox $outputBox `
+                    -Color ([System.Drawing.Color]::Red)
+            }
+            -Color ([System.Drawing.Color]::Red)
             Update-ProgressStatus -StatusText "Fehler" -ProgressValue 0 -TextColor ([System.Drawing.Color]::Red)
         }
     })
@@ -2553,36 +2202,12 @@ $btnTempFiles.Size = New-Object System.Drawing.Size(180, 50)
 $btnTempFiles.Location = New-Object System.Drawing.Point(30, 25)
 $btnTempFiles.Add_Click({
         Switch-ToOutputTab -TabControl $tabControl
-        # Einfacher Dialog mit zwei Optionen
-        $result = [System.Windows.Forms.MessageBox]::Show(
-            "Möchten Sie die erweiterte Temp-Files-Bereinigung (Ja) oder die einfache Version (Nein) verwenden?",
-            "Temp-Files-Bereinigung",
-            [System.Windows.Forms.MessageBoxButtons]::YesNoCancel,
-            [System.Windows.Forms.MessageBoxIcon]::Question
-        )
-    
-        switch ($result) {
-            'Yes' { 
-                # Status auf "Erweiterte Bereinigung läuft..." setzen
-                Update-ProgressStatus -StatusText "Erweiterte Bereinigung läuft..." -ProgressValue 0 -TextColor ([System.Drawing.Color]::DarkBlue)
-                Start-TempFilesCleanupAdvanced -outputBox $outputBox -progressBar $progressBar -mainform $mainform 
-                # Nach der Bereinigung Status auf "Fertig" setzen
-                Update-ProgressStatus -StatusText "Fertig" -ProgressValue 100 -TextColor ([System.Drawing.Color]::Green)
-            }
-            'No' { 
-                # Status auf "Bereinigung läuft..." setzen
-                Update-ProgressStatus -StatusText "Bereinigung läuft..." -ProgressValue 0 -TextColor ([System.Drawing.Color]::DarkBlue)
-                Start-TempFilesCleanup -outputBox $outputBox -progressBar $progressBar 
-                # Nach der Bereinigung Status auf "Fertig" setzen
-                Update-ProgressStatus -StatusText "Fertig" -ProgressValue 100 -TextColor ([System.Drawing.Color]::Green)
-            }
-            'Cancel' { 
-                $outputBox.SelectionColor = [System.Drawing.Color]::Gray
-                $outputBox.AppendText("Temp-Files-Bereinigung abgebrochen.`r`n") 
-                # Status auf "Abgebrochen" setzen
-                Update-ProgressStatus -StatusText "Abgebrochen" -ProgressValue 0 -TextColor ([System.Drawing.Color]::Gray)
-            }
-        }
+        # Dialog entfernt, direkt erweiterte Bereinigung starten
+        # Status auf "Erweiterte Bereinigung läuft..." setzen
+        Update-ProgressStatus -StatusText "Erweiterte Bereinigung läuft..." -ProgressValue 0 -TextColor ([System.Drawing.Color]::DarkBlue)
+        Start-TempFilesCleanupAdvanced -outputBox $outputBox -progressBar $progressBar -mainform $mainform 
+        # Nach der Bereinigung Status auf "Fertig" setzen
+        Update-ProgressStatus -StatusText "Fertig" -ProgressValue 100 -TextColor ([System.Drawing.Color]::Green)
     })
 $gbCleanupTemp.Controls.Add($btnTempFiles)
 
@@ -2654,7 +2279,7 @@ foreach ($button in $cleanupButtons) {
 # Neustart Button erstellen
 $btnRestart = New-Object System.Windows.Forms.Button
 $btnRestart.Text = "System Neustart"
-$btnRestart.Location = New-Object System.Drawing.Point(790, 835)
+$btnRestart.Location = New-Object System.Drawing.Point(850, 795)
 $btnRestart.Size = New-Object System.Drawing.Size(120, 30)
 $btnRestart.Add_Click({
         # Bestätigungsdialog anzeigen
@@ -2895,7 +2520,7 @@ function Get-ToolInfo {
     $infoBox.SelectionColor = [System.Drawing.Color]::Blue
     $infoBox.AppendText("ALLGEMEINE INFORMATIONEN:`r`n")
     $infoBox.SelectionColor = [System.Drawing.Color]::Black
-    $infoBox.AppendText("* Version: 1.0.0`r`n")
+    $infoBox.AppendText("* Version: 3.1.0`r`n")
     $infoBox.AppendText("* Entwickler: IT-Support`r`n")
     $infoBox.AppendText("* Letzte Aktualisierung: 01.03.2024`r`n")
     
@@ -3036,7 +2661,7 @@ $mainform.Add_Shown({
         $applySettingsTimer.Interval = 500
         $applySettingsTimer.Add_Tick({
                 $this.Stop()
-                $result = Apply-Settings
+                $result = Update-Settings
                 if ($result) {
                     $outputBox.SelectionColor = [System.Drawing.Color]::Green
                     $outputBox.AppendText("`r`nGespeicherte Einstellungen wurden angewendet.`r`n")
@@ -3044,6 +2669,59 @@ $mainform.Add_Shown({
                 $this.Dispose()
             })
         $applySettingsTimer.Start()
+        
+        # Timer für die finale Positionierung nach dem vollständigen Laden
+        $positioningTimer = New-Object System.Windows.Forms.Timer
+        $positioningTimer.Interval = 1000  # 1 Sekunde warten
+        $positioningTimer.Add_Tick({
+                $this.Stop()
+                
+                try {
+                    # Konsolenfenster finden und in den Vordergrund bringen
+                    $consoleHandle = Find-PowerShellWindow
+                    if ($consoleHandle -ne [IntPtr]::Zero) {
+                        # Konsolenfenster in den Vordergrund bringen
+                        [NativeMethods]::ShowWindow($consoleHandle, [NativeMethods]::SW_RESTORE)
+                        [NativeMethods]::SetForegroundWindow($consoleHandle)
+                        
+                        # Konsolenfenstergröße ermitteln
+                        $rect = New-Object RECT
+                        if ([NativeMethods]::GetWindowRect($consoleHandle, [ref]$rect)) {
+                            # Debug-Ausgaben entfernt
+                            
+                            # GUI-Fenster rechts neben dem Konsolenfenster positionieren
+                            $guiLeft = $rect.Right + 10
+                            $guiTop = $rect.Top
+                            
+                            # Sicherstellen, dass das Fenster auf dem Bildschirm sichtbar ist
+                            $screenWidth = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea.Width
+                            $screenHeight = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea.Height
+                            
+                            if ($guiLeft + $mainform.Width -gt $screenWidth) {
+                                # Wenn das GUI-Fenster rechts nicht mehr auf den Bildschirm passt, 
+                                # platziere es unter dem Konsolenfenster
+                                $guiLeft = $rect.Left
+                                $guiTop = $rect.Bottom + 10
+                                
+                                # Wenn auch das nicht passt, dann belasse es bei der aktuellen Position
+                                if ($guiTop + $mainform.Height -gt $screenHeight) {
+                                    return
+                                }
+                            }
+                            
+                            # Debug-Ausgabe entfernt
+                            $mainform.Location = New-Object System.Drawing.Point($guiLeft, $guiTop)
+                        }
+                    }
+                }
+                catch {
+                    # Debug-Ausgabe entfernt
+                }
+                finally {
+                    $this.Dispose()
+                }
+            })
+        $positioningTimer.Start()
     })
 
 # Hauptfenster anzeigen
@@ -3226,9 +2904,9 @@ $tabControl.DrawMode = [System.Windows.Forms.TabDrawMode]::OwnerDrawFixed
 
 # Event-Handler für das Zeichnen der Tabs
 $drawTabHandler = {
-    param($sender, $e)
+    param($tabControl, $e)
     
-    $tabPage = $sender.TabPages[$e.Index]
+    $tabPage = $tabControl.TabPages[$e.Index]
     $tabBounds = $e.Bounds
     $g = $e.Graphics
     
@@ -3237,32 +2915,32 @@ $drawTabHandler = {
     
     if ($isDarkMode) {
         # Dark Mode Farben
-        if ($e.Index -eq $sender.SelectedIndex) {
+        if ($e.Index -eq $tabControl.SelectedIndex) {
             # Ausgewählter Tab im Dark Mode
             $brush = New-Object System.Drawing.SolidBrush($tabPage.BackColor)
             $textColor = [System.Drawing.Color]::FromArgb(210, 220, 230)  # Helleres Blau-Weiß für aktive Tabs
-            $font = New-Object System.Drawing.Font($sender.Font, [System.Drawing.FontStyle]::Bold)
+            $font = New-Object System.Drawing.Font($tabControl.Font, [System.Drawing.FontStyle]::Bold)
         }
         else {
             # Nicht ausgewählter Tab im Dark Mode
             $brush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(38, 40, 48))  # Dunkelgrau für inaktive Tabs
             $textColor = [System.Drawing.Color]::FromArgb(140, 150, 160)  # Gedämpftes Blau-Grau
-            $font = $sender.Font
+            $font = $tabControl.Font
         }
     }
     else {
         # Light Mode Farben (Original-Code beibehalten)
-        if ($e.Index -eq $sender.SelectedIndex) {
+        if ($e.Index -eq $tabControl.SelectedIndex) {
             # Ausgewählter Tab
             $brush = New-Object System.Drawing.SolidBrush($tabPage.BackColor)
             $textColor = [System.Drawing.Color]::Black
-            $font = New-Object System.Drawing.Font($sender.Font, [System.Drawing.FontStyle]::Bold)
+            $font = New-Object System.Drawing.Font($tabControl.Font, [System.Drawing.FontStyle]::Bold)
         }
         else {
             # Nicht ausgewählter Tab
             $brush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(240, 240, 240))
             $textColor = [System.Drawing.Color]::DarkGray
-            $font = $sender.Font
+            $font = $tabControl.Font
         }
     }
     
@@ -3290,14 +2968,14 @@ $tabControl.Add_DrawItem($drawTabHandler)
 # GroupBox für den Ausgabe-TabControl erstellen
 $gbOutputTabControl = New-Object System.Windows.Forms.GroupBox
 $gbOutputTabControl.Text = "Ausgabe und Informationen"
-$gbOutputTabControl.Location = New-Object System.Drawing.Point(10, 450)
+$gbOutputTabControl.Location = New-Object System.Drawing.Point(10, 430)
 $gbOutputTabControl.Size = New-Object System.Drawing.Size(990, 360)
 $gbOutputTabControl.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
 $gbOutputTabControl.ForeColor = [System.Drawing.Color]::FromArgb(60, 60, 80)  # Dunkelblaugrau
 $mainform.Controls.Add($gbOutputTabControl)
 
 # Ausgabe-TabControl in die GroupBox verschieben
-$tabControl.Location = New-Object System.Drawing.Point(10, 20)
+$tabControl.Location = New-Object System.Drawing.Point(10, 10)
 $tabControl.Size = New-Object System.Drawing.Size(970, 330)
 $gbOutputTabControl.Controls.Add($tabControl)
 
@@ -3385,7 +3063,7 @@ $closeButton.BackColor = [System.Drawing.Color]::LightCoral
 $closeButton.ForeColor = [System.Drawing.Color]::White
 $closeButton.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
 $closeButton.Add_Click({
-        Write-Host "Schließen-Button wurde geklickt..."
+        # Debug-Meldung entfernt
         Close-FormSafely -Form $mainform
     })
 $mainform.Controls.Add($closeButton)
@@ -3399,188 +3077,5 @@ $script:ramDebugEnabled = $false
 $script:cpuThreshold = 90  # Standard-CPU-Schwellenwert (wird durch Einstellungen überschrieben)
 $script:gpuThreshold = 80  # Standard-GPU-Schwellenwert (wird durch Einstellungen überschrieben)
 $script:ramThreshold = 85  # Standard-RAM-Schwellenwert (wird durch Einstellungen überschrieben)
-
-# Update-Funktion für Hardware-Überwachung erweitern, um GPU-Schwellenwerte zu berücksichtigen
-# Diese Funktion sollte bereits im HardwareMonitorTools.psm1 existieren, aber wir fügen hier einen Hinweis ein
-# Wir werden die Variablen hier definieren, damit sie global verfügbar sind
-
-# Beispiel für eine erweiterte Update-Funktion:
-function Update-HardwareInfo {
-    param (
-        [System.Windows.Forms.Label]$cpuLabel,
-        [System.Windows.Forms.Label]$gpuLabel,
-        [System.Windows.Forms.Label]$ramLabel
-    )
-    
-    try {
-        # CPU-Auslastung abrufen
-        $cpuLoad = Get-CpuLoad
-        $cpuTemp = Get-CpuTemperature
-        
-        # GPU-Auslastung abrufen
-        $gpuLoad = Get-GpuLoad
-        $gpuTemp = Get-GpuTemperature
-        
-        # RAM-Auslastung abrufen
-        $ramLoad = Get-RamLoad
-        
-        # CPU-Anzeige aktualisieren
-        $cpuLabel.Text = "Auslastung: $cpuLoad% | Temp: $cpuTemp°C"
-        # Farbe basierend auf Schwellenwert ändern
-        if ($cpuLoad -ge $script:cpuThreshold) {
-            $cpuLabel.ForeColor = [System.Drawing.Color]::Red
-        }
-        else {
-            $cpuLabel.ForeColor = [System.Drawing.Color]::FromArgb(0, 70, 140)  # Dunkelblau
-        }
-        
-        # GPU-Anzeige aktualisieren
-        $gpuLabel.Text = "Auslastung: $gpuLoad% | Temp: $gpuTemp°C"
-        # Farbe basierend auf Schwellenwert ändern
-        if ($gpuLoad -ge $script:gpuThreshold) {
-            $gpuLabel.ForeColor = [System.Drawing.Color]::Red
-        }
-        else {
-            $gpuLabel.ForeColor = [System.Drawing.Color]::FromArgb(0, 100, 0)  # Dunkelgrün
-        }
-        
-        # RAM-Anzeige aktualisieren
-        $ramLabel.Text = "Auslastung: $ramLoad%"
-        # Farbe basierend auf Schwellenwert ändern
-        if ($ramLoad -ge $script:ramThreshold) {
-            $ramLabel.ForeColor = [System.Drawing.Color]::Red
-        }
-        else {
-            $ramLabel.ForeColor = [System.Drawing.Color]::FromArgb(128, 0, 128)  # Lila
-        }
-        
-        # Debug-Modus-Anzeigen aktualisieren, falls aktiviert
-        if ($script:cpuDebugEnabled) {
-            Write-Host "CPU-Debug: Auslastung: $cpuLoad%, Temperatur: $cpuTemp°C, Schwellenwert: $script:cpuThreshold%"
-        }
-        
-        if ($script:gpuDebugEnabled) {
-            Write-Host "GPU-Debug: Auslastung: $gpuLoad%, Temperatur: $gpuTemp°C, Schwellenwert: $script:gpuThreshold%"
-        }
-        
-        if ($script:ramDebugEnabled) {
-            Write-Host "RAM-Debug: Auslastung: $ramLoad%, Schwellenwert: $script:ramThreshold%"
-        }
-        
-        # Benachrichtigungen anzeigen, wenn aktiviert und Schwellenwerte überschritten
-        if ($script:settings.EnableNotifications) {
-            if ($cpuLoad -ge $script:cpuThreshold -and -not $script:cpuNotificationShown) {
-                $script:cpuNotificationShown = $true
-                Show-Notification -Title "CPU-Warnung" -Message "CPU-Auslastung: $cpuLoad% (Schwellenwert: $script:cpuThreshold%)"
-            }
-            elseif ($cpuLoad -lt $script:cpuThreshold) {
-                $script:cpuNotificationShown = $false
-            }
-            
-            if ($gpuLoad -ge $script:gpuThreshold -and -not $script:gpuNotificationShown) {
-                $script:gpuNotificationShown = $true
-                Show-Notification -Title "GPU-Warnung" -Message "GPU-Auslastung: $gpuLoad% (Schwellenwert: $script:gpuThreshold%)"
-            }
-            elseif ($gpuLoad -lt $script:gpuThreshold) {
-                $script:gpuNotificationShown = $false
-            }
-            
-            if ($ramLoad -ge $script:ramThreshold -and -not $script:ramNotificationShown) {
-                $script:ramNotificationShown = $true
-                Show-Notification -Title "RAM-Warnung" -Message "RAM-Auslastung: $ramLoad% (Schwellenwert: $script:ramThreshold%)"
-            }
-            elseif ($ramLoad -lt $script:ramThreshold) {
-                $script:ramNotificationShown = $false
-            }
-        }
-    }
-    catch {
-        Write-Host "Fehler bei der Hardware-Überwachung: $_" -ForegroundColor Red
-    }
-}
-
-# Benachrichtigungsfunktion
-function Show-Notification {
-    param (
-        [string]$Title,
-        [string]$Message
-    )
-    
-    try {
-        # Windows 10 Benachrichtigung mit PowerShell
-        $path = "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Notifications\Settings"
-        $app = "Windows.SystemToast.Notification"
-        
-        if (-not (Test-Path "$path\$app")) {
-            New-Item -Path "$path\$app" -Force | Out-Null
-            New-ItemProperty -Path "$path\$app" -Name "ShowInActionCenter" -Value 1 -PropertyType DWORD -Force | Out-Null
-        }
-        
-        [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
-        [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] | Out-Null
-        
-        $template = [Windows.UI.Notifications.ToastTemplateType]::ToastText02
-        $xml = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent($template)
-        
-        $text = $xml.GetElementsByTagName("text")
-        $text[0].AppendChild($xml.CreateTextNode($Title)) | Out-Null
-        $text[1].AppendChild($xml.CreateTextNode($Message)) | Out-Null
-        
-        $toast = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($app)
-        $toast.Show($xml)
-    }
-    catch {
-        # Fallback auf einfache MessageBox, wenn Windows-Benachrichtigungen nicht verfügbar
-        # Aber nur wenn es nicht zu viele sind, um Spam zu vermeiden
-        if ($script:settings.LogLevel -eq "Debug" -or $script:settings.LogLevel -eq "Detailliert") {
-            [System.Windows.Forms.MessageBox]::Show($Message, $Title, [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning)
-        }
-    }
-}
-
-# Initialisierung der Debug-Variablen
-$script:cpuDebugEnabled = $false
-$script:gpuDebugEnabled = $false
-$script:ramDebugEnabled = $false
-
-# Funktion zum Setzen des Hardware-Debug-Modus
-function Set-HardwareDebugMode {
-    param(
-        [Parameter(Mandatory = $true)]
-        [ValidateSet('CPU', 'GPU', 'RAM')]
-        [string]$Component,
-        
-        [Parameter(Mandatory = $true)]
-        [bool]$Enabled
-    )
-    
-    switch ($Component) {
-        'CPU' {
-            $script:cpuDebugEnabled = $Enabled
-            $statusText = if ($Enabled) { "Aktiviert" } else { "Deaktiviert" }
-            Write-Host "CPU Debug-Modus: $statusText"
-        }
-        'GPU' {
-            $script:gpuDebugEnabled = $Enabled
-            $statusText = if ($Enabled) { "Aktiviert" } else { "Deaktiviert" }
-            Write-Host "GPU Debug-Modus: $statusText"
-        }
-        'RAM' {
-            $script:ramDebugEnabled = $Enabled
-            $statusText = if ($Enabled) { "Aktiviert" } else { "Deaktiviert" }
-            Write-Host "RAM Debug-Modus: $statusText"
-        }
-    }
-}
-
-# Schwellenwerte für die Hardware-Überwachung
-$script:cpuThreshold = 90  # Standard-CPU-Schwellenwert (wird durch Einstellungen überschrieben)
-$script:gpuThreshold = 80  # Standard-GPU-Schwellenwert (wird durch Einstellungen überschrieben)
-$script:ramThreshold = 85  # Standard-RAM-Schwellenwert (wird durch Einstellungen überschrieben)
-
-
-
-
-
 
 

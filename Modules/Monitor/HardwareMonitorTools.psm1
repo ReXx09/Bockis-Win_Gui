@@ -1933,7 +1933,7 @@ function Get-RamTemperatureViaSMBus {
         $tempRegister = 0x33  # Typisches Register für DDR5 SPD-Temperatursensor
         
         # Versuch mit Treiber-DLL
-        if ($script:smBusDriver -ne $null -and (-not [IntPtr]::Equals($script:smBusDriver, [IntPtr]::Zero))) {
+        if ($null -ne $script:smBusDriver -and (-not [IntPtr]::Equals($script:smBusDriver, [IntPtr]::Zero))) {
             # Hier implementieren wir den spezifischen Treiberaufruf
             # Die Implementierung variiert je nach verwendetem Treiber
             

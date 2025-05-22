@@ -1,7 +1,6 @@
-# Import required modules
+﻿# Import required modules
 Import-Module "$PSScriptRoot\..\Core\Core.psm1" -Force
-Add-Type -AssemblyName System.Windows.Forms
-Add-Type -AssemblyName System.Drawing
+Import-Module "$PSScriptRoot\..\Core\ProgressBarTools.psm1" -Force
 
 # Function to run CHKDSK
 function Start-CHKDSK {
@@ -10,11 +9,148 @@ function Start-CHKDSK {
         [System.Windows.Forms.ProgressBar]$progressBar,
         [System.Windows.Forms.Form]$mainform
     )
+
+    Clear-Host
+    
+    # Stelle sicher, dass die ProgressBar initialisiert ist
+    if ($progressBar) {
+        Initialize-ProgressComponents -ProgressBar $progressBar -StatusLabel $null
+    }
+    
+    # Rahmen und Systeminformationen erstellen
+    $computerName = $env:COMPUTERNAME
+    $userName = $env:USERNAME
+    $osInfo = (Get-CimInstance -ClassName Win32_OperatingSystem).Caption
+    $dateTime = Get-Date -Format "dd.MM.yyyy HH:mm:ss"
+    $width = 80
+        
+    # Rahmen oben
+    Write-Host "╔══════════════════════════════════════════════════════════════════════════════╗" -ForegroundColor Green
+    Write-ColoredCenteredText                             "CHKDSK"                                         
+    Write-Host "╚══════════════════════════════════════════════════════════════════════════════╝" -ForegroundColor Green
+    
+    Write-Host '   .d8888b.  888    888 888    d8P  8888888b.   .d8888b.  888    d8P ' -ForegroundColor Cyan
+    Write-Host '  d88P  Y88b 888    888 888   d8P   888  "Y88b d88P  Y88b 888   d8P  ' -ForegroundColor Blue
+    Write-Host '  888    888 888    888 888  d8P    888    888 Y88b.      888  d8P    ' -ForegroundColor Cyan
+    Write-Host '  888        8888888888 888d88K     888    888  "Y888b.   888d88K     ' -ForegroundColor Blue
+    Write-Host '  888        888    888 8888888b    888    888     "Y88b. 8888888b    ' -ForegroundColor Cyan
+    Write-Host '  888    888 888    888 888  Y88b   888    888       "888 888  Y88b   ' -ForegroundColor Blue
+    Write-Host '  Y88b  d88P 888    888 888   Y88b  888  .d88P Y88b  d88P 888   Y88b  ' -ForegroundColor Cyan
+    Write-Host '   "Y8888P"  888    888 888    Y88b 8888888P"   "Y8888P"  888    Y88b' -ForegroundColor Blue
+    Write-Host
+    # Rahmen für Systeminformationen
+    Write-Host "╔══════════════════════════════════════════════════════════════════════════════╗" -ForegroundColor Green
+    Write-ColoredCenteredText                 "SYSTEMINFORMATIONEN"                                                     
+    Write-Host "╠══════════════════════════════════════════════════════════════════════════════╣" -ForegroundColor Green
+    # Systeminformationen
+    Write-Host "║                                                                              ║" -ForegroundColor Green
+    Write-Host "      ├─    Betriebssystem: $osInfo           "            -ForegroundColor Yellow                 
+    Write-Host "      ├─    Computer:       $computerName     "            -ForegroundColor Yellow                                    
+    Write-Host "      ├─    Benutzer:       $userName         "            -ForegroundColor Yellow                                    
+    Write-Host "      └─    Datum und Zeit: $dateTime         "            -ForegroundColor Yellow                                  
+    Write-Host "║                                                                              ║" -ForegroundColor Green
+
+    Write-Host "╠══════════════════════════════════════════════════════════════════════════════╣" -ForegroundColor Green
+    Write-ColoredCenteredText                     "Starte CHKDSK..."
+    Write-Host "╚══════════════════════════════════════════════════════════════════════════════╝" -ForegroundColor Green    # 1 Sekunde warten vor dem Start
+    Start-Sleep -Seconds 1
+    $outputBox.Clear()
+
+    # Header für den Scan
+    $outputBox.SelectionColor = [System.Drawing.Color]::DarkBlue
+    $outputBox.AppendText("`r`n===== CHKDSK - FESTPLATTEN-PRÜFUNG =====`r`n")
+    $outputBox.AppendText("Modus: Festplatten-Diagnose`r`n")
+    $outputBox.AppendText("Zeitstempel: $(Get-Date -Format 'dd.MM.yyyy HH:mm:ss')`r`n`r`n")
+    # Systeminformationen nebeneinander anzeigen
+    $outputBox.SelectionColor = [System.Drawing.Color]::Blue
+    $outputBox.AppendText("[i] SYSTEM-INFORMATIONEN:`r`n")
+    $outputBox.SelectionColor = [System.Drawing.Color]::Black
+    
+    # Format für nebeneinander stehende Informationen
+    $osLabel = "Betriebssystem:".PadRight(18)
+    $pcLabel = "Computer:".PadRight(18)
+    $userLabel = "Benutzer:".PadRight(18)
+    
+    # Zeile 1: Betriebssystem und Computer
+    $outputBox.AppendText("    $osLabel $osInfo".PadRight(60))
+    $outputBox.AppendText("$pcLabel $computerName`r`n")
+    
+    # Zeile 2: Benutzer und Datum/Zeit
+    $outputBox.AppendText("    $userLabel $userName".PadRight(60))
+    $outputBox.AppendText("Datum/Zeit: $(Get-Date -Format 'dd.MM.yyyy HH:mm:ss')`r`n`r`n")
     
     # Verfügbare Laufwerke ermitteln
     $drives = Get-WmiObject Win32_LogicalDisk | 
     Where-Object { $_.DriveType -eq 3 -or $_.DriveType -eq 2 } | 
-    Select-Object -ExpandProperty DeviceID
+    Select-Object -ExpandProperty DeviceID    # Laufwerksinformationen anzeigen
+    $outputBox.SelectionColor = [System.Drawing.Color]::Blue
+    $outputBox.AppendText("[i] VERFÜGBARE LAUFWERKE:`r`n`r`n")
+    
+    # Tabellenkopf erstellen
+    $outputBox.SelectionColor = [System.Drawing.Color]::DarkBlue
+    $lw = "Laufwerk".PadRight(15)
+    $name = "Bezeichnung".PadRight(20)
+    $total = "Größe".PadRight(15)
+    $free = "Freier Speicher".PadRight(20)
+    $used = "Belegung".PadRight(15)
+    $outputBox.AppendText("    $lw$name$total$free$used`r`n")
+    
+    # Trennlinie
+    $outputBox.SelectionColor = [System.Drawing.Color]::Gray
+    $outputBox.AppendText("    " + "".PadRight(85, '─') + "`r`n")
+    $outputBox.SelectionColor = [System.Drawing.Color]::Black
+    
+    # Laufwerksdaten in Tabellenform anzeigen
+    foreach ($drive in $drives) {
+        $driveInfo = Get-WmiObject Win32_LogicalDisk -Filter "DeviceID='$drive'"
+        $totalSpace = [Math]::Round($driveInfo.Size / 1GB, 2)
+        $freeSpace = [Math]::Round($driveInfo.FreeSpace / 1GB, 2)
+        $usedPercent = [Math]::Round(100 - (($driveInfo.FreeSpace / $driveInfo.Size) * 100), 1)
+        $isSystemDrive = $drive -eq $env:SystemDrive
+        
+        # Laufwerksname formatieren
+        $driveName = $drive
+        if ($isSystemDrive) {
+            $driveName += " (System)"
+        }
+        $driveCol = $driveName.PadRight(15)
+        
+        # Laufwerksbezeichnung formatieren
+        $labelName = if ($driveInfo.VolumeName) { $driveInfo.VolumeName } else { "<Keine>" }
+        $labelCol = $labelName.PadRight(20)
+        
+        # Größeninformationen formatieren
+        $totalCol = "$totalSpace GB".PadRight(15)
+        $freeCol = "$freeSpace GB".PadRight(20)
+        
+        # Zeile ausgeben
+        $outputBox.AppendText("    $driveCol$labelCol$totalCol$freeCol")
+        
+        # Speichernutzung mit Farbe je nach Füllstand anzeigen
+        if ($usedPercent -gt 90) {
+            $outputBox.SelectionColor = [System.Drawing.Color]::Red
+            $outputBox.AppendText("$usedPercent% (Kritisch)")
+        } 
+        elseif ($usedPercent -gt 75) {
+            $outputBox.SelectionColor = [System.Drawing.Color]::Orange
+            $outputBox.AppendText("$usedPercent% (Warnung)")
+        }
+        else {
+            $outputBox.SelectionColor = [System.Drawing.Color]::Green
+            $outputBox.AppendText("$usedPercent% (OK)")
+        }
+        
+        $outputBox.SelectionColor = [System.Drawing.Color]::Black
+        $outputBox.AppendText("`r`n")
+    }
+    
+    $outputBox.AppendText("`r`n")
+    
+    # Kurze Information zum weiteren Vorgehen
+    $outputBox.SelectionColor = [System.Drawing.Color]::Blue
+    $outputBox.AppendText("[>] VORBEREITUNG CHKDSK:`r`n")
+    $outputBox.SelectionColor = [System.Drawing.Color]::Gray
+    $outputBox.AppendText("    Bitte wählen Sie die zu prüfenden Laufwerke im neuen Fenster aus...`r`n")
 
     # Form für die Laufwerksauswahl erstellen
     $form = New-Object System.Windows.Forms.Form
@@ -183,13 +319,11 @@ function Start-CHKDSK {
             if ($checkedListBox.GetItemChecked($i)) {
                 $selectedDrives += $drives[$i]
             }
-        }
-
-        if ($selectedDrives.Count -eq 0) {
+        }        if ($selectedDrives.Count -eq 0) {
             $outputBox.AppendText("Keine Laufwerke ausgewählt. CHKDSK abgebrochen.`r`n")
             return
         }
-
+        
         # CHKDSK-Parameter aufbauen
         $chkdskParams = ""
         if ($checkBoxFixErrors.Checked) { $chkdskParams += " /f" }
@@ -197,177 +331,178 @@ function Start-CHKDSK {
         if ($checkBoxLessIntensiveIndex.Checked) { $chkdskParams += " /i" }
         if ($checkBoxForceDisMount.Checked) { $chkdskParams += " /x" }
 
-        # Informationen zu den Phasen anzeigen
-        $outputBox.AppendText("`r`n==== CHKDSK Phasenübersicht ====`r`n")
-        $outputBox.AppendText("Phase 1: Basisprüfung der Dateisystemstruktur - Schnell`r`n")
-        $outputBox.AppendText("Phase 2: Prüfung der Dateiattribute - Mittel`r`n")
-        $outputBox.AppendText("Phase 3: Prüfung der Sicherheitseinträge - Mittel`r`n")
+        # Kurze Zusammenfassung der Parameter anzeigen
+        $outputBox.AppendText("CHKDSK wird ausgeführt mit Parametern:$chkdskParams`r`n`r`n")
         if ($checkBoxScanSectors.Checked) {
-            $outputBox.AppendText("Phase 4: Prüfung der Dateizuordnungen - Lang`r`n")
-            $outputBox.AppendText("Phase 5: Prüfung auf fehlerhafte Sektoren - Sehr lang (abhängig von Laufwerksgröße)`r`n")
+            $outputBox.AppendText("Hinweis: Die Prüfung auf fehlerhafte Sektoren kann lange dauern.`r`n`r`n")
         }
-        $outputBox.AppendText("===========================`r`n`r`n")
 
-        # CHKDSK für die ausgewählten Laufwerke starten
-        $confirmResult = Show-CustomMessageBox -message "CHKDSK wird für $(($selectedDrives) -join ', ') gestartet. Möchten Sie fortfahren?" -title "Bestätigung" -fontSize 16
-        if ($confirmResult -eq "OK") {
-            # Abbruch-Button aktivieren (falls vorhanden)
-            $script:chkdskRunning = $true
+        # Abbruch-Button aktivieren
+        $script:chkdskRunning = $true
             
-            $totalDrives = $selectedDrives.Count
-            $currentDriveIndex = 0
-            
-            # Variable für Neustart-Erfordernis
-            $restartRequired = $false
-            $systemDriveChecked = $false
+        $totalDrives = $selectedDrives.Count
+        $currentDriveIndex = 0
+        # Variable für Neustart-Erfordernis
+        $restartRequired = $false
 
-            foreach ($drive in $selectedDrives) {
-                $currentDriveIndex++
-                $progressPercent = [int](($currentDriveIndex - 1) / $totalDrives * 100)
-                if ($null -ne $progressBar) {
-                    $progressBar.Value = $progressPercent
-                }
-                
-                $outputBox.AppendText("CHKDSK für Laufwerk $drive gestartet ($currentDriveIndex von $totalDrives)...`r`n")
-                
-                # Prüfen, ob es sich um das Systemlaufwerk handelt
-                $isSystemDrive = $drive -eq $env:SystemDrive
-                
-                if ($isSystemDrive -and ($checkBoxFixErrors.Checked -or $checkBoxScanSectors.Checked)) {
-                    $outputBox.AppendText("Systemlaufwerk $drive erkannt. CHKDSK wird beim nächsten Neustart ausgeführt.`r`n")
-                    $systemDriveChecked = $true
-                    $restartRequired = $true
-                    
-                    # CHKDSK beim nächsten Neustart mit fsutil planen (zuverlässiger)
-                    try {
-                        # Zuerst das Laufwerk als "dirty" markieren
-                        $fsutilResult = & fsutil dirty set $drive
-                        $outputBox.AppendText("Laufwerk als 'dirty' markiert: $fsutilResult`r`n")
-                        
-                        # Dann CHKDSK-Parameter für den nächsten Neustart setzen
-                        $regPath = "HKLM:\System\CurrentControlSet\Control\Session Manager"
-                        $regKey = Get-ItemProperty -Path $regPath -Name "BootExecute" -ErrorAction SilentlyContinue
-                        
-                        if ($regKey) {
-                            $bootExecute = $regKey.BootExecute
-                            # Prüfen, ob bereits ein CHKDSK-Eintrag vorhanden ist
-                            $chkdskEntry = "autocheck autochk * $drive$chkdskParams"
-                            
-                            if ($bootExecute -notcontains $chkdskEntry) {
-                                $newBootExecute = @("autocheck autochk *")
-                                foreach ($item in $bootExecute) {
-                                    if ($item -ne "autocheck autochk *") {
-                                        $newBootExecute += $item
-                                    }
-                                }
-                                $newBootExecute += $chkdskEntry
-                                Set-ItemProperty -Path $regPath -Name "BootExecute" -Value $newBootExecute
-                                $outputBox.AppendText("CHKDSK wurde für den nächsten Neustart geplant mit Parametern:$chkdskParams`r`n")
-                            }
-                        }
-                        
-                        # Prüfen, ob CHKDSK bereits geplant ist
-                        $chkntfsResult = & chkntfs $drive
-                        $outputBox.AppendText("Status: $chkntfsResult`r`n")
-                    }
-                    catch {
-                        $outputBox.AppendText("Fehler beim Setzen des CHKDSK-Neustarts: $_`r`n")
-                        # Alternativer Ansatz mit direktem Befehl
-                        if ($checkBoxAutoConfirmBusy.Checked) {
-                            $outputBox.AppendText("Verwende alternative Methode mit automatischer Bestätigung (J)`r`n")
-                            $chkdskCmd = "echo J | chkdsk $drive$chkdskParams /b"
-                        } 
-                        else {
-                            $chkdskCmd = "chkdsk $drive$chkdskParams /b"
-                        }
-                        
-                        Start-Process -FilePath "cmd.exe" -ArgumentList "/c $chkdskCmd" -Verb RunAs -Wait
-                    }
-                }
-                else {
-                    # Start CHKDSK process and capture exit code
-                    $outputBox.AppendText("Parameter: chkdsk $drive$chkdskParams`r`n")
-                    
-                    try {
-                        # Je nach Einstellung für Auto-Bestätigung
-                        if ($checkBoxAutoConfirmBusy.Checked) {
-                            $process = Start-Process -FilePath "cmd.exe" -ArgumentList "/c echo J | chkdsk $drive$chkdskParams" -NoNewWindow -PassThru -Wait
-                        }
-                        else {
-                            $process = Start-Process -FilePath "chkdsk.exe" -ArgumentList "$drive$chkdskParams" -NoNewWindow -PassThru -Wait
-                        }
-                        
-                        $exitCode = $process.ExitCode
-                        
-                        # Exit-Code interpretieren
-                        switch ($exitCode) {
-                            0 { 
-                                $outputBox.SelectionColor = [System.Drawing.Color]::Green
-                            }
-                            1 { 
-                                $outputBox.SelectionColor = [System.Drawing.Color]::DarkGreen
-                            }
-                            2 { 
-                                $outputBox.SelectionColor = [System.Drawing.Color]::Orange
-                                $restartRequired = $true
-                            }
-                            3 { 
-                                $outputBox.SelectionColor = [System.Drawing.Color]::Red
-                            }
-                            default { 
-                                $outputBox.SelectionColor = [System.Drawing.Color]::DarkRed
-                            }
-                        }
-                        
-                        # Schöne Ausgabe des Exit-Codes mit relevanten Informationen
-                        $formattedTime = if ($null -ne $stopwatch) { [math]::Round($stopwatch.Elapsed.TotalSeconds, 1) } else { "n/a" }
-                        $exitCodeMessage = switch ($exitCode) {
-                            0 { "[OK] CHKDSK erfolgreich abgeschlossen. Keine Fehler gefunden." }
-                            1 { "[OK] CHKDSK hat Fehler gefunden und korrigiert." }
-                            2 { "[WARNUNG] CHKDSK wurde mit /f Option ausgeführt und erfordert einen Neustart." }
-                            3 { "[FEHLER] CHKDSK konnte nicht alle Fehler beheben. Laufwerk möglicherweise beschädigt." }
-                            default { "[FEHLER] Unbekannter CHKDSK-Statuscode: $exitCode" }
-                        }
-                        
-                        $outputBox.AppendText("CHKDSK-Status: $exitCodeMessage`r`n")
-                        $outputBox.SelectionColor = [System.Drawing.Color]::Blue
-                        $outputBox.AppendText("[INFO] Exit-Code: $exitCode | Laufwerk: $drive | Dauer: $formattedTime Sekunden`r`n")
-                        $outputBox.AppendText("____________________________________________________`r`n`r`n")
-                        
-                        # Farbe zurücksetzen
-                        $outputBox.SelectionColor = $outputBox.ForeColor
-                    }
-                    catch {
-                        $outputBox.SelectionColor = [System.Drawing.Color]::Red
-                        $outputBox.AppendText("❌ FEHLER: $($_.Exception.Message)`r`n")
-                        $outputBox.SelectionColor = $outputBox.ForeColor
-                    }
-                }
-            }
-            
-            # Wenn ein Neustart erforderlich ist und Auto-Neustart aktiviert ist
-            if ($restartRequired -and $checkBoxAutoRestart.Checked) {
-                $seconds = [int]$numRestartTimer.Value
-                if ($seconds -gt 0) {
-                    $outputBox.AppendText("`r`nComputer wird in $seconds Sekunden neu gestartet...`r`n")
-                    Start-Process -FilePath "shutdown.exe" -ArgumentList "/r /t $seconds /c `"CHKDSK erfordert einen Neustart`"" -NoNewWindow
-                }
-            }
-            elseif ($restartRequired) {
-                $outputBox.AppendText("`r`nBitte starten Sie den Computer neu, um die CHKDSK-Prüfung für das Systemlaufwerk durchzuführen.`r`n")
-            }
-            
-            # Setze den Fortschrittsbalken auf 100%
+        foreach ($drive in $selectedDrives) {
+            $currentDriveIndex++
+            $progressPercent = [int](($currentDriveIndex - 1) / $totalDrives * 100)
             if ($null -ne $progressBar) {
-                $progressBar.Value = 100
+                $progressBar.Value = $progressPercent
             }
             
-            # CHKDSK-Lauf beendet
-            $script:chkdskRunning = $false
+            # Starten der Zeitmessung für dieses Laufwerk
+            $driveStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+                
+            $outputBox.AppendText("CHKDSK für Laufwerk $drive gestartet ($currentDriveIndex von $totalDrives)...`r`n")
+                
+            # Prüfen, ob es sich um das Systemlaufwerk handelt
+            $isSystemDrive = $drive -eq $env:SystemDrive
+            if ($isSystemDrive -and ($checkBoxFixErrors.Checked -or $checkBoxScanSectors.Checked)) {
+                $outputBox.AppendText("Systemlaufwerk $drive erkannt. CHKDSK wird beim nächsten Neustart ausgeführt.`r`n")
+                $restartRequired = $true
+                    
+                # CHKDSK beim nächsten Neustart mit fsutil planen (zuverlässiger)
+                try {
+                    # Zuerst das Laufwerk als "dirty" markieren
+                    $fsutilResult = & fsutil dirty set $drive
+                    $outputBox.AppendText("Laufwerk als 'dirty' markiert: $fsutilResult`r`n")
+                        
+                    # Dann CHKDSK-Parameter für den nächsten Neustart setzen
+                    $regPath = "HKLM:\System\CurrentControlSet\Control\Session Manager"
+                    $regKey = Get-ItemProperty -Path $regPath -Name "BootExecute" -ErrorAction SilentlyContinue
+                        
+                    if ($regKey) {
+                        $bootExecute = $regKey.BootExecute
+                        # Prüfen, ob bereits ein CHKDSK-Eintrag vorhanden ist
+                        $chkdskEntry = "autocheck autochk * $drive$chkdskParams"
+                            
+                        if ($bootExecute -notcontains $chkdskEntry) {
+                            $newBootExecute = @("autocheck autochk *")
+                            foreach ($item in $bootExecute) {
+                                if ($item -ne "autocheck autochk *") {
+                                    $newBootExecute += $item
+                                }
+                            }
+                            $newBootExecute += $chkdskEntry
+                            Set-ItemProperty -Path $regPath -Name "BootExecute" -Value $newBootExecute
+                            $outputBox.AppendText("CHKDSK wurde für den nächsten Neustart geplant mit Parametern:$chkdskParams`r`n")
+                        }
+                    }
+                    # Prüfen, ob CHKDSK bereits geplant ist
+                    $chkntfsResult = & chkntfs $drive
+                    $outputBox.AppendText("Status: $chkntfsResult`r`n")
+                    
+                    # Zeitmessung für Systemlaufwerk stoppen
+                    $driveStopwatch.Stop()
+                    $formattedTime = [math]::Round($driveStopwatch.Elapsed.TotalSeconds, 1)
+                    $outputBox.SelectionColor = [System.Drawing.Color]::Blue
+                    $outputBox.AppendText("[INFO] Laufwerk: $drive | Dauer der Einrichtung: $formattedTime Sekunden`r`n")
+                    $outputBox.AppendText("____________________________________________________`r`n`r`n")
+                    $outputBox.SelectionColor = $outputBox.ForeColor
+                }
+                catch {
+                    $outputBox.AppendText("Fehler beim Setzen des CHKDSK-Neustarts: $_`r`n")
+                    # Alternativer Ansatz mit direktem Befehl
+                    if ($checkBoxAutoConfirmBusy.Checked) {
+                        $outputBox.AppendText("Verwende alternative Methode mit automatischer Bestätigung (J)`r`n")
+                        $chkdskCmd = "echo J | chkdsk $drive$chkdskParams /b"
+                    } 
+                    else {
+                        $chkdskCmd = "chkdsk $drive$chkdskParams /b"
+                    }
+                        
+                    Start-Process -FilePath "cmd.exe" -ArgumentList "/c $chkdskCmd" -Verb RunAs -Wait
+                }
+            }
+            else {
+                # Start CHKDSK process and capture exit code
+                $outputBox.AppendText("Parameter: chkdsk $drive$chkdskParams`r`n")
+                    
+                try {
+                    # Je nach Einstellung für Auto-Bestätigung
+                    if ($checkBoxAutoConfirmBusy.Checked) {
+                        $process = Start-Process -FilePath "cmd.exe" -ArgumentList "/c echo J | chkdsk $drive$chkdskParams" -NoNewWindow -PassThru -Wait
+                    }
+                    else {
+                        $process = Start-Process -FilePath "chkdsk.exe" -ArgumentList "$drive$chkdskParams" -NoNewWindow -PassThru -Wait
+                    }
+                        
+                    $exitCode = $process.ExitCode
+                        
+                    # Exit-Code interpretieren
+                    switch ($exitCode) {
+                        0 { 
+                            $outputBox.SelectionColor = [System.Drawing.Color]::Green
+                        }
+                        1 { 
+                            $outputBox.SelectionColor = [System.Drawing.Color]::DarkGreen
+                        }
+                        2 { 
+                            $outputBox.SelectionColor = [System.Drawing.Color]::Orange
+                            $restartRequired = $true
+                        }
+                        3 { 
+                            $outputBox.SelectionColor = [System.Drawing.Color]::Red
+                        }
+                        default { 
+                            $outputBox.SelectionColor = [System.Drawing.Color]::DarkRed
+                        }
+                    }
+                    # Stoppe den Stopwatch für dieses Laufwerk
+                    $driveStopwatch.Stop()
+                    
+                    # Schöne Ausgabe des Exit-Codes mit relevanten Informationen
+                    $formattedTime = [math]::Round($driveStopwatch.Elapsed.TotalSeconds, 1)
+                    $exitCodeMessage = switch ($exitCode) {
+                        0 { "[OK] CHKDSK erfolgreich abgeschlossen. Keine Fehler gefunden." }
+                        1 { "[OK] CHKDSK hat Fehler gefunden und korrigiert." }
+                        2 { "[WARNUNG] CHKDSK wurde mit /f Option ausgeführt und erfordert einen Neustart." }
+                        3 { "[FEHLER] CHKDSK konnte nicht alle Fehler beheben. Laufwerk möglicherweise beschädigt." }
+                        default { "[FEHLER] Unbekannter CHKDSK-Statuscode: $exitCode" }
+                    }
+                        
+                    $outputBox.AppendText("CHKDSK-Status: $exitCodeMessage`r`n")
+                    $outputBox.SelectionColor = [System.Drawing.Color]::Blue
+                    $outputBox.AppendText("[INFO] Exit-Code: $exitCode | Laufwerk: $drive | Dauer: $formattedTime Sekunden`r`n")
+                    $outputBox.AppendText("____________________________________________________`r`n`r`n")
+                        
+                    # Farbe zurücksetzen
+                    $outputBox.SelectionColor = $outputBox.ForeColor
+                }
+                catch {
+                    # Stopwatch anhalten auch bei Fehlern
+                    $driveStopwatch.Stop()
+                    $formattedTime = [math]::Round($driveStopwatch.Elapsed.TotalSeconds, 1)
+                    
+                    $outputBox.SelectionColor = [System.Drawing.Color]::Red
+                    $outputBox.AppendText("❌ FEHLER: $($_.Exception.Message)`r`n")
+                    $outputBox.AppendText("[INFO] Laufwerk: $drive | Dauer bis zum Fehler: $formattedTime Sekunden`r`n")
+                    $outputBox.AppendText("____________________________________________________`r`n`r`n")
+                    $outputBox.SelectionColor = $outputBox.ForeColor
+                }
+            }
         }
-        else {
-            $outputBox.AppendText("CHKDSK wurde vom Benutzer abgebrochen.`r`n")
+            
+        # Wenn ein Neustart erforderlich ist und Auto-Neustart aktiviert ist
+        if ($restartRequired -and $checkBoxAutoRestart.Checked) {
+            $seconds = [int]$numRestartTimer.Value
+            if ($seconds -gt 0) {
+                $outputBox.AppendText("`r`nComputer wird in $seconds Sekunden neu gestartet...`r`n")
+                Start-Process -FilePath "shutdown.exe" -ArgumentList "/r /t $seconds /c `"CHKDSK erfordert einen Neustart`"" -NoNewWindow
+            }
         }
+        elseif ($restartRequired) {
+            $outputBox.AppendText("`r`nBitte starten Sie den Computer neu, um die CHKDSK-Prüfung für das Systemlaufwerk durchzuführen.`r`n")
+        }
+            
+        # Setze den Fortschrittsbalken auf 100%
+        if ($null -ne $progressBar) {
+            $progressBar.Value = 100
+        }
+        # CHKDSK-Lauf beendet
+        $script:chkdskRunning = $false
     }
     else {
         $outputBox.AppendText("CHKDSK wurde abgebrochen.`r`n")
@@ -375,4 +510,4 @@ function Start-CHKDSK {
 }
 
 # Export functions
-Export-ModuleMember -Function Start-CHKDSK 
+Export-ModuleMember -Function Start-CHKDSK

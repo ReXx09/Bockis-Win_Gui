@@ -2,32 +2,6 @@
 Import-Module "$PSScriptRoot\..\Core\Core.psm1" -Force
 Import-Module "$PSScriptRoot\..\Core\ProgressBarTools.psm1" -Force
 
-#Berechnung, Text und Rahmenfarbe
-function Write-ColoredCenteredText {
-    param(
-        [string]$text,
-        [string]$frameColor = "Green",
-        [string]$textColor = "Red",
-        [int]$totalWidth = 80,
-        [int]$contentWidth = 78  # Breite innerhalb der Rahmenzeichen (║)
-    )
-    
-    # Berechne die tatsächliche Textlänge
-    $textLength = $text.Length
-    
-    # Berechne die Anzahl der benötigten Leerzeichen für perfekte Zentrierung
-    $totalSpaces = $contentWidth - $textLength
-    $leftSpaces = [math]::Floor($totalSpaces / 2)
-    $rightSpaces = $totalSpaces - $leftSpaces
-    
-    # Erstelle den formatierten Text mit exakter Anzahl von Leerzeichen
-    Write-Host "║" -NoNewline -ForegroundColor $frameColor
-    Write-Host (" " * $leftSpaces) -NoNewline
-    Write-Host $text -NoNewline -ForegroundColor $textColor
-    Write-Host (" " * $rightSpaces) -NoNewline
-    Write-Host "║" -ForegroundColor $frameColor
-}
-
 # Function to run DISM Check Health
 function Start-CheckDISM {
     param (
@@ -97,8 +71,7 @@ function Start-CheckDISM {
     # 3 Sekunden warten vor dem Start
     Start-Sleep -Seconds 3
 
-    # Log-Datei-Pfad definieren
-    $logPath = "$env:TEMP\dism_check.log"
+    # Ergebnis-Pfad für JSON definieren (logPath wurde entfernt, da nicht verwendet)
     $resultPath = "$env:TEMP\dism_check_result.json"
 
     # Header für die Ausgabe
@@ -412,4 +385,4 @@ function Start-RestoreDISM {
 }
 
 # Export functions
-Export-ModuleMember -Function Start-CheckDISM, Start-ScanDISM, Start-RestoreDISM 
+Export-ModuleMember -Function Start-CheckDISM, Start-ScanDISM, Start-RestoreDISM

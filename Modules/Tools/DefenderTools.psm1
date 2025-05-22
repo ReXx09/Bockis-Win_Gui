@@ -2,65 +2,6 @@
 Import-Module "$PSScriptRoot\..\Core\Core.psm1" -Force
 Import-Module "$PSScriptRoot\..\Core\ProgressBarTools.psm1" -Force
 
-function Write-WrappedText {
-    param(
-        [string]$text,
-        [int]$maxWidth = 100,
-        [string]$foregroundColor = "White"
-    )
-
-    # Teile den Text in Wörter auf
-    $words = $text -split '\s+'
-    $currentLine = ""
-    
-    foreach ($word in $words) {
-        # Prüfe, ob das Wort zur aktuellen Zeile hinzugefügt werden kann
-        if (($currentLine.Length + $word.Length + 1) -le $maxWidth) {
-            # Füge Leerzeichen hinzu, wenn die Zeile nicht leer ist
-            if ($currentLine.Length -gt 0) {
-                $currentLine += " "
-            }
-            $currentLine += $word
-        }
-        else {
-            # Gib die aktuelle Zeile aus und starte eine neue Zeile
-            Write-Host $currentLine -ForegroundColor $foregroundColor
-            $currentLine = $word
-        }
-    }
-    
-    # Gib die letzte Zeile aus, falls vorhanden
-    if ($currentLine.Length -gt 0) {
-        Write-Host $currentLine -ForegroundColor $foregroundColor
-    }
-}
-
-#Berechnung, Text und Rahmenfarbe
-function Write-ColoredCenteredText {
-    param(
-        [string]$text,
-        [string]$frameColor = "Green",
-        [string]$textColor = "Red",
-        [int]$totalWidth = 80,
-        [int]$contentWidth = 78  # Breite innerhalb der Rahmenzeichen (║)
-    )
-    
-    # Berechne die tatsächliche Textlänge
-    $textLength = $text.Length
-    
-    # Berechne die Anzahl der benötigten Leerzeichen für perfekte Zentrierung
-    $totalSpaces = $contentWidth - $textLength
-    $leftSpaces = [math]::Floor($totalSpaces / 2)
-    $rightSpaces = $totalSpaces - $leftSpaces
-    
-    # Erstelle den formatierten Text mit exakter Anzahl von Leerzeichen
-    Write-Host "║" -NoNewline -ForegroundColor $frameColor
-    Write-Host (" " * $leftSpaces) -NoNewline
-    Write-Host $text -NoNewline -ForegroundColor $textColor
-    Write-Host (" " * $rightSpaces) -NoNewline
-    Write-Host "║" -ForegroundColor $frameColor
-}
-
 # Function to start Windows Defender and show status
 function Start-WindowsDefender {
     param(
@@ -597,4 +538,4 @@ function Restart-DefenderService {
 }
 
 # Export functions
-Export-ModuleMember -Function Start-WindowsDefender, Restart-DefenderService, Write-WrappedText, Write-ColoredCenteredText 
+Export-ModuleMember -Function Start-WindowsDefender, Restart-DefenderService

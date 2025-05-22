@@ -1,10 +1,63 @@
-# Import necessary .NET assemblies
+﻿# Import necessary .NET assemblies
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 Add-Type -AssemblyName PresentationCore, PresentationFramework
 
 # Import ProgressBarTools Modul
 Import-Module "$PSScriptRoot\ProgressBarTools.psm1" -Force
+
+# Setze die Konsolencodierung auf UTF-8-BOM für korrekte Unicode-Darstellung
+$OutputEncoding = [System.Text.UTF8Encoding]::new($true)
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($true)
+$PSDefaultParameterValues['Out-File:Encoding'] = 'utf8BOM'
+$PSDefaultParameterValues['*:Encoding'] = 'utf8BOM'
+chcp 65001 | Out-Null
+
+# Erweiterte Version von Write-ColoredCenteredText (zentral)
+function Write-ColoredCenteredText {
+    param(
+        [string]$text,
+        [string]$frameColor = "Green",
+        [string]$textColor = "Red",
+        [int]$totalWidth = 80,
+        [int]$contentWidth = 78  # Breite innerhalb der Rahmenzeichen (║)
+    )
+    $textLength = $text.Length
+    $totalSpaces = $contentWidth - $textLength
+    $leftSpaces = [math]::Floor($totalSpaces / 2)
+    $rightSpaces = $totalSpaces - $leftSpaces
+    Write-Host "║" -NoNewline -ForegroundColor $frameColor
+    Write-Host (" " * $leftSpaces) -NoNewline
+    Write-Host $text -NoNewline -ForegroundColor $textColor
+    Write-Host (" " * $rightSpaces) -NoNewline
+    Write-Host "║" -ForegroundColor $frameColor
+}
+
+# Zentrale Hilfsfunktion Write-WrappedText
+function Write-WrappedText {
+    param(
+        [string]$text,
+        [int]$maxWidth = 100,
+        [string]$foregroundColor = "White"
+    )
+    $words = $text -split '\s+'
+    $currentLine = ""
+    foreach ($word in $words) {
+        if (($currentLine.Length + $word.Length + 1) -le $maxWidth) {
+            if ($currentLine.Length -gt 0) {
+                $currentLine += " "
+            }
+            $currentLine += $word
+        }
+        else {
+            Write-Host $currentLine -ForegroundColor $foregroundColor
+            $currentLine = $word
+        }
+    }
+    if ($currentLine.Length -gt 0) {
+        Write-Host $currentLine -ForegroundColor $foregroundColor
+    }
+}
 
 # Function to check if the script is running as Administrator
 function Test-IsAdmin {
@@ -278,7 +331,7 @@ function Invoke-SystemTool {
 
         # Tool-spezifische Ausführung
         $scriptBlock = {
-            param($toolName, $args, $config)
+            param($toolName, $toolArgs, $config)
             
             $progressPreference = 'SilentlyContinue'
             $ErrorActionPreference = 'Stop'
@@ -289,7 +342,7 @@ function Invoke-SystemTool {
                     return $process.ExitCode
                 }
                 'DISM' {
-                    $process = Start-Process "DISM.exe" -ArgumentList $args -WindowStyle Hidden -Wait -PassThru
+                    $process = Start-Process "DISM.exe" -ArgumentList $toolArgs -WindowStyle Hidden -Wait -PassThru
                     return $process.ExitCode
                 }
                 'WindowsDefender' {
@@ -317,8 +370,7 @@ function Invoke-SystemTool {
                 default {
                     throw "Unbekanntes Tool: $toolName"
                 }
-            }
-        }
+            }        }
 
         # Ausführung mit Timeout
         $job = Start-Job -ScriptBlock $scriptBlock -ArgumentList $ToolName, $Arguments, $toolConfig
@@ -401,6 +453,8 @@ Export-ModuleMember -Function @(
     'Invoke-SystemTool',
     'Switch-ToOutputTab',
     'Get-SystemToolConfig',
-    'Update-SystemToolConfig'
+    'Update-SystemToolConfig',
+    'Write-ColoredCenteredText',
+    'Write-WrappedText'
 )
-Export-ModuleMember -Variable SystemToolConfig 
+Export-ModuleMember -Variable SystemToolConfig
