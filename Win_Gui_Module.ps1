@@ -95,7 +95,6 @@ function Show-SystemToolLogo {
     $accentColor = [System.ConsoleColor]::Green
 
     Write-Host
-    <<<<<<< HEAD
     Write-Host " `t   ███████╗██╗   ██╗███████╗████████╗███████╗███╗   ███╗" -ForegroundColor $primaryColor
     Write-Host " `t   ██╔════╝╚██╗ ██╔╝██╔════╝╚══██╔══╝██╔════╝████╗ ████║" -ForegroundColor $primaryColor
     Write-Host " `t   ███████╗ ╚████╔╝ ███████╗   ██║   █████╗  ██╔████╔██║" -ForegroundColor $primaryColor
@@ -108,20 +107,6 @@ function Show-SystemToolLogo {
     Write-Host " `t      ██║   ██║   ██║██║   ██║██║     ╚════██║" -ForegroundColor $secondaryColor
     Write-Host " `t      ██║   ╚██████╔╝╚██████╔╝███████╗███████║" -ForegroundColor $secondaryColor
     Write-Host " `t      ╚═╝    ╚═════╝  ╚═════╝ ╚══════╝╚══════╝" -ForegroundColor $secondaryColor
-    =======
-    Write-Host "    ███████╗██╗   ██╗███████╗████████╗███████╗███╗   ███╗" -ForegroundColor $primaryColor
-    Write-Host "    ██╔════╝╚██╗ ██╔╝██╔════╝╚══██╔══╝██╔════╝████╗ ████║" -ForegroundColor $primaryColor
-    Write-Host "    ███████╗ ╚████╔╝ ███████╗   ██║   █████╗  ██╔████╔██║" -ForegroundColor $primaryColor
-    Write-Host "    ╚════██║  ╚██╔╝  ╚════██║   ██║   ██╔══╝  ██║╚██╔╝██║" -ForegroundColor $primaryColor
-    Write-Host "    ███████║   ██║   ███████║   ██║   ███████╗██║ ╚═╝ ██║" -ForegroundColor $primaryColor
-    Write-Host "    ╚══════╝   ╚═╝   ╚══════╝   ╚═╝   ╚══════╝╚═╝     ╚═╝" -ForegroundColor $primaryColor
-    Write-Host "    ████████╗ ██████╗  ██████╗ ██╗     ███████╗" -ForegroundColor $secondaryColor
-    Write-Host "    ╚══██╔══╝██╔═══██╗██╔═══██╗██║     ██╔════╝" -ForegroundColor $secondaryColor
-    Write-Host "       ██║   ██║   ██║██║   ██║██║     ███████╗" -ForegroundColor $secondaryColor
-    Write-Host "       ██║   ██║   ██║██║   ██║██║     ╚════██║" -ForegroundColor $secondaryColor
-    Write-Host "       ██║   ╚██████╔╝╚██████╔╝███████╗███████║" -ForegroundColor $secondaryColor
-    Write-Host "       ╚═╝    ╚═════╝  ╚═════╝ ╚══════╝╚══════╝" -ForegroundColor $secondaryColor
-    >>>>>>> 89568ae905c1815a21ec4a2b8c3694882a901e2e
     Write-Host "`n`n                  Version 3.1 - PowerShell Edition" -ForegroundColor $accentColor
     Write-Host "                      Entwickelt von Bocki" -ForegroundColor $accentColor
 
@@ -2160,7 +2145,7 @@ $btnCHKDSK.Location = New-Object System.Drawing.Point(30, 25)
 $btnCHKDSK.Add_Click({
         Switch-ToOutputTab -TabControl $tabControl
         # Status auf "Scan läuft..." setzen
-        Update-ProgressStatus -StatusText "CHKDSK läuft..." -ProgressValue 0 -TextColor ([System.Drawing.Color]::DarkBlue)
+        Update-ProgressStatus -StatusText "CHKDSK Laufwerksauswahl wurde geöffnet..." -ProgressValue 0 -TextColor ([System.Drawing.Color]::DarkBlue)
         Start-CHKDSK -outputBox $outputBox -progressBar $progressBar -mainform $mainform 
         # Nach dem Scan Status auf "Fertig" setzen
         Update-ProgressStatus -StatusText "Fertig" -ProgressValue 100 -TextColor ([System.Drawing.Color]::Green)
@@ -3093,12 +3078,4 @@ $script:cpuThreshold = 90  # Standard-CPU-Schwellenwert (wird durch Einstellunge
 $script:gpuThreshold = 80  # Standard-GPU-Schwellenwert (wird durch Einstellungen überschrieben)
 $script:ramThreshold = 85  # Standard-RAM-Schwellenwert (wird durch Einstellungen überschrieben)
 
-<<<<<<< HEAD
-=======
-
-
-
-
-
->>>>>>> 89568ae905c1815a21ec4a2b8c3694882a901e2e
 
