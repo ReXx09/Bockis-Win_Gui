@@ -95,6 +95,7 @@ function Show-SystemToolLogo {
     $accentColor = [System.ConsoleColor]::Green
 
     Write-Host
+    <<<<<<< HEAD
     Write-Host " `t   ███████╗██╗   ██╗███████╗████████╗███████╗███╗   ███╗" -ForegroundColor $primaryColor
     Write-Host " `t   ██╔════╝╚██╗ ██╔╝██╔════╝╚══██╔══╝██╔════╝████╗ ████║" -ForegroundColor $primaryColor
     Write-Host " `t   ███████╗ ╚████╔╝ ███████╗   ██║   █████╗  ██╔████╔██║" -ForegroundColor $primaryColor
@@ -107,6 +108,20 @@ function Show-SystemToolLogo {
     Write-Host " `t      ██║   ██║   ██║██║   ██║██║     ╚════██║" -ForegroundColor $secondaryColor
     Write-Host " `t      ██║   ╚██████╔╝╚██████╔╝███████╗███████║" -ForegroundColor $secondaryColor
     Write-Host " `t      ╚═╝    ╚═════╝  ╚═════╝ ╚══════╝╚══════╝" -ForegroundColor $secondaryColor
+    =======
+    Write-Host "    ███████╗██╗   ██╗███████╗████████╗███████╗███╗   ███╗" -ForegroundColor $primaryColor
+    Write-Host "    ██╔════╝╚██╗ ██╔╝██╔════╝╚══██╔══╝██╔════╝████╗ ████║" -ForegroundColor $primaryColor
+    Write-Host "    ███████╗ ╚████╔╝ ███████╗   ██║   █████╗  ██╔████╔██║" -ForegroundColor $primaryColor
+    Write-Host "    ╚════██║  ╚██╔╝  ╚════██║   ██║   ██╔══╝  ██║╚██╔╝██║" -ForegroundColor $primaryColor
+    Write-Host "    ███████║   ██║   ███████║   ██║   ███████╗██║ ╚═╝ ██║" -ForegroundColor $primaryColor
+    Write-Host "    ╚══════╝   ╚═╝   ╚══════╝   ╚═╝   ╚══════╝╚═╝     ╚═╝" -ForegroundColor $primaryColor
+    Write-Host "    ████████╗ ██████╗  ██████╗ ██╗     ███████╗" -ForegroundColor $secondaryColor
+    Write-Host "    ╚══██╔══╝██╔═══██╗██╔═══██╗██║     ██╔════╝" -ForegroundColor $secondaryColor
+    Write-Host "       ██║   ██║   ██║██║   ██║██║     ███████╗" -ForegroundColor $secondaryColor
+    Write-Host "       ██║   ██║   ██║██║   ██║██║     ╚════██║" -ForegroundColor $secondaryColor
+    Write-Host "       ██║   ╚██████╔╝╚██████╔╝███████╗███████║" -ForegroundColor $secondaryColor
+    Write-Host "       ╚═╝    ╚═════╝  ╚═════╝ ╚══════╝╚══════╝" -ForegroundColor $secondaryColor
+    >>>>>>> 89568ae905c1815a21ec4a2b8c3694882a901e2e
     Write-Host "`n`n                  Version 3.1 - PowerShell Edition" -ForegroundColor $accentColor
     Write-Host "                      Entwickelt von Bocki" -ForegroundColor $accentColor
 
@@ -3078,4 +3093,12 @@ $script:cpuThreshold = 90  # Standard-CPU-Schwellenwert (wird durch Einstellunge
 $script:gpuThreshold = 80  # Standard-GPU-Schwellenwert (wird durch Einstellungen überschrieben)
 $script:ramThreshold = 85  # Standard-RAM-Schwellenwert (wird durch Einstellungen überschrieben)
 
+<<<<<<< HEAD
+=======
+
+
+
+
+
+>>>>>>> 89568ae905c1815a21ec4a2b8c3694882a901e2e
 

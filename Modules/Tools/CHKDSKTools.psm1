@@ -79,6 +79,53 @@ function Start-CHKDSK {
     $outputBox.AppendText("    $userLabel $userName".PadRight(60))
     $outputBox.AppendText("Datum/Zeit: $(Get-Date -Format 'dd.MM.yyyy HH:mm:ss')`r`n`r`n")
     
+    # Stelle sicher, dass die ProgressBar initialisiert ist
+    if ($progressBar) {
+        Initialize-ProgressComponents -ProgressBar $progressBar -StatusLabel $null
+    }
+    
+    # Rahmen und Systeminformationen erstellen
+    $computerName = $env:COMPUTERNAME
+    $userName = $env:USERNAME
+    $osInfo = (Get-CimInstance -ClassName Win32_OperatingSystem).Caption
+    $dateTime = Get-Date -Format "dd.MM.yyyy HH:mm:ss"
+    $width = 80
+        
+    # Rahmen oben
+    Write-Host "╔══════════════════════════════════════════════════════════════════════════════╗" -ForegroundColor Green
+    Write-ColoredCenteredText                             "CHKDSK"                                         
+    Write-Host "╚══════════════════════════════════════════════════════════════════════════════╝" -ForegroundColor Green
+    
+    Write-Host '   .d8888b.  888    888 888    d8P  8888888b.   .d8888b.  888    d8P ' -ForegroundColor Green
+    Write-Host '  d88P  Y88b 888    888 888   d8P   888  "Y88b d88P  Y88b 888   d8P  ' -ForegroundColor Green
+    Write-Host '  888    888 888    888 888  d8P    888    888 Y88b.      888  d8P    ' -ForegroundColor Green
+    Write-Host '  888        8888888888 888d88K     888    888  "Y888b.   888d88K     ' -ForegroundColor Green
+    Write-Host '  888        888    888 8888888b    888    888     "Y88b. 8888888b    ' -ForegroundColor Green
+    Write-Host '  888    888 888    888 888  Y88b   888    888       "888 888  Y88b   ' -ForegroundColor Green
+    Write-Host '  Y88b  d88P 888    888 888   Y88b  888  .d88P Y88b  d88P 888   Y88b  ' -ForegroundColor Green
+    Write-Host '   "Y8888P"  888    888 888    Y88b 8888888P"   "Y8888P"  888    Y88b' -ForegroundColor Green
+    Write-Host
+    # Rahmen für Systeminformationen
+    Write-Host "╔══════════════════════════════════════════════════════════════════════════════╗" -ForegroundColor Green
+    Write-Host "║                              SYSTEMINFORMATIONEN                             ║" -ForegroundColor Green
+    Write-Host "╠══════════════════════════════════════════════════════════════════════════════╣" -ForegroundColor Green
+    # Systeminformationen
+    Write-Host "║                                                                              ║" -ForegroundColor Green
+    Write-Host "      ├─    Betriebssystem: $osInfo           "            -ForegroundColor Yellow                 
+    Write-Host "      ├─    Computer:       $computerName     "            -ForegroundColor Yellow                                    
+    Write-Host "      ├─    Benutzer:       $userName         "            -ForegroundColor Yellow                                    
+    Write-Host "      └─    Datum und Zeit: $dateTime         "            -ForegroundColor Yellow                                  
+    Write-Host "║                                                                              ║" -ForegroundColor Green
+
+    Write-Host "╠══════════════════════════════════════════════════════════════════════════════╣" -ForegroundColor Green
+    Write-ColoredCenteredText                          "Starte CHKDSK..."
+    Write-Host "╚══════════════════════════════════════════════════════════════════════════════╝" -ForegroundColor Green
+    
+    # 3 Sekunden warten vor dem Start
+    Start-Sleep -Seconds 3
+    
+
+
     # Verfügbare Laufwerke ermitteln
     $drives = Get-WmiObject Win32_LogicalDisk | 
     Where-Object { $_.DriveType -eq 3 -or $_.DriveType -eq 2 } | 
