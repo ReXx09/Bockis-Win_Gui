@@ -537,5 +537,278 @@ function Restart-DefenderService {
     }
 }
 
+# Funktion zum Starten des Windows Defender Offline-Scans
+function Start-DefenderOfflineScan {
+    param(
+        [System.Windows.Forms.RichTextBox]$outputBox,
+        [System.Windows.Forms.TabControl]$TabControl,
+        [System.Windows.Forms.ProgressBar]$progressBar = $null,
+        [System.Windows.Forms.Form]$MainForm = $null
+    )
+    
+    # outputBox zurücksetzen
+    $outputBox.Clear()
+    
+    # PowerShell-Fenster aktivieren und Konsole leeren
+    try {
+        # Minimalen Code zur Aktivierung des Konsolenfensters verwenden
+        $signature = @'
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool SetForegroundWindow(IntPtr hWnd);
+        
+        [DllImport("kernel32.dll")]
+        public static extern IntPtr GetConsoleWindow();
+'@
+        try {
+            $type = Add-Type -MemberDefinition $signature -Name "ConsoleFunctions" -Namespace "Win32Simple" -PassThru -ErrorAction SilentlyContinue
+            $hwnd = $type::GetConsoleWindow()
+            if ($hwnd -ne [IntPtr]::Zero) {
+                [void]$type::SetForegroundWindow($hwnd)
+            }
+        }
+        catch {
+            # Ignorieren, falls nicht möglich
+            Write-Host "Hinweis: Konnte PowerShell-Fenster nicht aktivieren. Die Vorbereitung läuft trotzdem."
+        }
+    }
+    catch {
+        # Ignorieren, falls nicht möglich
+    }
+    
+    Clear-Host
+    
+    # Tab zur Ausgabe umschalten
+    Switch-ToOutputTab -TabControl $TabControl
+    
+    # Rahmen und Systeminformationen erstellen
+    $computerName = $env:COMPUTERNAME
+    $userName = $env:USERNAME
+    $osInfo = (Get-CimInstance -ClassName Win32_OperatingSystem).Caption
+    $dateTime = Get-Date -Format "dd.MM.yyyy HH:mm:ss"
+    $width = 80
+    
+    # Rahmen oben
+    Write-Host "╔══════════════════════════════════════════════════════════════════════════════╗" -ForegroundColor Green
+    Write-ColoredCenteredText                     "Windows Defender Offline-Scan"                                          
+    Write-Host "╚══════════════════════════════════════════════════════════════════════════════╝" -ForegroundColor Green
+    
+    # ASCII-Art Logo
+    Write-Host
+    Write-Host '   888       888  d8b                 888                                                 ' -ForegroundColor Cyan
+    Write-Host '   888   o   888  Y8P                 888                                                 ' -ForegroundColor Blue
+    Write-Host '   888  d8b  888                      888                                                 ' -ForegroundColor Cyan
+    Write-Host '   888 d888b 888  888  88888b.    .d88888   .d88b.   888  888  888  .d8888b               ' -ForegroundColor Blue
+    Write-Host '   888d88888b888  888  888 "88b  d88" 888  d88""88b  888  888  888  88K                   ' -ForegroundColor Cyan
+    Write-Host '   88888P Y88888  888  888  888  888  888  888  888  888  888  888  "Y8888b.              ' -ForegroundColor Blue    
+    Write-Host '   8888P   Y8888  888  888  888  Y88b 888  Y88..88P  Y88b 888 d88P       X88              ' -ForegroundColor Cyan
+    Write-Host '   888P     Y888  888  888  888   "Y88888   "Y88P"    "Y8888888P"    88888P               ' -ForegroundColor Blue
+    Write-Host                                                                    
+    Write-Host '   8888888b.            .d888                         888                                 ' -ForegroundColor Cyan
+    Write-Host '   888  "Y88b          d88P"                          888                                 ' -ForegroundColor Blue
+    Write-Host '   888    888          888                            888                                 ' -ForegroundColor Cyan
+    Write-Host '   888    888  .d88b.  888888 .d88b.  88888b.    .d88888  .d88b.  888d888                ' -ForegroundColor Blue
+    Write-Host '   888    888 d8P  Y8b 888   d8P  Y8b 888 "88b  d88" 888 d8P  Y8b 888P"                  ' -ForegroundColor Cyan
+    Write-Host '   888    888 88888888 888   88888888 888  888  888  888 88888888 888                    ' -ForegroundColor Blue
+    Write-Host '   888  .d88P Y8b.     888   Y8b.     888  888  Y88b 888 Y8b.     888                    ' -ForegroundColor Cyan
+    Write-Host '   8888888P"   "Y8888  888    "Y8888  888  888   "Y88888  "Y8888  888                    ' -ForegroundColor Blue
+    Write-Host '                                                                                          ' -ForegroundColor Cyan
+    Write-Host '   .d88888b.  .d888d888d888 d8888 8888b.   .d888 8888b.   .d88b.   .d88b.   .d88b.       ' -ForegroundColor Blue
+    Write-Host '  d88P" "Y88bd8888888P"888 d8P"      "88b d88P"    "88b d88""88b d88""88b d8P  Y8b      ' -ForegroundColor Cyan
+    Write-Host '  888     888888  888  888 88888  .d888888888      888 888  888 888  888 88888888      ' -ForegroundColor Blue
+    Write-Host '  888     888888  888  888 88888  888  888888      888 Y88..88P Y88..88P Y8b.          ' -ForegroundColor Cyan
+    Write-Host '  "Y8888888P"888  888  888 8888   "Y88888888      888  "Y88P"   "Y88P"   "Y8888       ' -ForegroundColor Blue
+    Write-Host
+    
+    # Rahmen für Systeminformationen
+    Write-Host "╔══════════════════════════════════════════════════════════════════════════════╗" -ForegroundColor Green
+    Write-ColoredCenteredText                          "SYSTEMINFORMATIONEN"                                           
+    Write-Host "╠══════════════════════════════════════════════════════════════════════════════╣" -ForegroundColor Green
+    # Systeminformationen
+    Write-Host "║                                                                              ║" -ForegroundColor Green
+    Write-Host "      ├─    Betriebssystem: $osInfo           "            -ForegroundColor Yellow                 
+    Write-Host "      ├─    Computer:       $computerName     "            -ForegroundColor Yellow                                    
+    Write-Host "      ├─    Benutzer:       $userName         "            -ForegroundColor Yellow                                    
+    Write-Host "      └─    Datum und Zeit: $dateTime         "            -ForegroundColor Yellow                                  
+    Write-Host "║                                                                              ║" -ForegroundColor Green
+    
+    Write-Host "╠══════════════════════════════════════════════════════════════════════════════╣" -ForegroundColor Green
+    Write-ColoredCenteredText "Windows Defender Offline-Scan wird vorbereitet..."
+    Write-Host "╚══════════════════════════════════════════════════════════════════════════════╝" -ForegroundColor Green
+    
+    # Status in GUI aktualisieren
+    Write-ToolLog -ToolName "WindowsDefender" -Message "Windows Defender Offline-Scan wird vorbereitet..." -OutputBox $outputBox -Color ([System.Drawing.Color]::Blue) -NoTimestamp
+    
+    # Progress Bar aktualisieren
+    Update-ProgressStatus -StatusText "Defender Offline-Scan wird vorbereitet..." -ProgressValue 10 -TextColor ([System.Drawing.Color]::DarkBlue) -progressBarParam $progressBar
+    
+    # Wichtige Informationen anzeigen
+    Write-Host "`n[!] WICHTIGE INFORMATIONEN" -ForegroundColor Yellow
+    Write-Host "Der Windows Defender Offline-Scan..." -ForegroundColor Cyan
+    Write-Host " ├─ Benötigt einen Systemneustart" -ForegroundColor White
+    Write-Host " ├─ Führt nach dem Neustart einen umfassenden Scan durch" -ForegroundColor White
+    Write-Host " ├─ Kann bis zu einer Stunde oder länger dauern" -ForegroundColor White
+    Write-Host " ├─ Alle nicht gespeicherten Daten gehen verloren" -ForegroundColor White
+    Write-Host " └─ Bietet erhöhte Sicherheit gegen Rootkits und persistente Malware" -ForegroundColor White
+    
+    # Diese Informationen auch in der GUI anzeigen
+    Write-ToolLog -ToolName "WindowsDefender" -Message "WICHTIGE INFORMATIONEN:" -OutputBox $outputBox -Color ([System.Drawing.Color]::Yellow) -NoTimestamp
+    Write-ToolLog -ToolName "WindowsDefender" -Message "Der Windows Defender Offline-Scan..." -OutputBox $outputBox -Color ([System.Drawing.Color]::Blue) -NoTimestamp
+    Write-ToolLog -ToolName "WindowsDefender" -Message " - Benötigt einen Systemneustart" -OutputBox $outputBox -NoTimestamp
+    Write-ToolLog -ToolName "WindowsDefender" -Message " - Führt nach dem Neustart einen umfassenden Scan durch" -OutputBox $outputBox -NoTimestamp
+    Write-ToolLog -ToolName "WindowsDefender" -Message " - Kann bis zu einer Stunde oder länger dauern" -OutputBox $outputBox -NoTimestamp
+    Write-ToolLog -ToolName "WindowsDefender" -Message " - Alle nicht gespeicherten Daten gehen verloren" -OutputBox $outputBox -NoTimestamp
+    Write-ToolLog -ToolName "WindowsDefender" -Message " - Bietet erhöhte Sicherheit gegen Rootkits und persistente Malware" -OutputBox $outputBox -NoTimestamp
+    
+    Update-ProgressStatus -StatusText "Warte auf Benutzerbestätigung..." -ProgressValue 30 -TextColor ([System.Drawing.Color]::Blue) -progressBarParam $progressBar
+    
+    # Bestätigung vom Benutzer einholen
+    $confirmMessage = "Sie möchten den Windows Defender Offline-Scan starten. `n`n" + 
+    "Diese Aktion ERFORDERT EINEN NEUSTART des Systems.`n" +
+    "Alle nicht gespeicherten Daten gehen verloren!`n`n" + 
+    "Bitte speichern Sie wichtige Dokumente und schließen Sie alle Programme.`n`n" +
+    "Möchten Sie fortfahren und den Offline-Scan starten?"
+    
+    $result = [System.Windows.Forms.MessageBox]::Show(
+        $confirmMessage,
+        "Windows Defender Offline-Scan",
+        [System.Windows.Forms.MessageBoxButtons]::YesNo,
+        [System.Windows.Forms.MessageBoxIcon]::Warning
+    )
+    
+    if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
+        try {
+            # Update Fortschritt
+            Update-ProgressStatus -StatusText "Konfiguriere Offline-Scan..." -ProgressValue 50 -TextColor ([System.Drawing.Color]::Blue) -progressBarParam $progressBar
+            
+            Write-Host "`n[+] Bereite Windows Defender Offline-Scan vor..." -ForegroundColor Green
+            Write-ToolLog -ToolName "WindowsDefender" -Message "Bereite Windows Defender Offline-Scan vor..." -OutputBox $outputBox -Color ([System.Drawing.Color]::Green) -NoTimestamp
+            
+            # Prüfe, welche Methode verfügbar ist
+            $offlineScanConfigured = $false
+            
+            # Methode 1: Start-MpWDOScan cmdlet
+            if (Get-Command Start-MpWDOScan -ErrorAction SilentlyContinue) {
+                try {
+                    Write-Host "`n[>] Konfiguriere Offline-Scan mit PowerShell-Cmdlet..." -ForegroundColor Yellow
+                    Write-ToolLog -ToolName "WindowsDefender" -Message "Konfiguriere Offline-Scan mit PowerShell-Cmdlet..." -OutputBox $outputBox -NoTimestamp
+                    
+                    Start-MpWDOScan
+                    $offlineScanConfigured = $true
+                    
+                    Write-Host "`n[+] Offline-Scan wurde erfolgreich konfiguriert!" -ForegroundColor Green
+                    Write-ToolLog -ToolName "WindowsDefender" -Message "Offline-Scan wurde erfolgreich konfiguriert!" -OutputBox $outputBox -Color ([System.Drawing.Color]::Green) -NoTimestamp
+                }
+                catch {
+                    Write-Host "`n[!] Fehler beim Konfigurieren des Offline-Scans mit PowerShell-Cmdlet: $_" -ForegroundColor Red
+                    Write-ToolLog -ToolName "WindowsDefender" -Message "Fehler beim Konfigurieren des Offline-Scans mit PowerShell-Cmdlet: $_" -OutputBox $outputBox -Color ([System.Drawing.Color]::Red) -NoTimestamp
+                }
+            }
+            
+            # Methode 2: MpCmdRun.exe als Alternative
+            if (-not $offlineScanConfigured) {
+                try {
+                    $mpCmdRunPath = "$env:ProgramFiles\Windows Defender\MpCmdRun.exe"
+                    if (Test-Path $mpCmdRunPath) {
+                        Write-Host "`n[>] Konfiguriere Offline-Scan mit MpCmdRun.exe..." -ForegroundColor Yellow
+                        Write-ToolLog -ToolName "WindowsDefender" -Message "Konfiguriere Offline-Scan mit MpCmdRun.exe..." -OutputBox $outputBox -NoTimestamp
+                        
+                        # Führe MpCmdRun für offline-Scan aus
+                        $process = Start-Process -FilePath $mpCmdRunPath -ArgumentList "-wdoscan" -NoNewWindow -PassThru -Wait
+                        
+                        if ($process.ExitCode -eq 0) {
+                            $offlineScanConfigured = $true
+                            Write-Host "`n[+] Offline-Scan wurde erfolgreich konfiguriert!" -ForegroundColor Green
+                            Write-ToolLog -ToolName "WindowsDefender" -Message "Offline-Scan wurde erfolgreich konfiguriert!" -OutputBox $outputBox -Color ([System.Drawing.Color]::Green) -NoTimestamp
+                        }
+                        else {
+                            Write-Host "`n[!] Fehler beim Konfigurieren des Offline-Scans mit MpCmdRun.exe. ExitCode: $($process.ExitCode)" -ForegroundColor Red
+                            Write-ToolLog -ToolName "WindowsDefender" -Message "Fehler beim Konfigurieren des Offline-Scans mit MpCmdRun.exe. ExitCode: $($process.ExitCode)" -OutputBox $outputBox -Color ([System.Drawing.Color]::Red) -NoTimestamp
+                        }
+                    }
+                    else {
+                        Write-Host "`n[!] MpCmdRun.exe nicht gefunden unter $mpCmdRunPath" -ForegroundColor Red
+                        Write-ToolLog -ToolName "WindowsDefender" -Message "MpCmdRun.exe nicht gefunden unter $mpCmdRunPath" -OutputBox $outputBox -Color ([System.Drawing.Color]::Red) -NoTimestamp
+                    }
+                }
+                catch {
+                    Write-Host "`n[!] Fehler beim Konfigurieren des Offline-Scans mit MpCmdRun.exe: $_" -ForegroundColor Red
+                    Write-ToolLog -ToolName "WindowsDefender" -Message "Fehler beim Konfigurieren des Offline-Scans mit MpCmdRun.exe: $_" -OutputBox $outputBox -Color ([System.Drawing.Color]::Red) -NoTimestamp
+                }
+            }
+            
+            # Methode 3: PowerShell-Befehl zum Neustart mit speziellen Parametern
+            if (-not $offlineScanConfigured) {
+                try {
+                    Write-Host "`n[>] Verwende alternative Methode über WDOSCAN-Parameter..." -ForegroundColor Yellow
+                    Write-ToolLog -ToolName "WindowsDefender" -Message "Verwende alternative Methode über WDOSCAN-Parameter..." -OutputBox $outputBox -NoTimestamp
+                    
+                    # Offline-Scan über Shutdown-Befehl einleiten
+                    # Der Parameter /fw erzwingt, dass Windows mit Windows Defender Offline gestartet wird
+                    $process = Start-Process -FilePath "shutdown.exe" -ArgumentList "/r /t 60 /f /fw" -NoNewWindow -PassThru -Wait
+                    
+                    if ($process.ExitCode -eq 0) {
+                        $offlineScanConfigured = $true
+                        Write-Host "`n[+] System wird in 60 Sekunden neu gestartet für den Offline-Scan!" -ForegroundColor Green
+                        Write-ToolLog -ToolName "WindowsDefender" -Message "System wird in 60 Sekunden neu gestartet für den Offline-Scan!" -OutputBox $outputBox -Color ([System.Drawing.Color]::Green) -NoTimestamp
+                    }
+                    else {
+                        Write-Host "`n[!] Fehler beim Konfigurieren des Neustarts. ExitCode: $($process.ExitCode)" -ForegroundColor Red
+                        Write-ToolLog -ToolName "WindowsDefender" -Message "Fehler beim Konfigurieren des Neustarts. ExitCode: $($process.ExitCode)" -OutputBox $outputBox -Color ([System.Drawing.Color]::Red) -NoTimestamp
+                    }
+                }
+                catch {
+                    Write-Host "`n[!] Fehler beim Konfigurieren des Neustarts: $_" -ForegroundColor Red
+                    Write-ToolLog -ToolName "WindowsDefender" -Message "Fehler beim Konfigurieren des Neustarts: $_" -OutputBox $outputBox -Color ([System.Drawing.Color]::Red) -NoTimestamp
+                }
+            }
+
+            # Abschließende Nachricht basierend auf Status
+            if ($offlineScanConfigured) {
+                Update-ProgressStatus -StatusText "Windows Defender Offline-Scan wird nach dem Neustart ausgeführt" -ProgressValue 100 -TextColor ([System.Drawing.Color]::Green) -progressBarParam $progressBar
+                
+                # Information für den Benutzer
+                $shutdownInfo = "Der Windows Defender Offline-Scan wurde konfiguriert.`n`n" + 
+                "Das System wird in wenigen Sekunden neu gestartet.`n" +
+                "Bitte schalten Sie den Computer während des Scans nicht aus.`n" +
+                "Der Scan kann bis zu einer Stunde dauern."
+                
+                [System.Windows.Forms.MessageBox]::Show(
+                    $shutdownInfo,
+                    "Windows Defender Offline-Scan",
+                    [System.Windows.Forms.MessageBoxButtons]::OK,
+                    [System.Windows.Forms.MessageBoxIcon]::Information
+                )
+            }
+            else {
+                Update-ProgressStatus -StatusText "Fehler bei der Konfiguration des Offline-Scans" -ProgressValue 0 -TextColor ([System.Drawing.Color]::Red) -progressBarParam $progressBar
+                
+                # Fehlermeldung für den Benutzer
+                [System.Windows.Forms.MessageBox]::Show(
+                    "Der Windows Defender Offline-Scan konnte nicht konfiguriert werden.`n" +
+                    "Bitte versuchen Sie es später erneut oder kontaktieren Sie den Support.",
+                    "Windows Defender Offline-Scan",
+                    [System.Windows.Forms.MessageBoxButtons]::OK,
+                    [System.Windows.Forms.MessageBoxIcon]::Error
+                )
+            }
+        }
+        catch {
+            Write-Host "`n[!] Unerwarteter Fehler beim Konfigurieren des Offline-Scans: $_" -ForegroundColor Red
+            Write-ToolLog -ToolName "WindowsDefender" -Message "Unerwarteter Fehler beim Konfigurieren des Offline-Scans: $_" -OutputBox $outputBox -Color ([System.Drawing.Color]::Red) -NoTimestamp
+            
+            Update-ProgressStatus -StatusText "Fehler" -ProgressValue 0 -TextColor ([System.Drawing.Color]::Red) -progressBarParam $progressBar
+        }
+    }
+    else {
+        # Benutzer hat abgebrochen
+        Write-Host "`n[i] Vorgang wurde durch den Benutzer abgebrochen." -ForegroundColor Yellow
+        Write-ToolLog -ToolName "WindowsDefender" -Message "Vorgang wurde durch den Benutzer abgebrochen." -OutputBox $outputBox -Color ([System.Drawing.Color]::Yellow) -NoTimestamp
+        
+        Update-ProgressStatus -StatusText "Abgebrochen" -ProgressValue 0 -TextColor ([System.Drawing.Color]::Blue) -progressBarParam $progressBar
+    }
+}
+
 # Export functions
-Export-ModuleMember -Function Start-WindowsDefender, Restart-DefenderService
+Export-ModuleMember -Function Start-WindowsDefender, Restart-DefenderService, Start-DefenderOfflineScan
+

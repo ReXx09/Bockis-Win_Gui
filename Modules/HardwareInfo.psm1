@@ -345,3 +345,4 @@ function Get-SystemInfo {
 
 # Exportiere die Funktionen
 Export-ModuleMember -Function Get-CPUInfo, Get-RAMInfo, Get-GPUInfo, Get-DiskInfo, Get-NetworkInfo, Get-SystemInfo
+

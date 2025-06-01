@@ -10,7 +10,9 @@ function Start-CheckDISM {
     )
 
     Clear-Host
-    
+    # outputBox zuruecksetzen
+    $outputBox.Clear()
+
     # Stelle sicher, dass die ProgressBar initialisiert ist
     if ($progressBar) {
         Initialize-ProgressComponents -ProgressBar $progressBar -StatusLabel $null
@@ -30,7 +32,6 @@ function Start-CheckDISM {
     
     # ASCII-Art Logo
     Write-Host
-    Write-Host
     Write-Host '  8888888b.  8888888  .d8888b.  888b     d888                           ' -ForegroundColor Cyan
     Write-Host '  888  "Y88b   888   d88P  Y88b 8888b   d8888                           ' -ForegroundColor Blue
     Write-Host '  888    888   888   Y88b.      88888b.d88888                           ' -ForegroundColor Cyan
@@ -48,9 +49,6 @@ function Start-CheckDISM {
     Write-Host '                     888    888 888  888 88888888 888      888888K      ' -ForegroundColor Blue
     Write-Host '                     Y88b  d88P 888  888 Y8b.     Y88b.    888 "88b     ' -ForegroundColor Cyan
     Write-Host '                      "Y8888P"  888  888  "Y8888   "Y8888P 888  888     ' -ForegroundColor Blue
-
-
-
     Write-Host
     # Rahmen für Systeminformationen
     Write-Host "╔══════════════════════════════════════════════════════════════════════════════╗" -ForegroundColor Green
@@ -138,7 +136,9 @@ function Start-ScanDISM {
     )
 
     Clear-Host
-    
+    # outputBox zuruecksetzen
+    $outputBox.Clear()
+
     # Stelle sicher, dass die ProgressBar initialisiert ist
     if ($progressBar) {
         Initialize-ProgressComponents -ProgressBar $progressBar -StatusLabel $null
@@ -155,9 +155,6 @@ function Start-ScanDISM {
     Write-Host "╔══════════════════════════════════════════════════════════════════════════════╗" -ForegroundColor Green
     Write-ColoredCenteredText                             "DISM SCAN HEALTH"                                         
     Write-Host "╚══════════════════════════════════════════════════════════════════════════════╝" -ForegroundColor Green
-    
-    # ASCII-Art Logo
-    Write-Host
     Write-Host
     Write-Host '8888888b. 8888888 .d8888b.  888b     d888              ' -ForegroundColor Cyan
     Write-Host '888  "Y88b  888  d88P  Y88b 8888b   d8888              ' -ForegroundColor Blue
@@ -177,19 +174,15 @@ function Start-ScanDISM {
     Write-Host '                 Y88b  d88P Y88b.    888  888 888  888 ' -ForegroundColor Cyan
     Write-Host '                  "Y8888P"   "Y8888P "Y888888 888  888 ' -ForegroundColor Blue
     Write-Host
-    Write-Host
-    # Rahmen für Systeminformationen
     Write-Host "╔══════════════════════════════════════════════════════════════════════════════╗" -ForegroundColor Green
     Write-Host "║                              SYSTEMINFORMATIONEN                             ║" -ForegroundColor Green
     Write-Host "╠══════════════════════════════════════════════════════════════════════════════╣" -ForegroundColor Green
-    # Systeminformationen
     Write-Host "║                                                                              ║" -ForegroundColor Green
     Write-Host "      ├─    Betriebssystem: $osInfo           "            -ForegroundColor Yellow                 
     Write-Host "      ├─    Computer:       $computerName     "            -ForegroundColor Yellow                                    
     Write-Host "      ├─    Benutzer:       $userName         "            -ForegroundColor Yellow                                    
     Write-Host "      └─    Datum und Zeit: $dateTime         "            -ForegroundColor Yellow                                  
     Write-Host "║                                                                              ║" -ForegroundColor Green
-
     Write-Host "╠══════════════════════════════════════════════════════════════════════════════╣" -ForegroundColor Green
     Write-ColoredCenteredText                          "Starte DISM Scan..."
     Write-Host "╚══════════════════════════════════════════════════════════════════════════════╝" -ForegroundColor Green
@@ -265,6 +258,8 @@ function Start-RestoreDISM {
     )
 
     Clear-Host
+    # outputBox zuruecksetzen
+    $outputBox.Clear()
     
     # Stelle sicher, dass die ProgressBar initialisiert ist
     if ($progressBar) {

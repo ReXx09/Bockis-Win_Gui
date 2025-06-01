@@ -568,9 +568,21 @@ function Start-FullMRT {
     # outputBox zuruecksetzen
     $outputBox.Clear()
     
+    try {
+        # Header für den Scan
+        $outputBox.SelectionColor = [System.Drawing.Color]::DarkBlue
+        $outputBox.AppendText("`r`n===== MICROSOFT MALICIOUS SOFTWARE REMOVAL TOOL (MRT) =====`r`n")
+        $outputBox.AppendText("Modus: Quick Scan`r`n")
+        $outputBox.AppendText("Zeitstempel: $(Get-Date -Format 'dd.MM.yyyy HH:mm:ss')`r`n`r`n")
         
+    }
+    catch {
+        $outputBox.SelectionColor = [System.Drawing.Color]::Red
+        $outputBox.AppendText("`r`n[-] FEHLER: $_`r`n")
+        return -1
+    }
        
-    $outputBox.AppendText("[>] MRT Full Scan wird gestartet...`r`n")
+    $outputBox.AppendText("[>] Windows- Fenster für MRT Full Scan wird geöffnet...`r`n")
     
           
     Write-Host
@@ -579,8 +591,9 @@ function Start-FullMRT {
     Write-Host
     Write-Host "`n" + ("═" * 70) -ForegroundColor Cyan 
     Write-Host
-    Write-Host "     [ Bitte starten Sie den Scan in der ... ]" -ForegroundColor $secondaryColor
-
+    Write-Host "     [>] WIndows- Fenster für " MRT Full Scan " wird geöffnet...... " -ForegroundColor $secondaryColor
+    Write-Host "     [i] Bitte starten Sie den Scan im Windowseigenen Tool-Fenster ... " -ForegroundColor $secondaryColor
+    Write-Host
     # MRT-Prozess starten und Exit-Code erfassen
     try {
         # Timer starten, um einen Timeout zu ermöglichen

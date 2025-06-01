@@ -68,127 +68,11 @@ $script:cpuInfoShown = $false
 $script:gpuInfoShown = $false
 $script:ramInfoShown = $false
 
-function Write-DebugOutput {
-    param(
-        [string]$Message,
-        [ValidateSet('CPU', 'GPU', 'RAM')]
-        [string]$Component,
-        [switch]$Force
-    )
-    
-    # Prüfen ob Debug für die spezifische Komponente aktiviert ist
-    $isDebugEnabled = switch ($Component) {
-        'CPU' { $script:DebugModeCPU }
-        'GPU' { $script:DebugModeGPU }
-        'RAM' { $script:DebugModeRAM }
-        default { $false }
-    }
-    
-    if ($isDebugEnabled -or $Force) {
-        $now = Get-Date
-        $lastOutput = switch ($Component) {
-            'CPU' { $script:lastCPUDebugOutput }
-            'GPU' { $script:lastGPUDebugOutput }
-            'RAM' { $script:lastRAMDebugOutput }
-        }
+# Debug-Funktion entfernt - Debug-Ausgaben wurden deaktiviert
 
-        if ($Force -or ($now - $lastOutput) -gt $script:debugUpdateInterval) {
-            Write-Host "[$Component] $Message" -ForegroundColor $(
-                switch ($Component) {
-                    'CPU' { 'Cyan' }
-                    'GPU' { 'Green' }
-                    'RAM' { 'Yellow' }
-                    default { 'White' }
-                }
-            )
+# Hardware-Info-Funktionen entfernt - Debug-Ausgaben wurden deaktiviert
 
-            # Aktualisiere den Zeitstempel
-            switch ($Component) {
-                'CPU' { $script:lastCPUDebugOutput = $now }
-                'GPU' { $script:lastGPUDebugOutput = $now }
-                'RAM' { $script:lastRAMDebugOutput = $now }
-            }
-        }
-    }
-}
-
-function Write-HardwareInfo {
-    param(
-        [ValidateSet('CPU', 'GPU', 'RAM')]
-        [string]$Component
-    )
-
-    switch ($Component) {
-        'CPU' {
-            if (-not $script:cpuInfoShown) {
-                $cpuWmi = Get-WmiObject -Class Win32_Processor | Select-Object -First 1
-                Write-Host "`n[CPU] === Hardware Information ===" -ForegroundColor Cyan
-                Write-Host "[CPU] Name: $($cpuWmi.Name)" -ForegroundColor Cyan
-                Write-Host "[CPU] Hersteller: $($cpuWmi.Manufacturer)" -ForegroundColor Cyan
-                Write-Host "[CPU] Kerne: $($cpuWmi.NumberOfCores)" -ForegroundColor Cyan
-                Write-Host "[CPU] Logische Prozessoren: $($cpuWmi.NumberOfLogicalProcessors)" -ForegroundColor Cyan
-                Write-Host "[CPU] Basis Taktrate: $($cpuWmi.MaxClockSpeed) MHz" -ForegroundColor Cyan
-                Write-Host "[CPU] ===========================" -ForegroundColor Cyan
-                $script:cpuInfoShown = $true
-            }
-        }
-        'GPU' {
-            if (-not $script:gpuInfoShown) {
-                $gpuWmi = Get-WmiObject -Class Win32_VideoController | Where-Object { $_.Name -match "NVIDIA|AMD|Radeon|GeForce|Intel.*Graphics" }
-                Write-Host "`n[GPU] === Hardware Information ===" -ForegroundColor Green
-                foreach ($gpu in $gpuWmi) {
-                    Write-Host "[GPU] Name: $($gpu.Name)" -ForegroundColor Green
-                    Write-Host "[GPU] Treiber Version: $($gpu.DriverVersion)" -ForegroundColor Green
-                    Write-Host "[GPU] Video RAM: $([math]::Round($gpu.AdapterRAM/1GB, 2)) GB" -ForegroundColor Green
-                    Write-Host "[GPU] Maximale Auflösung: $($gpu.MaxRefreshRate) Hz @ $($gpu.VideoModeDescription)" -ForegroundColor Green
-                }
-                Write-Host "[GPU] ===========================" -ForegroundColor Green
-                $script:gpuInfoShown = $true
-            }
-        }
-        'RAM' {
-            if (-not $script:ramInfoShown) {
-                $ramInfo = Get-WmiObject -Class Win32_PhysicalMemory
-                Write-Host "`n[RAM] === Hardware Information ===" -ForegroundColor Yellow
-                Write-Host "[RAM] Anzahl RAM-Module: $($ramInfo.Count)" -ForegroundColor Yellow
-                foreach ($module in $ramInfo) {
-                    Write-Host "[RAM] -------------------" -ForegroundColor Yellow
-                    Write-Host "[RAM] Hersteller: $($module.Manufacturer)" -ForegroundColor Yellow
-                    Write-Host "[RAM] Teilenummer: $($module.PartNumber)" -ForegroundColor Yellow
-                    Write-Host "[RAM] Kapazität: $([math]::Round($module.Capacity/1GB, 2)) GB" -ForegroundColor Yellow
-                    Write-Host "[RAM] Nominale Geschwindigkeit: $($module.Speed) MHz" -ForegroundColor Yellow
-                    Write-Host "[RAM] Form Factor: $($module.FormFactor)" -ForegroundColor Yellow
-                }
-                $computerSystem = Get-WmiObject -Class Win32_ComputerSystem
-                $totalRAM = [math]::Round($computerSystem.TotalPhysicalMemory / 1GB, 2)
-                Write-Host "[RAM] -------------------" -ForegroundColor Yellow
-                Write-Host "[RAM] Gesamter RAM: $totalRAM GB" -ForegroundColor Yellow
-                Write-Host "[RAM] ===========================" -ForegroundColor Yellow
-                $script:ramInfoShown = $true
-            }
-        }
-    }
-}
-
-function Write-SensorInfo {
-    param(
-        [ValidateSet('CPU', 'GPU', 'RAM')]
-        [string]$Component,
-        [hashtable]$SensorData
-    )
-
-    $color = switch ($Component) {
-        'CPU' { 'Cyan' }
-        'GPU' { 'Green' }
-        'RAM' { 'Yellow' }
-    }
-
-    Write-Host "[$Component] === Aktuelle Sensor-Werte ===" -ForegroundColor $color
-    foreach ($key in $SensorData.Keys) {
-        Write-Host "[$Component] $key : $($SensorData[$key])" -ForegroundColor $color
-    }
-    Write-Host "[$Component] ===========================" -ForegroundColor $color
-}
+# Debug-Funktionen entfernt - Sensor-Info-Ausgaben wurden deaktiviert
 
 function Reset-HardwareInfoStatus {
     param(
@@ -3035,4 +2919,3 @@ function Get-RamTemperatureViaSMBus {
         return $null
     }
 }
-

@@ -1,5 +1,10 @@
 ﻿# Win_Gui_Module.ps1 - Hauptskript für die PowerShell-GUI
-# Autor: Bocki 
+# Autor: Bocki
+
+# WPF-Assemblies für moderne UI-Komponenten laden
+Add-Type -AssemblyName PresentationFramework
+Add-Type -AssemblyName PresentationCore
+Add-Type -AssemblyName WindowsFormsIntegration
 
 # Settings-Modul importieren
 Import-Module "$PSScriptRoot\Modules\Core\Settings.psm1" -Force
@@ -10,7 +15,7 @@ $script:settings = $null
 # Laden der Einstellungen aus der Konfigurationsdatei, falls vorhanden
 function Import-Settings {
     $settingsFilePath = "$PSScriptRoot\config.json"
-    
+
     # Setze die globalen Einstellungen durch Aufruf der Funktion aus dem Settings-Modul
     return Import-SystemToolSettings -ConfigPath $settingsFilePath
 }
@@ -49,10 +54,10 @@ if (-not (Test-Admin)) {
     try {
         # Skriptpfad ermitteln
         $scriptPath = $MyInvocation.MyCommand.Path
-        
+
         # PowerShell mit erhöhten Rechten starten
         Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`"" -Verb RunAs -Wait
-        
+
         # Beende das aktuelle Skript, da es in einem neuen Prozess mit Admin-Rechten gestartet wird
         exit
     }
@@ -72,7 +77,7 @@ function Write-ToolLog {
         [System.Drawing.Color]$Color = [System.Drawing.Color]::Black,
         [switch]$NoTimestamp
     )
-    
+
     $OutputBox.SelectionColor = $Color
     if ($NoTimestamp) {
         $OutputBox.AppendText("$Message`r`n")
@@ -201,26 +206,26 @@ for ($i = 0; $i -lt $totalModules; $i++) {
     # Entferne Leerzeichen aus dem Modulpfad für korrekte Dateipfade
     $moduleClean = $module.Trim()
     $modulePath = Join-Path $modulesPath "$moduleClean.psm1"
-    
+
     # Fortschritt berechnen und anzeigen
     $percentComplete = [math]::Floor((($i + 1) / $totalModules) * 100)
     $filledLength = [math]::Floor((($i + 1) / $totalModules) * $barLength)
     $progressBar = "".PadLeft($filledLength, '█').PadRight($barLength, '░')
-    
+
     # Bereite eine saubere Anzeige vor: Lösche zuerst die ganze Zeile
     Write-Host "`r" + (" " * 100) -NoNewline
-    
+
     # Zeige den Fortschrittsbalken an
     Write-Host "`r[" -NoNewline -ForegroundColor $primaryColor
     Write-Host $progressBar -NoNewline -ForegroundColor $secondaryColor
     Write-Host "]" -NoNewline -ForegroundColor $primaryColor
-    
+
     # Zeige Prozent und Modulnamen in einem separaten Bereich an
     $moduleInfo = " $percentComplete% | Lade: "
     # Kürze den Modulnamen wenn nötig
     $displayModule = if ($module.Length -gt 25) { $module.Substring(0, 22) + "..." } else { $module }
     Write-Host "$moduleInfo$displayModule" -NoNewline -ForegroundColor $accentColor
-    
+
     try {
         # Prüfe ob Modul-Datei existiert
         if (-not (Test-Path $modulePath)) {
@@ -229,7 +234,7 @@ for ($i = 0; $i -lt $totalModules; $i++) {
 
         # Extrahiere den reinen Modulnamen ohne Pfad für Remove-Module
         $moduleNameOnly = $moduleClean.Split('\')[-1].Trim()
-        
+
         # Versuche vorhandenes Modul zu entfernen
         if (Get-Module $moduleNameOnly) {
             Remove-Module $moduleNameOnly -Force -ErrorAction SilentlyContinue
@@ -243,7 +248,7 @@ for ($i = 0; $i -lt $totalModules; $i++) {
         $errorMessage = "Fehler beim Laden des Moduls {0}: {1}" -f $module, $_.Exception.Message
         $moduleErrors += $errorMessage
     }
-    
+
     Start-Sleep -Milliseconds 100  # Kurze Verzögerung für visuelle Wirkung
 }
 
@@ -283,19 +288,19 @@ if ($missingModules.Count -gt 0) {
 try {
     # Aktuelle Fenstergröße abrufen (nicht direkt verwendet, aber für Debugging nützlich)
     $currentBufferSize = $Host.UI.RawUI.BufferSize
-    
+
     # Neue Fenstergröße setzen (nicht größer als der aktuelle Puffer)
     $newWindowSize = New-Object System.Management.Automation.Host.Size(
         [Math]::Min(80, $currentBufferSize.Width),
         [Math]::Min(50, $currentBufferSize.Height)
     )
-    
+
     # Neue Puffergröße setzen (nicht zu groß)
     $newBufferSize = New-Object System.Management.Automation.Host.Size(
         [Math]::Min(100, $currentBufferSize.Width),
         [Math]::Min(2000, $currentBufferSize.Height)
     )
-    
+
     # Größen anwenden
     $Host.UI.RawUI.WindowSize = $newWindowSize
     $Host.UI.RawUI.BufferSize = $newBufferSize
@@ -323,7 +328,7 @@ $script:positioningInitialized = $false
 
 function Initialize-WindowPositioning {
     if ($script:positioningInitialized) { return $true }
-    
+
     try {
         $dllImportSource = @'
 using System;
@@ -339,28 +344,28 @@ public static class NativeMethods
 
     [DllImport("user32.dll", SetLastError = true)]
     public static extern bool MoveWindow(IntPtr hWnd, int X, int Y, int nWidth, int nHeight, bool bRepaint);
-    
+
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool SetForegroundWindow(IntPtr hWnd);
 
     [DllImport("user32.dll")]
     public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
-    
+
     // ShowWindow-Befehle
     public const int SW_RESTORE = 9;
-    
+
     // Funktion zum Finden aller Fenster
     [DllImport("user32.dll")]
     public static extern bool EnumWindows(EnumWindowsProc enumProc, IntPtr lParam);
-    
+
     // Delegate für die Callback-Funktion
     public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
-    
+
     // Funktion zum Ermitteln des Fenstertitels
     [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
     public static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder lpString, int nMaxCount);
-    
+
     // Funktion zum Ermitteln, ob ein Fenster sichtbar ist
     [DllImport("user32.dll")]
     public static extern bool IsWindowVisible(IntPtr hWnd);
@@ -392,7 +397,7 @@ function Find-PowerShellWindow {
         # Debug-Meldung entfernt
         return [IntPtr]::Zero
     }
-    
+
     try {
         # Zuerst versuchen wir die Standard GetConsoleWindow-Methode
         $consoleHandle = [NativeMethods]::GetConsoleWindow()
@@ -404,45 +409,45 @@ function Find-PowerShellWindow {
         # Sammle alle Window-Handles in dieser Liste
         $script:windowList = New-Object System.Collections.Generic.List[IntPtr]
         $script:psWindowHandle = [IntPtr]::Zero
-        
+
         # Definiere eine Callback-Funktion für die Aufzählung
         $callbackScript = {
             param($hwnd, $lParam)
-            
+
             # Prüfen, ob das Fenster sichtbar ist
             if (-not [NativeMethods]::IsWindowVisible($hwnd)) {
                 return $true  # Weiter zum nächsten Fenster
             }
-            
+
             # Den Fenstertitel abrufen
             $sb = New-Object System.Text.StringBuilder(256)
             [void][NativeMethods]::GetWindowText($hwnd, $sb, $sb.Capacity)
             $windowTitle = $sb.ToString()
-            
+
             # Wenn der Titel Powershell, pwsh oder System-Tool enthält, haben wir es
             if ($windowTitle -match "PowerShell|pwsh|Windows PowerShell|System Tools") {
                 # Debug-Meldung entfernt
                 $script:psWindowHandle = $hwnd
                 return $false  # Stoppe die Enumeration
             }
-            
+
             # Fensterhandle zur Liste hinzufügen für spätere Verwendung
             $script:windowList.Add($hwnd)
-            
+
             return $true  # Weiter zum nächsten Fenster
         }
-        
+
         # Delegate erstellen, der bis zum GC erhalten bleibt
         $enumWindowsCallback = [NativeMethods+EnumWindowsProc]$callbackScript
-        
+
         # Alle Fenster auflisten
         [NativeMethods]::EnumWindows($enumWindowsCallback, [IntPtr]::Zero)
-        
+
         # Prüfen, ob wir ein PowerShell-Fenster gefunden haben
         if ($script:psWindowHandle -ne [IntPtr]::Zero) {
             return $script:psWindowHandle
         }
-        
+
         # Keine PowerShell-Fenster gefunden
         # Debug-Meldung entfernt
         return [IntPtr]::Zero
@@ -460,55 +465,55 @@ function Set-WindowPosition {
             $mainform.StartPosition = "CenterScreen"
             return
         }
-        
+
         # Holen der aktuellen Einstellungen aus dem Modul
         $settings = Get-SystemToolSettings
-        
+
         # Wenn Fenstergröße und -position gespeichert werden sollen und die gespeicherten Werte gültig sind
-        if ($settings.SaveWindowSize -and 
-            $settings.WindowWidth -gt 0 -and 
+        if ($settings.SaveWindowSize -and
+            $settings.WindowWidth -gt 0 -and
             $settings.WindowHeight -gt 0) {
-            
+
             # Setze die gespeicherte Fenstergröße
             $mainform.Size = New-Object System.Drawing.Size($settings.WindowWidth, $settings.WindowHeight)
-            
+
             # Wenn die Position ebenfalls gespeichert wurde
             if ($settings.WindowLeft -gt 0 -and $settings.WindowTop -gt 0) {
                 # Stelle sicher, dass das Fenster auf dem Bildschirm sichtbar ist
                 $screenWidth = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea.Width
                 $screenHeight = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea.Height
-                
+
                 $left = [Math]::Min($settings.WindowLeft, $screenWidth - 100)
                 $top = [Math]::Min($settings.WindowTop, $screenHeight - 100)
-                
+
                 $mainform.Location = New-Object System.Drawing.Point($left, $top)
-                
+
                 # Speichere initiale Position
                 $script:lastGuiLeft = $mainform.Left
                 $script:lastGuiTop = $mainform.Top
-                
+
                 return
             }
         }
-        
+
         # Wenn keine gespeicherten Werte verwendet werden oder diese ungültig sind,
         # positioniere das Fenster neben dem Konsolenfenster wie bisher
         $consoleHandle = Find-PowerShellWindow
-        
+
         # Prüfen, ob das Konsolenfenster gefunden wurde
         if ($consoleHandle -eq [IntPtr]::Zero) {
             # Debug-Meldung entfernt
             $mainform.StartPosition = "CenterScreen"
             return
         }
-        
+
         # Konsolenfenster in den Vordergrund bringen, um sicherzustellen, dass es sichtbar ist
         [NativeMethods]::ShowWindow($consoleHandle, [NativeMethods]::SW_RESTORE)
         [NativeMethods]::SetForegroundWindow($consoleHandle)
-        
+
         # Warten, um sicherzustellen, dass Windows Zeit hat, das Fenster anzuzeigen
         Start-Sleep -Milliseconds 200
-        
+
         # Konsolenfenstergröße ermitteln
         $rect = New-Object RECT
         if (-not [NativeMethods]::GetWindowRect($consoleHandle, [ref]$rect)) {
@@ -516,34 +521,34 @@ function Set-WindowPosition {
             $mainform.StartPosition = "CenterScreen"
             return
         }
-        
+
         # Fenstergröße und Position ausgeben (für Debugging)
         # Debug-Meldung entfernt
-        
+
         # GUI-Fenster rechts neben dem Konsolenfenster positionieren
         $guiLeft = $rect.Right + 10
         $guiTop = $rect.Top
-        
+
         # Prüfen, ob die Position auf dem Bildschirm sichtbar ist
         $screenWidth = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea.Width
         $screenHeight = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea.Height
-        
+
         if ($guiLeft + $mainform.Width -gt $screenWidth) {
-            # Wenn das GUI-Fenster rechts nicht mehr auf den Bildschirm passt, 
+            # Wenn das GUI-Fenster rechts nicht mehr auf den Bildschirm passt,
             # platziere es unter dem Konsolenfenster
             $guiLeft = $rect.Left
             $guiTop = $rect.Bottom + 10
-            
+
             # Wenn auch das nicht passt, dann zentriere es
             if ($guiTop + $mainform.Height -gt $screenHeight) {
                 $mainform.StartPosition = "CenterScreen"
                 return
             }
         }
-        
+
         # Debug-Meldung entfernt
         $mainform.Location = New-Object System.Drawing.Point($guiLeft, $guiTop)
-        
+
         # Speichere initiale Position
         $script:lastGuiLeft = $mainform.Left
         $script:lastGuiTop = $mainform.Top
@@ -680,10 +685,10 @@ $themeButton.Add_Click({
         $isDarkMode = Set-Theme -mainform $mainform -header $header -outputBox $outputBox -themeButton $themeButton -tabControl $tabControl -mainTabControl $mainTabControl
         # Update button icon based on theme
         if ($isDarkMode) {
-            $this.Text = "☀️"  
+            $this.Text = "☀️"
         }
         else {
-            $this.Text = "🌙"  
+            $this.Text = "🌙"
         }
     })
 $themeButton.Add_MouseEnter({ $this.BackColor = [System.Drawing.Color]::FromArgb(70, 70, 75) })
@@ -741,7 +746,7 @@ $titleBar.Add_MouseUp({
 $monitorBackgroundPanel = New-Object System.Windows.Forms.Panel
 $monitorBackgroundPanel.Location = New-Object System.Drawing.Point(0, 30)  # Von 20 auf 30 geändert
 $monitorBackgroundPanel.Size = New-Object System.Drawing.Size(1000, 85)
-$monitorBackgroundPanel.BackColor = [System.Drawing.Color]::FromArgb(220, 230, 240)  
+$monitorBackgroundPanel.BackColor = [System.Drawing.Color]::FromArgb(220, 230, 240)
 $monitorBackgroundPanel.BackColor = [System.Drawing.Color]::BurlyWood
 $mainform.Controls.Add($monitorBackgroundPanel)
 $monitorBackgroundPanel.SendToBack()  # Panel in den Hintergrund schicken
@@ -749,9 +754,9 @@ $monitorBackgroundPanel.SendToBack()  # Panel in den Hintergrund schicken
 # Separate Panels für CPU, GPU und RAM direkt auf dem Hauptformular
 $gbCPU = New-Object System.Windows.Forms.Panel
 $gbCPU.Location = New-Object System.Drawing.Point(1, 35)  # Von 5 auf 35 geändert
-$gbCPU.Size = New-Object System.Drawing.Size(340, 75)   
+$gbCPU.Size = New-Object System.Drawing.Size(340, 75)
 $gbCPU.BackColor = [System.Drawing.Color]::FromArgb(245, 245, 250)  # Noch helleres Grau
-$gbCPU.BackColor = [System.Drawing.Color]::Green 
+$gbCPU.BackColor = [System.Drawing.Color]::Green
 $mainform.Controls.Add($gbCPU)
 $gbCPU.BringToFront()  # CPU-Panel in den Vordergrund
 
@@ -766,9 +771,9 @@ $gbCPU.Controls.Add($lblCPUTitle)
 
 $gbGPU = New-Object System.Windows.Forms.Panel
 $gbGPU.Location = New-Object System.Drawing.Point(341, 35)   # Von 5 auf 35 geändert
-$gbGPU.Size = New-Object System.Drawing.Size(340, 75)   
+$gbGPU.Size = New-Object System.Drawing.Size(340, 75)
 $gbGPU.BackColor = [System.Drawing.Color]::FromArgb(245, 245, 250)  # Noch helleres Grau
-$gbGPU.BackColor = [System.Drawing.Color]::Yellow 
+$gbGPU.BackColor = [System.Drawing.Color]::Yellow
 $mainform.Controls.Add($gbGPU)
 $gbGPU.BringToFront()  # GPU-Panel in den Vordergrund
 
@@ -783,7 +788,7 @@ $gbGPU.Controls.Add($lblGPUTitle)
 
 $gbRAM = New-Object System.Windows.Forms.Panel
 $gbRAM.Location = New-Object System.Drawing.Point(681, 35)   # Von 5 auf 35 geändert
-$gbRAM.Size = New-Object System.Drawing.Size(345, 75)   
+$gbRAM.Size = New-Object System.Drawing.Size(345, 75)
 $gbRAM.BackColor = [System.Drawing.Color]::FromArgb(245, 245, 250)  # Noch helleres Grau
 $gbRAM.BackColor = [System.Drawing.Color]::Red
 $mainform.Controls.Add($gbRAM)
@@ -811,7 +816,7 @@ try {
     $ramInfo = Get-WmiObject -Class Win32_PhysicalMemory | Select-Object Manufacturer, PartNumber, Speed, SMBIOSMemoryType
     if ($ramInfo -and $ramInfo.Count -gt 0) {
         $ramManufacturer = $ramInfo[0].Manufacturer.Trim()
-        
+
         # Hersteller-Namen vereinfachen
         $ramManufacturer = switch -Regex ($ramManufacturer.ToUpper()) {
             "CORSAIR" { "Corsair" }
@@ -827,7 +832,7 @@ try {
 
         # Produktnamen aus PartNumber extrahieren
         $partNumber = $ramInfo[0].PartNumber.Trim()
-        
+
         $productName = switch -Regex ($partNumber.ToUpper()) {
             "DOMINATOR|DOM|CMT" { "Dominator" }
             "VENGEANCE|VEN|CMK" { "Vengeance" }
@@ -835,7 +840,7 @@ try {
             "RIPJAWS|RJ|F4" { "Ripjaws" }
             "FURY|FUR|KF" { "Fury" }
             "BALLISTIX|BL" { "Ballistix" }
-            default { 
+            default {
                 if ($partNumber -match '^[A-Za-z]+') {
                     $matches[0]
                 }
@@ -1056,7 +1061,7 @@ function Initialize-LogFile {
         }
         Rename-Item -Path $script:logPath -NewName ($script:logPath + ".bak") -Force
     }
-    
+
     # Erstelle neue Log-Datei mit Header
     $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
     @"
@@ -1075,19 +1080,19 @@ function Update-LogFile {
         [string]$Message,
         [switch]$IsError
     )
-    
+
     try {
         # Prüfe ob Log-Datei existiert
         if (-not (Test-Path $script:logPath)) {
             Initialize-LogFile
         }
-        
+
         # Prüfe Größe und Einträge
         $logItem = Get-Item $script:logPath -ErrorAction SilentlyContinue
         if ($logItem -and ($logItem.Length -gt $script:maxLogSize)) {
             Initialize-LogFile
         }
-        
+
         # Füge neuen Log-Eintrag hinzu
         $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
         $logEntry = "`n=== GUI Closing Log $timestamp ===`n"
@@ -1112,18 +1117,18 @@ function Close-FormSafely {
     param (
         [System.Windows.Forms.Form]$Form
     )
-    
+
     # Wenn wir bereits im Schließvorgang sind, nicht erneut durchführen
     if ($script:isClosing) {
         return
     }
-    
+
     try {
         # Flag setzen, dass wir im Schließvorgang sind
         $script:isClosing = $true
         Write-Host "Close-FormSafely: Schließvorgang wird gestartet..."
         Update-LogFile -Message "Close-FormSafely: Schließvorgang gestartet"
-        
+
         # Hardware-Monitoring stoppen
         if ($null -ne $script:hardwareTimer) {
             Write-Host "Close-FormSafely: Stoppe Hardware-Timer..."
@@ -1132,7 +1137,7 @@ function Close-FormSafely {
             $script:hardwareTimer.Dispose()
             $script:hardwareTimer = $null
         }
-        
+
         # Controls deaktivieren
         Write-Host "Close-FormSafely: Deaktiviere Controls..."
         Update-LogFile -Message "Close-FormSafely: Controls deaktiviert"
@@ -1142,13 +1147,13 @@ function Close-FormSafely {
                 $control.Enabled = $false
             }
         }
-        
+
         # Garbage Collection
         Write-Host "Close-FormSafely: Führe Garbage Collection durch..."
         Update-LogFile -Message "Close-FormSafely: Garbage Collection durchgeführt"
         [System.GC]::Collect()
         [System.GC]::WaitForPendingFinalizers()
-        
+
         # Direktes Beenden der Anwendung
         Write-Host "Close-FormSafely: Beende Anwendung..."
         Update-LogFile -Message "Close-FormSafely: Anwendung wird beendet"
@@ -1165,29 +1170,29 @@ function Close-FormSafely {
 # Event-Handler für FormClosing
 $mainform.Add_FormClosing({
         param($formSender, $e)
-    
+
         # Protokollieren des Schließversuchs
         Write-Host "Schließvorgang wird gestartet..."
         # Log-Eintrag für Schließvorgang
         Update-LogFile -Message "Anwendung wird geschlossen"
-    
+
         # Wenn wir bereits im Schließvorgang sind, nicht erneut durchführen
         if ($script:isClosing) {
             return
         }
-    
+
         # Fenstergröße und Position speichern mit der Funktion aus dem Settings-Modul
         Export-WindowPosition -MainForm $mainform -ConfigPath "$PSScriptRoot\config.json"
         Update-LogFile -Message "Fensterposition wurde gespeichert"
-        
+
         # Schließvorgang verhindern für normale Verarbeitung
         $e.Cancel = $true
-    
+
         try {
             # Flag setzen, dass wir im Schließvorgang sind
             $script:isClosing = $true
             Update-LogFile -Message "Schließvorgang initiiert"
-        
+
             # Hardware-Monitoring stoppen
             if ($null -ne $script:hardwareTimer) {
                 Write-Host "Stoppe Hardware-Timer..."
@@ -1196,7 +1201,7 @@ $mainform.Add_FormClosing({
                 $script:hardwareTimer.Dispose()
                 $script:hardwareTimer = $null
             }
-        
+
             # Controls deaktivieren
             Write-Host "Deaktiviere Controls..."
             $formSender.SuspendLayout()
@@ -1205,13 +1210,13 @@ $mainform.Add_FormClosing({
                     $control.Enabled = $false
                 }
             }
-        
+
             # Garbage Collection
             Write-Host "Führe Garbage Collection durch..."
             Update-LogFile -Message "Garbage Collection durchgeführt"
             [System.GC]::Collect()
             [System.GC]::WaitForPendingFinalizers()
-        
+
             # Direktes Beenden mit System.Environment.Exit(0)
             Write-Host "Beende Anwendung..."
             Update-LogFile -Message "Anwendung wurde ordnungsgemäß beendet"
@@ -1234,13 +1239,13 @@ $mainform.Add_LocationChanged({
                 $signature = @'
             [DllImport("kernel32.dll")]
             public static extern IntPtr GetConsoleWindow();
-            
+
             [DllImport("user32.dll")]
             public static extern bool MoveWindow(IntPtr hWnd, int X, int Y, int nWidth, int nHeight, bool bRepaint);
-            
+
             [DllImport("user32.dll")]
             public static extern bool GetWindowRect(IntPtr hWnd, ref RECT lpRect);
-            
+
             [StructLayout(LayoutKind.Sequential)]
             public struct RECT
             {
@@ -1263,21 +1268,21 @@ $mainform.Add_LocationChanged({
                         return
                     }
                 }
-            
+
                 # Hole das PowerShell-Konsolenfenster
                 $consoleHandle = $type::GetConsoleWindow()
                 if ($consoleHandle -ne [IntPtr]::Zero) {
                     # Aktuelle Konsolengröße ermitteln
                     $rect = New-Object Win32Interop.RECT
                     [void]$type::GetWindowRect($consoleHandle, [ref]$rect)
-                
+
                     $consoleWidth = $rect.Right - $rect.Left
                     $consoleHeight = $rect.Bottom - $rect.Top
-                
+
                     # Neue Position für PowerShell-Fenster berechnen (links neben der GUI)
                     $newConsoleLeft = [Math]::Max(0, $mainform.Left - $consoleWidth - 10) # 10 Pixel Abstand
                     $newConsoleTop = $mainform.Top
-                
+
                     # Konsolenfenster neu positionieren
                     [void]$type::MoveWindow($consoleHandle, $newConsoleLeft, $newConsoleTop, $consoleWidth, $consoleHeight, $true)
                 }
@@ -1579,7 +1584,7 @@ public class TextProgressBar : ProgressBar
     public string CustomText
     {
         get { return _text; }
-        set { 
+        set {
             _text = value;
             this.Invalidate();
         }
@@ -1588,7 +1593,7 @@ public class TextProgressBar : ProgressBar
     public Color TextColor
     {
         get { return _textColor; }
-        set { 
+        set {
             _textColor = value;
             this.Invalidate();
         }
@@ -1600,7 +1605,7 @@ public class TextProgressBar : ProgressBar
         Graphics g = e.Graphics;
 
         ProgressBarRenderer.DrawHorizontalBar(g, rect);
-        
+
         rect.Inflate(-3, -3);
         if (Value > 0)
         {
@@ -1617,13 +1622,13 @@ public class TextProgressBar : ProgressBar
                     (int)(rect.X + (rect.Width / 2) - (textSize.Width / 2)),
                     (int)(rect.Y + (rect.Height / 2) - (textSize.Height / 2))
                 );
-                
+
                 // Zeichne den Text mit Schatten für bessere Lesbarkeit
                 using (SolidBrush shadowBrush = new SolidBrush(Color.FromArgb(60, 0, 0, 0)))
                 {
                     g.DrawString(_text, f, shadowBrush, textPos.X + 1, textPos.Y + 1);
                 }
-                
+
                 using (SolidBrush textBrush = new SolidBrush(_textColor))
                 {
                     g.DrawString(_text, f, textBrush, textPos);
@@ -1656,20 +1661,20 @@ function Update-ProgressStatus {
         [int]$ProgressValue,
         [System.Drawing.Color]$TextColor = [System.Drawing.Color]::DarkBlue
     )
-    
+
     if ($null -eq $script:progressBar) {
         Write-Warning "ProgressBar-Komponente wurde nicht initialisiert."
         return
     }
-    
+
     # Text direkt in der ProgressBar anzeigen
     if ($script:progressBar.GetType().Name -eq "TextProgressBar") {
         $script:progressBar.CustomText = $StatusText
         $script:progressBar.TextColor = $TextColor
     }
-    
+
     $script:progressBar.Value = $ProgressValue
-    
+
     # Form aktualisieren
     [System.Windows.Forms.Application]::DoEvents()
 }
@@ -1704,11 +1709,10 @@ $outputBox.ScrollBars = "Vertical"
 $outputBox.WordWrap = $true
 $outputBox.ReadOnly = $true
 $outputBox.BackColor = [System.Drawing.Color]::White
-$outputBox.Text = "System-Tool bereit. Bitte wählen Sie eine Funktion aus.`r`n"
 $outputBox.Dock = [System.Windows.Forms.DockStyle]::None
 
 # Event-Handler für automatisches Scrollen hinzufügen
-$outputBox.Add_TextChanged({ 
+$outputBox.Add_TextChanged({
         # Cursor ans Ende des Textes setzen
         $this.SelectionStart = $this.TextLength
         # Zum Cursor scrollen
@@ -1736,16 +1740,16 @@ function Get-HardwareInfo {
     param (
         [System.Windows.Forms.RichTextBox]$infoBox
     )
-    
+
     $infoBox.Clear()
     $infoBox.SelectionColor = [System.Drawing.Color]::DarkBlue
     $infoBox.AppendText("===== HARDWARE-INFORMATIONEN =====`r`n`r`n")
-    
+
     # CPU-Informationen
     $infoBox.SelectionColor = [System.Drawing.Color]::Blue
     $infoBox.AppendText("CPU-INFORMATIONEN:`r`n")
     $infoBox.SelectionColor = [System.Drawing.Color]::Black
-    
+
     try {
         $cpuInfo = Get-WmiObject -Class Win32_Processor
         foreach ($cpu in $cpuInfo) {
@@ -1760,19 +1764,19 @@ function Get-HardwareInfo {
         $infoBox.SelectionColor = [System.Drawing.Color]::Red
         $infoBox.AppendText("Fehler beim Abrufen der CPU-Informationen: $_`r`n`r`n")
     }
-    
+
     # RAM-Informationen
     $infoBox.SelectionColor = [System.Drawing.Color]::Blue
     $infoBox.AppendText("RAM-INFORMATIONEN:`r`n")
     $infoBox.SelectionColor = [System.Drawing.Color]::Black
-    
+
     try {
         $totalRAM = (Get-WmiObject -Class Win32_ComputerSystem).TotalPhysicalMemory / 1GB
         $infoBox.AppendText("Gesamter RAM: $([math]::Round($totalRAM, 2)) GB`r`n")
-        
+
         $memoryModules = Get-WmiObject -Class Win32_PhysicalMemory
         $infoBox.AppendText("Anzahl der RAM-Module: $($memoryModules.Count)`r`n")
-        
+
         foreach ($module in $memoryModules) {
             $capacity = $module.Capacity / 1GB
             $infoBox.AppendText("RAM-Modul: $([math]::Round($capacity, 2)) GB ($($module.DeviceLocator))`r`n")
@@ -1783,12 +1787,12 @@ function Get-HardwareInfo {
         $infoBox.SelectionColor = [System.Drawing.Color]::Red
         $infoBox.AppendText("Fehler beim Abrufen der RAM-Informationen: $_`r`n`r`n")
     }
-    
+
     # Grafikkarten-Informationen
     $infoBox.SelectionColor = [System.Drawing.Color]::Blue
     $infoBox.AppendText("GRAFIKKARTEN-INFORMATIONEN:`r`n")
     $infoBox.SelectionColor = [System.Drawing.Color]::Black
-    
+
     try {
         $gpuInfo = Get-WmiObject -Class Win32_VideoController
         foreach ($gpu in $gpuInfo) {
@@ -1802,12 +1806,12 @@ function Get-HardwareInfo {
         $infoBox.SelectionColor = [System.Drawing.Color]::Red
         $infoBox.AppendText("Fehler beim Abrufen der Grafikkarten-Informationen: $_`r`n`r`n")
     }
-    
+
     # Festplatten-Informationen
     $infoBox.SelectionColor = [System.Drawing.Color]::Blue
     $infoBox.AppendText("FESTPLATTEN-INFORMATIONEN:`r`n")
     $infoBox.SelectionColor = [System.Drawing.Color]::Black
-    
+
     try {
         $drives = Get-WmiObject -Class Win32_DiskDrive
         foreach ($drive in $drives) {
@@ -1816,18 +1820,18 @@ function Get-HardwareInfo {
             $infoBox.AppendText("Größe: $sizeGB GB`r`n")
             $infoBox.AppendText("Schnittstelle: $($drive.InterfaceType)`r`n`r`n")
         }
-        
+
         # Logische Laufwerke und freier Speicherplatz
         $infoBox.SelectionColor = [System.Drawing.Color]::Blue
         $infoBox.AppendText("LOGISCHE LAUFWERKE:`r`n")
         $infoBox.SelectionColor = [System.Drawing.Color]::Black
-        
+
         $logicalDrives = Get-WmiObject -Class Win32_LogicalDisk -Filter "DriveType=3"
         foreach ($logicalDrive in $logicalDrives) {
             $freeGB = [math]::Round($logicalDrive.FreeSpace / 1GB, 2)
             $sizeGB = [math]::Round($logicalDrive.Size / 1GB, 2)
             $usedPercent = [math]::Round(($logicalDrive.Size - $logicalDrive.FreeSpace) / $logicalDrive.Size * 100, 1)
-            
+
             $infoBox.AppendText("Laufwerk $($logicalDrive.DeviceID) ($($logicalDrive.VolumeName))`r`n")
             $infoBox.AppendText("Gesamtgröße: $sizeGB GB`r`n")
             $infoBox.AppendText("Freier Speicher: $freeGB GB`r`n")
@@ -1838,18 +1842,18 @@ function Get-HardwareInfo {
         $infoBox.SelectionColor = [System.Drawing.Color]::Red
         $infoBox.AppendText("Fehler beim Abrufen der Laufwerk-Informationen: $_`r`n`r`n")
     }
-    
+
     # Netzwerk-Informationen
     $infoBox.SelectionColor = [System.Drawing.Color]::Blue
     $infoBox.AppendText("NETZWERK-INFORMATIONEN:`r`n")
     $infoBox.SelectionColor = [System.Drawing.Color]::Black
-    
+
     try {
         $networkAdapters = Get-WmiObject -Class Win32_NetworkAdapter | Where-Object { $_.PhysicalAdapter -eq $true }
         foreach ($adapter in $networkAdapters) {
             $infoBox.AppendText("Adapter: $($adapter.Name)`r`n")
             $infoBox.AppendText("MAC-Adresse: $($adapter.MACAddress)`r`n")
-            
+
             $config = Get-WmiObject -Class Win32_NetworkAdapterConfiguration | Where-Object { $_.Index -eq $adapter.Index }
             if ($config -and $config.IPAddress) {
                 $infoBox.AppendText("IP-Adressen: $($config.IPAddress -join ', ')`r`n")
@@ -1861,12 +1865,12 @@ function Get-HardwareInfo {
         $infoBox.SelectionColor = [System.Drawing.Color]::Red
         $infoBox.AppendText("Fehler beim Abrufen der Netzwerk-Informationen: $_`r`n`r`n")
     }
-    
+
     # Betriebssystem-Informationen
     $infoBox.SelectionColor = [System.Drawing.Color]::Blue
     $infoBox.AppendText("BETRIEBSSYSTEM-INFORMATIONEN:`r`n")
     $infoBox.SelectionColor = [System.Drawing.Color]::Black
-    
+
     try {
         $osInfo = Get-WmiObject -Class Win32_OperatingSystem
         $infoBox.AppendText("Betriebssystem: $($osInfo.Caption)`r`n")
@@ -1903,15 +1907,15 @@ $tabControl.Add_SelectedIndexChanged({
             $systemStatusBox.Clear()
             $systemStatusBox.SelectionColor = [System.Drawing.Color]::DarkBlue
             $systemStatusBox.AppendText("System-Status wird geladen...`r`n")
-            
+
             # Progressbar zurücksetzen
             $progressBar.Value = 0
             $progressBar.CustomText = "Status wird geladen..."
             $progressBar.TextColor = [System.Drawing.Color]::DarkBlue
-            
+
             # Initialisiere den Fortschritt
             $script:loadProgress = 0
-            
+
             # Live-Modus verwenden, der schrittweise Status anzeigt und ProgressBar aktualisiert
             Get-SystemStatusSummary -statusBox $systemStatusBox -LiveMode
         }
@@ -1919,7 +1923,7 @@ $tabControl.Add_SelectedIndexChanged({
             Get-ToolInfo -infoBox $toolInfoBox
         }
         elseif ($tabControl.SelectedTab -eq $tabToolDownloads) {
-            Show-ToolList -RichTextBox $toolDownloadsBox -Category "all"
+            # WPF-Kacheln werden automatisch angezeigt - kein Handler erforderlich
         }
     })
 
@@ -1937,6 +1941,7 @@ function Switch-ToOutputTab {
 
 # Erstelle Buttons für System-Tools
 $btnQuickMRT = New-Object System.Windows.Forms.Button
+$btnQuickMRT.Name = "btnQuickMRT"
 $btnQuickMRT.Text = "MRT Quick Scan"
 $btnQuickMRT.Size = New-Object System.Drawing.Size(180, 50)
 $btnQuickMRT.Location = New-Object System.Drawing.Point(30, 40)
@@ -1944,13 +1949,18 @@ $btnQuickMRT.Add_Click({
         Switch-ToOutputTab -TabControl $tabControl
         # Status auf "Scan läuft..." setzen
         Update-ProgressStatus -StatusText "MRT-Quick Scan wird gestartet..." -ProgressValue 0 -TextColor ([System.Drawing.Color]::DarkBlue)
-        Start-QuickMRT -outputBox $outputBox -progressBar $progressBar 
+        Start-QuickMRT -outputBox $outputBox -progressBar $progressBar
         # Nach dem Scan Status auf "Fertig" setzen
         Update-ProgressStatus -StatusText "Fertig" -ProgressValue 100 -TextColor ([System.Drawing.Color]::Green)
+        # Scan-Historie aktualisieren
+        Update-ScanHistory -ToolName "QuickMRT"
+        # Button-Status aktualisieren
+        Set-ButtonColor -Button $btnQuickMRT -Color $btnQuickMRT.FlatAppearance.BorderColor -ToolName "QuickMRT" -WithStatusIndicator
     })
 $gbSystemSecurity.Controls.Add($btnQuickMRT)
 
 $btnFullMRT = New-Object System.Windows.Forms.Button
+$btnFullMRT.Name = "btnFullMRT"
 $btnFullMRT.Text = "MRT Full Scan"
 $btnFullMRT.Size = New-Object System.Drawing.Size(180, 50)
 $btnFullMRT.Location = New-Object System.Drawing.Point(230, 40)
@@ -1959,31 +1969,59 @@ $btnFullMRT.Add_Click({
         $outputBox.Clear()
         $outputBox.SelectionColor = [System.Drawing.Color]::Blue
         $outputBox.AppendText("Starte MRT Full Scan...`r`n")
-        
+
         # Tab Control umschalten
         $tabControl.SelectedIndex = 0  # Ausgabe-Tab
-        
+
         # FullMRT-Scan starten
         Start-FullMRT -outputBox $outputBox -progressBar $progressBar
+        
+        # Scan-Historie aktualisieren
+        Update-ScanHistory -ToolName "FullMRT"
+        # Button-Status aktualisieren
+        Set-ButtonColor -Button $btnFullMRT -Color $btnFullMRT.FlatAppearance.BorderColor -ToolName "FullMRT" -WithStatusIndicator
     })
 $gbSystemSecurity.Controls.Add($btnFullMRT)
 
 $btnWindowsDefender = New-Object System.Windows.Forms.Button
+$btnWindowsDefender.Name = "btnWindowsDefender"
 $btnWindowsDefender.Text = "Windows Defender"
-$btnWindowsDefender.Size = New-Object System.Drawing.Size(180, 50) 
+$btnWindowsDefender.Size = New-Object System.Drawing.Size(180, 50)
 $btnWindowsDefender.Location = New-Object System.Drawing.Point(30, 110)
 $btnWindowsDefender.Add_Click({
         Switch-ToOutputTab -TabControl $tabControl
         $outputBox.Clear()
         Update-ProgressStatus -StatusText "Windows Defender wird gestartet..." -ProgressValue 0 -TextColor ([System.Drawing.Color]::DarkBlue)
         Start-WindowsDefender -outputBox $outputBox -TabControl $tabControl -progressBar $progressBar -MainForm $mainform
+        # Scan-Historie aktualisieren
+        Update-ScanHistory -ToolName "WindowsDefender"
+        # Button-Status aktualisieren
+        Set-ButtonColor -Button $btnWindowsDefender -Color $btnWindowsDefender.FlatAppearance.BorderColor -ToolName "WindowsDefender" -WithStatusIndicator
     })
 $gbSystemSecurity.Controls.Add($btnWindowsDefender)
+
+# Button für Windows Defender Offline-Scan
+$btnDefenderOffline = New-Object System.Windows.Forms.Button
+$btnDefenderOffline.Name = "btnDefenderOffline"
+$btnDefenderOffline.Text = "Defender Offline-Scan"
+$btnDefenderOffline.Size = New-Object System.Drawing.Size(180, 50)
+$btnDefenderOffline.Location = New-Object System.Drawing.Point(230, 110)
+$btnDefenderOffline.Add_Click({
+        Switch-ToOutputTab -TabControl $tabControl
+        $outputBox.Clear()
+        Update-ProgressStatus -StatusText "Windows Defender Offline-Scan wird vorbereitet..." -ProgressValue 0 -TextColor ([System.Drawing.Color]::DarkBlue)
+        Start-DefenderOfflineScan -outputBox $outputBox -TabControl $tabControl -progressBar $progressBar -MainForm $mainform
+        # Scan-Historie aktualisieren
+        Update-ScanHistory -ToolName "DefenderOfflineScan"
+        # Button-Status aktualisieren
+        Set-ButtonColor -Button $btnDefenderOffline -Color $btnDefenderOffline.FlatAppearance.BorderColor -ToolName "DefenderOfflineScan" -WithStatusIndicator
+    })
+$gbSystemSecurity.Controls.Add($btnDefenderOffline)
 
 # Neuer Button für Defender-Dienst-Neustart
 #$btnRestartDefender = New-Object System.Windows.Forms.Button
 #$btnRestartDefender.Text = "Defender Dienst Neustart"
-#$btnRestartDefender.Size = New-Object System.Drawing.Size(180, 50) 
+#$btnRestartDefender.Size = New-Object System.Drawing.Size(180, 50)
 #$btnRestartDefender.Location = New-Object System.Drawing.Point(230, 110)
 #$btnRestartDefender.Add_Click({
 #        Switch-ToOutputTab -TabControl $tabControl
@@ -1994,6 +2032,7 @@ $gbSystemSecurity.Controls.Add($btnWindowsDefender)
 #$gbSystemSecurity.Controls.Add($btnRestartDefender)
 
 $btnSFC = New-Object System.Windows.Forms.Button
+$btnSFC.Name = "btnSFC"
 $btnSFC.Text = "SFC Check"
 $btnSFC.Size = New-Object System.Drawing.Size(180, 50)
 $btnSFC.Location = New-Object System.Drawing.Point(30, 25)
@@ -2003,10 +2042,16 @@ $btnSFC.Add_Click({
         Update-ProgressStatus -StatusText "SFC Check wird initialisiert..." -ProgressValue 0 -TextColor ([System.Drawing.Color]::DarkBlue)
         Start-SFCCheck -outputBox $outputBox -progressBar $progressBar
         # Nach dem Check Status prüfen - wird jetzt von der Start-SFCCheck-Funktion übernommen
+        
+        # Scan-Historie aktualisieren
+        Update-ScanHistory -ToolName "SFC"
+        # Button-Status aktualisieren
+        Set-ButtonColor -Button $btnSFC -Color $btnSFC.FlatAppearance.BorderColor -ToolName "SFC" -WithStatusIndicator
     })
 $gbSystemMaintenance.Controls.Add($btnSFC)
 
 $btnMemoryDiag = New-Object System.Windows.Forms.Button
+$btnMemoryDiag.Name = "btnMemoryDiag"
 $btnMemoryDiag.Text = "Memory Diagnostic"
 $btnMemoryDiag.Size = New-Object System.Drawing.Size(180, 50)
 $btnMemoryDiag.Location = New-Object System.Drawing.Point(30, 25)
@@ -2017,12 +2062,18 @@ $btnMemoryDiag.Add_Click({
         Start-MemoryDiagnostic -outputBox $outputBox
         # Nach dem Start Status auf "Fertig" setzen
         Update-ProgressStatus -StatusText "Fertig" -ProgressValue 100 -TextColor ([System.Drawing.Color]::Green)
+        
+        # Scan-Historie aktualisieren
+        Update-ScanHistory -ToolName "MemoryDiag"
+        # Button-Status aktualisieren
+        Set-ButtonColor -Button $btnMemoryDiag -Color $btnMemoryDiag.FlatAppearance.BorderColor -ToolName "MemoryDiag" -WithStatusIndicator
     })
 $gbDiagnostics.Controls.Add($btnMemoryDiag)
 
 
 
 $btnWinUpdate = New-Object System.Windows.Forms.Button
+$btnWinUpdate.Name = "btnWinUpdate"
 $btnWinUpdate.Text = "Windows Update"
 $btnWinUpdate.Size = New-Object System.Drawing.Size(180, 50)
 $btnWinUpdate.Location = New-Object System.Drawing.Point(230, 25)
@@ -2034,14 +2085,19 @@ $btnWinUpdate.Add_Click({
             # Rufe die Modulfunktionen auf
             Start-WindowsUpdate -outputBox $outputBox -TabControl $tabControl -progressBar $progressBar -MainForm $mainform
             
+            # Scan-Historie aktualisieren
+            Update-ScanHistory -ToolName "WinUpdate"
+            # Button-Status aktualisieren
+            Set-ButtonColor -Button $btnWinUpdate -Color $btnWinUpdate.FlatAppearance.BorderColor -ToolName "WinUpdate" -WithStatusIndicator
+
             # Suche nach Updates
             $updateSession = New-Object -ComObject Microsoft.Update.Session
             $updateSearcher = $updateSession.CreateUpdateSearcher()
             $searchResult = $updateSearcher.Search("IsInstalled=0 AND IsHidden=0")
-            
+
             # Zeige Update-Status an
             Get-WindowsUpdateStatus -outputBox $outputBox -progressBar $progressBar
-            
+
             # Nur installieren wenn Updates gefunden wurden
             if ($searchResult.Updates.Count -gt 0) {
                 # Automatisch Updates installieren
@@ -2053,7 +2109,7 @@ $btnWinUpdate.Add_Click({
             else {
                 Update-ProgressStatus -StatusText "Keine Updates verfügbar" -ProgressValue 100 -TextColor ([System.Drawing.Color]::Green)
             }
-            
+
             # Nach dem Scan: Nutzer fragen, ob das Windows-Update-Fenster geöffnet werden soll
             $result = [System.Windows.Forms.MessageBox]::Show(
                 "Möchten Sie die Windows Update Einstellungen öffnen?",
@@ -2070,10 +2126,10 @@ $btnWinUpdate.Add_Click({
                 -Message "Fehler beim Starten oder Installieren von Windows Update: $_" `
                 -OutputBox $outputBox `
                 -Color ([System.Drawing.Color]::Red)
-                
+
             # Bei Fehler: ProgressBar rot einfärben
             Update-ProgressStatus -StatusText "Fehler bei Windows Update" -ProgressValue 100 -TextColor ([System.Drawing.Color]::Red)
-            
+
             # Versuche zusätzliche Fehlerinformationen zu sammeln
             try {
                 $wuauserv = Get-Service -Name "wuauserv"
@@ -2097,6 +2153,7 @@ $gbSystemMaintenance.Controls.Add($btnWinUpdate)
 
 # Buttons für Festplatten-Tools
 $btnCheckDISM = New-Object System.Windows.Forms.Button
+$btnCheckDISM.Name = "btnCheckDISM"
 $btnCheckDISM.Text = "DISM Check Health"
 $btnCheckDISM.Size = New-Object System.Drawing.Size(180, 50)
 $btnCheckDISM.Location = New-Object System.Drawing.Point(30, 40)
@@ -2107,10 +2164,16 @@ $btnCheckDISM.Add_Click({
         Start-CheckDISM -outputBox $outputBox -progressBar $progressBar
         # Nach dem Check Status auf "Fertig" setzen
         Update-ProgressStatus -StatusText "Fertig" -ProgressValue 100 -TextColor ([System.Drawing.Color]::Green)
+        
+        # Scan-Historie aktualisieren
+        Update-ScanHistory -ToolName "DISM"
+        # Button-Status aktualisieren
+        Set-ButtonColor -Button $btnCheckDISM -Color $btnCheckDISM.FlatAppearance.BorderColor -ToolName "DISM" -WithStatusIndicator
     })
 $gbDiskRepair.Controls.Add($btnCheckDISM)
 
 $btnScanDISM = New-Object System.Windows.Forms.Button
+$btnScanDISM.Name = "btnScanDISM"
 $btnScanDISM.Text = "DISM Scan Health"
 $btnScanDISM.Size = New-Object System.Drawing.Size(180, 50)
 $btnScanDISM.Location = New-Object System.Drawing.Point(230, 40)
@@ -2121,10 +2184,16 @@ $btnScanDISM.Add_Click({
         Start-ScanDISM -outputBox $outputBox -progressBar $progressBar
         # Nach dem Scan Status auf "Fertig" setzen
         Update-ProgressStatus -StatusText "Fertig" -ProgressValue 100 -TextColor ([System.Drawing.Color]::Green)
+        
+        # Scan-Historie aktualisieren
+        Update-ScanHistory -ToolName "DISM"
+        # Button-Status aktualisieren
+        Set-ButtonColor -Button $btnScanDISM -Color $btnScanDISM.FlatAppearance.BorderColor -ToolName "DISM" -WithStatusIndicator
     })
 $gbDiskRepair.Controls.Add($btnScanDISM)
 
 $btnRestoreDISM = New-Object System.Windows.Forms.Button
+$btnRestoreDISM.Name = "btnRestoreDISM"
 $btnRestoreDISM.Text = "DISM Restore Health"
 $btnRestoreDISM.Size = New-Object System.Drawing.Size(180, 50)
 $btnRestoreDISM.Location = New-Object System.Drawing.Point(30, 120)
@@ -2135,10 +2204,16 @@ $btnRestoreDISM.Add_Click({
         Start-RestoreDISM -outputBox $outputBox -progressBar $progressBar
         # Nach dem Restore Status auf "Fertig" setzen
         Update-ProgressStatus -StatusText "Fertig" -ProgressValue 100 -TextColor ([System.Drawing.Color]::Green)
+        
+        # Scan-Historie aktualisieren
+        Update-ScanHistory -ToolName "DISM"
+        # Button-Status aktualisieren
+        Set-ButtonColor -Button $btnRestoreDISM -Color $btnRestoreDISM.FlatAppearance.BorderColor -ToolName "DISM" -WithStatusIndicator
     })
 $gbDiskRepair.Controls.Add($btnRestoreDISM)
 
 $btnCHKDSK = New-Object System.Windows.Forms.Button
+$btnCHKDSK.Name = "btnCHKDSK"
 $btnCHKDSK.Text = "CHKDSK"
 $btnCHKDSK.Size = New-Object System.Drawing.Size(180, 50)
 $btnCHKDSK.Location = New-Object System.Drawing.Point(30, 25)
@@ -2146,14 +2221,20 @@ $btnCHKDSK.Add_Click({
         Switch-ToOutputTab -TabControl $tabControl
         # Status auf "Scan läuft..." setzen
         Update-ProgressStatus -StatusText "CHKDSK Laufwerksauswahl wurde geöffnet..." -ProgressValue 0 -TextColor ([System.Drawing.Color]::DarkBlue)
-        Start-CHKDSK -outputBox $outputBox -progressBar $progressBar -mainform $mainform 
+        Start-CHKDSK -outputBox $outputBox -progressBar $progressBar -mainform $mainform
         # Nach dem Scan Status auf "Fertig" setzen
         Update-ProgressStatus -StatusText "Fertig" -ProgressValue 100 -TextColor ([System.Drawing.Color]::Green)
+        
+        # Scan-Historie aktualisieren
+        Update-ScanHistory -ToolName "CHKDSK"
+        # Button-Status aktualisieren
+        Set-ButtonColor -Button $btnCHKDSK -Color $btnCHKDSK.FlatAppearance.BorderColor -ToolName "CHKDSK" -WithStatusIndicator
     })
 $gbDiskCheck.Controls.Add($btnCHKDSK)
 
 # Buttons für Netzwerk-Tools
 $btnPingTest = New-Object System.Windows.Forms.Button
+$btnPingTest.Name = "btnPingTest"
 $btnPingTest.Text = "Ping Test"
 $btnPingTest.Size = New-Object System.Drawing.Size(180, 50)
 $btnPingTest.Location = New-Object System.Drawing.Point(30, 25)
@@ -2168,6 +2249,7 @@ $btnPingTest.Add_Click({
 $gbNetworkDiagnostics.Controls.Add($btnPingTest)
 
 $btnResetNetwork = New-Object System.Windows.Forms.Button
+$btnResetNetwork.Name = "btnResetNetwork"
 $btnResetNetwork.Text = "Netzwerk zurücksetzen"
 $btnResetNetwork.Size = New-Object System.Drawing.Size(180, 50)
 $btnResetNetwork.Location = New-Object System.Drawing.Point(30, 25)
@@ -2183,6 +2265,7 @@ $gbNetworkRepair.Controls.Add($btnResetNetwork)
 
 # Buttons für Bereinigung
 $btnDiskCleanup = New-Object System.Windows.Forms.Button
+$btnDiskCleanup.Name = "btnDiskCleanup"
 $btnDiskCleanup.Text = "Disk Cleanup"
 $btnDiskCleanup.Size = New-Object System.Drawing.Size(180, 50)
 $btnDiskCleanup.Location = New-Object System.Drawing.Point(30, 25)
@@ -2190,13 +2273,14 @@ $btnDiskCleanup.Add_Click({
         Switch-ToOutputTab -TabControl $tabControl
         # Status auf "Bereinigung läuft..." setzen
         Update-ProgressStatus -StatusText "Bereinigung läuft..." -ProgressValue 0 -TextColor ([System.Drawing.Color]::DarkBlue)
-        Start-DiskCleanup -outputBox $outputBox -progressBar $progressBar 
+        Start-DiskCleanup -outputBox $outputBox -progressBar $progressBar
         # Nach der Bereinigung Status auf "Fertig" setzen
         Update-ProgressStatus -StatusText "Fertig" -ProgressValue 100 -TextColor ([System.Drawing.Color]::Green)
     })
 $gbCleanupSystem.Controls.Add($btnDiskCleanup)
 
 $btnTempFiles = New-Object System.Windows.Forms.Button
+$btnTempFiles.Name = "btnTempFiles"
 $btnTempFiles.Text = "Temporäre Dateien"
 $btnTempFiles.Size = New-Object System.Drawing.Size(180, 50)
 $btnTempFiles.Location = New-Object System.Drawing.Point(30, 25)
@@ -2204,8 +2288,8 @@ $btnTempFiles.Add_Click({
         Switch-ToOutputTab -TabControl $tabControl
         # Dialog entfernt, direkt erweiterte Bereinigung starten
         # Status auf "Erweiterte Bereinigung läuft..." setzen
-        Update-ProgressStatus -StatusText "Erweiterte Bereinigung läuft..." -ProgressValue 0 -TextColor ([System.Drawing.Color]::DarkBlue)
-        Start-TempFilesCleanupAdvanced -outputBox $outputBox -progressBar $progressBar -mainform $mainform 
+        Update-ProgressStatus -StatusText "Erweiterte Systemreinigung wurde geöffnet..." -ProgressValue 0 -TextColor ([System.Drawing.Color]::DarkBlue)
+        Start-TempFilesCleanupAdvanced -outputBox $outputBox -progressBar $progressBar -mainform $mainform
         # Nach der Bereinigung Status auf "Fertig" setzen
         Update-ProgressStatus -StatusText "Fertig" -ProgressValue 100 -TextColor ([System.Drawing.Color]::Green)
     })
@@ -2222,7 +2306,7 @@ $colorGroups = @(
 )
 
 # Buttons für System & Sicherheit definieren
-$systemButtons = @($btnQuickMRT, $btnFullMRT, $btnWindowsDefender, $btnSFC, $btnWinUpdate)
+$systemButtons = @($btnQuickMRT, $btnFullMRT, $btnWindowsDefender, $btnDefenderOffline, $btnSFC, $btnWinUpdate)
 $diskButtons = @($btnCheckDISM, $btnScanDISM, $btnRestoreDISM, $btnCHKDSK, $btnMemoryDiag)
 $networkButtons = @($btnPingTest, $btnResetNetwork)
 $cleanupButtons = @($btnDiskCleanup, $btnTempFiles)
@@ -2231,9 +2315,11 @@ $cleanupButtons = @($btnDiskCleanup, $btnTempFiles)
 function Set-ButtonColor {
     param(
         [System.Windows.Forms.Button]$Button,
-        [System.Drawing.Color]$Color
+        [System.Drawing.Color]$Color,
+        [string]$ToolName = $null,
+        [switch]$WithStatusIndicator = $false
     )
-    
+
     $Button.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
     $Button.FlatAppearance.BorderSize = 1
     $Button.FlatAppearance.BorderColor = $Color
@@ -2241,17 +2327,98 @@ function Set-ButtonColor {
     $Button.ForeColor = $Color
     $Button.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
     $Button.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
-    
+
     # Farbvariable zum späteren Zugriff speichern
     $colorValue = $Color
-    
+
+    # Status-Indikator hinzufügen, wenn angefordert und ein ToolName angegeben ist
+    if ($WithStatusIndicator -and $ToolName) {
+        # Wenn der Button bereits einen Status-Indikator hat, entferne ihn
+        $existingIndicator = $Button.Controls | Where-Object { $_.Name -eq "StatusIndicator" }
+        if ($existingIndicator) {
+            $Button.Controls.Remove($existingIndicator)
+        }
+
+        # Status-Farbe ermitteln
+        $statusColor = [System.Drawing.Color]::Gray
+        try {
+            $statusColor = Get-ScanStatus -ToolName $ToolName
+        }
+        catch {
+            Write-Host "Fehler beim Ermitteln des Status für $ToolName" -ForegroundColor Yellow
+            # Im Fehlerfall grauen Indikator verwenden
+        }
+
+        # Status-Indikator erstellen (kleiner Kreis)
+        $indicator = New-Object System.Windows.Forms.Panel
+        $indicator.Name = "StatusIndicator"
+        $indicator.Size = New-Object System.Drawing.Size(10, 10)
+        $indicator.Location = New-Object System.Drawing.Point(5, 5) # oben links
+        $indicator.BackColor = $statusColor
+        $indicator.BorderStyle = [System.Windows.Forms.BorderStyle]::None
+        
+        # Runden Kreis durch Paint-Event erzeugen
+        $indicator.Add_Paint({
+                $graphics = $_.Graphics
+                $rect = New-Object System.Drawing.Rectangle(0, 0, $this.Width, $this.Height)
+                $path = New-Object System.Drawing.Drawing2D.GraphicsPath
+                $path.AddEllipse($rect)
+                $this.Region = New-Object System.Drawing.Region($path)
+            
+                # Verwende die Graphics-Variable, damit sie nicht als unbenutzt gemeldet wird
+                if ($false) { $graphics.Clear() }
+            })
+
+        # Ballon-Tooltip für den Status-Indikator hinzufügen
+        # Verwende das globale Tooltip-Objekt für einheitliches Verhalten
+        if (-not $script:statusIndicatorTooltip) {
+            $script:statusIndicatorTooltip = New-Object System.Windows.Forms.ToolTip
+            $script:statusIndicatorTooltip.IsBalloon = $true
+            $script:statusIndicatorTooltip.ToolTipTitle = "Scan-Status"
+            $script:statusIndicatorTooltip.ToolTipIcon = [System.Windows.Forms.ToolTipIcon]::Info
+            $script:statusIndicatorTooltip.InitialDelay = 300
+            $script:statusIndicatorTooltip.AutoPopDelay = 8000
+            $script:statusIndicatorTooltip.ReshowDelay = 100
+        }
+        
+        $lastScan = Get-ScanHistory -ToolName $ToolName
+        
+        if ($lastScan) {
+            $scanDate = [DateTime]::ParseExact($lastScan, "yyyy-MM-dd HH:mm:ss", $null)
+            $timeDiff = (Get-Date) - $scanDate
+            
+            # Formatiere die Zeitdifferenz für den Tooltip
+            $tooltipText = "Letzter Scan: " + $scanDate.ToString("dd.MM.yyyy HH:mm:ss") + "`n(vor "
+            
+            if ($timeDiff.TotalDays -ge 1) {
+                $tooltipText += [Math]::Floor($timeDiff.TotalDays).ToString() + " Tagen"
+            }
+            elseif ($timeDiff.TotalHours -ge 1) {
+                $tooltipText += [Math]::Floor($timeDiff.TotalHours).ToString() + " Stunden"
+            }
+            else {
+                $tooltipText += [Math]::Floor($timeDiff.TotalMinutes).ToString() + " Minuten"
+            }
+            
+            $tooltipText += ")`n`n🟢 Status: Tool wurde heute ausgeführt"
+        }
+        else {
+            $tooltipText = "❌ Kein Scan durchgeführt`n`nKlicken Sie auf den Button, um das Tool zu starten."
+        }
+        
+        $script:statusIndicatorTooltip.SetToolTip($indicator, $tooltipText)
+        
+        # Status-Indikator zum Button hinzufügen
+        $Button.Controls.Add($indicator)
+    }
+
     # Hover-Effekt hinzufügen mit Closure-Technik
     $Button.Add_MouseEnter({
             $buttonColor = $colorValue
             $this.BackColor = $buttonColor
             $this.ForeColor = [System.Drawing.Color]::White
         }.GetNewClosure())
-    
+
     $Button.Add_MouseLeave({
             $buttonColor = $colorValue
             $this.BackColor = [System.Drawing.Color]::White
@@ -2276,6 +2443,36 @@ foreach ($button in $cleanupButtons) {
     Set-ButtonColor -Button $button -Color $colorGroups[3]
 }
 
+# Funktion zum Initialisieren aller Button-Statusindikatoren
+function Initialize-ButtonStatusIndicators {
+    # System & Sicherheit Buttons
+    foreach ($button in $systemButtons) {
+        # Ermittle den Tool-Namen aus dem Buttonnamen
+        $toolName = $button.Name -replace "btn", ""
+        Set-ButtonColor -Button $button -Color $button.FlatAppearance.BorderColor -ToolName $toolName -WithStatusIndicator
+    }
+    
+    # Festplatten-Tools Buttons
+    foreach ($button in $diskButtons) {
+        $toolName = $button.Name -replace "btn", ""
+        if ($toolName -match "DISM") { $toolName = "DISM" } # Spezialfall für DISM-Buttons
+        Set-ButtonColor -Button $button -Color $button.FlatAppearance.BorderColor -ToolName $toolName -WithStatusIndicator
+    }
+    
+    # Netzwerk-Tools Buttons (nur bestimmte)
+    $networkToolButtons = @($btnPingTest)
+    foreach ($button in $networkToolButtons) {
+        $toolName = $button.Name -replace "btn", ""
+        Set-ButtonColor -Button $button -Color $button.FlatAppearance.BorderColor -ToolName $toolName -WithStatusIndicator
+    }
+    
+    # Cleanup-Tools Buttons
+    foreach ($button in $cleanupButtons) {
+        $toolName = $button.Name -replace "btn", ""
+        Set-ButtonColor -Button $button -Color $button.FlatAppearance.BorderColor -ToolName $toolName -WithStatusIndicator
+    }
+}
+
 # Neustart Button erstellen
 $btnRestart = New-Object System.Windows.Forms.Button
 $btnRestart.Text = "System Neustart"
@@ -2289,28 +2486,28 @@ $btnRestart.Add_Click({
             [System.Windows.Forms.MessageBoxButtons]::YesNo,
             [System.Windows.Forms.MessageBoxIcon]::Warning
         )
-        
+
         if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
             # Timer für den Countdown erstellen
             $script:countdownSeconds = 30
             $script:countdownTimer = New-Object System.Windows.Forms.Timer
             $script:countdownTimer.Interval = 1000 # 1 Sekunde
-            
+
             # Progressbar für Countdown vorbereiten
             $progressBar.Maximum = $script:countdownSeconds
             $progressBar.Value = $script:countdownSeconds
-            
+
             # Status-Text aktualisieren
             Update-ProgressStatus -StatusText "System Neustart in $script:countdownSeconds Sekunden..." -ProgressValue $script:countdownSeconds -TextColor ([System.Drawing.Color]::Red)
-            
+
             # Timer-Event definieren
             $script:countdownTimer.Add_Tick({
                     $script:countdownSeconds--
                     $progressBar.Value = $script:countdownSeconds
-                    
+
                     if ($script:countdownSeconds -gt 0) {
                         Update-ProgressStatus -StatusText "System Neustart in $script:countdownSeconds Sekunden..." -ProgressValue $script:countdownSeconds -TextColor ([System.Drawing.Color]::Red)
-                        
+
                         # Warnung bei 10 Sekunden
                         if ($script:countdownSeconds -eq 10) {
                             $result = [System.Windows.Forms.MessageBox]::Show(
@@ -2319,16 +2516,16 @@ $btnRestart.Add_Click({
                                 [System.Windows.Forms.MessageBoxButtons]::YesNo,
                                 [System.Windows.Forms.MessageBoxIcon]::Warning
                             )
-                            
+
                             if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
                                 # Neustart abbrechen
                                 $script:countdownTimer.Stop()
                                 $script:countdownTimer.Dispose()
-                                
+
                                 # Progressbar zurücksetzen
                                 $progressBar.Value = 0
                                 Update-ProgressStatus -StatusText "Neustart abgebrochen" -ProgressValue 0 -TextColor ([System.Drawing.Color]::DarkBlue)
-                                
+
                                 # Bestätigungsmeldung
                                 [System.Windows.Forms.MessageBox]::Show(
                                     "Der System-Neustart wurde abgebrochen.",
@@ -2342,7 +2539,7 @@ $btnRestart.Add_Click({
                     else {
                         $script:countdownTimer.Stop()
                         $script:countdownTimer.Dispose()
-                        
+
                         # Neustart-Befehl ausführen
                         try {
                             # Versuche zuerst einen sanften Neustart
@@ -2364,7 +2561,7 @@ $btnRestart.Add_Click({
                         }
                     }
                 })
-            
+
             # Timer starten
             $script:countdownTimer.Start()
         }
@@ -2383,6 +2580,7 @@ $tooltipObj.AutoPopDelay = 5000
 $tooltipObj.SetToolTip($btnQuickMRT, "Führt einen schnellen Malware-Scan mit Microsoft Malicious Software Removal Tool durch")
 $tooltipObj.SetToolTip($btnFullMRT, "Führt einen vollständigen Systemscan mit Microsoft Malicious Software Removal Tool durch")
 $tooltipObj.SetToolTip($btnWindowsDefender, "Öffnet Windows Defender und zeigt den aktuellen Status an")
+$tooltipObj.SetToolTip($btnDefenderOffline, "Startet einen Windows Defender Offline-Scan, der beim nächsten Neustart ausgeführt wird")
 $tooltipObj.SetToolTip($btnSFC, "Überprüft und repariert Windows-Systemdateien mit dem System File Checker")
 $tooltipObj.SetToolTip($btnMemoryDiag, "Startet das Windows-Memory-Diagnostic-Tool zur Überprüfung des Arbeitsspeichers")
 $tooltipObj.SetToolTip($btnWinUpdate, "Öffnet die Windows Update-Einstellungen")
@@ -2448,20 +2646,20 @@ function Get-ToolInfo {
     param (
         [System.Windows.Forms.RichTextBox]$infoBox
     )
-    
+
     $infoBox.Clear()
     $infoBox.SelectionColor = [System.Drawing.Color]::DarkBlue
     $infoBox.AppendText("===== TOOL-INFORMATIONEN =====`r`n`r`n")
-    
+
     # Progressbar zurücksetzen
     $progressBar.Value = 0
     $progressBar.CustomText = "Tool-Info wird geladen..."
     $progressBar.TextColor = [System.Drawing.Color]::DarkBlue
-    
+
     # System-Tools Informationen - 20%
     $progressBar.Value = 20
     $progressBar.CustomText = "Lade System-Tools Info..."
-    
+
     $infoBox.SelectionColor = [System.Drawing.Color]::Blue
     $infoBox.AppendText("SYSTEM-TOOLS:`r`n")
     $infoBox.SelectionColor = [System.Drawing.Color]::Black
@@ -2471,11 +2669,11 @@ function Get-ToolInfo {
     $infoBox.AppendText("- Memory Diagnostic: Führt einen Arbeitsspeicher-Test durch.`r`n")
     $infoBox.AppendText("- System Scan: Systemscan auf Malware und Viren.`r`n")
     $infoBox.AppendText("`r`n")
-    
+
     # Disk-Tools Informationen - 40%
     $progressBar.Value = 40
     $progressBar.CustomText = "Lade Disk-Tools Info..."
-    
+
     $infoBox.SelectionColor = [System.Drawing.Color]::Blue
     $infoBox.AppendText("FESTPLATTEN-TOOLS:`r`n")
     $infoBox.SelectionColor = [System.Drawing.Color]::Black
@@ -2486,11 +2684,11 @@ function Get-ToolInfo {
     $infoBox.AppendText("- CHKDSK: Überprüft und repariert Festplattenfehler.`r`n")
     $infoBox.AppendText("- Drive Cleanup: Bereinigt temporäre und überflüssige Dateien.`r`n")
     $infoBox.AppendText("`r`n")
-    
+
     # Network-Tools Informationen - 60%
     $progressBar.Value = 60
     $progressBar.CustomText = "Lade Network-Tools Info..."
-    
+
     $infoBox.SelectionColor = [System.Drawing.Color]::Blue
     $infoBox.AppendText("NETWORK-TOOLS:`r`n")
     $infoBox.SelectionColor = [System.Drawing.Color]::Black
@@ -2498,11 +2696,11 @@ function Get-ToolInfo {
     $infoBox.AppendText("  - Setzt Netzwerkadapter zurueck`r`n")
     $infoBox.AppendText("  - Erneuert IP-Konfiguration`r`n")
     $infoBox.AppendText("  - Leert DNS-Cache`r`n`r`n")
-    
+
     # Cleanup-Tools Informationen - 80%
     $progressBar.Value = 80
     $progressBar.CustomText = "Lade Cleanup-Tools Info..."
-    
+
     $infoBox.SelectionColor = [System.Drawing.Color]::Blue
     $infoBox.AppendText("CLEANUP-TOOLS:`r`n")
     $infoBox.SelectionColor = [System.Drawing.Color]::Black
@@ -2512,22 +2710,22 @@ function Get-ToolInfo {
     $infoBox.AppendText("* Windows Cache`r`n")
     $infoBox.AppendText("  - Bereinigt Windows-Thumbnail-Cache`r`n")
     $infoBox.AppendText("  - Entfernt temporaere Windows-Dateien`r`n`r`n")
-    
+
     # Allgemeine Informationen - 90%
     $progressBar.Value = 90
     $progressBar.CustomText = "Lade allgemeine Informationen..."
-    
+
     $infoBox.SelectionColor = [System.Drawing.Color]::Blue
     $infoBox.AppendText("ALLGEMEINE INFORMATIONEN:`r`n")
     $infoBox.SelectionColor = [System.Drawing.Color]::Black
     $infoBox.AppendText("* Version: 3.1.0`r`n")
     $infoBox.AppendText("* Entwickler: IT-Support`r`n")
     $infoBox.AppendText("* Letzte Aktualisierung: 01.03.2024`r`n")
-    
+
     # Fertig - 100%
     $progressBar.Value = 100
     $progressBar.CustomText = "Tool-Info geladen"
-    
+
     # Nach kurzer Pause zurücksetzen
     Start-Sleep -Milliseconds 1000
     $progressBar.Value = 0
@@ -2546,91 +2744,378 @@ $btnRefreshToolInfo.Location = New-Object System.Drawing.Point(10, 0)
 $btnRefreshToolInfo.Add_Click({ Get-ToolInfo -infoBox $toolInfoBox })
 $tabToolInfo.Controls.Add($btnRefreshToolInfo)
 
-# Erstelle einen fünften Tab für Tool-Downloads
+# Erstelle einen fünften Tab für Tool-Downloads mit modernem WPF-UI
 $tabToolDownloads = New-Object System.Windows.Forms.TabPage
 $tabToolDownloads.Text = "Tool-Downloads"
 $tabToolDownloads.BackColor = $tabToolDownloadsColor
 $tabControl.TabPages.Add($tabToolDownloads)
 
-# Erstelle Output-Box für Tool-Downloads
-$toolDownloadsBox = New-Object System.Windows.Forms.RichTextBox
-$toolDownloadsBox.Location = New-Object System.Drawing.Point(0, 30)
-$toolDownloadsBox.Size = New-Object System.Drawing.Size(964, 302)
-$toolDownloadsBox.Font = New-Object System.Drawing.Font("Consolas", 12)
-$toolDownloadsBox.Multiline = $true
-$toolDownloadsBox.ScrollBars = "Both"
-$toolDownloadsBox.WordWrap = $false
-$toolDownloadsBox.ReadOnly = $true
-$toolDownloadsBox.BackColor = [System.Drawing.Color]::White
-$toolDownloadsBox.Text = "Tool-Downloads-Bereich wird geladen...`r`n"
-$toolDownloadsBox.Dock = [System.Windows.Forms.DockStyle]::Fill
+# Kategorie-Auswahl-Panel (oben)
+$categoryPanel = New-Object System.Windows.Forms.Panel
+$categoryPanel.Height = 40
+$categoryPanel.Dock = [System.Windows.Forms.DockStyle]::Top
+$categoryPanel.BackColor = $tabToolDownloadsColor
 
-# Click-Handler für Download-Buttons
-$toolDownloadsBox.Add_Click({
-        $clickPosition = $this.GetCharIndexFromPosition($this.PointToClient([System.Windows.Forms.Cursor]::Position))
-        $line = $this.GetLineFromCharIndex($clickPosition)
-        $lineText = $this.Lines[$line]
+# Container für WPF-Elemente
+$toolDownloadsHost = New-Object System.Windows.Forms.Integration.ElementHost
+$toolDownloadsHost.Dock = [System.Windows.Forms.DockStyle]::Fill
+$toolDownloadsHost.BackColor = [System.Drawing.Color]::White
+
+# Scrollviewer für den Inhalt
+$toolScrollViewer = New-Object Windows.Controls.ScrollViewer
+$toolScrollViewer.VerticalScrollBarVisibility = [Windows.Controls.ScrollBarVisibility]::Auto
+$toolScrollViewer.HorizontalScrollBarVisibility = [Windows.Controls.ScrollBarVisibility]::Disabled
+$toolScrollViewer.Background = [Windows.Media.Brushes]::White
+
+# WrapPanel für die Tool-Kacheln
+$toolWrapPanel = New-Object Windows.Controls.WrapPanel
+$toolWrapPanel.Margin = New-Object Windows.Thickness(10)
+$toolWrapPanel.Background = [Windows.Media.Brushes]::White
+$toolScrollViewer.Content = $toolWrapPanel
+$toolDownloadsHost.Child = $toolScrollViewer
+
+# Ressourcen-Dictionary für Tool-Kacheln
+$script:toolResourceDictionary = @{
+    ToolTileMargins             = New-Object Windows.Thickness(5)
+    ToolTileFontSize            = 14
+    ToolTileBorderThickness     = New-Object Windows.Thickness(1)
+    ToolTileWidth               = 380
+    ToolInstallUnselectedColor  = [Windows.Media.Brushes]::White
+    ToolInstallHighlightedColor = [Windows.Media.Brushes]::LightGray
+    MainForegroundColor         = [Windows.Media.Brushes]::Black
+    CategoryForegroundColor     = [Windows.Media.Brushes]::Gray
+}
+
+# Funktion zum Setzen von Ressourcen
+function Set-ToolResource {
+    param ($control, $property, $key)
+    $control.$property = $script:toolResourceDictionary[$key]
+}
+
+# Funktion zum Erstellen einer Tool-Kachel
+function Initialize-ToolEntry {
+    param(
+        [Windows.Controls.WrapPanel]$TargetElement,
+        $Tool
+    )
     
-        # Prüfe, ob der Klick auf dem Download-Text war
-        if ($lineText -match "\[Download\]") {
-            # Extrahiere den Tool-Namen aus der Zeile (erste 30 Zeichen)
-            $toolName = $lineText.Substring(0, 30).Trim()
-            
-            # Debug-Ausgabe
-            Write-Host "Klick auf Download-Button für Tool: $toolName"
-        
-            # Status auf "Download läuft..." setzen
-            Update-ProgressStatus -StatusText "Download läuft..." -ProgressValue 0 -TextColor ([System.Drawing.Color]::DarkBlue)
-        
-            # Tool herunterladen und installieren
-            $success = Get-ToolDownload -ToolName $toolName
-        
-            if ($success) {
-                Update-ProgressStatus -StatusText "Download und Installation abgeschlossen" -ProgressValue 100 -TextColor ([System.Drawing.Color]::Green)
-            }
-            else {
-                Update-ProgressStatus -StatusText "Download fehlgeschlagen" -ProgressValue 0 -TextColor ([System.Drawing.Color]::Red)
-            }
-        }
-    })
+    $border = New-Object Windows.Controls.Border
+    $border.BorderThickness = $script:toolResourceDictionary["ToolTileBorderThickness"]
+    $border.CornerRadius = 8
+    $border.Padding = $script:toolResourceDictionary["ToolTileMargins"]
+    $border.Width = $script:toolResourceDictionary["ToolTileWidth"]
+    $border.VerticalAlignment = "Top"
+    $border.Margin = $script:toolResourceDictionary["ToolTileMargins"]
+    $border.Cursor = [System.Windows.Input.Cursors]::Hand
+    $border.Background = $script:toolResourceDictionary["ToolInstallUnselectedColor"]
+    $border.BorderBrush = [Windows.Media.Brushes]::LightGray
+    $border.Tag = $Tool
+    $border.ToolTip = $Tool.Description
 
-# Tool-Downloads-Box dem TabToolDownloads hinzufügen
-$tabToolDownloads.Controls.Add($toolDownloadsBox)
+    # Hover-Effekt
+    $border.Add_MouseEnter({
+            $this.Background = $script:toolResourceDictionary["ToolInstallHighlightedColor"]
+        })
+    $border.Add_MouseLeave({
+            $this.Background = $script:toolResourceDictionary["ToolInstallUnselectedColor"]
+        })
+
+    $dockPanel = New-Object Windows.Controls.DockPanel
+    $border.Child = $dockPanel
+
+    # Header mit Icon und Name
+    $headerPanel = New-Object Windows.Controls.StackPanel
+    $headerPanel.Orientation = "Horizontal"
+    $headerPanel.VerticalAlignment = "Center"
+    $headerPanel.Margin = New-Object Windows.Thickness(0, 0, 0, 10)
+    [Windows.Controls.DockPanel]::SetDock($headerPanel, [Windows.Controls.Dock]::Top)
+
+    # Tool-Icon (Platzhalter)
+    $iconBorder = New-Object Windows.Controls.Border
+    $iconBorder.Width = 40
+    $iconBorder.Height = 40
+    $iconBorder.Background = [Windows.Media.Brushes]::LightBlue
+    $iconBorder.CornerRadius = 4
+    $iconBorder.Margin = New-Object Windows.Thickness(0, 0, 10, 0)
+    
+    $iconText = New-Object Windows.Controls.TextBlock
+    $iconText.Text = $Tool.Name.Substring(0, [Math]::Min(2, $Tool.Name.Length)).ToUpper()
+    $iconText.FontSize = 16
+    $iconText.FontWeight = [Windows.FontWeights]::Bold
+    $iconText.Foreground = [Windows.Media.Brushes]::White
+    $iconText.HorizontalAlignment = "Center"
+    $iconText.VerticalAlignment = "Center"
+    $iconBorder.Child = $iconText
+    $headerPanel.Children.Add($iconBorder)
+
+    # Name und Kategorie
+    $namePanel = New-Object Windows.Controls.StackPanel
+    $namePanel.VerticalAlignment = "Center"
+    
+    $appName = New-Object Windows.Controls.TextBlock
+    $appName.Text = $Tool.Name
+    $appName.FontWeight = [Windows.FontWeights]::Bold
+    $appName.FontSize = $script:toolResourceDictionary["ToolTileFontSize"]
+    $appName.Foreground = $script:toolResourceDictionary["MainForegroundColor"]
+    $namePanel.Children.Add($appName)
+    
+    $categoryBlock = New-Object Windows.Controls.TextBlock
+    $categoryBlock.Text = "Kategorie: " + $Tool.Category
+    $categoryBlock.FontSize = 12
+    $categoryBlock.Foreground = $script:toolResourceDictionary["CategoryForegroundColor"]
+    $namePanel.Children.Add($categoryBlock)
+    
+    $headerPanel.Children.Add($namePanel)
+    $dockPanel.Children.Add($headerPanel)
+
+    # Beschreibungsbereich
+    $descPanel = New-Object Windows.Controls.StackPanel
+    $descPanel.Margin = New-Object Windows.Thickness(0, 0, 0, 10)
+    [Windows.Controls.DockPanel]::SetDock($descPanel, [Windows.Controls.Dock]::Top)
+    
+    $descLabel = New-Object Windows.Controls.TextBlock
+    $descLabel.Text = if ($Tool.Description.Length -gt 120) { 
+        $Tool.Description.Substring(0, 120) + "..." 
+    }
+    else { 
+        $Tool.Description 
+    }
+    $descLabel.TextWrapping = [Windows.TextWrapping]::Wrap
+    $descLabel.FontSize = 12
+    $descLabel.Margin = New-Object Windows.Thickness(5)
+    $descPanel.Children.Add($descLabel)
+    $dockPanel.Children.Add($descPanel)
+
+    # Button Panel
+    $buttonPanel = New-Object Windows.Controls.StackPanel
+    $buttonPanel.Orientation = "Horizontal"
+    $buttonPanel.HorizontalAlignment = "Right"
+    $buttonPanel.VerticalAlignment = "Center"
+    [Windows.Controls.DockPanel]::SetDock($buttonPanel, [Windows.Controls.Dock]::Bottom)
+
+    # Info/Beschreibung Button
+    $infoButton = New-Object Windows.Controls.Button
+    $infoButton.Width = 45
+    $infoButton.Height = 35
+    $infoButton.Margin = New-Object Windows.Thickness(2)
+    $infoIcon = New-Object Windows.Controls.TextBlock
+    $infoIcon.Text = [char]0xE946  # Info-Symbol
+    $infoIcon.FontFamily = New-Object Windows.Media.FontFamily("Segoe MDL2 Assets")
+    $infoIcon.FontSize = 20
+    $infoIcon.Foreground = [Windows.Media.Brushes]::Blue
+    $infoButton.Content = $infoIcon
+    $infoButton.ToolTip = "Detaillierte Informationen anzeigen"
+    $infoButton.Add_Click({
+            $toolInfo = $this.Parent.Parent.Parent.Tag
+        
+            $infoText = "TOOL INFORMATION`n"
+            $infoText += "═══════════════════════════`n`n"
+            $infoText += "Name: $($toolInfo.Name)`n"
+            $infoText += "Version: $($toolInfo.Version)`n"
+            $infoText += "Kategorie: $($toolInfo.Category)`n`n"
+            $infoText += "Beschreibung:`n$($toolInfo.Description)`n`n"
+            $infoText += "Tags: $($toolInfo.Tags -join ', ')`n"
+            if ($toolInfo.Winget) { 
+                $infoText += "Winget-Paket: $($toolInfo.Winget)`n" 
+            }
+            $infoText += "Download-URL: $($toolInfo.DownloadUrl)`n"
+        
+            [System.Windows.Forms.MessageBox]::Show(
+                $infoText,
+                "Information - $($toolInfo.Name)",
+                [System.Windows.Forms.MessageBoxButtons]::OK,
+                [System.Windows.Forms.MessageBoxIcon]::Information
+            )
+        })
+    $buttonPanel.Children.Add($infoButton)
+
+    # Download Button (Winget, falls verfügbar)
+    if ($Tool.Winget) {
+        $wingetButton = New-Object Windows.Controls.Button
+        $wingetButton.Width = 45
+        $wingetButton.Height = 35
+        $wingetButton.Margin = New-Object Windows.Thickness(2)
+        $wingetIcon = New-Object Windows.Controls.TextBlock
+        $wingetIcon.Text = [char]0xE118  # Download-Symbol
+        $wingetIcon.FontFamily = New-Object Windows.Media.FontFamily("Segoe MDL2 Assets")
+        $wingetIcon.FontSize = 20
+        $wingetIcon.Foreground = [Windows.Media.Brushes]::Green
+        $wingetButton.Content = $wingetIcon
+        $wingetButton.ToolTip = "Mit Winget installieren"
+        $wingetButton.Add_Click({
+                $toolInfo = $this.Parent.Parent.Parent.Tag
+                try {
+                    Start-Process "winget" -ArgumentList "install", $toolInfo.Winget -Verb RunAs
+                    [System.Windows.Forms.MessageBox]::Show(
+                        "Winget-Installation wurde gestartet.",
+                        "Installation - $($toolInfo.Name)",
+                        [System.Windows.Forms.MessageBoxButtons]::OK,
+                        [System.Windows.Forms.MessageBoxIcon]::Information
+                    )
+                }
+                catch {
+                    [System.Windows.Forms.MessageBox]::Show(
+                        "Fehler beim Starten der Winget-Installation: $($_.Exception.Message)",
+                        "Fehler",
+                        [System.Windows.Forms.MessageBoxButtons]::OK,
+                        [System.Windows.Forms.MessageBoxIcon]::Error
+                    )
+                }
+            })
+        $buttonPanel.Children.Add($wingetButton)
+    }
+
+    # Web-Download Button
+    $webButton = New-Object Windows.Controls.Button
+    $webButton.Width = 45
+    $webButton.Height = 35
+    $webButton.Margin = New-Object Windows.Thickness(2)
+    $webIcon = New-Object Windows.Controls.TextBlock
+    $webIcon.Text = [char]0xE774  # Web-Symbol
+    $webIcon.FontFamily = New-Object Windows.Media.FontFamily("Segoe MDL2 Assets")
+    $webIcon.FontSize = 20
+    $webIcon.Foreground = [Windows.Media.Brushes]::Orange
+    $webButton.Content = $webIcon
+    $webButton.ToolTip = "Von Webseite herunterladen"
+    $webButton.Add_Click({
+            $toolInfo = $this.Parent.Parent.Parent.Tag
+            try {
+                Start-Process $toolInfo.DownloadUrl
+            }
+            catch {
+                [System.Windows.Forms.MessageBox]::Show(
+                    "Fehler beim Öffnen der Download-URL: $($_.Exception.Message)",
+                    "Fehler",
+                    [System.Windows.Forms.MessageBoxButtons]::OK,
+                    [System.Windows.Forms.MessageBoxIcon]::Error
+                )
+            }
+        })
+    $buttonPanel.Children.Add($webButton)
+
+    # Deinstallations-Button (falls Winget verfügbar)
+    if ($Tool.Winget) {
+        $uninstallButton = New-Object Windows.Controls.Button
+        $uninstallButton.Width = 45
+        $uninstallButton.Height = 35
+        $uninstallButton.Margin = New-Object Windows.Thickness(2)
+        $uninstallIcon = New-Object Windows.Controls.TextBlock
+        $uninstallIcon.Text = [char]0xE74D  # Uninstall-Symbol
+        $uninstallIcon.FontFamily = New-Object Windows.Media.FontFamily("Segoe MDL2 Assets")
+        $uninstallIcon.FontSize = 20
+        $uninstallIcon.Foreground = [Windows.Media.Brushes]::Red
+        $uninstallButton.Content = $uninstallIcon
+        $uninstallButton.ToolTip = "Mit Winget deinstallieren"
+        $uninstallButton.Add_Click({
+                $toolInfo = $this.Parent.Parent.Parent.Tag
+                $result = [System.Windows.Forms.MessageBox]::Show(
+                    "Möchten Sie $($toolInfo.Name) wirklich deinstallieren?",
+                    "Deinstallation bestätigen",
+                    [System.Windows.Forms.MessageBoxButtons]::YesNo,
+                    [System.Windows.Forms.MessageBoxIcon]::Question
+                )
+                if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
+                    try {
+                        Start-Process "winget" -ArgumentList "uninstall", $toolInfo.Winget -Verb RunAs
+                        [System.Windows.Forms.MessageBox]::Show(
+                            "Deinstallation wurde gestartet.",
+                            "Deinstallation - $($toolInfo.Name)",
+                            [System.Windows.Forms.MessageBoxButtons]::OK,
+                            [System.Windows.Forms.MessageBoxIcon]::Information
+                        )
+                    }
+                    catch {
+                        [System.Windows.Forms.MessageBox]::Show(
+                            "Fehler beim Starten der Deinstallation: $($_.Exception.Message)",
+                            "Fehler",
+                            [System.Windows.Forms.MessageBoxButtons]::OK,
+                            [System.Windows.Forms.MessageBoxIcon]::Error
+                        )
+                    }
+                }
+            })
+        $buttonPanel.Children.Add($uninstallButton)
+    }
+
+    $dockPanel.Children.Add($buttonPanel)
+    $TargetElement.Children.Add($border)
+}
+
+# Funktion zum Anzeigen der Tool-Kacheln
+function Show-ToolTileList {
+    param (
+        [Windows.Controls.WrapPanel]$WrapPanel,
+        [string]$Category = "all"
+    )
+    
+    $null = $WrapPanel.Children.Clear()
+    
+    # Tools nach Kategorie filtern
+    $filteredTools = if ($Category -eq "all") {
+        Get-AllTools
+    }
+    else {
+        Get-ToolsByCategory -Category $Category
+    }
+    
+    # Tools anzeigen und Rückgabewerte unterdrücken
+    foreach ($tool in $filteredTools) {
+        $null = Initialize-ToolEntry -TargetElement $WrapPanel -Tool $tool
+    }
+}
 
 # Buttons für die verschiedenen Kategorien erstellen
 $btnAllTools = New-Object System.Windows.Forms.Button
 $btnAllTools.Text = "Alle Tools"
 $btnAllTools.Size = New-Object System.Drawing.Size(120, 30)
-$btnAllTools.Location = New-Object System.Drawing.Point(10, 0)
-$btnAllTools.Add_Click({ Show-ToolList -RichTextBox $toolDownloadsBox -Category "all" })
-$tabToolDownloads.Controls.Add($btnAllTools)
+$btnAllTools.Location = New-Object System.Drawing.Point(10, 5)
+$btnAllTools.Add_Click({ $null = Show-ToolTileList -WrapPanel $toolWrapPanel -Category "all" })
+$categoryPanel.Controls.Add($btnAllTools)
 
 $btnSystemTools = New-Object System.Windows.Forms.Button
 $btnSystemTools.Text = "System-Tools"
 $btnSystemTools.Size = New-Object System.Drawing.Size(120, 30)
-$btnSystemTools.Location = New-Object System.Drawing.Point(140, 0)
-$btnSystemTools.Add_Click({ Show-ToolList -RichTextBox $toolDownloadsBox -Category "system" })
-$tabToolDownloads.Controls.Add($btnSystemTools)
+$btnSystemTools.Location = New-Object System.Drawing.Point(140, 5)
+$btnSystemTools.Add_Click({ $null = Show-ToolTileList -WrapPanel $toolWrapPanel -Category "system" })
+$categoryPanel.Controls.Add($btnSystemTools)
 
 $btnBrowserTools = New-Object System.Windows.Forms.Button
-$btnBrowserTools.Text = "Browser"
+$btnBrowserTools.Text = "Browser-Tools"
 $btnBrowserTools.Size = New-Object System.Drawing.Size(120, 30)
-$btnBrowserTools.Location = New-Object System.Drawing.Point(270, 0)
-$btnBrowserTools.Add_Click({ Show-ToolList -RichTextBox $toolDownloadsBox -Category "browser" })
-$tabToolDownloads.Controls.Add($btnBrowserTools)
+$btnBrowserTools.Location = New-Object System.Drawing.Point(270, 5)
+$btnBrowserTools.Add_Click({ $null = Show-ToolTileList -WrapPanel $toolWrapPanel -Category "browser" })
+$categoryPanel.Controls.Add($btnBrowserTools)
 
 $btnCommunicationTools = New-Object System.Windows.Forms.Button
 $btnCommunicationTools.Text = "Kommunikation"
 $btnCommunicationTools.Size = New-Object System.Drawing.Size(120, 30)
-$btnCommunicationTools.Location = New-Object System.Drawing.Point(400, 0)
-$btnCommunicationTools.Add_Click({ Show-ToolList -RichTextBox $toolDownloadsBox -Category "communication" })
-$tabToolDownloads.Controls.Add($btnCommunicationTools)
+$btnCommunicationTools.Location = New-Object System.Drawing.Point(400, 5)
+$btnCommunicationTools.Add_Click({ $null = Show-ToolTileList -WrapPanel $toolWrapPanel -Category "communication" })
+$categoryPanel.Controls.Add($btnCommunicationTools)
 
-# Tooltips für die Download-Buttons
-$tooltipObj.SetToolTip($btnAllTools, "Zeigt alle verfügbaren Tools an")
-$tooltipObj.SetToolTip($btnSystemTools, "Zeigt System-Tools an")
-$tooltipObj.SetToolTip($btnBrowserTools, "Zeigt Browser an")
-$tooltipObj.SetToolTip($btnCommunicationTools, "Zeigt Kommunikationstools an")
+# Info-Button für den Tab
+$infoButtonToolDownloads = New-ModernInfoButton -x 940 -y 10 -clickAction {
+    [System.Windows.Forms.MessageBox]::Show(
+        "Moderne Tool-Download-Oberfläche`n`n" +
+        "Features pro Tool-Kachel:`n" +
+        "🔹 Info-Button (blau): Detaillierte Informationen`n" +
+        "🔹 Download-Button (grün): Winget-Installation`n" +
+        "🔹 Web-Button (orange): Download von Website`n" +
+        "🔹 Uninstall-Button (rot): Deinstallation via Winget`n`n" +
+        "Wählen Sie eine Kategorie aus den oberen Buttons.",
+        "Tool-Downloads - Hilfe",
+        [System.Windows.Forms.MessageBoxButtons]::OK,
+        [System.Windows.Forms.MessageBoxIcon]::Information
+    )
+}
+$categoryPanel.Controls.Add($infoButtonToolDownloads)
+
+# Komponenten dem Tab hinzufügen
+$tabToolDownloads.Controls.Add($toolDownloadsHost)
+$tabToolDownloads.Controls.Add($categoryPanel)
+
+# Initialisierung der Tool-Kacheln (standardmäßig alle Tools anzeigen)
+$null = Show-ToolTileList -WrapPanel $toolWrapPanel -Category "all"
 
 # Hauptformular anzeigen
 $mainform.Add_Shown({
@@ -2640,21 +3125,59 @@ $mainform.Add_Shown({
         # Set-HardwareDebugMode -Component 'RAM' -Enabled $false
 
         $outputBox.Clear()
+
+        # Titel mit Rahmen
+        $outputBox.SelectionFont = New-Object System.Drawing.Font("Consolas", 14, [System.Drawing.FontStyle]::Bold)
+        $outputBox.SelectionColor = [System.Drawing.Color]::DarkBlue
+        $outputBox.AppendText("╔══════════════════════════════════════════════════════════════╗`r`n")
+        $outputBox.AppendText("║                 BOCKIS WINDOWS TOOL-KIT                      ║`r`n")
+        $outputBox.AppendText("╚══════════════════════════════════════════════════════════════╝`r`n`r`n")
+
+        # Systeminformationen
+        $outputBox.SelectionFont = New-Object System.Drawing.Font("Consolas", 12, [System.Drawing.FontStyle]::Regular)
+        $outputBox.SelectionColor = [System.Drawing.Color]::Blue
+        $outputBox.AppendText("► System-Informationen:`r`n")
+        $outputBox.SelectionColor = [System.Drawing.Color]::Black
+
+        
+        # Nutzungsinformationen
         $outputBox.SelectionColor = [System.Drawing.Color]::Green
-        $outputBox.AppendText("System-Tool wurde erfolgreich gestartet.")
-        $outputBox.AppendText("`r`n`r`nBitte wählen Sie eine Funktion aus den verfügbaren Tools.`r`n")
+        $outputBox.SelectionFont = New-Object System.Drawing.Font("Consolas", 12, [System.Drawing.FontStyle]::Bold)
+        $outputBox.AppendText("✓ System-Tool wurde erfolgreich gestartet`r`n`r`n")
+
+        $outputBox.SelectionFont = New-Object System.Drawing.Font("Consolas", 12, [System.Drawing.FontStyle]::Regular)
+        $outputBox.SelectionColor = [System.Drawing.Color]::DarkSlateGray
+        $outputBox.AppendText("Bitte wählen Sie eine Funktion aus den Tabs oben aus.`r`n")
         $outputBox.AppendText("Hinweis: Für die meisten Funktionen sind Administratorrechte erforderlich.`r`n")
-    
+
+        # Admin-Status prüfen und anzeigen
         if (-not (Test-Admin)) {
             $outputBox.SelectionColor = [System.Drawing.Color]::Red
-            $outputBox.AppendText("`r`nWARNUNG: Das Tool läuft NICHT mit Administratorrechten! Einige Funktionen werden nicht korrekt arbeiten.`r`n")
+            $outputBox.SelectionFont = New-Object System.Drawing.Font("Consolas", 12, [System.Drawing.FontStyle]::Bold)
+            $outputBox.AppendText("`r`nWARNUNG: Das Tool läuft NICHT mit Administratorrechten!`r`n")
+            $outputBox.SelectionFont = New-Object System.Drawing.Font("Consolas", 12, [System.Drawing.FontStyle]::Regular)
+            $outputBox.AppendText("Einige Funktionen werden nicht korrekt arbeiten.`r`n")
             $outputBox.AppendText("Bitte starten Sie das Tool erneut und bestätigen Sie die Admin-Anforderung.`r`n")
         }
         else {
             $outputBox.SelectionColor = [System.Drawing.Color]::Green
-            $outputBox.AppendText("`r`nDas Tool läuft mit Administratorrechten. Alle Funktionen stehen zur Verfügung.`r`n")
+            $outputBox.SelectionFont = New-Object System.Drawing.Font("Consolas", 12, [System.Drawing.FontStyle]::Bold)
+            $outputBox.AppendText("`r`n✓ Das Tool läuft mit Administratorrechten.`r`n")
+            $outputBox.SelectionFont = New-Object System.Drawing.Font("Consolas", 12, [System.Drawing.FontStyle]::Regular)
+            $outputBox.AppendText("Alle Funktionen stehen zur Verfügung.`r`n")
         }
-        
+
+        # Verfügbare Funktionen
+        $outputBox.SelectionColor = [System.Drawing.Color]::Blue
+        $outputBox.SelectionFont = New-Object System.Drawing.Font("Consolas", 12, [System.Drawing.FontStyle]::Bold)
+        $outputBox.AppendText("`r`n► Verfügbare Funktions-Bereiche:`r`n")
+        $outputBox.SelectionColor = [System.Drawing.Color]::Black
+        $outputBox.SelectionFont = New-Object System.Drawing.Font("Consolas", 12, [System.Drawing.FontStyle]::Regular)
+        $outputBox.AppendText("   • System & Sicherheit\r\n")
+        $outputBox.AppendText("   • Diagnose & Reparatur\r\n")
+        $outputBox.AppendText("   • Netzwerk-Tools\r\n")
+        $outputBox.AppendText("   • Bereinigung\r\n")
+
         # Gespeicherte Einstellungen anwenden, nachdem die GUI vollständig geladen ist
         # Kurze Verzögerung, um sicherzustellen, dass alle Steuerelemente geladen sind
         $applySettingsTimer = New-Object System.Windows.Forms.Timer
@@ -2666,16 +3189,28 @@ $mainform.Add_Shown({
                     $outputBox.SelectionColor = [System.Drawing.Color]::Green
                     $outputBox.AppendText("`r`nGespeicherte Einstellungen wurden angewendet.`r`n")
                 }
+                
+                # Button-Statusindikatoren initialisieren
+                try {
+                    Initialize-ButtonStatusIndicators
+                    $outputBox.SelectionColor = [System.Drawing.Color]::Green
+                    $outputBox.AppendText("Button-Statusindikatoren wurden initialisiert.`r`n")
+                }
+                catch {
+                    $outputBox.SelectionColor = [System.Drawing.Color]::Red
+                    $outputBox.AppendText("Fehler beim Initialisieren der Button-Statusindikatoren: $_`r`n")
+                }
+                
                 $this.Dispose()
             })
         $applySettingsTimer.Start()
-        
+
         # Timer für die finale Positionierung nach dem vollständigen Laden
         $positioningTimer = New-Object System.Windows.Forms.Timer
         $positioningTimer.Interval = 1000  # 1 Sekunde warten
         $positioningTimer.Add_Tick({
                 $this.Stop()
-                
+
                 try {
                     # Konsolenfenster finden und in den Vordergrund bringen
                     $consoleHandle = Find-PowerShellWindow
@@ -2683,32 +3218,32 @@ $mainform.Add_Shown({
                         # Konsolenfenster in den Vordergrund bringen
                         [NativeMethods]::ShowWindow($consoleHandle, [NativeMethods]::SW_RESTORE)
                         [NativeMethods]::SetForegroundWindow($consoleHandle)
-                        
+
                         # Konsolenfenstergröße ermitteln
                         $rect = New-Object RECT
                         if ([NativeMethods]::GetWindowRect($consoleHandle, [ref]$rect)) {
                             # Debug-Ausgaben entfernt
-                            
+
                             # GUI-Fenster rechts neben dem Konsolenfenster positionieren
                             $guiLeft = $rect.Right + 10
                             $guiTop = $rect.Top
-                            
+
                             # Sicherstellen, dass das Fenster auf dem Bildschirm sichtbar ist
                             $screenWidth = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea.Width
                             $screenHeight = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea.Height
-                            
+
                             if ($guiLeft + $mainform.Width -gt $screenWidth) {
-                                # Wenn das GUI-Fenster rechts nicht mehr auf den Bildschirm passt, 
+                                # Wenn das GUI-Fenster rechts nicht mehr auf den Bildschirm passt,
                                 # platziere es unter dem Konsolenfenster
                                 $guiLeft = $rect.Left
                                 $guiTop = $rect.Bottom + 10
-                                
+
                                 # Wenn auch das nicht passt, dann belasse es bei der aktuellen Position
                                 if ($guiTop + $mainform.Height -gt $screenHeight) {
                                     return
                                 }
                             }
-                            
+
                             # Debug-Ausgabe entfernt
                             $mainform.Location = New-Object System.Drawing.Point($guiLeft, $guiTop)
                         }
@@ -2725,7 +3260,7 @@ $mainform.Add_Shown({
     })
 
 # Hauptfenster anzeigen
-[void]$mainform.ShowDialog() 
+[void]$mainform.ShowDialog()
 
 # Ändern wir die Funktion Set-Theme, um mit den neuen Tabs anstelle von GroupBoxes zu arbeiten
 function Set-Theme {
@@ -2737,8 +3272,9 @@ function Set-Theme {
         [System.Windows.Forms.TabControl]$tabControl,
         [System.Windows.Forms.TabControl]$mainTabControl
     )
-    
+
     # Dark mode aktivieren/deaktivieren
+
     if ($mainform.BackColor -eq [System.Drawing.Color]::FromArgb(240, 240, 240) -or $mainform.BackColor -eq [System.Drawing.Color]::White) {
         # Auf Dark Mode umschalten
         # Moderne, dunklere Farbpalette mit blauen Akzenten
@@ -2746,13 +3282,13 @@ function Set-Theme {
         $header.ForeColor = [System.Drawing.Color]::FromArgb(220, 225, 235)  # Leicht bläuliches Weiß
         $outputBox.BackColor = [System.Drawing.Color]::FromArgb(20, 22, 28)  # Noch dunklerer Hintergrund (war 30, 30, 30)
         $outputBox.ForeColor = [System.Drawing.Color]::FromArgb(200, 210, 220)  # Bläuliches Hellgrau (war LightGray)
-        
+
         # Hardware-Monitor Panel anpassen
         $monitorBackgroundPanel.BackColor = [System.Drawing.Color]::FromArgb(24, 26, 32)  # Dunkleres Panel
         $gbCPU.BackColor = [System.Drawing.Color]::FromArgb(38, 42, 48)  # Dunkleres Grau-Blau statt Grün
         $gbGPU.BackColor = [System.Drawing.Color]::FromArgb(40, 44, 52)  # Dunkleres Grau-Blau statt Gelb
         $gbRAM.BackColor = [System.Drawing.Color]::FromArgb(42, 46, 56)  # Dunkleres Grau-Blau statt Rot
-        
+
         # Hardware-Monitor Labels anpassen
         $lblCPUTitle.BackColor = [System.Drawing.Color]::FromArgb(46, 50, 60)  # Dunkleres Blau statt Lavender
         $lblCPUTitle.ForeColor = [System.Drawing.Color]::FromArgb(200, 210, 220)  # Bläuliches Weiß
@@ -2760,7 +3296,7 @@ function Set-Theme {
         $lblGPUTitle.ForeColor = [System.Drawing.Color]::FromArgb(200, 210, 220)
         $lblRAMTitle.BackColor = [System.Drawing.Color]::FromArgb(46, 50, 60)
         $lblRAMTitle.ForeColor = [System.Drawing.Color]::FromArgb(200, 210, 220)
-        
+
         # Wenn CPU-Label, GPU-Label und RAM-Label existieren, auch diese anpassen
         if ($null -ne $cpuLabel) {
             $cpuLabel.ForeColor = [System.Drawing.Color]::FromArgb(200, 210, 220)
@@ -2771,13 +3307,13 @@ function Set-Theme {
         if ($null -ne $ramLabel) {
             $ramLabel.ForeColor = [System.Drawing.Color]::FromArgb(200, 210, 220)
         }
-        
+
         # Dunkles Farbschema für Ausgabe-Tabs
         $tabControl.BackColor = [System.Drawing.Color]::FromArgb(32, 34, 40)  # Leicht bläuliches Anthrazit
         $tabOutput.BackColor = [System.Drawing.Color]::FromArgb(26, 28, 34)  # Dunkleres Anthrazit mit blauen Untertönen
         $tabAdvanced.BackColor = [System.Drawing.Color]::FromArgb(28, 30, 36)  # Anthrazit
         $tabExtensions.BackColor = [System.Drawing.Color]::FromArgb(26, 29, 35)  # Anthrazit mit leichtem Blauton
-        
+
         # Dunkles Farbschema für Haupt-Tabs
         $mainTabControl.BackColor = [System.Drawing.Color]::FromArgb(24, 26, 32)  # Noch dunkleres Anthrazit
         $tabSystem.BackColor = [System.Drawing.Color]::FromArgb(30, 33, 42)  # Dunkelblau-Grau
@@ -2785,7 +3321,7 @@ function Set-Theme {
         $tabNetwork.BackColor = [System.Drawing.Color]::FromArgb(30, 33, 42)
         $tabCleanup.BackColor = [System.Drawing.Color]::FromArgb(30, 33, 42)
         $tabHardwareMonitor.BackColor = [System.Drawing.Color]::FromArgb(30, 33, 42)
-        
+
         # GroupBox-Farben im Dark Mode
         $gbSystemSecurity.ForeColor = [System.Drawing.Color]::FromArgb(180, 200, 220)  # Helleres Blau-Grau
         $gbSystemMaintenance.ForeColor = [System.Drawing.Color]::FromArgb(180, 200, 220)
@@ -2797,12 +3333,12 @@ function Set-Theme {
         $gbCleanupTemp.ForeColor = [System.Drawing.Color]::FromArgb(180, 200, 220)
         $gbMainTabControl.ForeColor = [System.Drawing.Color]::FromArgb(180, 200, 220)
         $gbOutputTabControl.ForeColor = [System.Drawing.Color]::FromArgb(180, 200, 220)
-        
+
         # Theme-Button im dunklen Design
         $themeButton.BackColor = [System.Drawing.Color]::FromArgb(40, 44, 52)  # Dunkler als Hintergrund
         $themeButton.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(60, 70, 90)  # Bläulicher Rand
         $themeButton.ForeColor = [System.Drawing.Color]::FromArgb(220, 225, 235)  # Bläuliches Weiß
-        
+
         return $true
     }
     else {
@@ -2811,13 +3347,13 @@ function Set-Theme {
         $header.ForeColor = [System.Drawing.Color]::Black
         $outputBox.BackColor = [System.Drawing.Color]::White
         $outputBox.ForeColor = [System.Drawing.Color]::Black
-        
+
         # Helles Farbschema für Ausgabe-Tabs
         $tabControl.BackColor = [System.Drawing.Color]::FromArgb(240, 240, 240)
         $tabOutput.BackColor = $tabOutputColor
         $tabAdvanced.BackColor = $tabAdvancedColor
         $tabExtensions.BackColor = $tabHardwareColor
-        
+
         # Helles Farbschema für Haupt-Tabs
         $mainTabControl.BackColor = [System.Drawing.Color]::FromArgb(240, 240, 240)
         $tabSystem.BackColor = $tabSystemColor
@@ -2825,7 +3361,7 @@ function Set-Theme {
         $tabNetwork.BackColor = $tabNetworkColor
         $tabCleanup.BackColor = $tabCleanupColor
         $tabHardwareMonitor.BackColor = $tabHardwareMonitorColor
-        
+
         # GroupBox-Farben im Light Mode
         $gbSystemSecurity.ForeColor = [System.Drawing.Color]::Black
         $gbSystemMaintenance.ForeColor = [System.Drawing.Color]::Black
@@ -2835,14 +3371,14 @@ function Set-Theme {
         $gbNetworkRepair.ForeColor = [System.Drawing.Color]::Black
         $gbCleanupSystem.ForeColor = [System.Drawing.Color]::Black
         $gbCleanupTemp.ForeColor = [System.Drawing.Color]::Black
-        
+
         $themeButton.BackColor = [System.Drawing.Color]::FromArgb(250, 250, 250)
         $themeButton.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(220, 220, 220)
         $themeButton.ForeColor = [System.Drawing.Color]::Black
-        
+
         return $false
     }
-} 
+}
 
 # Event-Handler für MainTabControl
 $mainTabControl.Add_SelectedIndexChanged({
@@ -2851,7 +3387,7 @@ $mainTabControl.Add_SelectedIndexChanged({
         $tabDisk.BackColor = $tabDiskColor
         $tabNetwork.BackColor = $tabNetworkColor
         $tabCleanup.BackColor = $tabCleanupColor
-    
+
         # Aktiven Tab hervorheben
         switch ($mainTabControl.SelectedTab) {
             $tabSystem { $tabSystem.BackColor = $tabSystemActiveColor }
@@ -2869,13 +3405,13 @@ $tabControl.Add_SelectedIndexChanged({
         $tabExtensions.BackColor = $tabHardwareColor
         $tabToolInfo.BackColor = $tabToolInfoColor
         $tabToolDownloads.BackColor = $tabToolDownloadsColor
-    
+
         # Aktiven Tab hervorheben
         switch ($tabControl.SelectedTab) {
-            $tabOutput { 
+            $tabOutput {
                 $tabOutput.BackColor = $tabOutputActiveColor
             }
-            $tabAdvanced { 
+            $tabAdvanced {
                 $tabAdvanced.BackColor = $tabAdvancedActiveColor
                 # Automatische Aktualisierung des System-Status
                 $systemStatusBox.Clear()
@@ -2883,17 +3419,17 @@ $tabControl.Add_SelectedIndexChanged({
                 $systemStatusBox.AppendText("System-Status wird geladen...`r`n")
                 Get-SystemStatusSummary -statusBox $systemStatusBox -LiveMode
             }
-            $tabExtensions { 
+            $tabExtensions {
                 $tabExtensions.BackColor = $tabHardwareActiveColor
                 Get-HardwareInfo -infoBox $hardwareInfoBox
             }
-            $tabToolInfo { 
+            $tabToolInfo {
                 $tabToolInfo.BackColor = $tabToolInfoActiveColor
                 Get-ToolInfo -infoBox $toolInfoBox
             }
-            $tabToolDownloads { 
+            $tabToolDownloads {
                 $tabToolDownloads.BackColor = $tabToolDownloadsActiveColor
-                Show-ToolList -RichTextBox $toolDownloadsBox -Category "all"
+                # WPF-Kacheln werden automatisch angezeigt - kein Handler erforderlich
             }
         }
     })
@@ -2905,14 +3441,14 @@ $tabControl.DrawMode = [System.Windows.Forms.TabDrawMode]::OwnerDrawFixed
 # Event-Handler für das Zeichnen der Tabs
 $drawTabHandler = {
     param($tabControl, $e)
-    
+
     $tabPage = $tabControl.TabPages[$e.Index]
     $tabBounds = $e.Bounds
     $g = $e.Graphics
-    
+
     # Prüfen, ob wir uns im Dark Mode befinden
     $isDarkMode = $mainform.BackColor -eq [System.Drawing.Color]::FromArgb(28, 30, 36)
-    
+
     if ($isDarkMode) {
         # Dark Mode Farben
         if ($e.Index -eq $tabControl.SelectedIndex) {
@@ -2943,17 +3479,17 @@ $drawTabHandler = {
             $font = $tabControl.Font
         }
     }
-    
+
     # Tab zeichnen
     $g.FillRectangle($brush, $tabBounds)
-    
+
     # Text zentriert zeichnen
     $textBrush = New-Object System.Drawing.SolidBrush($textColor)
     $stringFormat = New-Object System.Drawing.StringFormat
     $stringFormat.Alignment = [System.Drawing.StringAlignment]::Center
     $stringFormat.LineAlignment = [System.Drawing.StringAlignment]::Center
     $g.DrawString($tabPage.Text, $font, $textBrush, $tabBounds, $stringFormat)
-    
+
     # Ressourcen freigeben
     $brush.Dispose()
     $textBrush.Dispose()
@@ -2990,13 +3526,13 @@ $mainform.BackColor = [System.Drawing.Color]::FromArgb(45, 45, 48)
 $header.ForeColor = [System.Drawing.Color]::White
 $outputBox.BackColor = [System.Drawing.Color]::FromArgb(30, 30, 30)
 $outputBox.ForeColor = [System.Drawing.Color]::White
-    
+
 # Dunkles Farbschema für Ausgabe-Tabs
 $tabControl.BackColor = [System.Drawing.Color]::FromArgb(30, 30, 30)
 $tabOutput.BackColor = [System.Drawing.Color]::FromArgb(30, 30, 30)
 $tabAdvanced.BackColor = [System.Drawing.Color]::FromArgb(30, 30, 30)
 $tabExtensions.BackColor = [System.Drawing.Color]::FromArgb(30, 30, 30)
-    
+
 # Dunkles Farbschema für Haupt-Tabs
 $mainTabControl.BackColor = [System.Drawing.Color]::FromArgb(30, 30, 30)
 $tabSystem.BackColor = [System.Drawing.Color]::FromArgb(40, 40, 45)
@@ -3004,7 +3540,7 @@ $tabDisk.BackColor = [System.Drawing.Color]::FromArgb(40, 40, 45)
 $tabNetwork.BackColor = [System.Drawing.Color]::FromArgb(40, 40, 45)
 $tabCleanup.BackColor = [System.Drawing.Color]::FromArgb(40, 40, 45)
 $tabHardwareMonitor.BackColor = [System.Drawing.Color]::FromArgb(40, 40, 45)
-    
+
 # GroupBox-Farben im Dark Mode
 $gbSystemSecurity.ForeColor = [System.Drawing.Color]::White
 $gbSystemMaintenance.ForeColor = [System.Drawing.Color]::White
@@ -3026,7 +3562,7 @@ function Initialize-ProgressComponents {
         [System.Windows.Forms.ProgressBar]$ProgressBar,
         [System.Windows.Forms.Label]$StatusLabel = $null  # Beibehalten für Rückwärtskompatibilität
     )
-    
+
     $script:progressBar = $ProgressBar
     $script:progressStatusLabel = $StatusLabel
 }
@@ -3037,13 +3573,13 @@ function Start-CheckDISM {
         [System.Windows.Forms.RichTextBox]$outputBox,
         [System.Windows.Forms.ProgressBar]$progressBar
     )
-    
+
     Switch-ToOutputTab -TabControl $tabControl
     $result = Invoke-SystemTool -ToolName "DISM" `
         -Arguments "/Online /Cleanup-Image /CheckHealth" `
         -OutputBox $outputBox `
         -ProgressBar $progressBar
-    
+
     if (-not $result) {
         Write-ToolLog -ToolName "DISM" `
             -Message "DISM CheckHealth fehlgeschlagen." `
@@ -3051,8 +3587,6 @@ function Start-CheckDISM {
             -Color ([System.Drawing.Color]::Red)
     }
 }
-
-
 
 # Erstelle einen Schließen-Button auf dem Hauptformular
 $closeButton = New-Object System.Windows.Forms.Button

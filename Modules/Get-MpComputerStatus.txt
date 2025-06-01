@@ -1,6 +1,0 @@
-﻿Get-MpComputerStatus
-
-Get-MpThreat
-
-Get-MpThreatDetection
-

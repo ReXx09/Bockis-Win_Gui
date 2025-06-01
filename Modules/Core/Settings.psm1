@@ -1,4 +1,4 @@
-# Settings.psm1 - Einstellungsmodul für Bocki's System-Tool
+﻿# Settings.psm1 - Einstellungsmodul für Bocki's System-Tool
 # Autor: Bocki
 
 # Globale Variable für die Einstellungen, wird von der Hauptdatei gesetzt
@@ -128,23 +128,305 @@ function Export-SystemToolSettings {
         Diese Funktion speichert die aktuellen Einstellungen in die Konfigurationsdatei config.json.
     .PARAMETER ConfigPath
         Der Pfad zur Konfigurationsdatei
+    .PARAMETER Silent
+        Wenn gesetzt, wird keine Konsolenausgabe bei erfolgreichem Speichern erzeugt
     .EXAMPLE
         Export-SystemToolSettings -ConfigPath "C:\path\to\config.json"
     #>
     param (
         [Parameter(Mandatory = $true)]
-        [string]$ConfigPath
+        [string]$ConfigPath,
+        
+        [Parameter(Mandatory = $false)]
+        [switch]$Silent = $false
     )
     
     try {
         $settings = Get-SystemToolSettings
         $settings | ConvertTo-Json | Out-File -FilePath $ConfigPath -Encoding UTF8
-        Write-Host "Einstellungen wurden in $ConfigPath gespeichert." -ForegroundColor Green
+        
+        if (-not $Silent) {
+            Write-Host "Einstellungen wurden in $ConfigPath gespeichert." -ForegroundColor Green
+        }
+        
         return $true
     }
     catch {
         Write-Host "Fehler beim Speichern der Einstellungen: $_" -ForegroundColor Red
         return $false
+    }
+}
+
+# Funktionen für das Scan-Historie-Management
+function Update-ScanHistory {
+    <#
+    .SYNOPSIS
+        Aktualisiert die Scan-Historie für ein bestimmtes Tool
+    .DESCRIPTION
+        Diese Funktion aktualisiert die Scan-Historie für ein bestimmtes Tool mit dem aktuellen Zeitstempel
+        und speichert die Änderungen in den Einstellungen.
+    .PARAMETER ToolName
+        Der Name des Tools, für das die Scan-Historie aktualisiert wird
+    .EXAMPLE
+        Update-ScanHistory -ToolName "WindowsDefender"
+    #>
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]$ToolName
+    )
+    # Einstellungen holen
+    $settings = Get-SystemToolSettings
+    
+    # Wenn ScanHistory nicht existiert, initialisieren
+    # Prüfung funktioniert sowohl für PSCustomObject als auch Hashtable
+    $hasScanHistory = if ($settings -is [hashtable]) {
+        $settings.ContainsKey("ScanHistory")
+    }
+    else {
+        $null -ne $settings.PSObject.Properties["ScanHistory"]
+    }
+    
+    if (-not $hasScanHistory) {
+        if ($settings -is [hashtable]) {
+            $settings["ScanHistory"] = @{}
+        }
+        else {
+            # Für PSCustomObject eine neue Eigenschaft hinzufügen
+            $settings | Add-Member -MemberType NoteProperty -Name "ScanHistory" -Value @{} -Force
+        }
+    }
+    # Aktualisiere den Zeitstempel für das angegebene Tool
+    if ($settings["ScanHistory"] -is [hashtable]) {
+        $settings["ScanHistory"][$ToolName] = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+    }
+    else {
+        # Für PSCustomObject - prüfe ob die Eigenschaft existiert, wenn nicht, füge sie hinzu
+        if ($null -eq $settings["ScanHistory"].PSObject.Properties[$ToolName]) {
+            $settings["ScanHistory"] | Add-Member -MemberType NoteProperty -Name $ToolName -Value (Get-Date).ToString("yyyy-MM-dd HH:mm:ss") -Force
+        }
+        else {
+            $settings["ScanHistory"].$ToolName = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+        }
+    }
+    # Einstellungen speichern (im Hintergrund ohne Konsolenausgabe)
+    Export-SystemToolSettings -ConfigPath "$PSScriptRoot\..\..\config.json" -Silent
+}
+
+function Get-ScanHistory {
+    <#
+    .SYNOPSIS
+        Gibt die Scan-Historie für alle oder ein bestimmtes Tool zurück
+    .DESCRIPTION
+        Diese Funktion gibt die Scan-Historie für alle oder ein bestimmtes Tool zurück.
+    .PARAMETER ToolName
+        Der Name des Tools, für das die Scan-Historie abgerufen werden soll (optional)
+    .EXAMPLE
+        Get-ScanHistory -ToolName "WindowsDefender"
+    .EXAMPLE
+        Get-ScanHistory
+    #>
+    param (
+        [Parameter(Mandatory = $false)]
+        [string]$ToolName = $null
+    )
+    # Einstellungen holen
+    $settings = Get-SystemToolSettings
+    
+    # Wenn ScanHistory nicht existiert, leeres Hashtable zurückgeben
+    # Prüfung funktioniert sowohl für PSCustomObject als auch Hashtable
+    $hasScanHistory = if ($settings -is [hashtable]) {
+        $settings.ContainsKey("ScanHistory")
+    }
+    else {
+        $null -ne $settings.PSObject.Properties["ScanHistory"]
+    }
+    
+    if (-not $hasScanHistory) {
+        if ($settings -is [hashtable]) {
+            $settings["ScanHistory"] = @{}
+        }
+        else {
+            # Für PSCustomObject eine neue Eigenschaft hinzufügen
+            $settings | Add-Member -MemberType NoteProperty -Name "ScanHistory" -Value @{} -Force
+        }
+    }
+    # Wenn ToolName angegeben ist, nur diese Historie zurückgeben
+    if ($ToolName) {
+        # Prüfung funktioniert sowohl für PSCustomObject als auch Hashtable
+        $hasToolHistory = if ($settings["ScanHistory"] -is [hashtable]) {
+            $settings["ScanHistory"].ContainsKey($ToolName)
+        }
+        else {
+            $null -ne $settings["ScanHistory"].PSObject.Properties[$ToolName]
+        }
+        
+        if ($hasToolHistory) {
+            return $settings["ScanHistory"].$ToolName
+        }
+        else {
+            return $null
+        }
+    }
+    
+    # Ansonsten die gesamte Historie zurückgeben
+    return $settings["ScanHistory"]
+}
+
+function Get-ScanStatus {
+    <#
+    .SYNOPSIS
+        Ermittelt den Status eines Scans basierend auf dem letzten Ausführungszeitpunkt
+    .DESCRIPTION
+        Diese Funktion gibt den Status eines Scans zurück (Grün/Gelb/Rot), basierend auf dem
+        letzten Ausführungszeitpunkt und den konfigurierbaren Schwellwerten.
+    .PARAMETER ToolName
+        Der Name des Tools, für das der Scan-Status ermittelt werden soll
+    .EXAMPLE
+        Get-ScanStatus -ToolName "WindowsDefender"
+    #>
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]$ToolName
+    )
+    
+    # Status-Farben
+    $greenStatus = [System.Drawing.Color]::FromArgb(50, 205, 50)  # LimeGreen
+    $yellowStatus = [System.Drawing.Color]::FromArgb(255, 215, 0)  # Gold
+    $redStatus = [System.Drawing.Color]::FromArgb(220, 20, 60)  # Crimson
+    
+    # Einstellungen und letzten Scan-Zeitpunkt holen
+    $lastScanTime = Get-ScanHistory -ToolName $ToolName
+    
+    # Wenn kein Scan durchgeführt wurde, Rot zurückgeben
+    if (-not $lastScanTime) {
+        return $redStatus
+    }
+    
+    # Zeitdifferenz berechnen
+    $scanTime = [DateTime]::ParseExact($lastScanTime, "yyyy-MM-dd HH:mm:ss", $null)
+    $timeDiff = (Get-Date) - $scanTime
+    
+    # Schwellwerte abhängig vom Tool definieren
+    switch ($ToolName) {
+        "WindowsDefender" {
+            # Für Windows Defender: grün < 1 Tag, gelb < 7 Tage, sonst rot
+            if ($timeDiff.TotalDays -lt 1) {
+                return $greenStatus
+            }
+            elseif ($timeDiff.TotalDays -lt 7) {
+                return $yellowStatus
+            }
+            else {
+                return $redStatus
+            }
+        }
+        "QuickMRT" {
+            # Für Quick MRT: grün < 7 Tage, gelb < 30 Tage, sonst rot
+            if ($timeDiff.TotalDays -lt 7) {
+                return $greenStatus
+            }
+            elseif ($timeDiff.TotalDays -lt 30) {
+                return $yellowStatus
+            }
+            else {
+                return $redStatus
+            }
+        }
+        "FullMRT" {
+            # Für Full MRT: grün < 30 Tage, gelb < 90 Tage, sonst rot
+            if ($timeDiff.TotalDays -lt 30) {
+                return $greenStatus
+            }
+            elseif ($timeDiff.TotalDays -lt 90) {
+                return $yellowStatus
+            }
+            else {
+                return $redStatus
+            }
+        }
+        "SFC" {
+            # Für SFC: grün < 30 Tage, gelb < 90 Tage, sonst rot
+            if ($timeDiff.TotalDays -lt 30) {
+                return $greenStatus
+            }
+            elseif ($timeDiff.TotalDays -lt 90) {
+                return $yellowStatus
+            }
+            else {
+                return $redStatus
+            }
+        }
+        "MemoryDiag" {
+            # Für MemoryDiag: grün < 90 Tage, gelb < 180 Tage, sonst rot
+            if ($timeDiff.TotalDays -lt 90) {
+                return $greenStatus
+            }
+            elseif ($timeDiff.TotalDays -lt 180) {
+                return $yellowStatus
+            }
+            else {
+                return $redStatus
+            }
+        }
+        "WinUpdate" {
+            # Für WinUpdate: grün < 7 Tage, gelb < 30 Tage, sonst rot
+            if ($timeDiff.TotalDays -lt 7) {
+                return $greenStatus
+            }
+            elseif ($timeDiff.TotalDays -lt 30) {
+                return $yellowStatus
+            }
+            else {
+                return $redStatus
+            }
+        }
+        "DISM" {
+            # Für DISM-Tools: grün < 90 Tage, gelb < 180 Tage, sonst rot
+            if ($timeDiff.TotalDays -lt 90) {
+                return $greenStatus
+            }
+            elseif ($timeDiff.TotalDays -lt 180) {
+                return $yellowStatus
+            }
+            else {
+                return $redStatus
+            }
+        }        "CHKDSK" {
+            # Für CHKDSK: grün < 180 Tage, gelb < 365 Tage, sonst rot
+            if ($timeDiff.TotalDays -lt 180) {
+                return $greenStatus
+            }
+            elseif ($timeDiff.TotalDays -lt 365) {
+                return $yellowStatus
+            }
+            else {
+                return $redStatus
+            }
+        }
+        "DiskCleanup" {
+            # Für DiskCleanup: grün < 7 Tage, gelb < 30 Tage, sonst rot
+            if ($timeDiff.TotalDays -lt 7) {
+                return $greenStatus
+            }
+            elseif ($timeDiff.TotalDays -lt 30) {
+                return $yellowStatus
+            }
+            else {
+                return $redStatus
+            }
+        }
+        default {
+            # Standard für alle anderen Tools: grün < 30 Tage, gelb < 90 Tage, sonst rot
+            if ($timeDiff.TotalDays -lt 30) {
+                return $greenStatus
+            }
+            elseif ($timeDiff.TotalDays -lt 90) {
+                return $yellowStatus
+            }
+            else {
+                return $redStatus
+            }
+        }
     }
 }
 
@@ -388,7 +670,8 @@ function Show-SettingsDialog {
     # Wenn die gespeicherte Einstellung in der Liste ist, verwende sie, ansonsten basierend auf dem aktuellen Modus
     if ($cmbColorScheme.Items.Contains($script:settings.ColorScheme)) {
         $cmbColorScheme.SelectedItem = $script:settings.ColorScheme
-    } else {
+    }
+    else {
         $cmbColorScheme.SelectedItem = if ($isDarkMode) { "Dunkel (Dark Mode)" } else { "Hell (Light Mode)" }
     }
     
@@ -773,10 +1056,9 @@ function Export-WindowPosition {
         $settings.WindowHeight = $MainForm.Height
         $settings.WindowLeft = $MainForm.Left
         $settings.WindowTop = $MainForm.Top
-        
         Set-SystemToolSettings -Settings $settings
-          # Speichere in die Konfigurationsdatei
-        Export-SystemToolSettings -ConfigPath $ConfigPath
+        # Speichere in die Konfigurationsdatei (ohne zusätzliche Konsolenausgabe)
+        Export-SystemToolSettings -ConfigPath $ConfigPath -Silent
         
         Write-Host "Fenstergröße und -position wurden gespeichert: $($MainForm.Width)x$($MainForm.Height) an Position $($MainForm.Left),$($MainForm.Top)" -ForegroundColor Green
     }
@@ -791,3 +1073,6 @@ Export-ModuleMember -Function Export-SystemToolSettings
 Export-ModuleMember -Function Update-SystemToolUI
 Export-ModuleMember -Function Show-SettingsDialog
 Export-ModuleMember -Function Export-WindowPosition
+Export-ModuleMember -Function Update-ScanHistory
+Export-ModuleMember -Function Get-ScanHistory
+Export-ModuleMember -Function Get-ScanStatus
