@@ -19,6 +19,9 @@ function Start-WindowsUpdate {
     # outputBox zuruecksetzen
     $outputBox.Clear()
 
+    # In Log-Datei und Datenbank schreiben, dass Windows Update gestartet wird
+    Write-ToolLog -ToolName "WindowsUpdate" -Message "Windows Update wird gestartet" -OutputBox $outputBox -Color ([System.Drawing.Color]::Blue) -Level "Information" -SaveToDatabase
+
     # ProgressBar initialisieren, wenn vorhanden
     if ($progressBar) {
         $progressBar.Value = 10
@@ -28,14 +31,7 @@ function Start-WindowsUpdate {
 
     Clear-Host
     
-    # Rahmen und Systeminformationen erstellen
-    $computerName = $env:COMPUTERNAME
-    $userName = $env:USERNAME
-    $osInfo = (Get-CimInstance -ClassName Win32_OperatingSystem).Caption
-    $dateTime = Get-Date -Format "dd.MM.yyyy HH:mm:ss"
-    $width = 80
-
-        
+       
     # Rahmen oben
     Write-Host "╔══════════════════════════════════════════════════════════════════════════════╗" -ForegroundColor Green
     Write-ColoredCenteredText                              "Windows Update"                                          
@@ -65,14 +61,14 @@ function Start-WindowsUpdate {
     
     # Rahmen für Systeminformationen
     Write-Host "╔══════════════════════════════════════════════════════════════════════════════╗" -ForegroundColor Green
-    Write-ColoredCenteredText                          "SYSTEMINFORMATIONEN"                                           
+    Write-ColoredCenteredText                          "INFORMATIONEN"                                           
     Write-Host "╠══════════════════════════════════════════════════════════════════════════════╣" -ForegroundColor Green
     # Systeminformationen
     Write-Host "║                                                                              ║" -ForegroundColor Green
-    Write-Host "      ├─    Betriebssystem: $osInfo           "            -ForegroundColor Yellow                 
-    Write-Host "      ├─    Computer:       $computerName     "            -ForegroundColor Yellow                                    
-    Write-Host "      ├─    Benutzer:       $userName         "            -ForegroundColor Yellow                                    
-    Write-Host "      └─    Datum und Zeit: $dateTime         "            -ForegroundColor Yellow                                  
+    Write-Host "  ├─  System aktuell halten mit Windows Update:                                   "  -ForegroundColor Yellow                 
+    Write-Host "  ├─  Installiert Sicherheitsupdates, Fehlerbehebungen und neue Funktionen.       "  -ForegroundColor Yellow                                    
+    Write-Host "  ├─  Regelmäßige Updates verbessern Stabilität und Schutz des Systems.           "  -ForegroundColor Yellow                                    
+    Write-Host "  └─  Empfohlen für eine sichere und leistungsfähige Windows-Umgebung.            "  -ForegroundColor Yellow                                  
     Write-Host "║                                                                              ║" -ForegroundColor Green
     
     Write-Host "╠══════════════════════════════════════════════════════════════════════════════╣" -ForegroundColor Green
@@ -94,26 +90,19 @@ function Start-WindowsUpdate {
         
         # Windows Update NICHT direkt öffnen - stattdessen nur Status anzeigen
         
+    
         Write-ToolLog -ToolName "WindowsUpdate" `
-            -Message "[i] Windows Update wurde in den Einstellungen geöffnet." `
-            -OutputBox $outputBox `
-            -Color ([System.Drawing.Color]::Green) -NoTimestamp
-        
-        Write-Host
-        Write-Host "[i] Windows Update wird in den Einstellungen geöffnet" -ForegroundColor Green  
-
-        Write-ToolLog -ToolName "WindowsUpdate" `
-            -Message "[i] Bitte folgen Sie den Anweisungen in der Windows-Update-Seite,`r`n`tum Updates zu suchen und zu installieren." `
+            -Message "[►] Der Update-Status wird geprüft..." `
             -OutputBox $outputBox `
             -Color ([System.Drawing.Color]::Blue) -NoTimestamp
 
         Write-Host        
-        Write-Host "[i] Bitte folgen Sie den Anweisungen in der Windows-Update-Seite, "  -foregroundColor Green
-        Write-Host "    um Updates zu suchen und zu installieren."  -foregroundColor Green
+        Write-Host "[►] Der Update-Status wird gefrüft... "  -foregroundColor Blue
+        
         
         # Progress auf 50% setzen für die Suchphase
         if ($progressBar) {
-            $progressBar.Value = 50
+            $progressBar.Value = 30
             $progressBar.CustomText = "Windows Update wird ausgeführt..."
         }
         # Versuche den Update-Status abzurufen
@@ -124,13 +113,13 @@ function Start-WindowsUpdate {
             
             # Progress weiter erhöhen, um Fortschritt zu zeigen
             if ($progressBar) {
-                $progressBar.Value = 60
+                $progressBar.Value = 40
                 $progressBar.CustomText = "Update-Status wird geprüft..."
             }
         }
         catch {
             Write-ToolLog -ToolName "WindowsUpdate" `
-                -Message "[i] Info: Update-Status konnte nicht abgerufen werden." `
+                -Message "[►] Info: Update-Status konnte nicht abgerufen werden." `
                 -OutputBox $outputBox `
                 -Color ([System.Drawing.Color]::Yellow) -NoTimestamp
 
@@ -141,7 +130,7 @@ function Start-WindowsUpdate {
             }
 
             Write-Host
-            Write-Host "[i] Info: Update-Status konnte nicht abgerufen werden." -ForegroundColor Red
+            Write-Host "[!] Info: Update-Status konnte nicht abgerufen werden." -ForegroundColor Yellow
         }
     }
     catch {
@@ -158,7 +147,7 @@ function Start-WindowsUpdate {
         }
 
         Write-Host
-        Write-Host "[>] Fehler beim Starten von Windows Update: $_" -ForegroundColor Red
+        Write-Host "[X] Fehler beim Starten von Windows Update: $_" -ForegroundColor Red
     }
 }
 
@@ -172,17 +161,17 @@ function Get-WindowsUpdateStatus {
     try {
         # Progress auf 20% setzen für die Suchphase
         if ($progressBar) {
-            $progressBar.Value = 20
+            $progressBar.Value = 60
             $progressBar.CustomText = "Suche nach Updates..."
             $progressBar.TextColor = [System.Drawing.Color]::DarkBlue
         }
         
         Write-ToolLog -ToolName "WindowsUpdate" `
-            -Message "[>] Suche nach Updates..." `
+            -Message "[►] Suche nach Updates..." `
             -OutputBox $outputBox `
             -Color ([System.Drawing.Color]::Blue) -NoTimestamp
         Write-Host
-        Write-Host "[>] Suche nach Updates..." -ForegroundColor Yellow
+        Write-Host "[►] Suche nach Updates..." -ForegroundColor Blue
 
         # Windows Update COM-Objekte erstellen
         $updateSession = New-Object -ComObject Microsoft.Update.Session
@@ -190,15 +179,15 @@ function Get-WindowsUpdateStatus {
         
         # Suche nach allen verfügbaren Updates
         Write-ToolLog -ToolName "WindowsUpdate" `
-            -Message "[>] Prüfe auf verfügbare Updates..." `
+            -Message "[►] Prüfe auf verfügbare Updates..." `
             -OutputBox $outputBox -NoTimestamp
 
         Write-Host
-        Write-Host "[>] Prüfe auf verfügbare Updates..." -ForegroundColor Yellow   
+        Write-Host "[►] Prüfe auf verfügbare Updates..." -ForegroundColor Blue   
         
         # Progress auf 30% setzen für die Prüfphase
         if ($progressBar) {
-            $progressBar.Value = 30
+            $progressBar.Value = 70
             $progressBar.CustomText = "Prüfe auf Updates..."
         }
             
@@ -208,10 +197,12 @@ function Get-WindowsUpdateStatus {
         $criticalUpdates = $searchResult.Updates | Where-Object { $_.MsrcSeverity -eq "Critical" }
         $securityUpdates = $searchResult.Updates | Where-Object { $_.Type -eq "Security" }
         $normalUpdates = $searchResult.Updates | Where-Object { $_.MsrcSeverity -ne "Critical" -and $_.Type -ne "Security" }
-        
+
+       
+
         # Progress auf 40% setzen
         if ($progressBar) {
-            $progressBar.Value = 40
+            $progressBar.Value = 80
             if ($searchResult.Updates.Count -gt 0) {
                 $progressBar.CustomText = "$($searchResult.Updates.Count) Updates gefunden"
             }
@@ -229,7 +220,7 @@ function Get-WindowsUpdateStatus {
             Write-Host
             Write-Host "          ├─ $($searchResult.Updates.Count) Updates verfügbar:" -ForegroundColor Yellow
             Write-Host
-
+            Write-Host "`n" + ("═" * 70) -ForegroundColor Cyan
             # Kritische Updates anzeigen
             if ($criticalUpdates.Count -gt 0) {
                 Write-ToolLog -ToolName "WindowsUpdate" `
@@ -268,8 +259,6 @@ function Get-WindowsUpdateStatus {
                         -OutputBox $outputBox -NoTimestamp
                 }
             }
-
-            # Update-Historie wurde entfernt - nicht mehr anzeigen
 
         }
         else {
@@ -340,7 +329,7 @@ function Install-AvailableWindowsUpdates {
     # Prüfe, ob das PSWindowsUpdate-Modul installiert ist
     if (Get-Module -ListAvailable -Name PSWindowsUpdate) {
         $outputBox.SelectionColor = [System.Drawing.Color]::Green
-        $outputBox.AppendText("PSWindowsUpdate-Modul gefunden. Updates werden gesucht...\r\n")
+        $outputBox.AppendText("PSWindowsUpdate-Modul gefunden. Updates werden gesucht...`r`n")
         
         # Fortschrittsanzeige aktualisieren
         if ($progressBar) {
@@ -359,7 +348,7 @@ function Install-AvailableWindowsUpdates {
         $updates = Get-WindowsUpdate -AcceptAll -IgnoreReboot
         if ($updates) {
             $outputBox.SelectionColor = [System.Drawing.Color]::Blue
-            $outputBox.AppendText("Updates werden installiert...\r\n")
+            $outputBox.AppendText("Updates werden installiert...`r`n")
             
             # Fortschrittsanzeige aktualisieren
             if ($progressBar) {
@@ -369,7 +358,7 @@ function Install-AvailableWindowsUpdates {
             
             Install-WindowsUpdate -AcceptAll -IgnoreReboot -AutoReboot -Verbose | ForEach-Object {
                 $outputBox.SelectionColor = [System.Drawing.Color]::Black
-                $outputBox.AppendText($_.ToString() + "\r\n")
+                $outputBox.AppendText($_.ToString() + "`r`n")
             }
             
             # Fortschrittsanzeige abschließen
@@ -380,11 +369,11 @@ function Install-AvailableWindowsUpdates {
             }
             
             $outputBox.SelectionColor = [System.Drawing.Color]::Green
-            $outputBox.AppendText("Alle verfügbaren Updates wurden installiert.\r\n")
+            $outputBox.AppendText("Alle verfügbaren Updates wurden installiert.`r`n")
         }
         else {
             $outputBox.SelectionColor = [System.Drawing.Color]::Green
-            $outputBox.AppendText("Keine Updates verfügbar.\r\n")
+            $outputBox.AppendText("Keine Updates verfügbar.`r`n")
             
             # Fortschrittsanzeige abschließen
             if ($progressBar) {
@@ -396,7 +385,7 @@ function Install-AvailableWindowsUpdates {
     }
     else {
         $outputBox.SelectionColor = [System.Drawing.Color]::Orange
-        $outputBox.AppendText("PSWindowsUpdate-Modul nicht gefunden. Verwende Windows Update COM-Objekt...\r\n")
+        $outputBox.AppendText("PSWindowsUpdate-Modul nicht gefunden. Verwende Windows Update COM-Objekt...`r`n")
         
         # Fortschrittsanzeige aktualisieren
         if ($progressBar) {
@@ -418,7 +407,7 @@ function Install-AvailableWindowsUpdates {
             $searchResult = $updateSearcher.Search("IsInstalled=0 AND IsHidden=0")
             if ($searchResult.Updates.Count -gt 0) {
                 $outputBox.SelectionColor = [System.Drawing.Color]::Blue
-                $outputBox.AppendText("Updates werden installiert...\r\n")
+                $outputBox.AppendText("Updates werden installiert...`r`n")
                 
                 # Fortschrittsanzeige aktualisieren
                 if ($progressBar) {
@@ -429,7 +418,7 @@ function Install-AvailableWindowsUpdates {
                 $updatesToInstall = New-Object -ComObject Microsoft.Update.UpdateColl
                 foreach ($update in $searchResult.Updates) {
                     $updatesToInstall.Add($update) | Out-Null
-                    $outputBox.AppendText("- " + $update.Title + "\r\n")
+                    $outputBox.AppendText("- " + $update.Title + "  `r`n")
                 }
                 
                 $installer = $updateSession.CreateUpdateInstaller()
@@ -452,7 +441,7 @@ function Install-AvailableWindowsUpdates {
                     }
                     
                     $outputBox.SelectionColor = [System.Drawing.Color]::Green
-                    $outputBox.AppendText("Alle Updates wurden erfolgreich installiert.\r\n")
+                    $outputBox.AppendText("Alle Updates wurden erfolgreich installiert.`r`n")
                 }
                 else {
                     # Fortschrittsanzeige aktualisieren
@@ -463,7 +452,7 @@ function Install-AvailableWindowsUpdates {
                     }
                     
                     $outputBox.SelectionColor = [System.Drawing.Color]::Red
-                    $outputBox.AppendText("Einige Updates konnten nicht installiert werden.\r\n")
+                    $outputBox.AppendText("Einige Updates konnten nicht installiert werden.`r`n")
                 }
             }
             else {
@@ -475,7 +464,7 @@ function Install-AvailableWindowsUpdates {
                 }
                 
                 $outputBox.SelectionColor = [System.Drawing.Color]::Green
-                $outputBox.AppendText("Keine Updates verfügbar.\r\n")
+                $outputBox.AppendText("Keine Updates verfügbar.`r`n")
             }
         }
         catch {
@@ -487,32 +476,32 @@ function Install-AvailableWindowsUpdates {
             }
             
             $outputBox.SelectionColor = [System.Drawing.Color]::Red
-            $outputBox.AppendText("Fehler beim Installieren der Updates: $_\r\n")
+            $outputBox.AppendText("Fehler beim Installieren der Updates: $_`r`n")
             
             # Zusätzliche Fehlerinformationen versuchen zu sammeln
             try {
                 $wuauserv = Get-Service -Name "wuauserv"
                 $outputBox.SelectionColor = [System.Drawing.Color]::Yellow
-                $outputBox.AppendText("Windows Update Dienst Status: $($wuauserv.Status)\r\n")
+                $outputBox.AppendText("Windows Update Dienst Status: $($wuauserv.Status)`r`n")
                 
                 if ($wuauserv.Status -ne "Running") {
-                    $outputBox.AppendText("Versuche Windows Update Dienst zu starten...\r\n")
+                    $outputBox.AppendText("Versuche Windows Update Dienst zu starten...`r`n")
                     Start-Service -Name "wuauserv"
                     $outputBox.SelectionColor = [System.Drawing.Color]::Green
-                    $outputBox.AppendText("Bitte versuchen Sie die Updatesuche erneut.\r\n")
+                    $outputBox.AppendText("Bitte versuchen Sie die Updatesuche erneut.`r`n")
                 }
             }
             catch {
                 $outputBox.SelectionColor = [System.Drawing.Color]::Red
-                $outputBox.AppendText("Zusätzlicher Fehler beim Prüfen des Update-Dienstes: $_\r\n")
+                $outputBox.AppendText("Zusätzlicher Fehler beim Prüfen des Update-Dienstes: $_`r`n")
             }
         }
     }
     
     # Abschluss-Meldung am Ende hinzufügen, unabhängig vom Pfad
     $outputBox.SelectionColor = [System.Drawing.Color]::Green
-    $outputBox.AppendText("\r\n=== Windows Update-Prozess abgeschlossen ===\r\n")
-    $outputBox.AppendText("Fertig!\r\n")
+    $outputBox.AppendText("`r`n=== Windows Update-Prozess abgeschlossen ===`r`n")
+    $outputBox.AppendText("Fertig!`r`n")
     
     # Stelle sicher, dass am Ende die ProgressBar auf 100% ist
     if ($progressBar) {

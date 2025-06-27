@@ -533,13 +533,13 @@ function Update-SystemToolUI {
         }
         if ($settings.RamThreshold -ne $null) {
             $script:ramThreshold = [int]$settings.RamThreshold
-        }
-        if ($settings.GpuThreshold -ne $null) {
+        }        if ($settings.GpuThreshold -ne $null) {
             # GPU-Schwellenwert hinzufügen
             $script:gpuThreshold = [int]$settings.GpuThreshold
         }
         
-        Write-Host "`r[+] Einstellungen wurden erfolgreich angewendet." -ForegroundColor Green
+        # Die Meldung wird jetzt in der GUI-Initialisierung angezeigt
+        # Write-Host "`r[+] Einstellungen wurden erfolgreich angewendet." -ForegroundColor Green
         return $true
     }
     catch {
@@ -802,7 +802,6 @@ function Show-SettingsDialog {
     $txtLogPath.Size = New-Object System.Drawing.Size(250, 25)
     $txtLogPath.Text = $script:settings.LogPath  # Aktuelle Einstellung laden
     $tabLogs.Controls.Add($txtLogPath)
-    
     $btnBrowseLogPath = New-Object System.Windows.Forms.Button
     $btnBrowseLogPath.Text = "..."
     $btnBrowseLogPath.Location = New-Object System.Drawing.Point(410, 100)
@@ -817,6 +816,147 @@ function Show-SettingsDialog {
             }
         })
     $tabLogs.Controls.Add($btnBrowseLogPath)
+    
+    # Reset-Logs Button
+    $btnResetLogs = New-Object System.Windows.Forms.Button
+    $btnResetLogs.Text = "Alle Logs zurücksetzen"
+    $btnResetLogs.Location = New-Object System.Drawing.Point(15, 140)
+    $btnResetLogs.Size = New-Object System.Drawing.Size(150, 30)
+    $btnResetLogs.BackColor = [System.Drawing.Color]::FromArgb(220, 53, 69)  # Rot für Lösch-Aktion
+    $btnResetLogs.ForeColor = [System.Drawing.Color]::White
+    $btnResetLogs.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+    $btnResetLogs.Add_Click({
+            # Bestätigungsdialog anzeigen
+            $result = [System.Windows.Forms.MessageBox]::Show(
+                "Möchten Sie wirklich alle Log-Dateien zurücksetzen?`n`nDiese Aktion kann nicht rückgängig gemacht werden.`n`nFolgende Logs werden gelöscht:`n• CHKDSK.log`n• DISM-Check.log`n• DISM-Scan.log`n• FullMRT.log`n• QuickMRT.log`n• SFCCheck.log`n• WindowsDefender.log`n• WindowsUpdate.log`n• DefenderOfflineScan.log`n• gui_closing.log",
+                "Logs zurücksetzen",
+                [System.Windows.Forms.MessageBoxButtons]::YesNo,
+                [System.Windows.Forms.MessageBoxIcon]::Warning
+            )
+            
+            if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
+                try {
+                    # Log-Verzeichnis aus dem aktuellen Skript-Pfad ableiten
+                    $logsPath = Join-Path -Path $PSScriptRoot -ChildPath "..\..\Logs"
+                    $resolvedLogsPath = Resolve-Path $logsPath -ErrorAction SilentlyContinue
+                    
+                    if ($resolvedLogsPath) {
+                        $logsFolder = $resolvedLogsPath.Path
+                    }
+                    else {
+                        $logsFolder = $logsPath
+                    }
+                    
+                    # Liste der zu löschenden Log-Dateien
+                    $logFiles = @(
+                        "CHKDSK.log",
+                        "DefenderOfflineScan.log", 
+                        "DISM-Check.log",
+                        "DISM-Scan.log",
+                        "FullMRT.log",
+                        "gui_closing.log",
+                        "QuickMRT.log",
+                        "SFCCheck.log",
+                        "WindowsDefender.log",
+                        "WindowsUpdate.log"
+                    )
+                    
+                    $deletedCount = 0
+                    $errors = @()
+                    
+                    foreach ($logFile in $logFiles) {
+                        $fullPath = Join-Path -Path $logsFolder -ChildPath $logFile
+                        
+                        if (Test-Path $fullPath) {
+                            try {
+                                Remove-Item -Path $fullPath -Force
+                                $deletedCount++
+                                Write-Host "Log-Datei gelöscht: $logFile" -ForegroundColor Green
+                            }
+                            catch {
+                                $errors += "Fehler beim Löschen von $logFile`: $_"
+                                Write-Host "Fehler beim Löschen von $logFile`: $_" -ForegroundColor Red
+                            }
+                        }
+                        else {
+                            Write-Host "Log-Datei nicht gefunden: $logFile" -ForegroundColor Yellow
+                        }
+                    }
+                    
+                    # Ergebnis anzeigen
+                    if ($errors.Count -eq 0) {
+                        [System.Windows.Forms.MessageBox]::Show(
+                            "Erfolgreich $deletedCount Log-Dateien zurückgesetzt.`n`nAlle Logs wurden aus dem Verzeichnis gelöscht:`n$logsFolder",
+                            "Logs erfolgreich zurückgesetzt",
+                            [System.Windows.Forms.MessageBoxButtons]::OK,
+                            [System.Windows.Forms.MessageBoxIcon]::Information
+                        )
+                    }
+                    else {
+                        $errorMessage = "Log-Reset teilweise erfolgreich:`n`n$deletedCount Dateien gelöscht.`n`nFehler:`n" + ($errors -join "`n")
+                        [System.Windows.Forms.MessageBox]::Show(
+                            $errorMessage,
+                            "Log-Reset mit Fehlern",
+                            [System.Windows.Forms.MessageBoxButtons]::OK,
+                            [System.Windows.Forms.MessageBoxIcon]::Warning
+                        )
+                    }
+                }
+                catch {
+                    [System.Windows.Forms.MessageBox]::Show(
+                        "Fehler beim Zurücksetzen der Logs:`n`n$_",
+                        "Fehler",
+                        [System.Windows.Forms.MessageBoxButtons]::OK,
+                        [System.Windows.Forms.MessageBoxIcon]::Error
+                    )
+                }
+            }
+        })
+    $tabLogs.Controls.Add($btnResetLogs)
+    
+    # Log-Ordner öffnen Button
+    $btnOpenLogFolder = New-Object System.Windows.Forms.Button
+    $btnOpenLogFolder.Text = "Log-Ordner öffnen"
+    $btnOpenLogFolder.Location = New-Object System.Drawing.Point(175, 140)
+    $btnOpenLogFolder.Size = New-Object System.Drawing.Size(120, 30)
+    $btnOpenLogFolder.BackColor = [System.Drawing.Color]::FromArgb(40, 167, 69)  # Grün für Info-Aktion
+    $btnOpenLogFolder.ForeColor = [System.Drawing.Color]::White
+    $btnOpenLogFolder.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+    $btnOpenLogFolder.Add_Click({
+            try {
+                # Log-Verzeichnis aus dem aktuellen Skript-Pfad ableiten
+                $logsPath = Join-Path -Path $PSScriptRoot -ChildPath "..\..\Logs"
+                $resolvedLogsPath = Resolve-Path $logsPath -ErrorAction SilentlyContinue
+                
+                if ($resolvedLogsPath) {
+                    $logsFolder = $resolvedLogsPath.Path
+                }
+                else {
+                    $logsFolder = $logsPath
+                }
+                
+                if (Test-Path $logsFolder) {
+                    Start-Process "explorer.exe" -ArgumentList $logsFolder
+                }
+                else {
+                    [System.Windows.Forms.MessageBox]::Show(
+                        "Log-Ordner nicht gefunden:`n$logsFolder",
+                        "Ordner nicht gefunden",
+                        [System.Windows.Forms.MessageBoxButtons]::OK,
+                        [System.Windows.Forms.MessageBoxIcon]::Warning
+                    )
+                }
+            }
+            catch {
+                [System.Windows.Forms.MessageBox]::Show(
+                    "Fehler beim Öffnen des Log-Ordners:`n`n$_",
+                    "Fehler",
+                    [System.Windows.Forms.MessageBoxButtons]::OK,
+                    [System.Windows.Forms.MessageBoxIcon]::Error
+                )
+            }
+        })
+    $tabLogs.Controls.Add($btnOpenLogFolder)
     
     # Tab 4: Verhalten
     $tabBehavior = New-Object System.Windows.Forms.TabPage

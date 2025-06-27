@@ -9,8 +9,42 @@ Add-Type -AssemblyName WindowsFormsIntegration
 # Settings-Modul importieren
 Import-Module "$PSScriptRoot\Modules\Core\Settings.psm1" -Force
 
+# LogManager-Modul importieren
+Import-Module "$PSScriptRoot\Modules\Core\LogManager.psm1" -Force
+
 # Globale Einstellungen - werden vom Settings-Modul verwaltet
 $script:settings = $null
+
+# Globale Datenbankverbindung
+$script:dbConnection = $null
+
+# Funktion zum Initialisieren der Systemdatenbank - wird früher definiert, damit sie überall verfügbar ist
+function Initialize-SystemDatabase {
+    try {
+        # Prüfe, ob das DatabaseManager-Modul geladen ist
+        if (-not (Get-Command -Name Initialize-Database -ErrorAction SilentlyContinue)) {
+            Write-Host "Lade DatabaseManager Modul..." -ForegroundColor Yellow
+            Import-Module "$PSScriptRoot\Modules\DatabaseManager.psm1" -Force
+        }
+
+        # Initialisiere die Datenbank und speichere die Verbindung in der globalen Variable
+        $script:dbConnection = Initialize-Database
+        
+        if ($script:dbConnection) {
+            # Die Meldung wird jetzt in der GUI-Initialisierung angezeigt
+            # Write-Host "Datenbankverbindung erfolgreich initialisiert" -ForegroundColor Green
+            return $true
+        }
+        else {
+            Write-Host "Fehler beim Initialisieren der Datenbankverbindung" -ForegroundColor Red
+            return $false
+        }
+    }
+    catch {
+        Write-Host "Fehler beim Initialisieren der Datenbank: $_" -ForegroundColor Red
+        return $false
+    }
+}
 
 # Laden der Einstellungen aus der Konfigurationsdatei, falls vorhanden
 function Import-Settings {
@@ -21,7 +55,7 @@ function Import-Settings {
 }
 
 # Einstellungen beim Programmstart laden
-Import-Settings
+$null = Import-Settings
 
 # Einstellungen auf die Benutzeroberfläche anwenden
 function Update-Settings {
@@ -75,9 +109,13 @@ function Write-ToolLog {
         [string]$Message,
         [System.Windows.Forms.RichTextBox]$OutputBox,
         [System.Drawing.Color]$Color = [System.Drawing.Color]::Black,
-        [switch]$NoTimestamp
+        [ValidateSet('Information', 'Warning', 'Error', 'Success')]
+        [string]$Level = 'Information',
+        [switch]$NoTimestamp,
+        [switch]$SaveToDatabase
     )
 
+    # Ausgabe in der RichTextBox
     $OutputBox.SelectionColor = $Color
     if ($NoTimestamp) {
         $OutputBox.AppendText("$Message`r`n")
@@ -85,6 +123,37 @@ function Write-ToolLog {
     else {
         $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
         $OutputBox.AppendText("[$timestamp] [$ToolName] $Message`r`n")
+    }
+
+    # Verwende LogManager, um in die Logdatei zu schreiben
+    if (Get-Command -Name 'Write-ToolLog' -Module 'LogManager' -ErrorAction SilentlyContinue) {
+        & (Get-Command -Name 'Write-ToolLog' -Module 'LogManager') `
+            -ToolName $ToolName `
+            -Message $Message `
+            -Level $Level `
+            -NoTimestamp:$NoTimestamp
+    }
+
+    # Speichere in der Datenbank, wenn angefordert
+    if ($SaveToDatabase -and $script:dbConnection) {
+        # Konvertiere Color/Level zur Ergebnis-Darstellung
+        $result = switch ($Level) {
+            'Error' { "Fehler" }
+            'Warning' { "Warnung" }
+            'Success' { "Erfolgreich" }
+            default { "Information" }
+        }
+        
+        # Exitcode basierend auf Level
+        $exitCode = switch ($Level) {
+            'Error' { 1 }
+            'Warning' { 2 }
+            'Success' { 0 }
+            default { 0 }
+        }
+        
+        # In Datenbank speichern
+        Save-DiagnosticToDatabase -ToolName $ToolName -Result $result -ExitCode $exitCode -Details $Message
     }
 }
 
@@ -140,11 +209,6 @@ Show-SystemToolLogo
 $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
 $modulesPath = Join-Path -Path $scriptPath -ChildPath "Modules"
 
-# Initialisierung der Debug-Variablen
-$script:cpuDebugEnabled = $false
-$script:gpuDebugEnabled = $false
-$script:ramDebugEnabled = $false
-
 # Stelle sicher, dass das Modules-Verzeichnis existiert
 if (-not (Test-Path $modulesPath)) {
     Write-Host "Erstelle Modules-Verzeichnis..." -ForegroundColor Yellow
@@ -160,6 +224,7 @@ $moduleOrder = @(
     'Core\Core                    ', # Basis-Funktionalitäten
     'Core\UI                      ', # UI-Komponenten
     'Core\ProgressBarTools        ', # ProgressBar-Funktionalitäten
+    'Core\LogManager              ', # Logging-Funktionalitäten
     'Monitor\HardwareMonitorTools ', # Hardware-Monitor-Tools
     'SystemInfo                   ', # System-Informationen
     'Tools\SystemTools            ', # System-Tools
@@ -230,13 +295,12 @@ for ($i = 0; $i -lt $totalModules; $i++) {
         # Prüfe ob Modul-Datei existiert
         if (-not (Test-Path $modulePath)) {
             throw "Modul-Datei nicht gefunden: $modulePath"
-        }
-
-        # Extrahiere den reinen Modulnamen ohne Pfad für Remove-Module
+        }        # Extrahiere den reinen Modulnamen ohne Pfad für Remove-Module
         $moduleNameOnly = $moduleClean.Split('\')[-1].Trim()
 
         # Versuche vorhandenes Modul zu entfernen
-        if (Get-Module $moduleNameOnly) {
+        $existingModule = Get-Module $moduleNameOnly
+        if ($existingModule) {
             Remove-Module $moduleNameOnly -Force -ErrorAction SilentlyContinue
         }
 
@@ -286,7 +350,7 @@ if ($missingModules.Count -gt 0) {
 
 # PowerShell-Fenster anpassen - mit Fehlerbehandlung
 try {
-    # Aktuelle Fenstergröße abrufen (nicht direkt verwendet, aber für Debugging nützlich)
+    # Aktuelle Fenstergröße abrufen
     $currentBufferSize = $Host.UI.RawUI.BufferSize
 
     # Neue Fenstergröße setzen (nicht größer als der aktuelle Puffer)
@@ -319,7 +383,7 @@ Write-Host "`n" + ("═" * 70) -ForegroundColor Cyan
 
 # Erstelle das Hauptformular
 $mainform = New-Object System.Windows.Forms.Form
-$mainform.Text = "Bocki's System-Tool 3.0"
+$mainform.Text = "Bocki's System-Tool 3.1"
 $mainform.Size = New-Object System.Drawing.Size(1000, 900)
 $mainform.StartPosition = "Manual"  # Manuelle Positionierung aktivieren
 
@@ -393,16 +457,13 @@ public struct RECT
 
 # Funktion zum Suchen von PowerShell-Fenstern
 function Find-PowerShellWindow {
-    if (-not (Initialize-WindowPositioning)) {
-        # Debug-Meldung entfernt
+    $null = Initialize-WindowPositioning    if (-not $script:positioningInitialized) {
         return [IntPtr]::Zero
     }
 
     try {
-        # Zuerst versuchen wir die Standard GetConsoleWindow-Methode
-        $consoleHandle = [NativeMethods]::GetConsoleWindow()
+        # Zuerst versuchen wir die Standard GetConsoleWindow-Methode        $consoleHandle = [NativeMethods]::GetConsoleWindow()
         if ($consoleHandle -ne [IntPtr]::Zero) {
-            # Debug-Meldung entfernt
             return $consoleHandle
         }
 
@@ -417,21 +478,15 @@ function Find-PowerShellWindow {
             # Prüfen, ob das Fenster sichtbar ist
             if (-not [NativeMethods]::IsWindowVisible($hwnd)) {
                 return $true  # Weiter zum nächsten Fenster
-            }
-
-            # Den Fenstertitel abrufen
+            }            # Den Fenstertitel abrufen und prüfen
             $sb = New-Object System.Text.StringBuilder(256)
             [void][NativeMethods]::GetWindowText($hwnd, $sb, $sb.Capacity)
-            $windowTitle = $sb.ToString()
 
             # Wenn der Titel Powershell, pwsh oder System-Tool enthält, haben wir es
-            if ($windowTitle -match "PowerShell|pwsh|Windows PowerShell|System Tools") {
-                # Debug-Meldung entfernt
+            if ($sb.ToString() -match "PowerShell|pwsh|Windows PowerShell|System Tools") {
                 $script:psWindowHandle = $hwnd
                 return $false  # Stoppe die Enumeration
-            }
-
-            # Fensterhandle zur Liste hinzufügen für spätere Verwendung
+            }            # Fensterhandle zur Liste hinzufügen für spätere Verwendung
             $script:windowList.Add($hwnd)
 
             return $true  # Weiter zum nächsten Fenster
@@ -449,11 +504,9 @@ function Find-PowerShellWindow {
         }
 
         # Keine PowerShell-Fenster gefunden
-        # Debug-Meldung entfernt
         return [IntPtr]::Zero
     }
     catch {
-        # Debug-Meldung entfernt
         return [IntPtr]::Zero
     }
 }
@@ -461,7 +514,8 @@ function Find-PowerShellWindow {
 # Initiale Positionierung
 function Set-WindowPosition {
     try {
-        if (-not (Initialize-WindowPositioning)) {
+        $null = Initialize-WindowPositioning
+        if (-not $script:positioningInitialized) {
             $mainform.StartPosition = "CenterScreen"
             return
         }
@@ -498,32 +552,31 @@ function Set-WindowPosition {
 
         # Wenn keine gespeicherten Werte verwendet werden oder diese ungültig sind,
         # positioniere das Fenster neben dem Konsolenfenster wie bisher
-        $consoleHandle = Find-PowerShellWindow
-
-        # Prüfen, ob das Konsolenfenster gefunden wurde
+        $consoleHandle = Find-PowerShellWindow        # Prüfen, ob das Konsolenfenster gefunden wurde
         if ($consoleHandle -eq [IntPtr]::Zero) {
-            # Debug-Meldung entfernt
             $mainform.StartPosition = "CenterScreen"
             return
         }
 
         # Konsolenfenster in den Vordergrund bringen, um sicherzustellen, dass es sichtbar ist
-        [NativeMethods]::ShowWindow($consoleHandle, [NativeMethods]::SW_RESTORE)
-        [NativeMethods]::SetForegroundWindow($consoleHandle)
-
-        # Warten, um sicherzustellen, dass Windows Zeit hat, das Fenster anzuzeigen
-        Start-Sleep -Milliseconds 200
-
-        # Konsolenfenstergröße ermitteln
-        $rect = New-Object RECT
-        if (-not [NativeMethods]::GetWindowRect($consoleHandle, [ref]$rect)) {
-            # Debug-Meldung entfernt
+        try {
+            [NativeMethods]::ShowWindow($consoleHandle, [NativeMethods]::SW_RESTORE)
+            [NativeMethods]::SetForegroundWindow($consoleHandle)
+        }
+        catch {
+            # Bei Fehlern bei den API-Aufrufen, verwende Standardpositionierung
             $mainform.StartPosition = "CenterScreen"
             return
         }
 
-        # Fenstergröße und Position ausgeben (für Debugging)
-        # Debug-Meldung entfernt
+        # Warten, um sicherzustellen, dass Windows Zeit hat, das Fenster anzuzeigen
+        Start-Sleep -Milliseconds 200
+
+        # Konsolenfenstergröße ermitteln$rect = New-Object RECT
+        if (-not [NativeMethods]::GetWindowRect($consoleHandle, [ref]$rect)) {
+            $mainform.StartPosition = "CenterScreen"
+            return
+        }
 
         # GUI-Fenster rechts neben dem Konsolenfenster positionieren
         $guiLeft = $rect.Right + 10
@@ -543,10 +596,9 @@ function Set-WindowPosition {
             if ($guiTop + $mainform.Height -gt $screenHeight) {
                 $mainform.StartPosition = "CenterScreen"
                 return
-            }
+            }        
         }
 
-        # Debug-Meldung entfernt
         $mainform.Location = New-Object System.Drawing.Point($guiLeft, $guiTop)
 
         # Speichere initiale Position
@@ -560,7 +612,7 @@ function Set-WindowPosition {
 }
 
 # GUI-Fenster positionieren
-Set-WindowPosition
+$null = Set-WindowPosition
 
 $mainform.Font = New-Object System.Drawing.Font("Segoe UI", 10)
 $mainform.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::None  # Kein Rahmen
@@ -578,7 +630,7 @@ $script:mouseOffset = New-Object System.Drawing.Point
 
 # Titel-Label
 $titleLabel = New-Object System.Windows.Forms.Label
-$titleLabel.Text = "Bocki's System-Tool 3.0"
+$titleLabel.Text = "Bocki's System-Tool 3.1"
 $titleLabel.ForeColor = [System.Drawing.Color]::White
 $titleLabel.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
 $titleLabel.Location = New-Object System.Drawing.Point(10, 5)
@@ -965,64 +1017,22 @@ $ramLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
 $ramLabel.BackColor = [System.Drawing.Color]::Lavender
 $gbRAM.Controls.Add($ramLabel)
 
-# Debug-Buttons für die Hardware-Komponenten
-$btnDebugCPU = New-Object System.Windows.Forms.Button
-$btnDebugCPU.Text = "?"
-$btnDebugCPU.Size = New-Object System.Drawing.Size(25, 20)
-$btnDebugCPU.Location = New-Object System.Drawing.Point(265, 0)
-$btnDebugCPU.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
-$btnDebugCPU.BackColor = [System.Drawing.Color]::LightGray
-$btnDebugCPU.Add_Click({
-        $script:cpuDebugEnabled = -not $script:cpuDebugEnabled
-        Set-HardwareDebugMode -Component 'CPU' -Enabled $script:cpuDebugEnabled
-        $this.BackColor = if ($script:cpuDebugEnabled) { [System.Drawing.Color]::LightGreen } else { [System.Drawing.Color]::LightGray }
-    })
-$gbCPU.Controls.Add($btnDebugCPU)
-$btnDebugCPU.BringToFront()  # CPU-Panel in den Vordergrund
+# Datenbank initialisieren vor der Hardware-Monitorinitialisierung
+$null = Initialize-SystemDatabase
 
-$btnDebugGPU = New-Object System.Windows.Forms.Button
-$btnDebugGPU.Text = "?"
-$btnDebugGPU.Size = New-Object System.Drawing.Size(25, 20)
-$btnDebugGPU.Location = New-Object System.Drawing.Point(265, 0)
-$btnDebugGPU.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
-$btnDebugGPU.BackColor = [System.Drawing.Color]::LightGray
-$btnDebugGPU.Add_Click({
-        $script:gpuDebugEnabled = -not $script:gpuDebugEnabled
-        Set-HardwareDebugMode -Component 'GPU' -Enabled $script:gpuDebugEnabled
-        $this.BackColor = if ($script:gpuDebugEnabled) { [System.Drawing.Color]::LightGreen } else { [System.Drawing.Color]::LightGray }
-    })
-$gbGPU.Controls.Add($btnDebugGPU)
-$btnDebugGPU.BringToFront()  # GPU-Panel in den Vordergrund
-
-$btnDebugRAM = New-Object System.Windows.Forms.Button
-$btnDebugRAM.Text = "?"
-$btnDebugRAM.Size = New-Object System.Drawing.Size(25, 20)
-$btnDebugRAM.Location = New-Object System.Drawing.Point(265, 0)
-$btnDebugRAM.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
-$btnDebugRAM.BackColor = [System.Drawing.Color]::LightGray
-$btnDebugRAM.Add_Click({
-        $script:ramDebugEnabled = -not $script:ramDebugEnabled
-        Set-HardwareDebugMode -Component 'RAM' -Enabled $script:ramDebugEnabled
-        $this.BackColor = if ($script:ramDebugEnabled) { [System.Drawing.Color]::LightGreen } else { [System.Drawing.Color]::LightGray }
-    })
-$gbRAM.Controls.Add($btnDebugRAM)
-$btnDebugRAM.BringToFront()  # RAM-Panel in den Vordergrund
-
-# Tooltip für die Debug-Buttons erstellen
+# Tooltip für bessere Benutzererfahrung hinzufügen - VOR Hardware-Initialisierung!
 if (-not $tooltipObj) {
     $tooltipObj = New-Object System.Windows.Forms.ToolTip
     $tooltipObj.IsBalloon = $true
-    $tooltipObj.ToolTipTitle = "Debug-Information"
+    $tooltipObj.ToolTipTitle = "Information"
+    $tooltipObj.ToolTipIcon = [System.Windows.Forms.ToolTipIcon]::Info
     $tooltipObj.InitialDelay = 500
     $tooltipObj.AutoPopDelay = 5000
+    # Aktivierung wird später nach vollständigem GUI-Laden durchgeführt
+    
+    # Setze auch als Script-Variable für globale Verfügbarkeit
+    $script:globalTooltip = $tooltipObj
 }
-
-# Tooltips für Debug-Buttons setzen
-$tooltipObj.SetToolTip($btnDebugCPU, "Debug-Modus für CPU-Monitoring aktivieren/deaktivieren")
-$tooltipObj.SetToolTip($btnDebugGPU, "Debug-Modus für GPU-Monitoring aktivieren/deaktivieren")
-$tooltipObj.SetToolTip($btnDebugRAM, "Debug-Modus für RAM-Monitoring aktivieren/deaktivieren")
-
-
 
 # Timer für Hardware-Updates initialisieren
 $hardwareResult = Initialize-HardwareMonitoring `
@@ -1033,7 +1043,8 @@ $hardwareResult = Initialize-HardwareMonitoring `
     -gbGPU $gbGPU `
     -gbRAM $gbRAM `
     -WaitForGuiLoaded `
-    -LoadDelayMs 3000
+    -LoadDelayMs 3000 `
+    -GlobalTooltip $tooltipObj
 
 # Prüfen ob Hardware-Initialisierung erfolgreich war
 if (-not $hardwareResult) {
@@ -1046,35 +1057,24 @@ $script:isClosing = $false
 $script:closeAttempts = 0
 $script:maxCloseAttempts = 3
 
-# Globale Variablen für Logging
-$script:logPath = Join-Path $PSScriptRoot "gui_closing.log"
-$script:maxLogSize = 1MB  # Maximale Größe des Log-Files
-$script:maxLogEntries = 100  # Maximale Anzahl der Log-Einträge
+# Logging wird vollständig durch das LogManager-System verwaltet
+# Keine lokalen Log-Variablen mehr nötig
 
-# Funktion zum Initialisieren der Log-Datei
+# Funktion zum Initialisieren der Log-Datei - nutzt ausschließlich das LogManager-System
 function Initialize-LogFile {
-    if (Test-Path $script:logPath) {
-        # Erstelle Backup des alten Logs
-        $backupPath = $script:logPath + ".bak"
-        if (Test-Path $backupPath) {
-            Remove-Item $backupPath -Force
-        }
-        Rename-Item -Path $script:logPath -NewName ($script:logPath + ".bak") -Force
+    try {
+        # Initialisiere das GUI-Closing-Log über das LogManager-System
+        Initialize-GuiClosingLog
+        Write-Verbose "GUI-Closing-Log erfolgreich über LogManager initialisiert"
+        return $true
     }
-
-    # Erstelle neue Log-Datei mit Header
-    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    @"
-=== System-Tool Log ===
-Erstellt am: $timestamp
-Maximale Größe: 1MB
-Maximale Einträge: 100
-=====================
-
-"@ | Out-File -FilePath $script:logPath -Encoding UTF8
+    catch {
+        Write-Warning "Fehler beim Initialisieren des GUI-Closing-Logs über LogManager: $_"
+        return $false
+    }
 }
 
-# Funktion zum Verwalten der Log-Datei
+# Funktion zum Verwalten der Log-Datei - nutzt jetzt das LogManager-System
 function Update-LogFile {
     param(
         [string]$Message,
@@ -1082,28 +1082,17 @@ function Update-LogFile {
     )
 
     try {
-        # Prüfe ob Log-Datei existiert
-        if (-not (Test-Path $script:logPath)) {
-            Initialize-LogFile
-        }
-
-        # Prüfe Größe und Einträge
-        $logItem = Get-Item $script:logPath -ErrorAction SilentlyContinue
-        if ($logItem -and ($logItem.Length -gt $script:maxLogSize)) {
-            Initialize-LogFile
-        }
-
-        # Füge neuen Log-Eintrag hinzu
-        $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-        $logEntry = "`n=== GUI Closing Log $timestamp ===`n"
-        if ($IsError) {
-            $logEntry += "[ERROR] "
-        }
-        $logEntry += $Message
-        $logEntry | Add-Content -Path $script:logPath -Encoding UTF8
+        # Bestimme den Log-Level basierend auf dem IsError-Parameter
+        $level = if ($IsError) { 'Error' } else { 'Information' }
+        
+        # Verwende das LogManager-System für GUI-Closing-Logs
+        Write-GuiClosingLog -Message $Message -Level $level
+        
+        return $true
     }
     catch {
-        Write-Warning "Fehler beim Schreiben des Logs: $_"
+        Write-Warning "Fehler beim Schreiben des Logs über LogManager: $_"
+        return $false
     }
 }
 
@@ -1136,6 +1125,13 @@ function Close-FormSafely {
             $script:hardwareTimer.Stop()
             $script:hardwareTimer.Dispose()
             $script:hardwareTimer = $null
+        }
+
+        # Datenbankverbindung schließen
+        if ($null -ne $script:dbConnection) {
+            Write-Host "Close-FormSafely: Schließe Datenbankverbindung..."
+            Update-LogFile -Message "Close-FormSafely: Datenbankverbindung wird geschlossen"
+            Close-SystemDatabase
         }
 
         # Controls deaktivieren
@@ -1503,13 +1499,13 @@ $tblNetwork.Controls.Add($gbNetworkRepair)
 
 # GroupBoxes für Cleanup-Tab erstellen
 $gbCleanupSystem = New-Object System.Windows.Forms.GroupBox
-$gbCleanupSystem.Text = "System-Bereinigung"
+$gbCleanupSystem.Text = "Schnelle Bereinigung"
 $gbCleanupSystem.Location = New-Object System.Drawing.Point(30, 15)
 $gbCleanupSystem.Size = New-Object System.Drawing.Size(440, 95)
 $tblCleanup.Controls.Add($gbCleanupSystem)
 
 $gbCleanupTemp = New-Object System.Windows.Forms.GroupBox
-$gbCleanupTemp.Text = "Temporäre Dateien"
+$gbCleanupTemp.Text = "Erweiterte Bereinigung"
 $gbCleanupTemp.Location = New-Object System.Drawing.Point(500, 15)
 $gbCleanupTemp.Size = New-Object System.Drawing.Size(440, 95)
 $tblCleanup.Controls.Add($gbCleanupTemp)
@@ -1639,10 +1635,8 @@ public class TextProgressBar : ProgressBar
 }
 "@ -ReferencedAssemblies "System.Windows.Forms", "System.Drawing"
 
-# Entferne das alte Status-Label
-# $progressStatusLabel.Dispose()
+# Initialisiere die TextProgressBar
 
-# Erstelle die neue TextProgressBar anstelle der alten ProgressBar
 $progressBar = New-Object TextProgressBar
 $progressBar.Location = New-Object System.Drawing.Point(190, 795)
 $progressBar.Size = New-Object System.Drawing.Size(650, 30)
@@ -2059,9 +2053,8 @@ $btnMemoryDiag.Add_Click({
         Switch-ToOutputTab -TabControl $tabControl
         # Status auf "Memory Diagnostic wird gestartet..." setzen
         Update-ProgressStatus -StatusText "Memory Diagnostic wird gestartet..." -ProgressValue 0 -TextColor ([System.Drawing.Color]::DarkBlue)
-        Start-MemoryDiagnostic -outputBox $outputBox
-        # Nach dem Start Status auf "Fertig" setzen
-        Update-ProgressStatus -StatusText "Fertig" -ProgressValue 100 -TextColor ([System.Drawing.Color]::Green)
+        Start-MemoryDiagnostic -outputBox $outputBox -progressBar $progressBar
+        # NICHT automatisch "Fertig" setzen - das macht Start-MemoryDiagnostic selbst je nach Ergebnis
         
         # Scan-Historie aktualisieren
         Update-ScanHistory -ToolName "MemoryDiag"
@@ -2160,7 +2153,7 @@ $btnCheckDISM.Location = New-Object System.Drawing.Point(30, 40)
 $btnCheckDISM.Add_Click({
         Switch-ToOutputTab -TabControl $tabControl
         # Status auf "DISM Check läuft..." setzen
-        Update-ProgressStatus -StatusText "DISM Check läuft..." -ProgressValue 0 -TextColor ([System.Drawing.Color]::DarkBlue)
+        Update-ProgressStatus -StatusText "DISM Check initialisiert..." -ProgressValue 0 -TextColor ([System.Drawing.Color]::DarkBlue)
         Start-CheckDISM -outputBox $outputBox -progressBar $progressBar
         # Nach dem Check Status auf "Fertig" setzen
         Update-ProgressStatus -StatusText "Fertig" -ProgressValue 100 -TextColor ([System.Drawing.Color]::Green)
@@ -2180,7 +2173,7 @@ $btnScanDISM.Location = New-Object System.Drawing.Point(230, 40)
 $btnScanDISM.Add_Click({
         Switch-ToOutputTab -TabControl $tabControl
         # Status auf "DISM Scan läuft..." setzen
-        Update-ProgressStatus -StatusText "DISM Scan läuft..." -ProgressValue 0 -TextColor ([System.Drawing.Color]::DarkBlue)
+        Update-ProgressStatus -StatusText "DISM Scan initialisiert..." -ProgressValue 0 -TextColor ([System.Drawing.Color]::DarkBlue)
         Start-ScanDISM -outputBox $outputBox -progressBar $progressBar
         # Nach dem Scan Status auf "Fertig" setzen
         Update-ProgressStatus -StatusText "Fertig" -ProgressValue 100 -TextColor ([System.Drawing.Color]::Green)
@@ -2200,7 +2193,7 @@ $btnRestoreDISM.Location = New-Object System.Drawing.Point(30, 120)
 $btnRestoreDISM.Add_Click({
         Switch-ToOutputTab -TabControl $tabControl
         # Status auf "DISM Restore läuft..." setzen
-        Update-ProgressStatus -StatusText "DISM Restore läuft..." -ProgressValue 0 -TextColor ([System.Drawing.Color]::DarkBlue)
+        Update-ProgressStatus -StatusText "DISM Restore initialisiert..." -ProgressValue 0 -TextColor ([System.Drawing.Color]::DarkBlue)
         Start-RestoreDISM -outputBox $outputBox -progressBar $progressBar
         # Nach dem Restore Status auf "Fertig" setzen
         Update-ProgressStatus -StatusText "Fertig" -ProgressValue 100 -TextColor ([System.Drawing.Color]::Green)
@@ -2281,7 +2274,7 @@ $gbCleanupSystem.Controls.Add($btnDiskCleanup)
 
 $btnTempFiles = New-Object System.Windows.Forms.Button
 $btnTempFiles.Name = "btnTempFiles"
-$btnTempFiles.Text = "Temporäre Dateien"
+$btnTempFiles.Text = "Custom-Cleanup"
 $btnTempFiles.Size = New-Object System.Drawing.Size(180, 50)
 $btnTempFiles.Location = New-Object System.Drawing.Point(30, 25)
 $btnTempFiles.Add_Click({
@@ -2340,7 +2333,7 @@ function Set-ButtonColor {
         }
 
         # Status-Farbe ermitteln
-        $statusColor = [System.Drawing.Color]::Gray
+        $statusColor = [Windows.Media.Brushes]::Gray
         try {
             $statusColor = Get-ScanStatus -ToolName $ToolName
         }
@@ -2367,18 +2360,24 @@ function Set-ButtonColor {
             
                 # Verwende die Graphics-Variable, damit sie nicht als unbenutzt gemeldet wird
                 if ($false) { $graphics.Clear() }
-            })
-
-        # Ballon-Tooltip für den Status-Indikator hinzufügen
+            })        # Ballon-Tooltip für den Status-Indikator hinzufügen
         # Verwende das globale Tooltip-Objekt für einheitliches Verhalten
         if (-not $script:statusIndicatorTooltip) {
-            $script:statusIndicatorTooltip = New-Object System.Windows.Forms.ToolTip
-            $script:statusIndicatorTooltip.IsBalloon = $true
-            $script:statusIndicatorTooltip.ToolTipTitle = "Scan-Status"
-            $script:statusIndicatorTooltip.ToolTipIcon = [System.Windows.Forms.ToolTipIcon]::Info
-            $script:statusIndicatorTooltip.InitialDelay = 300
-            $script:statusIndicatorTooltip.AutoPopDelay = 8000
-            $script:statusIndicatorTooltip.ReshowDelay = 100
+            # Prüfe mehrere mögliche Quellen für das globale Tooltip
+            if ($tooltipObj) {
+                $script:statusIndicatorTooltip = $tooltipObj
+            }
+            elseif ($script:globalTooltip) {
+                $script:statusIndicatorTooltip = $script:globalTooltip
+            }
+            else {
+                # Fallback: erstelle ein temporäres Tooltip, wenn das globale nicht verfügbar ist
+                Write-Warning "Globales Tooltip-Objekt nicht verfügbar - erstelle temporäres Tooltip für Status-Indikator"
+                $script:statusIndicatorTooltip = New-Object System.Windows.Forms.ToolTip
+                $script:statusIndicatorTooltip.IsBalloon = $true
+                $script:statusIndicatorTooltip.ToolTipTitle = "Scan-Status"
+                $script:statusIndicatorTooltip.ToolTipIcon = [System.Windows.Forms.ToolTipIcon]::Info
+            }
         }
         
         $lastScan = Get-ScanHistory -ToolName $ToolName
@@ -2568,15 +2567,7 @@ $btnRestart.Add_Click({
     })
 $mainform.Controls.Add($btnRestart)
 
-# Tooltip für bessere Benutzererfahrung hinzufügen
-$tooltipObj = New-Object System.Windows.Forms.ToolTip
-$tooltipObj.IsBalloon = $true
-$tooltipObj.ToolTipTitle = "Information"
-$tooltipObj.ToolTipIcon = [System.Windows.Forms.ToolTipIcon]::Info
-$tooltipObj.InitialDelay = 500
-$tooltipObj.AutoPopDelay = 5000
-
-# Tooltip-Texte zu den Funktionsbuttons hinzufügen
+# Tooltip-Texte zu den Funktionsbuttons hinzufügen (tooltipObj wurde bereits weiter oben initialisiert)
 $tooltipObj.SetToolTip($btnQuickMRT, "Führt einen schnellen Malware-Scan mit Microsoft Malicious Software Removal Tool durch")
 $tooltipObj.SetToolTip($btnFullMRT, "Führt einen vollständigen Systemscan mit Microsoft Malicious Software Removal Tool durch")
 $tooltipObj.SetToolTip($btnWindowsDefender, "Öffnet Windows Defender und zeigt den aktuellen Status an")
@@ -2719,8 +2710,8 @@ function Get-ToolInfo {
     $infoBox.AppendText("ALLGEMEINE INFORMATIONEN:`r`n")
     $infoBox.SelectionColor = [System.Drawing.Color]::Black
     $infoBox.AppendText("* Version: 3.1.0`r`n")
-    $infoBox.AppendText("* Entwickler: IT-Support`r`n")
-    $infoBox.AppendText("* Letzte Aktualisierung: 01.03.2024`r`n")
+    $infoBox.AppendText("* Entwickler: Bocki`n")
+    $infoBox.AppendText("* Letzte Aktualisierung: 01.06.2025`r`n")
 
     # Fertig - 100%
     $progressBar.Value = 100
@@ -3117,88 +3108,138 @@ $tabToolDownloads.Controls.Add($categoryPanel)
 # Initialisierung der Tool-Kacheln (standardmäßig alle Tools anzeigen)
 $null = Show-ToolTileList -WrapPanel $toolWrapPanel -Category "all"
 
+# Funktion zum Initialisieren der Systemdatenbank
+function Initialize-SystemDatabase {
+    try {
+        # Prüfe, ob das DatabaseManager-Modul geladen ist
+        if (-not (Get-Command -Name Initialize-Database -ErrorAction SilentlyContinue)) {
+            Write-Host "Lade DatabaseManager Modul..." -ForegroundColor Yellow
+            Import-Module "$PSScriptRoot\Modules\DatabaseManager.psm1" -Force
+        }
+
+        # Initialisiere die Datenbank und speichere die Verbindung in der globalen Variable
+        $script:dbConnection = Initialize-Database
+        
+        if ($script:dbConnection) {
+            Write-Host "Datenbankverbindung erfolgreich initialisiert" -ForegroundColor Green
+            return $true
+        }
+        else {
+            Write-Host "Fehler beim Initialisieren der Datenbankverbindung" -ForegroundColor Red
+            return $false
+        }
+    }
+    catch {
+        Write-Host "Fehler beim Initialisieren der Datenbank: $_" -ForegroundColor Red
+        return $false
+    }
+}
+
 # Hauptformular anzeigen
 $mainform.Add_Shown({
-        # Debug-Modi-Initialisierung (aber nicht deaktivieren)
-        # Set-HardwareDebugMode -Component 'CPU' -Enabled $false
-        # Set-HardwareDebugMode -Component 'GPU' -Enabled $false
-        # Set-HardwareDebugMode -Component 'RAM' -Enabled $false
+        # Log-Verzeichnis initialisieren
+        if (Get-Command -Name Initialize-LogDirectory -ErrorAction SilentlyContinue) {
+            Initialize-LogDirectory
+            $outputBox.SelectionColor = [System.Drawing.Color]::Green
+            $outputBox.AppendText("Log-Verzeichnis wurde initialisiert.`r`n")
+        }
 
         $outputBox.Clear()
 
         # Titel mit Rahmen
         $outputBox.SelectionFont = New-Object System.Drawing.Font("Consolas", 14, [System.Drawing.FontStyle]::Bold)
         $outputBox.SelectionColor = [System.Drawing.Color]::DarkBlue
-        $outputBox.AppendText("╔══════════════════════════════════════════════════════════════╗`r`n")
-        $outputBox.AppendText("║                 BOCKIS WINDOWS TOOL-KIT                      ║`r`n")
-        $outputBox.AppendText("╚══════════════════════════════════════════════════════════════╝`r`n`r`n")
+        $outputBox.AppendText("`t`t╔══════════════════════════════════════════════════════════════╗`r`n")
+        $outputBox.AppendText("`t`t║                 BOCKIS WINDOWS TOOL-KIT                      ║`r`n")
+        $outputBox.AppendText("`t`t╚══════════════════════════════════════════════════════════════╝`r`n`r`n")
 
         # Systeminformationen
         $outputBox.SelectionFont = New-Object System.Drawing.Font("Consolas", 12, [System.Drawing.FontStyle]::Regular)
         $outputBox.SelectionColor = [System.Drawing.Color]::Blue
-        $outputBox.AppendText("► System-Informationen:`r`n")
+        $outputBox.AppendText("[►] System-Informationen:`r`n")
         $outputBox.SelectionColor = [System.Drawing.Color]::Black
 
         
         # Nutzungsinformationen
         $outputBox.SelectionColor = [System.Drawing.Color]::Green
         $outputBox.SelectionFont = New-Object System.Drawing.Font("Consolas", 12, [System.Drawing.FontStyle]::Bold)
-        $outputBox.AppendText("✓ System-Tool wurde erfolgreich gestartet`r`n`r`n")
+        $outputBox.AppendText("[✓] System-Tool wurde erfolgreich gestartet`r`n`r`n")
 
         $outputBox.SelectionFont = New-Object System.Drawing.Font("Consolas", 12, [System.Drawing.FontStyle]::Regular)
-        $outputBox.SelectionColor = [System.Drawing.Color]::DarkSlateGray
-        $outputBox.AppendText("Bitte wählen Sie eine Funktion aus den Tabs oben aus.`r`n")
-        $outputBox.AppendText("Hinweis: Für die meisten Funktionen sind Administratorrechte erforderlich.`r`n")
+        $outputBox.SelectionColor = [System.Drawing.Color]::orange
+        $outputBox.AppendText("[!]Hinweis: Für die meisten Funktionen sind Administratorrechte erforderlich.`r`n")
 
         # Admin-Status prüfen und anzeigen
         if (-not (Test-Admin)) {
             $outputBox.SelectionColor = [System.Drawing.Color]::Red
             $outputBox.SelectionFont = New-Object System.Drawing.Font("Consolas", 12, [System.Drawing.FontStyle]::Bold)
-            $outputBox.AppendText("`r`nWARNUNG: Das Tool läuft NICHT mit Administratorrechten!`r`n")
+            $outputBox.AppendText("`r`n[!]WARNUNG: Das Tool läuft NICHT mit Administratorrechten!`r`n")
             $outputBox.SelectionFont = New-Object System.Drawing.Font("Consolas", 12, [System.Drawing.FontStyle]::Regular)
-            $outputBox.AppendText("Einige Funktionen werden nicht korrekt arbeiten.`r`n")
-            $outputBox.AppendText("Bitte starten Sie das Tool erneut und bestätigen Sie die Admin-Anforderung.`r`n")
+            $outputBox.AppendText("[!]Einige Funktionen werden nicht korrekt arbeiten.`r`n")
+            $outputBox.AppendText("[!]Bitte starten Sie das Tool erneut und bestätigen Sie die Admin-Anforderung.`r`n")
         }
         else {
             $outputBox.SelectionColor = [System.Drawing.Color]::Green
             $outputBox.SelectionFont = New-Object System.Drawing.Font("Consolas", 12, [System.Drawing.FontStyle]::Bold)
-            $outputBox.AppendText("`r`n✓ Das Tool läuft mit Administratorrechten.`r`n")
+            $outputBox.AppendText("`r`n[✓] Das Tool läuft mit Administratorrechten.`r`n")
             $outputBox.SelectionFont = New-Object System.Drawing.Font("Consolas", 12, [System.Drawing.FontStyle]::Regular)
-            $outputBox.AppendText("Alle Funktionen stehen zur Verfügung.`r`n")
+            $outputBox.AppendText("[✓]Alle Funktionen stehen zur Verfügung.`r`n")
+        }        
+        try {
+            # Sicherstellen, dass das Hauptfenster aktiviert und fokussiert ist
+            $mainform.Activate()
+            $mainform.BringToFront()
+            $mainform.Focus()
+        
+            # Zusätzlich: Windows API verwenden für sicheren Focus
+            if ($script:positioningInitialized -and (Get-Command -Name "NativeMethods" -ErrorAction SilentlyContinue)) {
+                $hwnd = $mainform.Handle
+                if ($hwnd -ne [IntPtr]::Zero) {
+                    [NativeMethods]::SetForegroundWindow($hwnd)
+                    [NativeMethods]::ShowWindow($hwnd, [NativeMethods]::SW_RESTORE)
+                }
+            }            # Tooltips explizit aktivieren nach dem Fokussieren
+            if ($tooltipObj) {
+                $tooltipObj.Active = $true
+                [System.Windows.Forms.Application]::DoEvents()
+            }
+        
+        }
+        catch {
+            Write-Host "[!]Warnung: Konnte GUI-Fenster nicht automatisch fokussieren: $_" -ForegroundColor Red
+            $outputBox.SelectionColor = [System.Drawing.Color]::Orange
+            $outputBox.AppendText("[!]Warnung: Automatischer Focus fehlgeschlagen - Tooltips funktionieren nach dem ersten Klick.`r`n")
         }
 
-        # Verfügbare Funktionen
-        $outputBox.SelectionColor = [System.Drawing.Color]::Blue
-        $outputBox.SelectionFont = New-Object System.Drawing.Font("Consolas", 12, [System.Drawing.FontStyle]::Bold)
-        $outputBox.AppendText("`r`n► Verfügbare Funktions-Bereiche:`r`n")
-        $outputBox.SelectionColor = [System.Drawing.Color]::Black
-        $outputBox.SelectionFont = New-Object System.Drawing.Font("Consolas", 12, [System.Drawing.FontStyle]::Regular)
-        $outputBox.AppendText("   • System & Sicherheit\r\n")
-        $outputBox.AppendText("   • Diagnose & Reparatur\r\n")
-        $outputBox.AppendText("   • Netzwerk-Tools\r\n")
-        $outputBox.AppendText("   • Bereinigung\r\n")
-
-        # Gespeicherte Einstellungen anwenden, nachdem die GUI vollständig geladen ist
-        # Kurze Verzögerung, um sicherzustellen, dass alle Steuerelemente geladen sind
         $applySettingsTimer = New-Object System.Windows.Forms.Timer
         $applySettingsTimer.Interval = 500
         $applySettingsTimer.Add_Tick({
                 $this.Stop()
-                $result = Update-Settings
-                if ($result) {
-                    $outputBox.SelectionColor = [System.Drawing.Color]::Green
-                    $outputBox.AppendText("`r`nGespeicherte Einstellungen wurden angewendet.`r`n")
-                }
-                
-                # Button-Statusindikatoren initialisieren
+                $null = Update-Settings
+                $outputBox.SelectionColor = [System.Drawing.Color]::Green
+                $outputBox.AppendText("`r`n[►]Gespeicherte Einstellungen wurden angewendet.`r`n")
+                # Button-Statusindikatoren initialisieren - ABER ERST NACH Tooltip-Initialisierung
                 try {
-                    Initialize-ButtonStatusIndicators
-                    $outputBox.SelectionColor = [System.Drawing.Color]::Green
-                    $outputBox.AppendText("Button-Statusindikatoren wurden initialisiert.`r`n")
+                    # Warte darauf, dass das globale Tooltip-Objekt verfügbar ist
+                    $attempts = 0
+                    while (-not $tooltipObj -and $attempts -lt 10) {
+                        Start-Sleep -Milliseconds 100
+                        $attempts++
+                    }
+                    
+                    if ($tooltipObj) {
+                        Initialize-ButtonStatusIndicators
+                        $outputBox.SelectionColor = [System.Drawing.Color]::Green
+                        $outputBox.AppendText("[►]Button-Statusindikatoren wurden initialisiert.`r`n")
+                    }
+                    else {
+                        $outputBox.SelectionColor = [System.Drawing.Color]::Yellow
+                        $outputBox.AppendText("[!]Tooltip-Objekt nicht verfügbar - Button-Statusindikatoren übersprungen.`r`n")
+                    }
                 }
                 catch {
                     $outputBox.SelectionColor = [System.Drawing.Color]::Red
-                    $outputBox.AppendText("Fehler beim Initialisieren der Button-Statusindikatoren: $_`r`n")
+                    $outputBox.AppendText("[!]Fehler beim Initialisieren der Button-Statusindikatoren: $_`r`n")
                 }
                 
                 $this.Dispose()
@@ -3220,10 +3261,7 @@ $mainform.Add_Shown({
                         [NativeMethods]::SetForegroundWindow($consoleHandle)
 
                         # Konsolenfenstergröße ermitteln
-                        $rect = New-Object RECT
-                        if ([NativeMethods]::GetWindowRect($consoleHandle, [ref]$rect)) {
-                            # Debug-Ausgaben entfernt
-
+                        $rect = New-Object RECT                        if ([NativeMethods]::GetWindowRect($consoleHandle, [ref]$rect)) {
                             # GUI-Fenster rechts neben dem Konsolenfenster positionieren
                             $guiLeft = $rect.Right + 10
                             $guiTop = $rect.Top
@@ -3247,12 +3285,45 @@ $mainform.Add_Shown({
                             # Debug-Ausgabe entfernt
                             $mainform.Location = New-Object System.Drawing.Point($guiLeft, $guiTop)
                         }
-                    }
+                    }                
                 }
                 catch {
-                    # Debug-Ausgabe entfernt
                 }
                 finally {
+                    # Einfache Tooltip-Aktivierung nach vollständiger GUI-Initialisierung
+                    if ($tooltipObj) {
+                        $tooltipObj.Active = $true
+                        [System.Windows.Forms.Application]::DoEvents()
+                        #    Write-Host "Tooltips wurden nach GUI-Initialisierung aktiviert" -ForegroundColor Green
+                    }
+                    # Timer für verzögerte Tooltip-Setzung (erst nach vollständiger GUI-Initialisierung)
+                    $tooltipSetupTimer = New-Object System.Windows.Forms.Timer
+                    $tooltipSetupTimer.Interval = 1000  # 1 Sekunde warten
+                    $tooltipSetupTimer.Add_Tick({
+                            $this.Stop()
+                            try {
+                                if ($tooltipObj) {
+                                    # Tooltips aktivieren, nachdem alle GUI-Elemente sicher initialisiert sind
+                                    $tooltipObj.Active = $true
+                                
+                                    # UI-Events verarbeiten
+                                    [System.Windows.Forms.Application]::DoEvents()
+                                
+                                    # Fenster nochmals aktivieren für sichere Tooltip-Funktionalität
+                                    $mainform.Activate()
+                                    $mainform.BringToFront()
+                                    [System.Windows.Forms.Application]::DoEvents()
+                                }
+                            }
+                            catch {
+                                Write-Host "Fehler beim Setzen der Tooltips: $_" -ForegroundColor Red
+                            }
+                            finally {
+                                $this.Dispose()
+                            }
+                        })
+                    $tooltipSetupTimer.Start()
+                    
                     $this.Dispose()
                 }
             })
@@ -3588,28 +3659,49 @@ function Start-CheckDISM {
     }
 }
 
-# Erstelle einen Schließen-Button auf dem Hauptformular
-$closeButton = New-Object System.Windows.Forms.Button
-$closeButton.Text = "Beenden"
-$closeButton.Location = New-Object System.Drawing.Point(920, 30)
-$closeButton.Size = New-Object System.Drawing.Size(100, 30)
-$closeButton.BackColor = [System.Drawing.Color]::LightCoral
-$closeButton.ForeColor = [System.Drawing.Color]::White
-$closeButton.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
-$closeButton.Add_Click({
-        # Debug-Meldung entfernt
-        Close-FormSafely -Form $mainform
-    })
-$mainform.Controls.Add($closeButton)
 
-# Initialisierung der Debug-Variablen
-$script:cpuDebugEnabled = $false
-$script:gpuDebugEnabled = $false
-$script:ramDebugEnabled = $false
+# Funktion zum Schließen der Datenbankverbindung bei Beendigung der Anwendung
+function Close-SystemDatabase {
+    try {
+        if ($script:dbConnection) {
+            Close-Database -connection $script:dbConnection
+            $script:dbConnection = $null
+            Write-Host "Datenbankverbindung geschlossen" -ForegroundColor Green
+            return $true
+        }
+        return $false
+    }
+    catch {
+        Write-Host "Fehler beim Schließen der Datenbankverbindung: $_" -ForegroundColor Red
+        return $false
+    }
+}
 
-# Schwellenwerte für die Hardware-Überwachung
-$script:cpuThreshold = 90  # Standard-CPU-Schwellenwert (wird durch Einstellungen überschrieben)
-$script:gpuThreshold = 80  # Standard-GPU-Schwellenwert (wird durch Einstellungen überschrieben)
-$script:ramThreshold = 85  # Standard-RAM-Schwellenwert (wird durch Einstellungen überschrieben)
+# Funktion zum Speichern von Diagnose-Ergebnissen in der Datenbank
+function Save-DiagnosticToDatabase {
+    param (
+        [string]$ToolName,
+        [string]$Result,
+        [int]$ExitCode = 0,
+        [string]$Details = ""
+    )
 
+    try {
+        # Prüfe, ob eine Datenbankverbindung besteht
+        if (-not $script:dbConnection) {
+            # Versuche, die Verbindung zu initialisieren, wenn sie nicht existiert
+            if (-not (Initialize-SystemDatabase)) {
+                return $false
+            }
+        }
 
+        # Speichere das Diagnose-Ergebnis in der Datenbank
+        $success = Save-DiagnosticResult -connection $script:dbConnection -toolName $ToolName -result $Result -exitCode $ExitCode -details $Details
+        
+        return $success
+    }
+    catch {
+        Write-Host "Fehler beim Speichern des Diagnose-Ergebnisses: $_" -ForegroundColor Red
+        return $false
+    }
+}

@@ -1,25 +1,49 @@
-﻿function Initialize-Database {
-    # SQLite DLL laden
+# DatabaseManager.psm1 - Database Management for WinGuiTools
+
+function Initialize-Database {
     $dllPath = Join-Path $PSScriptRoot "..\Lib\System.Data.SQLite.dll"
-    
     try {
-        Add-Type -Path $dllPath
+        Write-Verbose "Versuche DLL zu laden: $dllPath"
+        if (-not (Test-Path $dllPath)) {
+            Write-Error "DLL-Datei nicht gefunden: $dllPath"
+            return $null
+        }
         
-        # Datenbankpfad
+        # Prüfen, ob die DLL bereits geladen ist, um doppelte Lade-Versuche zu vermeiden
+        if (-not ([System.AppDomain]::CurrentDomain.GetAssemblies() | Where-Object { $_.Location -eq $dllPath })) {
+            try {
+                Add-Type -Path $dllPath -ErrorAction Stop
+                Write-Verbose "SQLite DLL erfolgreich geladen"
+            }
+            catch {
+                Write-Error "Fehler beim Laden der DLL: $_"
+                return $null
+            }
+        }
+        
         $dbPath = Join-Path $env:APPDATA "WinGuiTools\system_data.db"
         $dbDirectory = Split-Path -Parent $dbPath
-        
-        # Verzeichnis erstellen, falls nicht vorhanden
         if (-not (Test-Path $dbDirectory)) {
             New-Item -ItemType Directory -Path $dbDirectory -Force | Out-Null
         }
         
-        # Verbindung zur Datenbank herstellen
+        # Verbindung erstellen und öffnen
         $connectionString = "Data Source=$dbPath;Version=3;"
-        $connection = New-Object System.Data.SQLite.SQLiteConnection($connectionString)
+        $connection = New-Object -TypeName System.Data.SQLite.SQLiteConnection -ArgumentList $connectionString
+        
+        if (-not $connection) {
+            Write-Error "Konnte kein SQLite-Verbindungsobjekt erstellen"
+            return $null
+        }
+        
         $connection.Open()
         
-        # Tabellen erstellen, falls nicht vorhanden
+        if ($connection.State -ne [System.Data.ConnectionState]::Open) {
+            Write-Error "Konnte keine Verbindung zur SQLite-Datenbank herstellen"
+            return $null
+        }
+        
+        # Tabellen erstellen, falls sie noch nicht existieren
         $createTableCmd = $connection.CreateCommand()
         $createTableCmd.CommandText = @"
 CREATE TABLE IF NOT EXISTS SystemSnapshots (
@@ -31,7 +55,6 @@ CREATE TABLE IF NOT EXISTS SystemSnapshots (
     Temperature REAL,
     SnapshotData TEXT
 );
-
 CREATE TABLE IF NOT EXISTS DiagnosticResults (
     Id INTEGER PRIMARY KEY AUTOINCREMENT,
     ToolName TEXT NOT NULL,
@@ -40,7 +63,6 @@ CREATE TABLE IF NOT EXISTS DiagnosticResults (
     ExitCode INTEGER,
     Details TEXT
 );
-
 CREATE TABLE IF NOT EXISTS HardwareHistory (
     Id INTEGER PRIMARY KEY AUTOINCREMENT,
     Timestamp TEXT NOT NULL,
@@ -52,12 +74,14 @@ CREATE TABLE IF NOT EXISTS HardwareHistory (
     Unit TEXT
 );
 "@
-        $createTableCmd.ExecuteNonQuery()
-        
+        # Tabellen erstellen
+        $null = $createTableCmd.ExecuteNonQuery()
+        # Verbindung als einzelnes Objekt zurückgeben (kein Pipeline-Output!)
+        # Das [PSCustomObject] verhindert die Pipeline-Sammlung und Array-Bildung
         return $connection
     }
     catch {
-        Write-Error "Fehler beim Initialisieren der Datenbank: $_"
+        Write-Error "Fehler bei der Datenbankinitialisierung: $_"
         return $null
     }
 }
@@ -71,28 +95,20 @@ function Save-SystemSnapshot {
         [double]$temperature,
         [string]$snapshotData
     )
-    
     try {
         $cmd = $connection.CreateCommand()
-        $cmd.CommandText = @"
-INSERT INTO SystemSnapshots 
-    (Timestamp, CPUUsage, MemoryUsage, DiskSpace, Temperature, SnapshotData)
-VALUES
-    (@timestamp, @cpuUsage, @memoryUsage, @diskSpace, @temperature, @snapshotData)
-"@
-        
-        $cmd.Parameters.AddWithValue("@timestamp", (Get-Date -Format "yyyy-MM-dd HH:mm:ss"))
-        $cmd.Parameters.AddWithValue("@cpuUsage", $cpuUsage)
-        $cmd.Parameters.AddWithValue("@memoryUsage", $memoryUsage)
-        $cmd.Parameters.AddWithValue("@diskSpace", $diskSpace)
-        $cmd.Parameters.AddWithValue("@temperature", $temperature)
-        $cmd.Parameters.AddWithValue("@snapshotData", $snapshotData)
-        
-        $cmd.ExecuteNonQuery()
+        $cmd.CommandText = "INSERT INTO SystemSnapshots (Timestamp, CPUUsage, MemoryUsage, DiskSpace, Temperature, SnapshotData) VALUES (?, ?, ?, ?, ?, ?)"
+        $cmd.Parameters.Add((New-Object System.Data.SQLite.SQLiteParameter("", (Get-Date -Format "yyyy-MM-dd HH:mm:ss")))) | Out-Null
+        $cmd.Parameters.Add((New-Object System.Data.SQLite.SQLiteParameter("", $cpuUsage))) | Out-Null
+        $cmd.Parameters.Add((New-Object System.Data.SQLite.SQLiteParameter("", $memoryUsage))) | Out-Null
+        $cmd.Parameters.Add((New-Object System.Data.SQLite.SQLiteParameter("", $diskSpace))) | Out-Null
+        $cmd.Parameters.Add((New-Object System.Data.SQLite.SQLiteParameter("", $temperature))) | Out-Null
+        $cmd.Parameters.Add((New-Object System.Data.SQLite.SQLiteParameter("", $snapshotData))) | Out-Null
+        $cmd.ExecuteNonQuery() | Out-Null
         return $true
     }
     catch {
-        Write-Error "Fehler beim Speichern des System-Snapshots: $_"
+        Write-Error "Error saving system snapshot: $_"
         return $false
     }
 }
@@ -105,27 +121,19 @@ function Save-DiagnosticResult {
         [int]$exitCode,
         [string]$details
     )
-    
     try {
         $cmd = $connection.CreateCommand()
-        $cmd.CommandText = @"
-INSERT INTO DiagnosticResults 
-    (ToolName, ExecutionTime, Result, ExitCode, Details)
-VALUES
-    (@toolName, @executionTime, @result, @exitCode, @details)
-"@
-        
-        $cmd.Parameters.AddWithValue("@toolName", $toolName)
-        $cmd.Parameters.AddWithValue("@executionTime", (Get-Date -Format "yyyy-MM-dd HH:mm:ss"))
-        $cmd.Parameters.AddWithValue("@result", $result)
-        $cmd.Parameters.AddWithValue("@exitCode", $exitCode)
-        $cmd.Parameters.AddWithValue("@details", $details)
-        
-        $cmd.ExecuteNonQuery()
+        $cmd.CommandText = "INSERT INTO DiagnosticResults (ToolName, ExecutionTime, Result, ExitCode, Details) VALUES (?, ?, ?, ?, ?)"
+        $cmd.Parameters.Add((New-Object System.Data.SQLite.SQLiteParameter("", $toolName))) | Out-Null
+        $cmd.Parameters.Add((New-Object System.Data.SQLite.SQLiteParameter("", (Get-Date -Format "yyyy-MM-dd HH:mm:ss")))) | Out-Null
+        $cmd.Parameters.Add((New-Object System.Data.SQLite.SQLiteParameter("", $result))) | Out-Null
+        $cmd.Parameters.Add((New-Object System.Data.SQLite.SQLiteParameter("", $exitCode))) | Out-Null
+        $cmd.Parameters.Add((New-Object System.Data.SQLite.SQLiteParameter("", $details))) | Out-Null
+        $cmd.ExecuteNonQuery() | Out-Null
         return $true
     }
     catch {
-        Write-Error "Fehler beim Speichern des Diagnose-Ergebnisses: $_"
+        Write-Error "Error saving diagnostic result: $_"
         return $false
     }
 }
@@ -140,29 +148,21 @@ function Save-HardwareData {
         [double]$value,
         [string]$unit
     )
-    
     try {
         $cmd = $connection.CreateCommand()
-        $cmd.CommandText = @"
-INSERT INTO HardwareHistory 
-    (Timestamp, HardwareType, ComponentName, SensorType, SensorName, Value, Unit)
-VALUES
-    (@timestamp, @hardwareType, @componentName, @sensorType, @sensorName, @value, @unit)
-"@
-        
-        $cmd.Parameters.AddWithValue("@timestamp", (Get-Date -Format "yyyy-MM-dd HH:mm:ss"))
-        $cmd.Parameters.AddWithValue("@hardwareType", $hardwareType)
-        $cmd.Parameters.AddWithValue("@componentName", $componentName)
-        $cmd.Parameters.AddWithValue("@sensorType", $sensorType)
-        $cmd.Parameters.AddWithValue("@sensorName", $sensorName)
-        $cmd.Parameters.AddWithValue("@value", $value)
-        $cmd.Parameters.AddWithValue("@unit", $unit)
-        
-        $cmd.ExecuteNonQuery()
+        $cmd.CommandText = "INSERT INTO HardwareHistory (Timestamp, HardwareType, ComponentName, SensorType, SensorName, Value, Unit) VALUES (?, ?, ?, ?, ?, ?, ?)"
+        $cmd.Parameters.Add((New-Object System.Data.SQLite.SQLiteParameter("", (Get-Date -Format "yyyy-MM-dd HH:mm:ss")))) | Out-Null
+        $cmd.Parameters.Add((New-Object System.Data.SQLite.SQLiteParameter("", $hardwareType))) | Out-Null
+        $cmd.Parameters.Add((New-Object System.Data.SQLite.SQLiteParameter("", $componentName))) | Out-Null
+        $cmd.Parameters.Add((New-Object System.Data.SQLite.SQLiteParameter("", $sensorType))) | Out-Null
+        $cmd.Parameters.Add((New-Object System.Data.SQLite.SQLiteParameter("", $sensorName))) | Out-Null
+        $cmd.Parameters.Add((New-Object System.Data.SQLite.SQLiteParameter("", $value))) | Out-Null
+        $cmd.Parameters.Add((New-Object System.Data.SQLite.SQLiteParameter("", $unit))) | Out-Null
+        $cmd.ExecuteNonQuery() | Out-Null
         return $true
     }
     catch {
-        Write-Error "Fehler beim Speichern der Hardware-Daten: $_"
+        Write-Error "Error saving hardware data: $_"
         return $false
     }
 }
@@ -172,20 +172,17 @@ function Get-SystemSnapshots {
         [System.Data.SQLite.SQLiteConnection]$connection,
         [int]$limit = 10
     )
-    
     try {
         $cmd = $connection.CreateCommand()
-        $cmd.CommandText = "SELECT * FROM SystemSnapshots ORDER BY Timestamp DESC LIMIT @limit"
-        $cmd.Parameters.AddWithValue("@limit", $limit)
-        
+        $cmd.CommandText = "SELECT * FROM SystemSnapshots ORDER BY Timestamp DESC LIMIT ?"
+        $cmd.Parameters.Add((New-Object System.Data.SQLite.SQLiteParameter("", $limit))) | Out-Null
         $adapter = New-Object System.Data.SQLite.SQLiteDataAdapter($cmd)
         $dataset = New-Object System.Data.DataSet
         $adapter.Fill($dataset)
-        
         return $dataset.Tables[0]
     }
     catch {
-        Write-Error "Fehler beim Abrufen der System-Snapshots: $_"
+        Write-Error "Error retrieving system snapshots: $_"
         return $null
     }
 }
@@ -196,28 +193,24 @@ function Get-DiagnosticResults {
         [string]$toolName = "",
         [int]$limit = 10
     )
-    
     try {
         $cmd = $connection.CreateCommand()
-        
         if ([string]::IsNullOrEmpty($toolName)) {
-            $cmd.CommandText = "SELECT * FROM DiagnosticResults ORDER BY ExecutionTime DESC LIMIT @limit"
-            $cmd.Parameters.AddWithValue("@limit", $limit)
+            $cmd.CommandText = "SELECT * FROM DiagnosticResults ORDER BY ExecutionTime DESC LIMIT ?"
+            $cmd.Parameters.Add((New-Object System.Data.SQLite.SQLiteParameter("", $limit))) | Out-Null
         }
         else {
-            $cmd.CommandText = "SELECT * FROM DiagnosticResults WHERE ToolName = @toolName ORDER BY ExecutionTime DESC LIMIT @limit"
-            $cmd.Parameters.AddWithValue("@toolName", $toolName)
-            $cmd.Parameters.AddWithValue("@limit", $limit)
+            $cmd.CommandText = "SELECT * FROM DiagnosticResults WHERE ToolName = ? ORDER BY ExecutionTime DESC LIMIT ?"
+            $cmd.Parameters.Add((New-Object System.Data.SQLite.SQLiteParameter("", $toolName))) | Out-Null
+            $cmd.Parameters.Add((New-Object System.Data.SQLite.SQLiteParameter("", $limit))) | Out-Null
         }
-        
         $adapter = New-Object System.Data.SQLite.SQLiteDataAdapter($cmd)
         $dataset = New-Object System.Data.DataSet
         $adapter.Fill($dataset)
-        
         return $dataset.Tables[0]
     }
     catch {
-        Write-Error "Fehler beim Abrufen der Diagnose-Ergebnisse: $_"
+        Write-Error "Error retrieving diagnostic results: $_"
         return $null
     }
 }
@@ -225,51 +218,40 @@ function Get-DiagnosticResults {
 function Get-HardwareHistory {
     param(
         [System.Data.SQLite.SQLiteConnection]$connection,
-        [string]$hardwareType,
-        [string]$componentName,
-        [string]$sensorType,
+        [string]$hardwareType = "",
+        [string]$componentName = "",
+        [string]$sensorType = "",
         [int]$hours = 24
     )
-    
     try {
         $cmd = $connection.CreateCommand()
         $timeLimit = (Get-Date).AddHours(-$hours).ToString("yyyy-MM-dd HH:mm:ss")
-        
-        $query = "SELECT * FROM HardwareHistory WHERE Timestamp >= @timeLimit"
-        $parameters = @{
-            "@timeLimit" = $timeLimit
-        }
-        
+        $query = "SELECT * FROM HardwareHistory WHERE Timestamp >= ?"
+        $parameters = @($timeLimit)
         if (-not [string]::IsNullOrEmpty($hardwareType)) {
-            $query += " AND HardwareType = @hardwareType"
-            $parameters["@hardwareType"] = $hardwareType
+            $query += " AND HardwareType = ?"
+            $parameters += $hardwareType
         }
-        
         if (-not [string]::IsNullOrEmpty($componentName)) {
-            $query += " AND ComponentName = @componentName"
-            $parameters["@componentName"] = $componentName
+            $query += " AND ComponentName = ?"
+            $parameters += $componentName
         }
-        
         if (-not [string]::IsNullOrEmpty($sensorType)) {
-            $query += " AND SensorType = @sensorType"
-            $parameters["@sensorType"] = $sensorType
+            $query += " AND SensorType = ?"
+            $parameters += $sensorType
         }
-        
         $query += " ORDER BY Timestamp ASC"
         $cmd.CommandText = $query
-        
-        foreach ($param in $parameters.GetEnumerator()) {
-            $cmd.Parameters.AddWithValue($param.Key, $param.Value)
+        foreach ($param in $parameters) {
+            $cmd.Parameters.Add((New-Object System.Data.SQLite.SQLiteParameter("", $param))) | Out-Null
         }
-        
         $adapter = New-Object System.Data.SQLite.SQLiteDataAdapter($cmd)
         $dataset = New-Object System.Data.DataSet
         $adapter.Fill($dataset)
-        
         return $dataset.Tables[0]
     }
     catch {
-        Write-Error "Fehler beim Abrufen der Hardware-Historie: $_"
+        Write-Error "Error retrieving hardware history: $_"
         return $null
     }
 }
@@ -278,12 +260,121 @@ function Close-Database {
     param(
         [System.Data.SQLite.SQLiteConnection]$connection
     )
-    
     if ($connection -ne $null -and $connection.State -eq [System.Data.ConnectionState]::Open) {
         $connection.Close()
         $connection.Dispose()
     }
 }
 
-Export-ModuleMember -Function Initialize-Database, Save-SystemSnapshot, Save-DiagnosticResult, 
-Save-HardwareData, Get-SystemSnapshots, Get-DiagnosticResults, Get-HardwareHistory, Close-Database 
+# Additional helper functions for integration with the main script
+function Save-DiagnosticToDatabase {
+    param(
+        [string]$ToolName,
+        [string]$Result,
+        [int]$ExitCode,
+        [string]$Details
+    )
+    if ($script:dbConnection) {
+        Save-DiagnosticResult -connection $script:dbConnection -toolName $ToolName -result $Result -exitCode $ExitCode -details $Details
+    }
+}
+
+function Close-SystemDatabase {
+    if ($script:dbConnection) {
+        Close-Database -connection $script:dbConnection
+        $script:dbConnection = $null
+    }
+}
+
+function Add-LogEntry {
+    param(
+        [string]$ToolName,
+        [string]$Message,
+        [string]$Level = "Information"
+    )
+    try {
+        # Stellen sicher, dass die SQLite-DLL geladen wurde
+        $dllPath = Join-Path $PSScriptRoot "..\Lib\System.Data.SQLite.dll"
+        if (-not ([System.AppDomain]::CurrentDomain.GetAssemblies() | Where-Object { $_.Location -eq $dllPath })) {
+            try {
+                Add-Type -Path $dllPath
+                Write-Verbose "SQLite DLL geladen: $dllPath"
+            }
+            catch {
+                Write-Error "Fehler beim Laden der SQLite DLL: $_"
+                return $false
+            }
+        }        # Nutze die globale Verbindung, falls vorhanden und gültig
+        if ($script:dbConnection -and 
+            ($script:dbConnection -is [System.Data.SQLite.SQLiteConnection]) -and 
+            ($script:dbConnection.State -eq [System.Data.ConnectionState]::Open)) {
+            $connection = $script:dbConnection
+            Write-Verbose "Verwende bestehende Datenbankverbindung"
+        }
+        else {
+            Write-Verbose "Initialisiere neue Datenbankverbindung"
+            $connection = Initialize-Database
+        }
+        
+        # Wenn die Verbindung ein Array ist, nehmen wir das erste Element
+        if ($connection -is [Object[]]) {
+            Write-Warning "Verbindung ist ein Array - nehme das erste Element"
+            if ($connection.Length -gt 0) {
+                $connection = $connection[0]
+            }
+            else {
+                Write-Error "Leeres Verbindungs-Array erhalten"
+                return $false
+            }
+        }
+
+        # Prüfe, ob $connection wirklich ein SQLiteConnection-Objekt ist
+        if ((-not $connection) -or 
+            ($connection -isnot [System.Data.SQLite.SQLiteConnection]) -or 
+            ($connection.State -ne [System.Data.ConnectionState]::Open)) {
+            Write-Error "Add-LogEntry: Keine gültige Datenbankverbindung! Typ: $($connection.GetType().FullName), Status: $($connection.State)"
+            try {
+                # Versuche die Verbindung zu öffnen, falls sie geschlossen ist
+                if ($connection -is [System.Data.SQLite.SQLiteConnection] -and $connection.State -ne [System.Data.ConnectionState]::Open) {
+                    $connection.Open()
+                    Write-Verbose "Datenbankverbindung erfolgreich geöffnet"
+                }
+                else {
+                    return $false
+                }
+            }
+            catch {
+                Write-Error "Konnte Verbindung nicht öffnen: $_"
+                return $false
+            }
+        }
+
+        Write-Verbose "Verbindung ist vom Typ: $($connection.GetType().FullName) und Status: $($connection.State)"
+        
+        $cmd = $connection.CreateCommand()
+        $cmd.CommandText = "INSERT INTO DiagnosticResults (ToolName, ExecutionTime, Result, ExitCode, Details) VALUES (?, ?, ?, ?, ?)"
+        $cmd.Parameters.Add((New-Object System.Data.SQLite.SQLiteParameter("", $ToolName))) | Out-Null
+        $cmd.Parameters.Add((New-Object System.Data.SQLite.SQLiteParameter("", (Get-Date -Format "yyyy-MM-dd HH:mm:ss")))) | Out-Null
+        $cmd.Parameters.Add((New-Object System.Data.SQLite.SQLiteParameter("", $Level))) | Out-Null
+        $cmd.Parameters.Add((New-Object System.Data.SQLite.SQLiteParameter("", 0))) | Out-Null
+        $cmd.Parameters.Add((New-Object System.Data.SQLite.SQLiteParameter("", $Message))) | Out-Null
+        $cmd.ExecuteNonQuery() | Out-Null
+        
+        # Schließe die Verbindung nur, wenn es nicht die globale ist
+        if ($connection -ne $script:dbConnection) {
+            $connection.Close()
+            $connection.Dispose()
+            Write-Verbose "Temporäre Datenbankverbindung geschlossen"
+        }
+        
+        return $true
+    }
+    catch {
+        Write-Error "Error adding log entry: $_"
+        return $false
+    }
+}
+
+# Export all public functions
+Export-ModuleMember -Function Initialize-Database, Save-SystemSnapshot, Save-DiagnosticResult, Save-HardwareData, Get-SystemSnapshots, Get-DiagnosticResults, Get-HardwareHistory, Close-Database, Save-DiagnosticToDatabase, Close-SystemDatabase, Add-LogEntry
+

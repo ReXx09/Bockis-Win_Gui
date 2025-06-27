@@ -336,7 +336,8 @@ function Initialize-LiveMonitoring {
         [System.Windows.Forms.Label]$ramLabel,
         [System.Windows.Forms.Panel]$gbCPU,
         [System.Windows.Forms.Panel]$gbGPU,
-        [System.Windows.Forms.Panel]$gbRAM
+        [System.Windows.Forms.Panel]$gbRAM,
+        [System.Windows.Forms.ToolTip]$GlobalTooltip = $null
     )
 
     try {
@@ -347,17 +348,18 @@ function Initialize-LiveMonitoring {
                 Write-Warning "LibreHardwareMonitor konnte nicht initialisiert werden!"
                 return $null
             }
-            $script:useLibreHardware = $true
+            $script:useLibreHardware = $true        }        # Tooltip für Hardware-Statistiken verwenden (globales ToolTip bevorzugen)
+        if ($GlobalTooltip) {
+            $script:tooltipControl = $GlobalTooltip
         }
-
-        # Tooltip für Hardware-Statistiken neu initialisieren
-        $tooltip = New-Object System.Windows.Forms.ToolTip
-        $tooltip.AutoPopDelay = 15000  # 15 Sekunden anzeigen
-        $tooltip.InitialDelay = 100    # Schnellere Verzögerung
-        $tooltip.ReshowDelay = 100     # Schnellere Verzögerung
-        $tooltip.Active = $true
-        $tooltip.IsBalloon = $true     # Balloon-Stil für bessere Sichtbarkeit
-        $script:tooltipControl = $tooltip
+        elseif (-not $script:tooltipControl) {
+            $script:tooltipControl = New-Object System.Windows.Forms.ToolTip
+            $script:tooltipControl.AutoPopDelay = 15000  # 15 Sekunden anzeigen
+            $script:tooltipControl.InitialDelay = 100    # Schnellere Verzögerung
+            $script:tooltipControl.ReshowDelay = 100     # Schnellere Verzögerung
+            $script:tooltipControl.Active = $true
+            $script:tooltipControl.IsBalloon = $true     # Balloon-Stil für bessere Sichtbarkeit
+        }
 
         # Event-Handler für CPU-Label und Panel
         if ($cpuLabel) {
@@ -621,7 +623,8 @@ function Initialize-HardwareMonitoring {
         [System.Windows.Forms.Panel]$gbRAM,
         [switch]$SuppressVisualFeedback,
         [switch]$WaitForGuiLoaded,
-        [int]$LoadDelayMs = 0
+        [int]$LoadDelayMs = 0,
+        [System.Windows.Forms.ToolTip]$GlobalTooltip = $null
     )
     
     # Farbdefinitionen für Ladevisualisierung
@@ -630,7 +633,7 @@ function Initialize-HardwareMonitoring {
     $accentColor = [System.ConsoleColor]::Green
     
     if (-not $SuppressVisualFeedback) {
-        Write-Host "`n[+]Hardware-Monitore werden initialisiert..." -ForegroundColor $accentColor
+        Write-Host "`n[+]GUI wird initialisiert..." -ForegroundColor $accentColor
         write-host
         # Fortschrittsbalken initial anzeigen
         $barLength = 20
@@ -724,8 +727,7 @@ function Initialize-HardwareMonitoring {
                     $script:gpuStats.LastReset = (Get-Date)
                     $script:ramStats.LastReset = (Get-Date)
                     Start-Sleep -Milliseconds 200
-                }
-                "Timer-Setup" {
+                }                "Timer-Setup" {
                     # Eigentliche Initialisierung des Monitorings durchführen
                     $script:hardwareTimer = Initialize-LiveMonitoring `
                         -cpuLabel $cpuLabel `
@@ -733,7 +735,8 @@ function Initialize-HardwareMonitoring {
                         -ramLabel $ramLabel `
                         -gbCPU $gbCPU `
                         -gbGPU $gbGPU `
-                        -gbRAM $gbRAM
+                        -gbRAM $gbRAM `
+                        -GlobalTooltip $GlobalTooltip
                     
                     Start-Sleep -Milliseconds 200
                 }
@@ -765,10 +768,23 @@ function Initialize-HardwareMonitoring {
                             # Kurze Pause für UI-Updates
                             [System.Windows.Forms.Application]::DoEvents()
                         }
-                        
                         if (-not $SuppressVisualFeedback) {
                             Write-Host -NoNewline "`r$(" " * 100)"
-                            Write-Host "`r`t├─ GUI-Synchronisierung abgeschlossen." -ForegroundColor $accentColor
+                            Write-Host "`r`t├─ GUI-Synchronisierung abgeschlossen." -ForegroundColor $accentColor                            # Prüfe, ob die Datenbankverbindung initialisiert wurde
+                            # Da die Datenbank im Hauptskript initialisiert wird, müssen wir global prüfen
+                            $null = $globalDB = $null -ne (Get-Variable -Name dbConnection -Scope Global -ErrorAction SilentlyContinue)
+                            $null = $scriptDB = $null -ne (Get-Variable -Name dbConnection -Scope Script -ErrorAction SilentlyContinue)
+                            
+                            if ($globalDB -or $scriptDB) {
+                                Write-Host "`r`t├─ Datenbankverbindung erfolgreich initialisiert!" -ForegroundColor Green
+                            }
+                              # Prüfe, ob die Einstellungen angewendet wurden
+                            $null = $globalSettings = $null -ne (Get-Variable -Name settings -Scope Global -ErrorAction SilentlyContinue)
+                            $null = $scriptSettings = $null -ne (Get-Variable -Name settings -Scope Script -ErrorAction SilentlyContinue)
+                            
+                            if ($globalSettings -or $scriptSettings) {
+                                Write-Host "`r`t├─ Einstellungen wurden erfolgreich angewendet." -ForegroundColor Green
+                            }
                         }
                     }
                 }
@@ -785,8 +801,7 @@ function Initialize-HardwareMonitoring {
         if (-not $timerStatus.Exists) {
             Write-Warning "`r`t[i]Hardware-Timer konnte nicht initialisiert werden!" -ForegroundColor Red
             return $false
-        }
-        elseif (-not $timerStatus.Running) {
+        }        elseif (-not $timerStatus.Running) {
             $null = Start-HardwareMonitoring
         }
     }
@@ -1382,11 +1397,11 @@ function Get-RamTemperatureFromRegistry {
                 $ramTempProps = $regValue.PSObject.Properties | Where-Object { 
                     # Erweiterte Regex-Muster für RAM-Temperatursensoren
                     ($_.Name -match "DIMM|Memory|RAM|SPD|DDR[45]|Speicher|MEM\." -or 
-                     $_.Name -match "Speicher.*Temp" -or 
-                     $_.Name -match "BANK.*Temp" -or
-                     $_.Name -match "Channel\s*[A-D]" -or
-                     $_.Name -match "Slot\s*\d+" -or
-                     $_.Name -match "Module\s*\d+") -and 
+                    $_.Name -match "Speicher.*Temp" -or 
+                    $_.Name -match "BANK.*Temp" -or
+                    $_.Name -match "Channel\s*[A-D]" -or
+                    $_.Name -match "Slot\s*\d+" -or
+                    $_.Name -match "Module\s*\d+") -and 
                     
                     # Typprüfung - nur numerische Werte verwenden
                     ($_.Value -is [int] -or $_.Value -is [double] -or $_.Value -is [float] -or 
@@ -1410,9 +1425,9 @@ function Get-RamTemperatureFromRegistry {
                         # Details für Debug speichern
                         $sensorDetails += [PSCustomObject]@{
                             Source = "Registry"
-                            Path = $regPath
-                            Name = $prop.Name
-                            Value = $tempValue
+                            Path   = $regPath
+                            Name   = $prop.Name
+                            Value  = $tempValue
                         }
                         
                         if ($script:DebugModeRAM) {
@@ -1425,7 +1440,7 @@ function Get-RamTemperatureFromRegistry {
                 $sensorSections = $regValue.PSObject.Properties | Where-Object { 
                     $_.Name -match "^Section" -and 
                     ($_.Value -match "Memory|RAM|DIMM|SPD|DDR[45]|Speicher" -or
-                     $_.Value -match "Channel\s*[A-D]")
+                    $_.Value -match "Channel\s*[A-D]")
                 }
                 
                 if ($sensorSections) {
@@ -1446,8 +1461,8 @@ function Get-RamTemperatureFromRegistry {
                         $tempLabels = $regValue.PSObject.Properties | Where-Object { 
                             $_.Name -match "^Label${sectionNumber}_\d+$" -and 
                             ($_.Value -match "Temperature|Temp|°C" -or 
-                             $_.Value -match "DIMM|Memory|RAM|SPD|DDR[45]|Speicher" -or
-                             $_.Value -match "Channel\s*[A-D]|Slot\s*\d+|Module\s*\d+")
+                            $_.Value -match "DIMM|Memory|RAM|SPD|DDR[45]|Speicher" -or
+                            $_.Value -match "Channel\s*[A-D]|Slot\s*\d+|Module\s*\d+")
                         }
                         
                         if ($script:DebugModeRAM -and $tempLabels) {
@@ -1475,9 +1490,9 @@ function Get-RamTemperatureFromRegistry {
                                     # Für Debug: Details speichern
                                     $sensorDetails += [PSCustomObject]@{
                                         Source = "HWiNFO64 Section"
-                                        Path = $regPath
-                                        Name = "$($label.Value)"
-                                        Value = $finalValue
+                                        Path   = $regPath
+                                        Name   = "$($label.Value)"
+                                        Value  = $finalValue
                                     }
                                     
                                     if ($script:DebugModeRAM) {
@@ -1505,12 +1520,12 @@ function Get-RamTemperatureFromRegistry {
             # Ergänze Statistiken für die Detailansicht
             $script:ramStats.Registry = @{
                 FoundSensors = $true
-                Source      = "Registry"
-                Values      = $temperatures
-                Min         = $minTemp
-                Max         = $maxTemp
-                Avg         = $avgTemp
-                Current     = $maxTemp  # Der höchste Wert ist meist relevant
+                Source       = "Registry"
+                Values       = $temperatures
+                Min          = $minTemp
+                Max          = $maxTemp
+                Avg          = $avgTemp
+                Current      = $maxTemp  # Der höchste Wert ist meist relevant
             }
             
             return $maxTemp
@@ -1601,11 +1616,11 @@ function Get-RamTemperature {
                     $ramSensors = $hwInfoSensors | Where-Object {
                         # Sensorname-Muster (erweitert für mehr Erkennungsraten)
                         (($_.SensorName -match "RAM|DIMM|Memory|Speicher|SPD|MEM\.") -or
-                         ($_.SensorName -match "DDR[45]") -or                       # DDR4/DDR5 Referenz
-                         ($_.SensorName -match "DIMM\s*#?\d+") -or                  # DIMM + Zahl
-                         ($_.SensorName -match "BANK\s*#?\d+") -or                  # Bank + Zahl
-                         ($_.SensorName -match "Slot\s*#?\d+") -or                  # Slot + Zahl
-                         ($_.SensorName -match "Channel\s*[A-D]")) -and             # Channel A-D
+                         ($_.SensorName -match "DDR[45]") -or # DDR4/DDR5 Referenz
+                         ($_.SensorName -match "DIMM\s*#?\d+") -or # DIMM + Zahl
+                         ($_.SensorName -match "BANK\s*#?\d+") -or # Bank + Zahl
+                         ($_.SensorName -match "Slot\s*#?\d+") -or # Slot + Zahl
+                         ($_.SensorName -match "Channel\s*[A-D]")) -and # Channel A-D
                         # UND ein Temperatursensor
                         ($_.SensorType -eq "Temperature" -or $_.SensorType -match "Temp")
                     }
@@ -1617,7 +1632,8 @@ function Get-RamTemperature {
                             foreach ($s in $ramSensors) {
                                 Write-DebugOutput -Component 'RAM' -Message "  HWiNFO Sensor: $($s.SensorName) = $($s.Value)°C" -Force
                             }
-                        } else {
+                        }
+                        else {
                             Write-DebugOutput -Component 'RAM' -Message "HWiNFO64: Keine RAM-Temperatursensoren gefunden" -Force
                         }
                     }
@@ -1721,7 +1737,8 @@ function Get-RamTemperature {
             # Debug: Zeige alle Temperatursensoren
             Write-DebugOutput -Component 'RAM' -Message "Verfügbare Temperatursensoren (Gesamt: $($allTempSensors.Count)):" -Force
             foreach ($sensor in $allTempSensors) {
-                if ($sensor.Value -gt 0) {  # Nur aktive Sensoren anzeigen
+                if ($sensor.Value -gt 0) {
+                    # Nur aktive Sensoren anzeigen
                     Write-DebugOutput -Component 'RAM' -Message "  $($sensor.HardwareType) - $($sensor.SensorName): $($sensor.Value)°C" -Force
                 }
             }
@@ -2532,9 +2549,9 @@ function Get-RamTemperatureViaSMBus {
     if (-not (Test-Path -Path variable:script:smBusTempCache)) {
         $script:smBusTempCache = @{
             LastUpdate = [DateTime]::MinValue
-            Values = @()
-            Max = $null
-            Source = $null
+            Values     = @()
+            Max        = $null
+            Source     = $null
         }
     }
     
@@ -2624,9 +2641,9 @@ function Get-RamTemperatureViaSMBus {
             
             # DDR5-spezifische Register
             $tempRegisters = @(
-                0x05,  # DDR5 SPD Hub Temperatursensor (primärer Sensor)
-                0x06,  # DDR5 SPD Hub erweiterter Temperatursensor (16-bit)
-                0x33,  # Alternatives Temperatur-Register
+                0x05, # DDR5 SPD Hub Temperatursensor (primärer Sensor)
+                0x06, # DDR5 SPD Hub erweiterter Temperatursensor (16-bit)
+                0x33, # Alternatives Temperatur-Register
                 0x31   # Backup-Register für ältere DDR5-Module
             )
         }
@@ -2648,9 +2665,9 @@ function Get-RamTemperatureViaSMBus {
             
             # DDR4-spezifische Register
             $tempRegisters = @(
-                0x22,  # DDR4 SPD Temperatursensor (Haupt-Register)
-                0x24,  # DDR4 erweiterter Temperatursensor
-                0x0E,  # Alternative für manche Hersteller
+                0x22, # DDR4 SPD Temperatursensor (Haupt-Register)
+                0x24, # DDR4 erweiterter Temperatursensor
+                0x0E, # Alternative für manche Hersteller
                 0x05   # Universelles Temperatur-Register
             )
         }
@@ -2793,11 +2810,11 @@ function Get-RamTemperatureViaSMBus {
                             $temperatures += $temp
                             $sensorFound = $true
                             $sensorDetails += [PSCustomObject]@{
-                                Type = "DDR5 SPD Hub"
-                                Address = "0x$($address.ToString('X2'))"
+                                Type     = "DDR5 SPD Hub"
+                                Address  = "0x$($address.ToString('X2'))"
                                 Register = "0x05"
-                                Raw = $rawTemp
-                                Value = $temp
+                                Raw      = $rawTemp
+                                Value    = $temp
                             }
                             
                             if ($script:DebugModeRAM) {
@@ -2814,11 +2831,11 @@ function Get-RamTemperatureViaSMBus {
                             $temperatures += $temp
                             $sensorFound = $true
                             $sensorDetails += [PSCustomObject]@{
-                                Type = "DDR5 SPD Hub 16-bit"
-                                Address = "0x$($address.ToString('X2'))"
+                                Type     = "DDR5 SPD Hub 16-bit"
+                                Address  = "0x$($address.ToString('X2'))"
                                 Register = "0x06-0x07"
-                                Raw = $raw16BitTemp
-                                Value = $temp
+                                Raw      = $raw16BitTemp
+                                Value    = $temp
                             }
                             
                             if ($script:DebugModeRAM) {
@@ -2842,11 +2859,11 @@ function Get-RamTemperatureViaSMBus {
                                 $temperatures += $temp
                                 $sensorFound = $true
                                 $sensorDetails += [PSCustomObject]@{
-                                    Type = "$detectedRAMType Standard"
-                                    Address = "0x$($address.ToString('X2'))"
+                                    Type     = "$detectedRAMType Standard"
+                                    Address  = "0x$($address.ToString('X2'))"
                                     Register = "0x$($register.ToString('X2'))"
-                                    Raw = $rawTemp
-                                    Value = $temp
+                                    Raw      = $rawTemp
+                                    Value    = $temp
                                 }
                                 
                                 if ($script:DebugModeRAM) {
@@ -2880,12 +2897,12 @@ function Get-RamTemperatureViaSMBus {
                                             if ($temp) {
                                                 $temperatures += $temp
                                                 $sensorDetails += [PSCustomObject]@{
-                                                    Type = "I2C $detectedRAMType"
-                                                    Bus = $bus
-                                                    Address = "0x$($address.ToString('X2'))"
+                                                    Type     = "I2C $detectedRAMType"
+                                                    Bus      = $bus
+                                                    Address  = "0x$($address.ToString('X2'))"
                                                     Register = "0x$($register.ToString('X2'))"
-                                                    Raw = $rawTemp
-                                                    Value = $temp
+                                                    Raw      = $rawTemp
+                                                    Value    = $temp
                                                 }
                                                 
                                                 if ($script:DebugModeRAM) {
@@ -2936,11 +2953,11 @@ function Get-RamTemperatureViaSMBus {
                                     if ($tempValue -gt 10 -and $tempValue -lt 100) {
                                         $temperatures += $tempValue
                                         $sensorDetails += [PSCustomObject]@{
-                                            Type = "WMI"
+                                            Type      = "WMI"
                                             Namespace = $namespace
-                                            Class = $class
-                                            Property = $prop.Name
-                                            Value = $tempValue
+                                            Class     = $class
+                                            Property  = $prop.Name
+                                            Value     = $tempValue
                                         }
                                         
                                         if ($script:DebugModeRAM) {
@@ -2975,24 +2992,26 @@ function Get-RamTemperatureViaSMBus {
                 $maxSensor = $sensorDetails | Where-Object { $_.Value -eq $maxTemp } | Select-Object -First 1
                 if ($maxSensor) {
                     "$($maxSensor.Type) $($maxSensor.Address):$($maxSensor.Register)"
-                } else {
+                }
+                else {
                     "SMBus"
                 }
-            } else {
+            }
+            else {
                 "SMBus"
             }
             
             # SPD-Daten für Detailanzeige speichern
             $script:ramStats.SPD = @{
                 FoundSensors = $true
-                Source      = $primarySource
-                Values      = $temperatures
-                Min         = $minTemp
-                Max         = $maxTemp
-                Avg         = $avgTemp
-                Current     = $maxTemp  # Den höchsten Wert als aktuell anzeigen
-                Details     = $sensorDetails
-                Type        = $detectedRAMType
+                Source       = $primarySource
+                Values       = $temperatures
+                Min          = $minTemp
+                Max          = $maxTemp
+                Avg          = $avgTemp
+                Current      = $maxTemp  # Den höchsten Wert als aktuell anzeigen
+                Details      = $sensorDetails
+                Type         = $detectedRAMType
             }
             
             # Cache aktualisieren
@@ -3011,7 +3030,8 @@ function Get-RamTemperatureViaSMBus {
                     foreach ($sensor in $sensorDetails) {
                         $sensorInfo = if ($sensor.Type -match "I2C") {
                             "Bus=$($sensor.Bus), "
-                        } else { "" }
+                        }
+                        else { "" }
                         $sensorInfo += "Adresse=$($sensor.Address), Register=$($sensor.Register), Temp=$($sensor.Value)°C"
                         Write-DebugOutput -Component 'RAM' -Message "  $($sensor.Type): $sensorInfo" -Force
                     }

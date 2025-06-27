@@ -17,18 +17,21 @@ function Start-CHKDSK {
         Initialize-ProgressComponents -ProgressBar $progressBar -StatusLabel $null
     }
     
+    # In Log-Datei und Datenbank schreiben, dass CHKDSK gestartet wird
+    Write-ToolLog -ToolName "CHKDSK" -Message "CHKDSK wird gestartet" -OutputBox $outputBox -Color ([System.Drawing.Color]::Blue) -Level "Information" -SaveToDatabase
+    
     # Rahmen und Systeminformationen erstellen
-    $computerName = $env:COMPUTERNAME
-    $userName = $env:USERNAME
-    $osInfo = (Get-CimInstance -ClassName Win32_OperatingSystem).Caption
-    $dateTime = Get-Date -Format "dd.MM.yyyy HH:mm:ss"
-    $width = 80
+    #$computerName = $env:COMPUTERNAME
+    #$userName = $env:USERNAME
+    #$osInfo = (Get-CimInstance -ClassName Win32_OperatingSystem).Caption
+    #$dateTime = Get-Date -Format "dd.MM.yyyy HH:mm:ss"
+    #$width = 80
         
     # Rahmen oben
     Write-Host "╔══════════════════════════════════════════════════════════════════════════════╗" -ForegroundColor Green
     Write-ColoredCenteredText                             "CHKDSK"                                         
     Write-Host "╚══════════════════════════════════════════════════════════════════════════════╝" -ForegroundColor Green
-    
+    Write-Host
     Write-Host '   .d8888b.  888    888 888    d8P  8888888b.   .d8888b.  888    d8P ' -ForegroundColor Cyan
     Write-Host '  d88P  Y88b 888    888 888   d8P   888  "Y88b d88P  Y88b 888   d8P  ' -ForegroundColor Blue
     Write-Host '  888    888 888    888 888  d8P    888    888 Y88b.      888  d8P    ' -ForegroundColor Cyan
@@ -40,14 +43,14 @@ function Start-CHKDSK {
     Write-Host
     # Rahmen für Systeminformationen
     Write-Host "╔══════════════════════════════════════════════════════════════════════════════╗" -ForegroundColor Green
-    Write-ColoredCenteredText                 "SYSTEMINFORMATIONEN"                                                     
+    Write-ColoredCenteredText                 "INFORMATIONEN"                                                     
     Write-Host "╠══════════════════════════════════════════════════════════════════════════════╣" -ForegroundColor Green
     # Systeminformationen
     Write-Host "║                                                                              ║" -ForegroundColor Green
-    Write-Host "      ├─    Betriebssystem: $osInfo           "            -ForegroundColor Yellow                 
-    Write-Host "      ├─    Computer:       $computerName     "            -ForegroundColor Yellow                                    
-    Write-Host "      ├─    Benutzer:       $userName         "            -ForegroundColor Yellow                                    
-    Write-Host "      └─    Datum und Zeit: $dateTime         "            -ForegroundColor Yellow                                  
+    Write-Host " ├─ Datenträgerprüfung mit CHKDSK:                                                "  -ForegroundColor Yellow                 
+    Write-Host " ├─ Sucht nach Dateisystemfehlern und fehlerhaften Sektoren auf der Festplatte.   "  -ForegroundColor Yellow                                    
+    Write-Host " ├─ Kann Probleme beheben, die zu Datenverlust oder Systemfehlern führen.         "  -ForegroundColor Yellow                                    
+    Write-Host " └─ Empfohlen bei Abstürzen, langsamen Zugriffen oder nach Stromausfällen.        "  -ForegroundColor Yellow                                  
     Write-Host "║                                                                              ║" -ForegroundColor Green
 
     Write-Host "╠══════════════════════════════════════════════════════════════════════════════╣" -ForegroundColor Green
@@ -55,36 +58,21 @@ function Start-CHKDSK {
     Write-Host "╚══════════════════════════════════════════════════════════════════════════════╝" -ForegroundColor Green    # 1 Sekunde warten vor dem Start
     Start-Sleep -Seconds 1
     $outputBox.Clear()
-
-    # Header für den Scan
-    $outputBox.SelectionColor = [System.Drawing.Color]::DarkBlue
-    $outputBox.AppendText("`r`n===== CHKDSK - FESTPLATTEN-PRÜFUNG =====`r`n")
-    $outputBox.AppendText("Modus: Festplatten-Diagnose`r`n")
-    $outputBox.AppendText("Zeitstempel: $(Get-Date -Format 'dd.MM.yyyy HH:mm:ss')`r`n`r`n")
-    # Systeminformationen nebeneinander anzeigen
-    $outputBox.SelectionColor = [System.Drawing.Color]::Blue
-    $outputBox.AppendText("[i] SYSTEM-INFORMATIONEN:`r`n")
-    $outputBox.SelectionColor = [System.Drawing.Color]::Black
-    
-    # Format für nebeneinander stehende Informationen
-    $osLabel = "Betriebssystem:".PadRight(18)
-    $pcLabel = "Computer:".PadRight(18)
-    $userLabel = "Benutzer:".PadRight(18)
-    
-    # Zeile 1: Betriebssystem und Computer
-    $outputBox.AppendText("    $osLabel $osInfo".PadRight(60))
-    $outputBox.AppendText("$pcLabel $computerName`r`n")
-    
-    # Zeile 2: Benutzer und Datum/Zeit
-    $outputBox.AppendText("    $userLabel $userName".PadRight(60))
-    $outputBox.AppendText("Datum/Zeit: $(Get-Date -Format 'dd.MM.yyyy HH:mm:ss')`r`n`r`n")
-    
+    Write-Host 
+    Write-Host
+    Write-Host "     [>] Ein Dialog-Fenster für die Auswahl der Laufwerke wird geöffnet...... " -ForegroundColor $secondaryColor
+    Write-Host
+    Write-Host "     [i] Bitte wählen Sie die zu prüfenden Laufwerke und Optionen aus... " -ForegroundColor Blue
+    Write-Host
+    Write-Host "`n" + ("═" * 70) -ForegroundColor Cyan 
+    Write-Host
+        
     # Verfügbare Laufwerke ermitteln
     $drives = Get-WmiObject Win32_LogicalDisk | 
     Where-Object { $_.DriveType -eq 3 -or $_.DriveType -eq 2 } | 
     Select-Object -ExpandProperty DeviceID    # Laufwerksinformationen anzeigen
     $outputBox.SelectionColor = [System.Drawing.Color]::Blue
-    $outputBox.AppendText("[i] VERFÜGBARE LAUFWERKE:`r`n`r`n")
+    $outputBox.AppendText("[►] VERFÜGBARE LAUFWERKE:`r`n`r`n")
     
     # Tabellenkopf erstellen
     $outputBox.SelectionColor = [System.Drawing.Color]::DarkBlue
@@ -148,9 +136,9 @@ function Start-CHKDSK {
     
     # Kurze Information zum weiteren Vorgehen
     $outputBox.SelectionColor = [System.Drawing.Color]::Blue
-    $outputBox.AppendText("[>] VORBEREITUNG CHKDSK:`r`n")
-    $outputBox.SelectionColor = [System.Drawing.Color]::Gray
-    $outputBox.AppendText("    Bitte wählen Sie die zu prüfenden Laufwerke im neuen Fenster aus...`r`n")
+    $outputBox.AppendText("[►] VORBEREITUNG CHKDSK:`r`n")
+    $outputBox.SelectionColor = [System.Drawing.Color]::Green
+    $outputBox.AppendText("    Bitte wählen Sie die zu prüfenden Laufwerke und Optionen im Dialog-Fenster aus...`r`n")
 
     # Form für die Laufwerksauswahl erstellen
     $form = New-Object System.Windows.Forms.Form

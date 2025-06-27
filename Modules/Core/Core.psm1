@@ -13,6 +13,158 @@ $PSDefaultParameterValues['Out-File:Encoding'] = 'utf8BOM'
 $PSDefaultParameterValues['*:Encoding'] = 'utf8BOM'
 chcp 65001 | Out-Null
 
+# ===== SYMBOL HELPER FUNKTIONEN =====
+# Definition der einheitlichen Symbole für konsistente Ausgabe
+$Script:SuccessSymbol = '[√]'      # Erfolg, Grün (#00AA00)
+$Script:ErrorSymbol = '[X]'        # Fehler, Rot (#CC0000)
+$Script:WarningSymbol = '[!]'      # Warnung, Orange (#FF8800)
+$Script:InfoSymbol = '[►]'         # Information, Blau (#0066CC)
+$Script:ProcessSymbol = '[>]'      # Prozess/Fortschritt, Cyan (#00AACC)
+$Script:StartSymbol = '[+]'        # Start einer Operation, Grün
+
+# Definition der Farben für RichTextBox
+$Script:SuccessColor = [System.Drawing.Color]::FromArgb(0, 170, 0)    # Grün (#00AA00)
+$Script:ErrorColor = [System.Drawing.Color]::FromArgb(204, 0, 0)      # Rot (#CC0000)
+$Script:WarningColor = [System.Drawing.Color]::FromArgb(255, 136, 0)  # Orange (#FF8800)
+$Script:InfoColor = [System.Drawing.Color]::FromArgb(0, 102, 204)     # Blau (#0066CC)
+$Script:ProcessColor = [System.Drawing.Color]::FromArgb(0, 170, 204)  # Cyan (#00AACC)
+$Script:StartColor = [System.Drawing.Color]::FromArgb(0, 170, 0)      # Grün (#00AA00)
+
+# Definition der Farben für Konsole (PowerShell)
+$Script:SuccessColorConsole = 'Green'     # ähnlich zu #00AA00
+$Script:ErrorColorConsole = 'Red'         # ähnlich zu #CC0000
+$Script:WarningColorConsole = 'Yellow'    # Gelb (ähnlich zu #FF8800)
+$Script:InfoColorConsole = 'Blue'         # ähnlich zu #0066CC
+$Script:ProcessColorConsole = 'Cyan'      # ähnlich zu #00AACC
+$Script:StartColorConsole = 'Green'       # ähnlich zu #00AA00
+
+# Hilfsfunktion für konsistente Symbol-Ausgabe in Konsole und OutputBox
+function Write-ConsoleAndOutputBox {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$Message,
+        
+        [Parameter(Mandatory=$true)]
+        [ValidateSet('Success', 'Error', 'Warning', 'Info', 'Process', 'Start')]
+        [string]$Type,
+        
+        [System.Windows.Forms.RichTextBox]$OutputBox = $null,
+        
+        [string]$ToolName = "System",
+        
+        [switch]$NoNewLine,
+        
+        [switch]$NoTimestamp,
+        
+        [switch]$SaveToDatabase
+    )
+      # Symbol und Farben anhand des Typs auswählen
+    $symbol = switch ($Type) {
+        'Success' { $Script:SuccessSymbol }
+        'Error'   { $Script:ErrorSymbol }
+        'Warning' { $Script:WarningSymbol }
+        'Info'    { $Script:InfoSymbol }
+        'Process' { $Script:ProcessSymbol }
+        'Start'   { $Script:StartSymbol }
+    }
+    
+    $consoleColor = switch ($Type) {
+        'Success' { $Script:SuccessColorConsole }
+        'Error'   { $Script:ErrorColorConsole }
+        'Warning' { $Script:WarningColorConsole }
+        'Info'    { $Script:InfoColorConsole }
+        'Process' { $Script:ProcessColorConsole }
+        'Start'   { $Script:StartColorConsole }
+    }
+    
+    $boxColor = switch ($Type) {
+        'Success' { $Script:SuccessColor }
+        'Error'   { $Script:ErrorColor }
+        'Warning' { $Script:WarningColor }
+        'Info'    { $Script:InfoColor }
+        'Process' { $Script:ProcessColor }
+        'Start'   { $Script:StartColor }
+    }
+    
+    $messageWithSymbol = "$symbol $Message"
+    
+    # Konsolen-Ausgabe
+    if ($NoNewLine) {
+        Write-Host $messageWithSymbol -NoNewline -ForegroundColor $consoleColor
+    } else {
+        Write-Host $messageWithSymbol -ForegroundColor $consoleColor
+    }
+      # OutputBox-Ausgabe (falls vorhanden)
+    if ($OutputBox) {
+        $logLevel = switch ($Type) {
+            'Success' { 'Success' }
+            'Error'   { 'Error' }
+            'Warning' { 'Warning' }
+            'Info'    { 'Information' }
+            'Process' { 'Information' }
+            'Start'   { 'Information' }
+        }
+        
+        Write-ToolLog -ToolName $ToolName -Message $messageWithSymbol -OutputBox $OutputBox -Color $boxColor -Level $logLevel -NoTimestamp:$NoTimestamp -SaveToDatabase:$SaveToDatabase
+    }
+}
+
+# Funktion zum Abrufen des Symbols
+function Get-Symbol {
+    param(
+        [Parameter(Mandatory=$true)]
+        [ValidateSet('Success', 'Error', 'Warning', 'Info', 'Process', 'Start')]
+        [string]$Type
+    )
+    
+    switch ($Type) {
+        'Success' { return $Script:SuccessSymbol }
+        'Error'   { return $Script:ErrorSymbol }
+        'Warning' { return $Script:WarningSymbol }
+        'Info'    { return $Script:InfoSymbol }
+        'Process' { return $Script:ProcessSymbol }
+        'Start'   { return $Script:StartSymbol }
+    }
+}
+
+# Funktion zum Abrufen der RichTextBox-Farbe
+function Get-SymbolColor {
+    param(
+        [Parameter(Mandatory=$true)]
+        [ValidateSet('Success', 'Error', 'Warning', 'Info', 'Process', 'Start')]
+        [string]$Type
+    )
+    
+    switch ($Type) {
+        'Success' { return $Script:SuccessColor }
+        'Error'   { return $Script:ErrorColor }
+        'Warning' { return $Script:WarningColor }
+        'Info'    { return $Script:InfoColor }
+        'Process' { return $Script:ProcessColor }
+        'Start'   { return $Script:StartColor }
+    }
+}
+
+# Funktion zum Abrufen der Konsolenfarbe
+function Get-SymbolConsoleColor {
+    param(
+        [Parameter(Mandatory=$true)]
+        [ValidateSet('Success', 'Error', 'Warning', 'Info', 'Process', 'Start')]
+        [string]$Type
+    )
+    
+    switch ($Type) {
+        'Success' { return $Script:SuccessColorConsole }
+        'Error'   { return $Script:ErrorColorConsole }
+        'Warning' { return $Script:WarningColorConsole }
+        'Info'    { return $Script:InfoColorConsole }
+        'Process' { return $Script:ProcessColorConsole }
+        'Start'   { return $Script:StartColorConsole }
+    }
+}
+
+# ===== ENDE SYMBOL HELPER FUNKTIONEN =====
+
 # Erweiterte Version von Write-ColoredCenteredText (zentral)
 function Write-ColoredCenteredText {
     param(
@@ -370,7 +522,7 @@ function Invoke-SystemTool {
                 default {
                     throw "Unbekanntes Tool: $toolName"
                 }
-            }        }
+            } }
 
         # Ausführung mit Timeout
         $job = Start-Job -ScriptBlock $scriptBlock -ArgumentList $ToolName, $Arguments, $toolConfig
@@ -455,7 +607,11 @@ Export-ModuleMember -Function @(
     'Get-SystemToolConfig',
     'Update-SystemToolConfig',
     'Write-ColoredCenteredText',
-    'Write-WrappedText'
+    'Write-WrappedText',
+    'Write-ConsoleAndOutputBox',
+    'Get-Symbol',
+    'Get-SymbolColor',
+    'Get-SymbolConsoleColor'
 )
 Export-ModuleMember -Variable SystemToolConfig
 

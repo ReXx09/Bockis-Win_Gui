@@ -1,0 +1,30 @@
+# Proprietary libraries - DO NOT COMMIT
+Lib/iCUESDK.x64_2019.dll
+Lib/HidSharp.dll
+
+# User-specific files
+config.json
+*.user
+*.suo
+
+# Logs
+Logs/*.log
+
+# Temporary files
+*.tmp
+*.temp
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# VS Code
+.vscode/settings.json
+.vscode/launch.json
+.vscode/tasks.json
+
+# Build outputs
+bin/
+obj/
+*.exe

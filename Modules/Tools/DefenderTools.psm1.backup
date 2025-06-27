@@ -114,7 +114,8 @@ function Start-WindowsDefender {
               
         # Status abrufen und anzeigen
         $status = Get-MpComputerStatus
-        Write-ConsoleAndOutputBox -Message "Aktueller Windows Defender Status:" -Type "Info" -OutputBox $outputBox -ToolName "WindowsDefender" -NoTimestamp -SaveToDatabase
+          Write-Host "`n[►] Aktueller Windows Defender Status:" -ForegroundColor Blue
+        Write-ToolLog -ToolName "WindowsDefender" -Message "[►] Aktueller Windows Defender Status:" -OutputBox $outputBox -Color ([System.Drawing.Color]::Blue) -Level "Information" -NoTimestamp -SaveToDatabase
         
         Write-Host " - Antivirus: $($status.AntivirusEnabled)" -ForegroundColor Yellow
         Write-ToolLog -ToolName "WindowsDefender" -Message " - Antivirus: $($status.AntivirusEnabled)" -OutputBox $outputBox -Level "Information" -NoTimestamp -SaveToDatabase
@@ -145,15 +146,15 @@ function Start-WindowsDefender {
         }
         else {
             Write-Host " - Letzter Scan: vor $($status.QuickScanAge) Stunden" -ForegroundColor Blue
-            Write-ToolLog -ToolName "WindowsDefender" -Message " - Letzter Scan: vor $($status.QuickScanAge) Stunden" -OutputBox $outputBox -Level "Information" -NoTimestamp -SaveToDatabase
-        }        
+            Write-ToolLog -ToolName "WindowsDefender" -Message " - Letzter Scan: vor $($status.QuickScanAge) Stunden" -OutputBox $outputBox -Level "Information" -NoTimestamp -SaveToDatabase        
         if (-not $status.AntivirusEnabled) {
-            Write-ConsoleAndOutputBox -Message "WARNUNG: Windows Defender Antivirus ist nicht aktiv!" -Type "Warning" -OutputBox $outputBox -ToolName "WindowsDefender" -NoTimestamp -SaveToDatabase
+            Write-Host "`n[!] WARNUNG: Windows Defender Antivirus ist nicht aktiv!" -ForegroundColor Red
+            Write-ToolLog -ToolName "WindowsDefender" -Message "[!] WARNUNG: Windows Defender Antivirus ist nicht aktiv!" -OutputBox $outputBox -Color ([System.Drawing.Color]::Red) -Level "Warning" -NoTimestamp -SaveToDatabase
         }
         Write-Host "`n" + ("═" * 70) -ForegroundColor Cyan
-        
-        # Starte Quick Scan in der PowerShell
-        Write-ConsoleAndOutputBox -Message "Starte Windows Defender Quick Scan..." -Type "Start" -OutputBox $outputBox -ToolName "WindowsDefender" -NoTimestamp -SaveToDatabase
+          # Starte Quick Scan in der PowerShell
+        Write-Host "`n[+] Starte Windows Defender Quick Scan..." -ForegroundColor Green
+        Write-ToolLog -ToolName "WindowsDefender" -Message "[+] Starte Windows Defender Quick Scan..." -OutputBox $outputBox -Color ([System.Drawing.Color]::Green) -Level "Information" -NoTimestamp -SaveToDatabase
         
         Update-ProgressStatus -StatusText "Führe Quick Scan aus..." -ProgressValue 10 -TextColor ([System.Drawing.Color]::DarkBlue) -progressBarParam $progressBar
         
@@ -177,8 +178,9 @@ function Start-WindowsDefender {
                     Write-Host "Hinweis: Windows Defender PowerShell-Modul konnte nicht geladen werden." -ForegroundColor Yellow
                 }
             }
+            
             if (Get-Command Start-MpScan -ErrorAction SilentlyContinue) {
-                Write-ConsoleAndOutputBox -Message "Führe QuickScan mit Start-MpScan aus..." -Type "Info" -OutputBox $outputBox -ToolName "WindowsDefender" -NoTimestamp
+                Write-Host "`n[►] Führe QuickScan mit Start-MpScan aus..." -ForegroundColor Blue
                 
                 # Animationszeichen für Fortschritt
                 $progressChars = @('|', '/', '-', '\')
@@ -208,18 +210,21 @@ function Start-WindowsDefender {
                 }
                 
                 Write-Host ""  # Neue Zeile nach Animation
+                
                 # Ergebnis abholen
                 $scanResult = Receive-Job -Job $scanJob
-                Remove-Job -Job $scanJob -Force
-                Write-ConsoleAndOutputBox -Message "Windows Defender Quick Scan abgeschlossen." -Type "Success" -OutputBox $outputBox -ToolName "WindowsDefender" -NoTimestamp -SaveToDatabase
+                Remove-Job -Job $scanJob -Force                Write-Host "`n[+] Windows Defender Quick Scan abgeschlossen." -ForegroundColor Green
+                Write-ToolLog -ToolName "WindowsDefender" -Message "[+] Windows Defender Quick Scan abgeschlossen." -OutputBox $outputBox -Color ([System.Drawing.Color]::Green) -Level "Success" -NoTimestamp -SaveToDatabase
                 Write-Host "`n" + ("═" * 70) -ForegroundColor Cyan
             } 
+                       
             else {
                 # Alternativer Ansatz mit MpCmdRun
-                Write-ConsoleAndOutputBox -Message "Start-MpScan nicht verfügbar, verwende MpCmdRun.exe als Alternative..." -Type "Info" -OutputBox $outputBox -ToolName "WindowsDefender" -NoTimestamp
+                Write-Host "`n[►] Start-MpScan nicht verfügbar, verwende MpCmdRun.exe als Alternative..." -ForegroundColor Blue
+                
                 $mpCmdRunPath = "$env:ProgramFiles\Windows Defender\MpCmdRun.exe"
                 if (Test-Path $mpCmdRunPath) {
-                    Write-ConsoleAndOutputBox -Message "MpCmdRun.exe gefunden, starte QuickScan..." -Type "Info" -OutputBox $outputBox -ToolName "WindowsDefender" -NoTimestamp
+                    Write-Host "`n[►] MpCmdRun.exe gefunden, starte QuickScan..." -ForegroundColor Blue
                     
                     # Führe MpCmdRun mit Quick Scan aus
                     $process = Start-Process -FilePath $mpCmdRunPath -ArgumentList "-Scan -ScanType 1" -NoNewWindow -PassThru
@@ -248,18 +253,23 @@ function Start-WindowsDefender {
                     }
                     
                     Write-Host ""  # Neue Zeile nach Animation
+                   
+
                     if ($process.ExitCode -eq 0) {
-                        Write-ConsoleAndOutputBox -Message "Windows Defender Quick Scan (MpCmdRun) abgeschlossen." -Type "Success" -OutputBox $outputBox -ToolName "WindowsDefender" -NoTimestamp -SaveToDatabase
+                        Write-Host "`n[+] Windows Defender Quick Scan (MpCmdRun) abgeschlossen." -ForegroundColor Green
+                        Write-ToolLog -ToolName "WindowsDefender" -Message "Windows Defender Quick Scan (MpCmdRun) abgeschlossen." -OutputBox $outputBox -Color ([System.Drawing.Color]::Green) -Level "Success" -NoTimestamp -SaveToDatabase
                     }
                     else {
-                        Write-ConsoleAndOutputBox -Message "Fehler beim Windows Defender Scan. ExitCode: $($process.ExitCode)" -Type "Error" -OutputBox $outputBox -ToolName "WindowsDefender" -NoTimestamp -SaveToDatabase
-                    }                
+                        Write-Host "`n[!] Fehler beim Windows Defender Scan. ExitCode: $($process.ExitCode)" -ForegroundColor Red
+                        Write-ToolLog -ToolName "WindowsDefender" -Message "Fehler beim Windows Defender Scan (MpCmdRun). ExitCode: $($process.ExitCode)" -OutputBox $outputBox -Color ([System.Drawing.Color]::Red) -Level "Error" -NoTimestamp -SaveToDatabase
+                    }
                 }
                 else {
-                    Write-ConsoleAndOutputBox -Message "Weder Start-MpScan noch MpCmdRun.exe konnten gefunden werden." -Type "Error" -OutputBox $outputBox -ToolName "WindowsDefender" -NoTimestamp -SaveToDatabase
+                    Write-Host "`n[!] Weder Start-MpScan noch MpCmdRun.exe konnten gefunden werden." -ForegroundColor Red
+                    Write-ToolLog -ToolName "WindowsDefender" -Message "Weder Start-MpScan noch MpCmdRun.exe konnten gefunden werden." -OutputBox $outputBox -Color ([System.Drawing.Color]::Red) -Level "Error" -NoTimestamp -SaveToDatabase
                 }
-            }            # Scan-Ergebnisse auswerten
-            Write-ConsoleAndOutputBox -Message "Scan-Ergebnisse werden ausgewertet..." -Type "Info" -OutputBox $outputBox -ToolName "WindowsDefender" -NoTimestamp -SaveToDatabase
+            }            # Scan-Ergebnisse auswerten            Write-Host "`n[►] Scan-Ergebnisse werden ausgewertet..." -ForegroundColor Blue
+            Write-ToolLog -ToolName "WindowsDefender" -Message "[►] Scan-Ergebnisse werden ausgewertet..." -OutputBox $outputBox -Level "Information" -NoTimestamp -SaveToDatabase
             
             $threats = $null
             try {
@@ -267,33 +277,37 @@ function Start-WindowsDefender {
                 if (Get-Command Get-MpThreatDetection -ErrorAction SilentlyContinue) {
                     $threats = Get-MpThreatDetection | Where-Object { $_.ThreatStatus -ne "Resolved" }
                 }
-                if ($threats -and $threats.Count -gt 0) {
+                  if ($threats -and $threats.Count -gt 0) {
                     $threatCount = $threats.Count
-                    Write-ConsoleAndOutputBox -Message "Scan-Ergebnis: $threatCount aktive Bedrohung(en) erkannt!" -Type "Warning" -OutputBox $outputBox -ToolName "WindowsDefender" -NoTimestamp -SaveToDatabase
+                    Write-Host "`n[!] Scan-Ergebnis: $threatCount aktive Bedrohung(en) erkannt!" -ForegroundColor Red
+                    Write-ToolLog -ToolName "WindowsDefender" -Message "[!] Scan-Ergebnis: $threatCount aktive Bedrohung(en) erkannt!" -OutputBox $outputBox -Color ([System.Drawing.Color]::Red) -Level "Warning" -NoTimestamp -SaveToDatabase
                     
                     # Liste alle erkannten Bedrohungen auf
                     foreach ($threat in $threats) {
                         Write-Host "    - $($threat.ThreatName) ($($threat.ThreatID))" -ForegroundColor Red
-                        Write-ToolLog -ToolName "WindowsDefender" -Message "- $($threat.ThreatName) ($($threat.ThreatID))" -OutputBox $outputBox -Color ([System.Drawing.Color]::Red) -Level "Warning" -NoTimestamp -SaveToDatabase
+                        Write-ToolLog -ToolName "WindowsDefender" -Message "    - $($threat.ThreatName) ($($threat.ThreatID))" -OutputBox $outputBox -Color ([System.Drawing.Color]::Red) -Level "Warning" -NoTimestamp -SaveToDatabase
                     }
                 }
                 else {
-                    Write-ConsoleAndOutputBox -Message "Scan-Ergebnis: Keine Bedrohungen erkannt - System ist sauber." -Type "Success" -OutputBox $outputBox -ToolName "WindowsDefender" -NoTimestamp -SaveToDatabase
-                }            
-            }
+                    Write-Host "`n[√] Scan-Ergebnis: Keine Bedrohungen erkannt - System ist sauber." -ForegroundColor Green
+                    Write-ToolLog -ToolName "WindowsDefender" -Message "[√] Scan-Ergebnis: Keine Bedrohungen erkannt - System ist sauber." -OutputBox $outputBox -Color ([System.Drawing.Color]::Green) -Level "Success" -NoTimestamp -SaveToDatabase
+                }            }
             catch {
-                Write-ConsoleAndOutputBox -Message "Fehler beim Auswerten der Scan-Ergebnisse: $_" -Type "Warning" -OutputBox $outputBox -ToolName "WindowsDefender" -NoTimestamp
-            }        
+                Write-Host "`n[!] Fehler beim Auswerten der Scan-Ergebnisse: $_" -ForegroundColor Yellow
+                Write-ToolLog -ToolName "WindowsDefender" -Message "[!] Fehler beim Auswerten der Scan-Ergebnisse: $_" -OutputBox $outputBox -Color ([System.Drawing.Color]::Orange) -Level "Warning" -NoTimestamp -SaveToDatabase
+            }
         }
         catch {
-            Write-ConsoleAndOutputBox -Message "Fehler beim Ausführen des Windows Defender Scans: $_" -Type "Error" -OutputBox $outputBox -ToolName "WindowsDefender" -SaveToDatabase
+            Write-Host "`n[!] Fehler beim Ausführen des Windows Defender Scans: $_" -ForegroundColor Red
+            Write-ToolLog -ToolName "WindowsDefender" -Message "[!] Fehler beim Ausführen des Windows Defender Scans: $_" -OutputBox $outputBox -Color ([System.Drawing.Color]::Red) -Level "Error" -NoTimestamp -SaveToDatabase
         }
         
         # Erfolgreichen Status setzen
-        Update-ProgressStatus -StatusText "Windows Defender Scan abgeschlossen" -ProgressValue 100 -TextColor ([System.Drawing.Color]::Green) -progressBarParam $progressBar    
+        Update-ProgressStatus -StatusText "Windows Defender Scan abgeschlossen" -ProgressValue 100 -TextColor ([System.Drawing.Color]::Green) -progressBarParam $progressBar
     }
     catch {
-        Write-ConsoleAndOutputBox -Message "Fehler beim Ausführen des Windows Defender Scans: $_" -Type "Error" -OutputBox $outputBox -ToolName "WindowsDefender" -SaveToDatabase
+        Write-Host "`n[!] Fehler beim Ausführen des Windows Defender Scans: $_" -ForegroundColor Red
+        Write-ToolLog -ToolName "WindowsDefender" -Message "[!] Fehler beim Ausführen des Windows Defender Scans: $_" -OutputBox $outputBox -Color ([System.Drawing.Color]::Red) -Level "Error" -NoTimestamp -SaveToDatabase
         Update-ProgressStatus -StatusText "Fehler" -ProgressValue 0 -TextColor ([System.Drawing.Color]::Red) -progressBarParam $progressBar
     }
 
@@ -368,17 +382,19 @@ function Restart-DefenderService {
             "Sense", # Windows Defender Advanced Threat Protection Service
             "SecurityHealthService" # Windows Security Health Service
         )
+        
         $restartedServices = 0
         $totalServices = $defenderServices.Count
-        
-        Write-ConsoleAndOutputBox -Message "Starte Neustart der Windows Defender-Dienste..." -Type "Start" -OutputBox $outputBox -ToolName "WindowsDefender" -NoTimestamp -SaveToDatabase
+          Write-Host "`n[+] Starte Neustart der Windows Defender-Dienste..." -ForegroundColor Green
+        Write-ToolLog -ToolName "WindowsDefender" -Message "[+] Starte Neustart der Windows Defender-Dienste..." -OutputBox $outputBox -Color ([System.Drawing.Color]::Green) -Level "Information" -NoTimestamp -SaveToDatabase
         
         foreach ($service in $defenderServices) {
             try {
                 # Prüfen, ob der Dienst existiert
                 $svc = Get-Service -Name $service -ErrorAction SilentlyContinue
-                if ($svc) {
-                    Write-ConsoleAndOutputBox -Message "Dienst: $service" -Type "Info" -OutputBox $outputBox -ToolName "WindowsDefender" -NoTimestamp -SaveToDatabase
+                  if ($svc) {
+                    Write-Host "`n[►] Dienst: $service" -ForegroundColor Blue
+                    Write-ToolLog -ToolName "WindowsDefender" -Message "[►] Dienst: $service" -OutputBox $outputBox -Level "Information" -NoTimestamp -SaveToDatabase
                     
                     # Dienst stoppen
                     Write-Host "    - Stoppe Dienst..." -ForegroundColor Cyan
@@ -395,22 +411,25 @@ function Restart-DefenderService {
                     
                     # Status des Dienstes prüfen
                     $svcStatus = (Get-Service -Name $service).Status
+                    
                     if ($svcStatus -eq "Running") {
                         Write-Host "    - Status: $svcStatus ✓" -ForegroundColor Green
-                        Write-ToolLog -ToolName "WindowsDefender" -Message "  - Status: $svcStatus ✓" -OutputBox $outputBox -Color ([System.Drawing.Color]::Green) -NoTimestamp
+                        Write-ToolLog -ToolName "WindowsDefender" -Message "  - Status: $svcStatus" -OutputBox $outputBox -Color ([System.Drawing.Color]::Green) -NoTimestamp
                         $restartedServices++
                     } 
                     else {
                         Write-Host "    - Status: $svcStatus ✗" -ForegroundColor Red
-                        Write-ToolLog -ToolName "WindowsDefender" -Message "  - Status: $svcStatus ✗" -OutputBox $outputBox -Color ([System.Drawing.Color]::Red) -NoTimestamp
-                    }                
+                        Write-ToolLog -ToolName "WindowsDefender" -Message "  - Status: $svcStatus" -OutputBox $outputBox -Color ([System.Drawing.Color]::Red) -NoTimestamp
+                    }
                 } 
                 else {
-                    Write-ConsoleAndOutputBox -Message "Dienst $service nicht gefunden." -Type "Warning" -OutputBox $outputBox -ToolName "WindowsDefender" -NoTimestamp
-                }            
+                    Write-Host "`n[!] Dienst $service nicht gefunden." -ForegroundColor Yellow
+                    Write-ToolLog -ToolName "WindowsDefender" -Message "Dienst $service nicht gefunden." -OutputBox $outputBox -Color ([System.Drawing.Color]::Yellow) -NoTimestamp
+                }
             }
             catch {
-                Write-ConsoleAndOutputBox -Message "Fehler beim Neustart des Dienstes $service - Fehlermeldung: $_" -Type "Error" -OutputBox $outputBox -ToolName "WindowsDefender" -NoTimestamp
+                Write-Host "`n[!] Fehler beim Neustart des Dienstes $service - Fehlermeldung: $_" -ForegroundColor Red
+                Write-ToolLog -ToolName "WindowsDefender" -Message "Fehler beim Neustart des Dienstes $service - Fehlermeldung: $_" -OutputBox $outputBox -Color ([System.Drawing.Color]::Red) -NoTimestamp
             }
             
             # Fortschritt aktualisieren
@@ -420,23 +439,26 @@ function Restart-DefenderService {
                 Update-ProgressStatus -StatusText $statusMessage -ProgressValue $progressValue -TextColor ([System.Drawing.Color]::Blue) -progressBarParam $progressBar
             }
         }
-        # MpCmdRun.exe zur Aktualisierung der Signaturen ausführen
-        Write-ConsoleAndOutputBox -Message "Aktualisiere Defender-Signaturen..." -Type "Start" -OutputBox $outputBox -ToolName "WindowsDefender" -NoTimestamp
+          # MpCmdRun.exe zur Aktualisierung der Signaturen ausführen
+        Write-Host "`n[+] Aktualisiere Defender-Signaturen..." -ForegroundColor Green
+        Write-ToolLog -ToolName "WindowsDefender" -Message "[+] Aktualisiere Defender-Signaturen..." -OutputBox $outputBox -NoTimestamp
         
         $mpCmdRunPath = "$env:ProgramFiles\Windows Defender\MpCmdRun.exe"
         if (Test-Path $mpCmdRunPath) {
             Write-Host "    - Starte Update-Prozess..." -ForegroundColor Cyan
             Start-Process -FilePath $mpCmdRunPath -ArgumentList "-SignatureUpdate" -NoNewWindow -Wait
             
-            Write-ConsoleAndOutputBox -Message "  - Signatur-Update abgeschlossen." -Type "Success" -OutputBox $outputBox -ToolName "WindowsDefender" -NoTimestamp        
+            Write-Host "    - Signatur-Update abgeschlossen ✓" -ForegroundColor Green
+            Write-ToolLog -ToolName "WindowsDefender" -Message "  - Signatur-Update abgeschlossen." -OutputBox $outputBox -Color ([System.Drawing.Color]::Green) -NoTimestamp
         }
         else {
-            Write-ConsoleAndOutputBox -Message "MpCmdRun.exe nicht gefunden. Signatur-Update übersprungen." -Type "Warning" -OutputBox $outputBox -ToolName "WindowsDefender" -NoTimestamp
+            Write-Host "    - MpCmdRun.exe nicht gefunden. Signatur-Update übersprungen ✗" -ForegroundColor Yellow
+            Write-ToolLog -ToolName "WindowsDefender" -Message "MpCmdRun.exe nicht gefunden. Signatur-Update übersprungen." -OutputBox $outputBox -Color ([System.Drawing.Color]::Yellow) -NoTimestamp
         }
         
         # Status abrufen und anzeigen
-        $status = Get-MpComputerStatus
-        Write-ConsoleAndOutputBox -Message "Aktueller Status nach Neustart:" -Type "Start" -OutputBox $outputBox -ToolName "WindowsDefender" -NoTimestamp -SaveToDatabase
+        $status = Get-MpComputerStatus        Write-Host "`n[+] Aktueller Status nach Neustart:" -ForegroundColor Green
+        Write-ToolLog -ToolName "WindowsDefender" -Message "[+] Aktueller Status nach Neustart:" -OutputBox $outputBox -Color ([System.Drawing.Color]::Green) -Level "Information" -NoTimestamp -SaveToDatabase
         
         Write-Host "    - Antivirus: $($status.AntivirusEnabled)" -ForegroundColor Yellow
         Write-ToolLog -ToolName "WindowsDefender" -Message "- Antivirus: $($status.AntivirusEnabled)" -OutputBox $outputBox -Level "Information" -NoTimestamp -SaveToDatabase
@@ -471,26 +493,29 @@ function Restart-DefenderService {
             Write-Host "    - Letzter Scan: vor $($status.QuickScanAge) Stunden" -ForegroundColor Cyan
             Write-ToolLog -ToolName "WindowsDefender" -Message "- Letzter Scan: vor $($status.QuickScanAge) Stunden" -OutputBox $outputBox -Level "Information" -NoTimestamp -SaveToDatabase
         }
+        
         if (-not $status.AntivirusEnabled) {
-            Write-ConsoleAndOutputBox -Message "WARNUNG: Windows Defender Antivirus ist nicht aktiv!" -Type "Warning" -OutputBox $outputBox -ToolName "WindowsDefender" -NoTimestamp -SaveToDatabase
+            Write-Host "`n[!] WARNUNG: Windows Defender Antivirus ist nicht aktiv!" -ForegroundColor Red
+            Write-ToolLog -ToolName "WindowsDefender" -Message "WARNUNG: Windows Defender Antivirus ist nicht aktiv!" -OutputBox $outputBox -Color ([System.Drawing.Color]::Red) -Level "Warning" -NoTimestamp -SaveToDatabase
         }
         
         # Erfolgreichen Status setzen
         if ($restartedServices -eq $totalServices) {
-            Write-ConsoleAndOutputBox -Message "Windows Defender-Dienste erfolgreich neu gestartet" -Type "Success" -OutputBox $outputBox -ToolName "WindowsDefender"
+            Write-Host "`n[✓] Windows Defender-Dienste erfolgreich neu gestartet" -ForegroundColor Green
             Update-ProgressStatus -StatusText "Windows Defender-Dienste erfolgreich neu gestartet" -ProgressValue 100 -TextColor ([System.Drawing.Color]::Green) -progressBarParam $progressBar
         }
         elseif ($restartedServices -gt 0) {
-            Write-ConsoleAndOutputBox -Message "$restartedServices von $totalServices Diensten neu gestartet" -Type "Warning" -OutputBox $outputBox -ToolName "WindowsDefender"
+            Write-Host "`n[!] $restartedServices von $totalServices Diensten neu gestartet" -ForegroundColor Yellow
             Update-ProgressStatus -StatusText "$restartedServices von $totalServices Diensten neu gestartet" -ProgressValue 100 -TextColor ([System.Drawing.Color]::Yellow) -progressBarParam $progressBar
         }
         else {
-            Write-ConsoleAndOutputBox -Message "Fehler beim Neustart der Dienste" -Type "Error" -OutputBox $outputBox -ToolName "WindowsDefender"
+            Write-Host "`n[✗] Fehler beim Neustart der Dienste" -ForegroundColor Red
             Update-ProgressStatus -StatusText "Fehler beim Neustart der Dienste" -ProgressValue 0 -TextColor ([System.Drawing.Color]::Red) -progressBarParam $progressBar
-        }    
+        }
     }
     catch {
-        Write-ConsoleAndOutputBox -Message "Fehler beim Neustart der Defender-Dienste: $_" -Type "Error" -OutputBox $outputBox -ToolName "WindowsDefender" -NoTimestamp -SaveToDatabase
+        Write-Host "`n[✗] Fehler beim Neustart der Defender-Dienste: $_" -ForegroundColor Red
+        Write-ToolLog -ToolName "WindowsDefender" -Message "Fehler beim Neustart der Defender-Dienste - Fehlermeldung: $_" -OutputBox $outputBox -Color ([System.Drawing.Color]::Red) -Level "Error" -NoTimestamp -SaveToDatabase
         
         Update-ProgressStatus -StatusText "Fehler" -ProgressValue 0 -TextColor ([System.Drawing.Color]::Red) -progressBarParam $progressBar
     }
@@ -599,8 +624,9 @@ function Start-DefenderOfflineScan {
     
     # Progress Bar aktualisieren
     Update-ProgressStatus -StatusText "Defender Offline-Scan wird vorbereitet..." -ProgressValue 10 -TextColor ([System.Drawing.Color]::DarkBlue) -progressBarParam $progressBar
+    
     # Wichtige Informationen anzeigen
-    Write-ConsoleAndOutputBox -Message "WICHTIGE INFORMATIONEN" -Type "Warning" -OutputBox $outputBox -ToolName "DefenderOfflineScan" -NoTimestamp -SaveToDatabase
+    Write-Host "`n[!] WICHTIGE INFORMATIONEN" -ForegroundColor Yellow
     Write-Host "Der Windows Defender Offline-Scan..." -ForegroundColor Cyan
     Write-Host " ├─ Benötigt einen Systemneustart" -ForegroundColor White
     Write-Host " ├─ Führt nach dem Neustart einen umfassenden Scan durch" -ForegroundColor White
@@ -635,22 +661,26 @@ function Start-DefenderOfflineScan {
     if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
         try {
             # Update Fortschritt
-            Update-ProgressStatus -StatusText "Konfiguriere Offline-Scan..." -ProgressValue 50 -TextColor ([System.Drawing.Color]::Blue) -progressBarParam $progressBar
-            Write-ConsoleAndOutputBox -Message "Bereite Windows Defender Offline-Scan vor..." -Type "Start" -OutputBox $outputBox -ToolName "DefenderOfflineScan" -NoTimestamp -SaveToDatabase
+            Update-ProgressStatus -StatusText "Konfiguriere Offline-Scan..." -ProgressValue 50 -TextColor ([System.Drawing.Color]::Blue) -progressBarParam $progressBar            Write-Host "`n[+] Bereite Windows Defender Offline-Scan vor..." -ForegroundColor Green
+            Write-ToolLog -ToolName "DefenderOfflineScan" -Message "[+] Bereite Windows Defender Offline-Scan vor..." -OutputBox $outputBox -Color ([System.Drawing.Color]::Green) -Level "Information" -NoTimestamp -SaveToDatabase
             
             # Prüfe, welche Methode verfügbar ist
             $offlineScanConfigured = $false
-            # Methode 1: Start-MpWDOScan cmdlet
-            if (Get-Command Start-MpWDOScan -ErrorAction SilentlyContinue) {
+            
+            # Methode 1: Start-MpWDOScan cmdlet            if (Get-Command Start-MpWDOScan -ErrorAction SilentlyContinue) {
                 try {
-                    Write-ConsoleAndOutputBox -Message "Konfiguriere Offline-Scan mit PowerShell-Cmdlet..." -Type "Info" -OutputBox $outputBox -ToolName "DefenderOfflineScan" -NoTimestamp -SaveToDatabase
+                    Write-Host "`n[►] Konfiguriere Offline-Scan mit PowerShell-Cmdlet..." -ForegroundColor Blue
+                    Write-ToolLog -ToolName "DefenderOfflineScan" -Message "[►] Konfiguriere Offline-Scan mit PowerShell-Cmdlet..." -OutputBox $outputBox -Level "Information" -NoTimestamp -SaveToDatabase
+                    
                     Start-MpWDOScan
                     $offlineScanConfigured = $true
                     
-                    Write-ConsoleAndOutputBox -Message "Offline-Scan wurde erfolgreich konfiguriert!" -Type "Success" -OutputBox $outputBox -ToolName "WindowsDefender" -NoTimestamp
+                    Write-Host "`n[+] Offline-Scan wurde erfolgreich konfiguriert!" -ForegroundColor Green
+                    Write-ToolLog -ToolName "WindowsDefender" -Message "Offline-Scan wurde erfolgreich konfiguriert!" -OutputBox $outputBox -Color ([System.Drawing.Color]::Green) -NoTimestamp
                 }
                 catch {
-                    Write-ConsoleAndOutputBox -Message "Fehler beim Konfigurieren des Offline-Scans mit PowerShell-Cmdlet: $_" -Type "Error" -OutputBox $outputBox -ToolName "WindowsDefender" -NoTimestamp
+                    Write-Host "`n[!] Fehler beim Konfigurieren des Offline-Scans mit PowerShell-Cmdlet: $_" -ForegroundColor Red
+                    Write-ToolLog -ToolName "WindowsDefender" -Message "Fehler beim Konfigurieren des Offline-Scans mit PowerShell-Cmdlet: $_" -OutputBox $outputBox -Color ([System.Drawing.Color]::Red) -NoTimestamp
                 }
             }
             
@@ -658,45 +688,56 @@ function Start-DefenderOfflineScan {
             if (-not $offlineScanConfigured) {
                 try {
                     $mpCmdRunPath = "$env:ProgramFiles\Windows Defender\MpCmdRun.exe"
-                    if (Test-Path $mpCmdRunPath) {
-                        Write-ConsoleAndOutputBox -Message "Konfiguriere Offline-Scan mit MpCmdRun.exe..." -Type "Info" -OutputBox $outputBox -ToolName "WindowsDefender" -NoTimestamp
+                    if (Test-Path $mpCmdRunPath) {                        Write-Host "`n[►] Konfiguriere Offline-Scan mit MpCmdRun.exe..." -ForegroundColor Blue
+                        Write-ToolLog -ToolName "WindowsDefender" -Message "[►] Konfiguriere Offline-Scan mit MpCmdRun.exe..." -OutputBox $outputBox -NoTimestamp
                         
                         # Führe MpCmdRun für offline-Scan aus
                         $process = Start-Process -FilePath $mpCmdRunPath -ArgumentList "-wdoscan" -NoNewWindow -PassThru -Wait
+                        
                         if ($process.ExitCode -eq 0) {
                             $offlineScanConfigured = $true
-                            Write-ConsoleAndOutputBox -Message "Offline-Scan wurde erfolgreich konfiguriert!" -Type "Success" -OutputBox $outputBox -ToolName "WindowsDefender" -NoTimestamp
+                            Write-Host "`n[+] Offline-Scan wurde erfolgreich konfiguriert!" -ForegroundColor Green
+                            Write-ToolLog -ToolName "WindowsDefender" -Message "Offline-Scan wurde erfolgreich konfiguriert!" -OutputBox $outputBox -Color ([System.Drawing.Color]::Green) -NoTimestamp
                         }
                         else {
-                            Write-ConsoleAndOutputBox -Message "Fehler beim Konfigurieren des Offline-Scans mit MpCmdRun.exe. ExitCode: $($process.ExitCode)" -Type "Error" -OutputBox $outputBox -ToolName "WindowsDefender" -NoTimestamp
+                            Write-Host "`n[!] Fehler beim Konfigurieren des Offline-Scans mit MpCmdRun.exe. ExitCode: $($process.ExitCode)" -ForegroundColor Red
+                            Write-ToolLog -ToolName "WindowsDefender" -Message "Fehler beim Konfigurieren des Offline-Scans mit MpCmdRun.exe. ExitCode: $($process.ExitCode)" -OutputBox $outputBox -Color ([System.Drawing.Color]::Red) -NoTimestamp
                         }
                     }
                     else {
-                        Write-ConsoleAndOutputBox -Message "MpCmdRun.exe nicht gefunden unter $mpCmdRunPath" -Type "Error" -OutputBox $outputBox -ToolName "WindowsDefender" -NoTimestamp
+                        Write-Host "`n[!] MpCmdRun.exe nicht gefunden unter $mpCmdRunPath" -ForegroundColor Red
+                        Write-ToolLog -ToolName "WindowsDefender" -Message "MpCmdRun.exe nicht gefunden unter $mpCmdRunPath" -OutputBox $outputBox -Color ([System.Drawing.Color]::Red) -NoTimestamp
                     }
                 }
                 catch {
-                    Write-ConsoleAndOutputBox -Message "Fehler beim Konfigurieren des Offline-Scans mit MpCmdRun.exe: $_" -Type "Error" -OutputBox $outputBox -ToolName "WindowsDefender" -NoTimestamp
+                    Write-Host "`n[!] Fehler beim Konfigurieren des Offline-Scans mit MpCmdRun.exe: $_" -ForegroundColor Red
+                    Write-ToolLog -ToolName "WindowsDefender" -Message "Fehler beim Konfigurieren des Offline-Scans mit MpCmdRun.exe: $_" -OutputBox $outputBox -Color ([System.Drawing.Color]::Red) -NoTimestamp
                 }
             }
+            
             # Methode 3: PowerShell-Befehl zum Neustart mit speziellen Parametern
             if (-not $offlineScanConfigured) {
                 try {
-                    Write-ConsoleAndOutputBox -Message "Verwende alternative Methode über WDOSCAN-Parameter..." -Type "Info" -OutputBox $outputBox -ToolName "WindowsDefender" -NoTimestamp
+                    Write-Host "`n[►] Verwende alternative Methode über WDOSCAN-Parameter..." -ForegroundColor Blue
+                    Write-ToolLog -ToolName "WindowsDefender" -Message "Verwende alternative Methode über WDOSCAN-Parameter..." -OutputBox $outputBox -NoTimestamp
                     
                     # Offline-Scan über Shutdown-Befehl einleiten
                     # Der Parameter /fw erzwingt, dass Windows mit Windows Defender Offline gestartet wird
                     $process = Start-Process -FilePath "shutdown.exe" -ArgumentList "/r /t 60 /f /fw" -NoNewWindow -PassThru -Wait
+                    
                     if ($process.ExitCode -eq 0) {
                         $offlineScanConfigured = $true
-                        Write-ConsoleAndOutputBox -Message "System wird in 60 Sekunden neu gestartet für den Offline-Scan!" -Type "Success" -OutputBox $outputBox -ToolName "WindowsDefender" -NoTimestamp
+                        Write-Host "`n[+] System wird in 60 Sekunden neu gestartet für den Offline-Scan!" -ForegroundColor Green
+                        Write-ToolLog -ToolName "WindowsDefender" -Message "System wird in 60 Sekunden neu gestartet für den Offline-Scan!" -OutputBox $outputBox -Color ([System.Drawing.Color]::Green) -NoTimestamp
                     }
                     else {
-                        Write-ConsoleAndOutputBox -Message "Fehler beim Konfigurieren des Neustarts. ExitCode: $($process.ExitCode)" -Type "Error" -OutputBox $outputBox -ToolName "WindowsDefender" -NoTimestamp
+                        Write-Host "`n[!] Fehler beim Konfigurieren des Neustarts. ExitCode: $($process.ExitCode)" -ForegroundColor Red
+                        Write-ToolLog -ToolName "WindowsDefender" -Message "Fehler beim Konfigurieren des Neustarts. ExitCode: $($process.ExitCode)" -OutputBox $outputBox -Color ([System.Drawing.Color]::Red) -NoTimestamp
                     }
                 }
                 catch {
-                    Write-ConsoleAndOutputBox -Message "Fehler beim Konfigurieren des Neustarts: $_" -Type "Error" -OutputBox $outputBox -ToolName "WindowsDefender" -NoTimestamp
+                    Write-Host "`n[!] Fehler beim Konfigurieren des Neustarts: $_" -ForegroundColor Red
+                    Write-ToolLog -ToolName "WindowsDefender" -Message "Fehler beim Konfigurieren des Neustarts: $_" -OutputBox $outputBox -Color ([System.Drawing.Color]::Red) -NoTimestamp
                 }
             }
 
@@ -728,17 +769,19 @@ function Start-DefenderOfflineScan {
                     [System.Windows.Forms.MessageBoxButtons]::OK,
                     [System.Windows.Forms.MessageBoxIcon]::Error
                 )
-            }        
+            }
         }
         catch {
-            Write-ConsoleAndOutputBox -Message "Unerwarteter Fehler beim Konfigurieren des Offline-Scans: $_" -Type "Error" -OutputBox $outputBox -ToolName "DefenderOfflineScan" -NoTimestamp -SaveToDatabase
+            Write-Host "`n[!] Unerwarteter Fehler beim Konfigurieren des Offline-Scans: $_" -ForegroundColor Red
+            Write-ToolLog -ToolName "DefenderOfflineScan" -Message "Unerwarteter Fehler beim Konfigurieren des Offline-Scans: $_" -OutputBox $outputBox -Color ([System.Drawing.Color]::Red) -Level "Error" -SaveToDatabase
             
             Update-ProgressStatus -StatusText "Fehler" -ProgressValue 0 -TextColor ([System.Drawing.Color]::Red) -progressBarParam $progressBar
         }
     }
     else {
         # Benutzer hat abgebrochen
-        Write-ConsoleAndOutputBox -Message "Vorgang wurde durch den Benutzer abgebrochen." -Type "Warning" -OutputBox $outputBox -ToolName "DefenderOfflineScan" -SaveToDatabase
+        Write-Host "`n[!] Vorgang wurde durch den Benutzer abgebrochen." -ForegroundColor Red
+        Write-ToolLog -ToolName "DefenderOfflineScan" -Message "Vorgang wurde durch den Benutzer abgebrochen." -OutputBox $outputBox -Color ([System.Drawing.Color]::Red) -Level "Information" -SaveToDatabase
         
         Update-ProgressStatus -StatusText "Abgebrochen" -ProgressValue 0 -TextColor ([System.Drawing.Color]::Blue) -progressBarParam $progressBar
     }
