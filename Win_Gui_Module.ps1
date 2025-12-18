@@ -4702,10 +4702,10 @@ Start-Process powershell.exe -ArgumentList '-ExecutionPolicy Bypass -File "$PSSc
     }
 }
 
-# Update-Button erstellen
+# Update-Button erstellen (rechts neben Progressbar)
 $btnUpdate = New-Object System.Windows.Forms.Button
 $btnUpdate.Text = "🔄 Update"
-$btnUpdate.Location = New-Object System.Drawing.Point(180, 755)
+$btnUpdate.Location = New-Object System.Drawing.Point(850, 755)  # 190 + 650 + 10 = rechts neben Progressbar
 $btnUpdate.Size = New-Object System.Drawing.Size(140, 30)
 $btnUpdate.BackColor = [System.Drawing.Color]::FromArgb(16, 124, 16)  # Grün
 $btnUpdate.ForeColor = [System.Drawing.Color]::White
