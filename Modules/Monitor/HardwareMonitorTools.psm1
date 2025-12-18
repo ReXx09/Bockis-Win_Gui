@@ -48,11 +48,6 @@ $script:ramStats = @{}
 # Automatische Zurücksetzung der Statistiken nach X Stunden
 $script:statsResetInterval = [TimeSpan]::FromHours(24)
 
-# Corsair iCUE Integration - Pfad zur SDK DLL definieren (muss installiert sein)
-$script:iCUESDKPath = Join-Path -Path ${env:ProgramFiles(x86)} -ChildPath "Corsair\CORSAIR iCUE Software\SDK\bin\CUESDK.x64_2019.dll"
-$script:useICUE = $false
-$script:icueInitialized = $false
-
 #endregion
 
 #region Debug-Funktionalität
@@ -1887,7 +1882,6 @@ function Get-RamTemperature {
         2. Registry-Werte
         3. LibreHardwareMonitor-Sensoren (Memory und Mainboard)
         4. SMBus-Direktzugriff
-        5. Corsair iCUE SDK (für Corsair RAM)
         
         Die Funktion implementiert ein intelligentes Caching und liefert detaillierte Debuginformationen.
     
@@ -2230,45 +2224,6 @@ function Get-RamTemperature {
         }
         #endregion
         
-        #region METHODE 5: Corsair iCUE SDK (letzte Option)
-        if ($script:DebugModeRAM) {
-            Write-DebugOutput -Component 'RAM' -Message "Methode 5: Versuche Corsair iCUE SDK" -Force
-        }
-        
-        # Prüfe, ob die Corsair SDK initialisiert ist oder initialisierbar ist
-        if ((Test-Path $script:iCUESDKPath) -or $script:icueInitialized) {
-            try {
-                $corsairTemp = Get-CorsairRAMTemperature
-                
-                if ($corsairTemp) {
-                    if ($script:DebugModeRAM) {
-                        Write-DebugOutput -Component 'RAM' -Message "Corsair iCUE: RAM-Temperatur = $corsairTemp°C" -Force
-                    }
-                    
-                    # Cache aktualisieren
-                    $script:lastRamTemp = $corsairTemp
-                    $script:lastRamTempTime = $now
-                    $script:ramStats.Corsair = @{
-                        FoundSensors = $true
-                        Source       = "Corsair iCUE"
-                        Values       = @($corsairTemp)
-                        Min          = $corsairTemp
-                        Max          = $corsairTemp
-                        Avg          = $corsairTemp
-                        Current      = $corsairTemp
-                    }
-                    
-                    return $corsairTemp
-                }
-            }
-            catch {
-                if ($script:DebugModeRAM) {
-                    Write-DebugOutput -Component 'RAM' -Message "Corsair iCUE Fehler: $_" -Force
-                }
-            }
-        }
-        #endregion
-        
         # Wenn keine Methode erfolgreich war
         if ($script:DebugModeRAM) {
             Write-DebugOutput -Component 'RAM' -Message "Keine RAM-Temperatur ermittelbar" -Force
@@ -2278,79 +2233,6 @@ function Get-RamTemperature {
     }
     catch {
         Write-DebugOutput -Component 'RAM' -Message "Fehler bei RAM-Temperatur: $_" -Force
-        return $null
-    }
-}
-
-# Versuche die iCUE SDK für Corsair RAM einzubinden
-function Initialize-CorsairSDK {
-    if ($script:icueInitialized) {
-        return $true
-    }
-    
-    try {
-        if (Test-Path $script:iCUESDKPath) {
-            # Importiere die iCUE SDK DLL
-            Add-Type -Path $script:iCUESDKPath -ErrorAction Stop
-            
-            # Initialisiere SDK
-            [CUESDK.CorsairLightingSDK]::CorsairPerformProtocolHandshake() | Out-Null
-            $deviceCount = [CUESDK.CorsairLightingSDK]::CorsairGetDeviceCount()
-            
-            if ($deviceCount -gt 0) {
-                Write-Host "Corsair iCUE SDK erfolgreich initialisiert. $deviceCount Geräte gefunden." -ForegroundColor Green
-                $script:useICUE = $true
-                $script:icueInitialized = $true
-                return $true
-            }
-            else {
-                Write-Host "Corsair iCUE SDK initialisiert, aber keine Geräte gefunden." -ForegroundColor Yellow
-                return $false
-            }
-        }
-        else {
-            # Write-Host "Corsair iCUE SDK nicht gefunden unter: $script:iCUESDKPath" -ForegroundColor Yellow
-            return $false
-        }
-    }
-    catch {
-        # Fehler beim Laden der DLL
-        # Write-Host "Fehler beim Initialisieren der Corsair iCUE SDK: $_" -ForegroundColor Yellow
-        return $false
-    }
-}
-    
-# Funktion zum Abrufen der Corsair RAM Temperatur via iCUE
-function Get-CorsairRAMTemperature {
-    if (-not $script:useICUE -or -not $script:icueInitialized) {
-        if (-not (Initialize-CorsairSDK)) {
-            return $null
-        }
-    }
-    
-    try {
-        $deviceCount = [CUESDK.CorsairLightingSDK]::CorsairGetDeviceCount()
-        
-        for ($i = 0; $i -lt $deviceCount; $i++) {
-            $device = [CUESDK.CorsairLightingSDK]::CorsairGetDeviceInfo($i)
-            
-            # Prüfe, ob es sich um RAM handelt (Typischerweise Typ 4 = DRAM)
-            if ($device.type -eq 4 -or $device.model -match "Dominator|Vengeance|RAM") {
-                # Versuche Sensor-Informationen abzurufen
-                $sensorInfo = [CUESDK.CorsairLightingSDK]::CorsairGetTemperature($i)
-                
-                if ($sensorInfo -and $sensorInfo.temperature -gt 0) {
-                    return [math]::Round($sensorInfo.temperature, 1)
-                }
-            }
-        }
-        
-        return $null
-    }
-    catch {
-        if ($script:DebugModeRAM) {
-            Write-DebugOutput -Component 'RAM' -Message "Fehler bei Corsair SDK: $_" -Force
-        }
         return $null
     }
 }

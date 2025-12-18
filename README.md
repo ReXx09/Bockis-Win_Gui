@@ -453,12 +453,6 @@ Dieses Tool ist unter der MIT-Lizenz veröffentlicht. Siehe [LICENSE.txt](LICENS
 ### Drittanbieter-Lizenzen
 Dieses Projekt verwendet verschiedene Drittanbieter-Bibliotheken. Details siehe [THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md).
 
-**Wichtiger Hinweis:** Einige optionale Funktionen benötigen proprietäre Software:
-- Corsair iCUE SDK (für Corsair-Hardware)
-- HidSharp (für HID-Geräte)
-
-Diese müssen separat installiert werden und sind nicht im Repository enthalten.
-
 ## 🔧 Technische Details
 
 ### Architektur
