@@ -1,0 +1,212 @@
+[
+  {
+    "Category": "system",
+    "Tool": "7-Zip",
+    "WingetId": "7zip.7zip",
+    "Status": "Valid",
+    "Message": "Winget-ID verfügbar"
+  },
+  {
+    "Category": "system",
+    "Tool": "CCleaner",
+    "WingetId": "Piriform.CCleaner",
+    "Status": "Valid",
+    "Message": "Winget-ID verfügbar"
+  },
+  {
+    "Category": "system",
+    "Tool": "CPU-Z",
+    "WingetId": "CPUID.CPU-Z",
+    "Status": "Valid",
+    "Message": "Winget-ID verfügbar"
+  },
+  {
+    "Category": "system",
+    "Tool": "GPU-Z",
+    "WingetId": "TechPowerUp.GPU-Z",
+    "Status": "Valid",
+    "Message": "Winget-ID verfügbar"
+  },
+  {
+    "Category": "system",
+    "Tool": "OCCT",
+    "WingetId": "OCBASE.OCCT",
+    "Status": "Invalid",
+    "Message": "Winget-ID nicht gefunden"
+  },
+  {
+    "Category": "system",
+    "Tool": "Intel Driver & Support Assistant",
+    "WingetId": "Intel.IntelDriverAndSupportAssistant",
+    "Status": "Valid",
+    "Message": "Winget-ID verfügbar"
+  },
+  {
+    "Category": "system",
+    "Tool": "LibreHardwareMonitor",
+    "WingetId": "LibreHardwareMonitor.LibreHardwareMonitor",
+    "Status": "Valid",
+    "Message": "Winget-ID verfügbar"
+  },
+  {
+    "Category": "system",
+    "Tool": "UniGetUI",
+    "WingetId": "MartiCliment.UniGetUI",
+    "Status": "Valid",
+    "Message": "Winget-ID verfügbar"
+  },
+  {
+    "Category": "applications",
+    "Tool": "Brave Browser",
+    "WingetId": "Brave.Brave",
+    "Status": "Valid",
+    "Message": "Winget-ID verfügbar"
+  },
+  {
+    "Category": "applications",
+    "Tool": "Mozilla Firefox",
+    "WingetId": "Mozilla.Firefox",
+    "Status": "Valid",
+    "Message": "Winget-ID verfügbar"
+  },
+  {
+    "Category": "applications",
+    "Tool": "Google Chrome",
+    "WingetId": "Google.Chrome",
+    "Status": "Valid",
+    "Message": "Winget-ID verfügbar"
+  },
+  {
+    "Category": "applications",
+    "Tool": "Discord",
+    "WingetId": "Discord.Discord",
+    "Status": "Valid",
+    "Message": "Winget-ID verfügbar"
+  },
+  {
+    "Category": "applications",
+    "Tool": "LibreOffice",
+    "WingetId": "TheDocumentFoundation.LibreOffice",
+    "Status": "Valid",
+    "Message": "Winget-ID verfügbar"
+  },
+  {
+    "Category": "applications",
+    "Tool": "Apache OpenOffice",
+    "WingetId": "Apache.OpenOffice",
+    "Status": "Valid",
+    "Message": "Winget-ID verfügbar"
+  },
+  {
+    "Category": "applications",
+    "Tool": "Sky Go",
+    "WingetId": "SkyDeutschland.SkyGo",
+    "Status": "Invalid",
+    "Message": "Winget-ID nicht gefunden"
+  },
+  {
+    "Category": "audiotv",
+    "Tool": "VLC Media Player",
+    "WingetId": "VideoLAN.VLC",
+    "Status": "Valid",
+    "Message": "Winget-ID verfügbar"
+  },
+  {
+    "Category": "audiotv",
+    "Tool": "Spotify",
+    "WingetId": "Spotify.Spotify",
+    "Status": "Valid",
+    "Message": "Winget-ID verfügbar"
+  },
+  {
+    "Category": "audiotv",
+    "Tool": "Audacity",
+    "WingetId": "Audacity.Audacity",
+    "Status": "Valid",
+    "Message": "Winget-ID verfügbar"
+  },
+  {
+    "Category": "audiotv",
+    "Tool": "OBS Studio",
+    "WingetId": "OBSProject.OBSStudio",
+    "Status": "Valid",
+    "Message": "Winget-ID verfügbar"
+  },
+  {
+    "Category": "audiotv",
+    "Tool": "Sky Go",
+    "WingetId": "Sky.SkyGo",
+    "Status": "Valid",
+    "Message": "Winget-ID verfügbar"
+  },
+  {
+    "Category": "audiotv",
+    "Tool": "EarTrumpet",
+    "WingetId": "File-New-Project.EarTrumpet",
+    "Status": "Valid",
+    "Message": "Winget-ID verfügbar"
+  },
+  {
+    "Category": "audiotv",
+    "Tool": "SteelSeries GG",
+    "WingetId": "SteelSeries.GG",
+    "Status": "Valid",
+    "Message": "Winget-ID verfügbar"
+  },
+  {
+    "Category": "audiotv",
+    "Tool": "MIXLINE",
+    "WingetId": "Logitech.MIXLINE",
+    "Status": "Valid",
+    "Message": "Winget-ID verfügbar"
+  },
+  {
+    "Category": "audiotv",
+    "Tool": "Voicemeeter Potato",
+    "WingetId": "VB-Audio.Voicemeeter.Potato",
+    "Status": "Valid",
+    "Message": "Winget-ID verfügbar"
+  },
+  {
+    "Category": "coding",
+    "Tool": "PuTTY",
+    "WingetId": "PuTTY.PuTTY",
+    "Status": "Valid",
+    "Message": "Winget-ID verfügbar"
+  },
+  {
+    "Category": "coding",
+    "Tool": "WinSCP",
+    "WingetId": "WinSCP.WinSCP",
+    "Status": "Valid",
+    "Message": "Winget-ID verfügbar"
+  },
+  {
+    "Category": "coding",
+    "Tool": "Visual Studio Code",
+    "WingetId": "Microsoft.VisualStudioCode",
+    "Status": "Valid",
+    "Message": "Winget-ID verfügbar"
+  },
+  {
+    "Category": "coding",
+    "Tool": "Notepad++",
+    "WingetId": "Notepad++.Notepad++",
+    "Status": "Valid",
+    "Message": "Winget-ID verfügbar"
+  },
+  {
+    "Category": "coding",
+    "Tool": "PowerShell",
+    "WingetId": "Microsoft.PowerShell",
+    "Status": "Valid",
+    "Message": "Winget-ID verfügbar"
+  },
+  {
+    "Category": "coding",
+    "Tool": "WireGuard",
+    "WingetId": "WireGuard.WireGuard",
+    "Status": "Valid",
+    "Message": "Winget-ID verfügbar"
+  }
+]
