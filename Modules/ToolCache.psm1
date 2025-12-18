@@ -11,6 +11,10 @@ $script:toolCache = [System.Runtime.Caching.MemoryCache]::Default
 $script:installedPackagesCache = $null
 $script:installedPackagesCacheTime = $null
 
+# Cache für Versionsinformationen (reduziert winget upgrade Aufrufe)
+$script:versionInfoCache = @{}
+$script:versionInfoCacheTime = @{}
+
 # Locking-Variable für Cache-Initialisierung (verhindert Race Conditions)
 $script:cacheInitializationLock = $false
 
@@ -21,6 +25,7 @@ $script:knownKeys = @()
 $script:defaultCacheExpiration = 15  # 15 Minuten Standard-Ablaufzeit für Tool-Informationen
 $script:installStatusCacheExpiration = 5  # 5 Minuten für den Installationsstatus
 $script:installedPackagesCacheExpiration = 5  # 5 Minuten für die gesamte Paketliste
+$script:versionInfoCacheExpiration = 10  # 10 Minuten für Versionsinformationen
 
 # Funktion zum Speichern von Objekten im Cache
 function Add-ToolToCache {
@@ -124,6 +129,64 @@ function Remove-ToolFromCache {
     }
 }
 
+# Funktion zum Cachen von Versionsinformationen
+function Get-CachedToolVersionInfo {
+    param (
+        [Parameter(Mandatory=$true)]
+        [object]$Tool
+    )
+    
+    # Wenn das Tool keine Winget-ID hat, können wir keine Version abrufen
+    if (-not $Tool.Winget) {
+        return @{
+            InstalledVersion = $null
+            AvailableVersion = $null
+            HasUpdate = $false
+        }
+    }
+    
+    # Cache-Schlüssel generieren
+    $cacheKey = "VersionInfo_$($Tool.Winget)"
+    
+    # Prüfen, ob Versionsinformationen im Cache sind und nicht abgelaufen
+    if ($script:versionInfoCache.ContainsKey($cacheKey)) {
+        $cacheTime = $script:versionInfoCacheTime[$cacheKey]
+        $cacheAge = (Get-Date) - $cacheTime
+        
+        if ($cacheAge.TotalMinutes -lt $script:versionInfoCacheExpiration) {
+            Write-Verbose "Versionsinformationen für $($Tool.Name) aus Cache abgerufen (Alter: $([math]::Round($cacheAge.TotalMinutes, 1)) min)"
+            return $script:versionInfoCache[$cacheKey]
+        }
+        else {
+            Write-Verbose "Versionsinformationen-Cache für $($Tool.Name) ist abgelaufen (Alter: $([math]::Round($cacheAge.TotalMinutes, 1)) min)"
+        }
+    }
+    
+    return $null
+}
+
+# Funktion zum Speichern von Versionsinformationen im Cache
+function Set-CachedToolVersionInfo {
+    param (
+        [Parameter(Mandatory=$true)]
+        [object]$Tool,
+        
+        [Parameter(Mandatory=$true)]
+        [hashtable]$VersionInfo
+    )
+    
+    if (-not $Tool.Winget) {
+        return $false
+    }
+    
+    $cacheKey = "VersionInfo_$($Tool.Winget)"
+    $script:versionInfoCache[$cacheKey] = $VersionInfo
+    $script:versionInfoCacheTime[$cacheKey] = Get-Date
+    
+    Write-Verbose "Versionsinformationen für $($Tool.Name) im Cache gespeichert"
+    return $true
+}
+
 # Funktion zum Leeren des gesamten Caches
 function Clear-ToolCache {
     try {
@@ -149,6 +212,10 @@ function Clear-ToolCache {
         # Installierte Pakete Cache leeren
         $script:installedPackagesCache = $null
         $script:installedPackagesCacheTime = $null
+        
+        # Versionsinformationen-Cache leeren
+        $script:versionInfoCache.Clear()
+        $script:versionInfoCacheTime.Clear()
         
         Write-Verbose "Cache vollständig geleert"
         return $true
@@ -340,6 +407,64 @@ function Get-CachedToolInstallationStatus {
     }
 }
 
+# Funktion zum Cachen von Versionsinformationen
+function Get-CachedToolVersionInfo {
+    param (
+        [Parameter(Mandatory=$true)]
+        [object]$Tool
+    )
+    
+    # Wenn das Tool keine Winget-ID hat, können wir keine Version abrufen
+    if (-not $Tool.Winget) {
+        return @{
+            InstalledVersion = $null
+            AvailableVersion = $null
+            HasUpdate = $false
+        }
+    }
+    
+    # Cache-Schlüssel generieren
+    $cacheKey = "VersionInfo_$($Tool.Winget)"
+    
+    # Prüfen, ob Versionsinformationen im Cache sind und nicht abgelaufen
+    if ($script:versionInfoCache.ContainsKey($cacheKey)) {
+        $cacheTime = $script:versionInfoCacheTime[$cacheKey]
+        $cacheAge = (Get-Date) - $cacheTime
+        
+        if ($cacheAge.TotalMinutes -lt $script:versionInfoCacheExpiration) {
+            Write-Verbose "Versionsinformationen für $($Tool.Name) aus Cache abgerufen (Alter: $([math]::Round($cacheAge.TotalMinutes, 1)) min)"
+            return $script:versionInfoCache[$cacheKey]
+        }
+        else {
+            Write-Verbose "Versionsinformationen-Cache für $($Tool.Name) ist abgelaufen (Alter: $([math]::Round($cacheAge.TotalMinutes, 1)) min)"
+        }
+    }
+    
+    return $null
+}
+
+# Funktion zum Speichern von Versionsinformationen im Cache
+function Set-CachedToolVersionInfo {
+    param (
+        [Parameter(Mandatory=$true)]
+        [object]$Tool,
+        
+        [Parameter(Mandatory=$true)]
+        [hashtable]$VersionInfo
+    )
+    
+    if (-not $Tool.Winget) {
+        return $false
+    }
+    
+    $cacheKey = "VersionInfo_$($Tool.Winget)"
+    $script:versionInfoCache[$cacheKey] = $VersionInfo
+    $script:versionInfoCacheTime[$cacheKey] = Get-Date
+    
+    Write-Verbose "Versionsinformationen für $($Tool.Name) im Cache gespeichert"
+    return $true
+}
+
 # Funktion zum Aktualisieren des Cache nach einer Installation oder Deinstallation
 function Update-ToolInstallationStatus {
     param (
@@ -362,9 +487,17 @@ function Update-ToolInstallationStatus {
     $result = Add-ToolToCache -Key $cacheKey -Value $IsInstalled -ExpirationMinutes $script:installStatusCacheExpiration
     Write-Verbose "Installationsstatus für $($Tool.Name) aktualisiert: $IsInstalled"
     
-    # Paketcache als veraltet markieren
+    # Paketcache und Versionsinfo-Cache als veraltet markieren
     $script:installedPackagesCache = $null
     $script:installedPackagesCacheTime = $null
+    
+    # Versionsinformationen für dieses spezifische Tool löschen
+    $versionCacheKey = "VersionInfo_$($Tool.Winget)"
+    if ($script:versionInfoCache.ContainsKey($versionCacheKey)) {
+        $script:versionInfoCache.Remove($versionCacheKey)
+        $script:versionInfoCacheTime.Remove($versionCacheKey)
+        Write-Verbose "Versionsinformationen-Cache für $($Tool.Name) gelöscht"
+    }
     
     return $result
 }
@@ -450,4 +583,5 @@ Initialize-ToolCacheKeys | Out-Null
 Export-ModuleMember -Function Add-ToolToCache, Get-ToolFromCache, Remove-ToolFromCache, Clear-ToolCache, 
                      Get-CachedToolInstallationStatus, Update-ToolInstallationStatus,
                      Get-CachedToolsByCategory, Set-CachedToolsByCategory, Clear-ToolCacheOnExit,
-                     Initialize-InstalledPackagesCache, Initialize-ToolCacheKeys
+                     Initialize-InstalledPackagesCache, Initialize-ToolCacheKeys,
+                     Get-CachedToolVersionInfo, Set-CachedToolVersionInfo

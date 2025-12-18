@@ -1017,23 +1017,30 @@ function Get-ToolVersionInfo {
         }
     }
     
+    # Prüfe zuerst den Cache (wenn Get-CachedToolVersionInfo verfügbar ist)
+    if (Get-Command -Name Get-CachedToolVersionInfo -ErrorAction SilentlyContinue) {
+        $cachedVersionInfo = Get-CachedToolVersionInfo -Tool $Tool
+        if ($null -ne $cachedVersionInfo) {
+            Write-Verbose "Verwende gecachte Versionsinformationen für $($Tool.Name)"
+            return $cachedVersionInfo
+        }
+    }
+    
+    # Hole Versionsinformationen neu ab
     $job = $null
     try {
-        # Verwende winget list mit upgrade check
+        # Verwende winget upgrade --include-unknown für bessere Performance
         $job = Start-Job -ScriptBlock {
             param($wingetId)
             
-            # Hole beide Informationen: installierte Version und verfügbares Update
-            $listOutput = winget list --id $wingetId --exact 2>$null | Out-String
-            $upgradeOutput = winget upgrade --id $wingetId --exact 2>$null | Out-String
+            # NUR winget upgrade Aufruf (schneller als list + upgrade)
+            $upgradeOutput = winget upgrade --id $wingetId --exact --include-unknown 2>$null | Out-String
             
-            return @{
-                List = $listOutput
-                Upgrade = $upgradeOutput
-            }
+            return $upgradeOutput
         } -ArgumentList $Tool.Winget
         
-        $completed = Wait-Job -Job $job -Timeout 12
+        # Reduzierter Timeout von 12s auf 6s
+        $completed = Wait-Job -Job $job -Timeout 6
         
         if ($completed) {
             $result = Receive-Job -Job $job
@@ -1041,54 +1048,44 @@ function Get-ToolVersionInfo {
             $availableVersion = $null
             $hasUpdate = $false
             
-            # Parse installierte Version aus winget list
-            if ($result.List -match [regex]::Escape($Tool.Winget)) {
-                # Versuche Version zu extrahieren (Format: Name ID Version Source)
-                $lines = $result.List -split "`n"
-                foreach ($line in $lines) {
-                    if ($line -match [regex]::Escape($Tool.Winget)) {
-                        # Zeile gefunden, extrahiere Version
-                        # Typisches Format: "Name    ID    Version    Source"
-                        $parts = $line -split '\s+' | Where-Object { $_ -ne '' }
-                        if ($parts.Count -ge 3) {
-                            # Version ist typischerweise an Position 2 (nach Name und ID)
-                            $installedVersion = $parts[2]
-                        }
-                        break
-                    }
-                }
-            }
-            
-            # Parse verfügbare Version aus winget upgrade
-            if ($result.Upgrade -match [regex]::Escape($Tool.Winget)) {
-                $lines = $result.Upgrade -split "`n"
+            # Parse Versionsinformationen aus winget upgrade
+            if ($result -match [regex]::Escape($Tool.Winget)) {
+                $lines = $result -split "`n"
                 foreach ($line in $lines) {
                     if ($line -match [regex]::Escape($Tool.Winget)) {
                         # Format: "Name ID Version Available Source"
                         $parts = $line -split '\s+' | Where-Object { $_ -ne '' }
-                        if ($parts.Count -ge 4) {
-                            # Installierte Version
-                            if (-not $installedVersion) {
-                                $installedVersion = $parts[2]
+                        if ($parts.Count -ge 3) {
+                            # Installierte Version (Position 2)
+                            $installedVersion = $parts[2]
+                            
+                            # Verfügbare Version (Position 3, wenn vorhanden)
+                            if ($parts.Count -ge 4 -and $parts[3] -ne '<' -and $parts[3] -notmatch '^[a-zA-Z]') {
+                                $availableVersion = $parts[3]
+                                $hasUpdate = $true
                             }
-                            # Verfügbare Version
-                            $availableVersion = $parts[3]
-                            $hasUpdate = $true
                         }
                         break
                     }
                 }
             }
             
-            return @{
+            $versionInfo = @{
                 InstalledVersion = $installedVersion
                 AvailableVersion = $availableVersion
                 HasUpdate = $hasUpdate
             }
+            
+            # Speichere im Cache (wenn Set-CachedToolVersionInfo verfügbar ist)
+            if (Get-Command -Name Set-CachedToolVersionInfo -ErrorAction SilentlyContinue) {
+                Set-CachedToolVersionInfo -Tool $Tool -VersionInfo $versionInfo
+            }
+            
+            return $versionInfo
         }
         else {
             Stop-Job -Job $job -ErrorAction SilentlyContinue
-            Write-Verbose "Timeout beim Abrufen der Versionsinfo für $($Tool.Name)"
+            Write-Verbose "Timeout beim Abrufen der Versionsinfo für $($Tool.Name) (>6s)"
         }
     }
     catch {
