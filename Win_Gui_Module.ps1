@@ -4545,6 +4545,181 @@ $btnRestart.Add_Click({
 
 $mainform.Controls.Add($btnRestart)
 
+# ===================================================================
+# AUTO-UPDATE BUTTON
+# ===================================================================
+
+# Funktion zum Prüfen und Durchführen von Updates
+function Check-ForUpdates {
+    param(
+        [bool]$AutoInstall = $false
+    )
+    
+    try {
+        $currentVersion = $script:AppVersion
+        $repoOwner = "ReXx09"
+        $repoName = "Bockis-Win_Gui"
+        $apiUrl = "https://api.github.com/repos/$repoOwner/$repoName/releases/latest"
+        
+        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
+        $outputBox.AppendText("[i] Prüfe auf Updates...`r`n")
+        
+        # GitHub API abfragen
+        $latestRelease = Invoke-RestMethod -Uri $apiUrl -Headers @{ "User-Agent" = "Bockis-System-Tool" }
+        $latestVersion = $latestRelease.tag_name -replace 'v', ''
+        
+        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
+        $outputBox.AppendText("Aktuelle Version: $currentVersion`r`n")
+        $outputBox.AppendText("Neueste Version: $latestVersion`r`n`r`n")
+        
+        # Versionsvergleich
+        if ([version]$latestVersion -gt [version]$currentVersion) {
+            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
+            $outputBox.AppendText("[✓] Update verfügbar: v$latestVersion`r`n`r`n")
+            
+            # Asset-URL ermitteln (erstes ZIP-Asset)
+            $asset = $latestRelease.assets | Where-Object { $_.name -like "*.zip" } | Select-Object -First 1
+            
+            if (-not $asset) {
+                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
+                $outputBox.AppendText("[✗] Kein Download-Asset gefunden!`r`n")
+                return $false
+            }
+            
+            # Benutzer fragen
+            $result = [System.Windows.Forms.MessageBox]::Show(
+                "Neue Version verfügbar: v$latestVersion`n`nAktuell installiert: v$currentVersion`n`nRelease-Notes:`n$($latestRelease.body.Substring(0, [Math]::Min(200, $latestRelease.body.Length)))...`n`nMöchten Sie jetzt updaten?",
+                "Update verfügbar",
+                [System.Windows.Forms.MessageBoxButtons]::YesNo,
+                [System.Windows.Forms.MessageBoxIcon]::Information
+            )
+            
+            if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
+                # Download-Pfad
+                $tempPath = [System.IO.Path]::GetTempPath()
+                $zipPath = Join-Path $tempPath "Bockis-Update-v$latestVersion.zip"
+                $extractPath = Join-Path $tempPath "Bockis-Update-Extract"
+                
+                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
+                $outputBox.AppendText("[i] Download wird gestartet...`r`n")
+                $outputBox.AppendText("Quelle: $($asset.browser_download_url)`r`n")
+                $outputBox.AppendText("Ziel: $zipPath`r`n`r`n")
+                
+                # Progressbar vorbereiten
+                Update-ProgressStatus -StatusText "Download läuft..." -ProgressValue 0 -TextColor ([System.Drawing.Color]::Blue)
+                
+                # Download mit Fortschrittsanzeige
+                $webClient = New-Object System.Net.WebClient
+                $webClient.Headers.Add("User-Agent", "Bockis-System-Tool")
+                
+                Register-ObjectEvent -InputObject $webClient -EventName DownloadProgressChanged -SourceIdentifier WebClient.DownloadProgressChanged -Action {
+                    $progressBar.Value = $EventArgs.ProgressPercentage
+                    Update-ProgressStatus -StatusText "Download: $($EventArgs.ProgressPercentage)%" -ProgressValue $EventArgs.ProgressPercentage -TextColor ([System.Drawing.Color]::Blue)
+                } | Out-Null
+                
+                $webClient.DownloadFileAsync($asset.browser_download_url, $zipPath)
+                
+                # Warten auf Download-Abschluss
+                while ($webClient.IsBusy) {
+                    [System.Windows.Forms.Application]::DoEvents()
+                    Start-Sleep -Milliseconds 100
+                }
+                
+                Unregister-Event -SourceIdentifier WebClient.DownloadProgressChanged
+                $webClient.Dispose()
+                
+                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
+                $outputBox.AppendText("[✓] Download abgeschlossen!`r`n`r`n")
+                
+                # Entpacken
+                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
+                $outputBox.AppendText("[i] Extrahiere Update...`r`n")
+                Update-ProgressStatus -StatusText "Entpacken..." -ProgressValue 50 -TextColor ([System.Drawing.Color]::Green)
+                
+                if (Test-Path $extractPath) {
+                    Remove-Item $extractPath -Recurse -Force
+                }
+                
+                Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force
+                
+                # Update-Script erstellen
+                $updateScript = @"
+Start-Sleep -Seconds 2
+Write-Host 'Installiere Update...'
+`$source = '$extractPath\*'
+`$dest = '$PSScriptRoot'
+Copy-Item -Path `$source -Destination `$dest -Recurse -Force
+Remove-Item '$zipPath' -Force
+Remove-Item '$extractPath' -Recurse -Force
+Write-Host 'Update abgeschlossen! Starte Anwendung...'
+Start-Process powershell.exe -ArgumentList '-ExecutionPolicy Bypass -File "$PSScriptRoot\Win_Gui_Module.ps1"'
+"@
+                
+                $updateScriptPath = Join-Path $tempPath "BockisUpdate.ps1"
+                $updateScript | Out-File -FilePath $updateScriptPath -Encoding UTF8 -Force
+                
+                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
+                $outputBox.AppendText("[✓] Update wird installiert...`r`n")
+                $outputBox.AppendText("[i] Anwendung wird neu gestartet!`r`n")
+                
+                Update-ProgressStatus -StatusText "Installation..." -ProgressValue 100 -TextColor ([System.Drawing.Color]::LimeGreen)
+                
+                # Update-Script starten und GUI schließen
+                Start-Process powershell.exe -ArgumentList "-ExecutionPolicy Bypass -WindowStyle Hidden -File `"$updateScriptPath`"" -WindowStyle Hidden
+                
+                Start-Sleep -Milliseconds 500
+                $mainform.Close()
+            }
+            
+            return $true
+        }
+        else {
+            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
+            $outputBox.AppendText("[✓] Sie verwenden bereits die neueste Version!`r`n")
+            
+            [System.Windows.Forms.MessageBox]::Show(
+                "Sie verwenden bereits die neueste Version: v$currentVersion",
+                "Keine Updates",
+                [System.Windows.Forms.MessageBoxButtons]::OK,
+                [System.Windows.Forms.MessageBoxIcon]::Information
+            )
+            
+            return $false
+        }
+    }
+    catch {
+        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
+        $outputBox.AppendText("[✗] Fehler beim Update-Check: $_`r`n")
+        
+        [System.Windows.Forms.MessageBox]::Show(
+            "Fehler beim Prüfen auf Updates:`n`n$_`n`nBitte überprüfen Sie Ihre Internetverbindung.",
+            "Update-Fehler",
+            [System.Windows.Forms.MessageBoxButtons]::OK,
+            [System.Windows.Forms.MessageBoxIcon]::Error
+        )
+        
+        return $false
+    }
+}
+
+# Update-Button erstellen
+$btnUpdate = New-Object System.Windows.Forms.Button
+$btnUpdate.Text = "🔄 Update"
+$btnUpdate.Location = New-Object System.Drawing.Point(180, 755)
+$btnUpdate.Size = New-Object System.Drawing.Size(140, 30)
+$btnUpdate.BackColor = [System.Drawing.Color]::FromArgb(16, 124, 16)  # Grün
+$btnUpdate.ForeColor = [System.Drawing.Color]::White
+$btnUpdate.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+$btnUpdate.FlatAppearance.BorderSize = 0
+$btnUpdate.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+
+# Click-Event: Update prüfen
+$btnUpdate.Add_Click({
+    Check-ForUpdates
+})
+
+$mainform.Controls.Add($btnUpdate)
+
 # Tooltip-Texte zu den Funktionsbuttons hinzufügen (tooltipObj wurde bereits weiter oben initialisiert)
 $tooltipObj.SetToolTip($btnQuickMRT, "Führt einen schnellen Malware-Scan mit Microsoft Malicious Software Removal Tool durch")
 $tooltipObj.SetToolTip($btnFullMRT, "Führt einen vollständigen Systemscan mit Microsoft Malicious Software Removal Tool durch")
@@ -4565,6 +4740,7 @@ $tooltipObj.SetToolTip($btnResetNetwork, "Setzt Netzwerkadapter und TCP/IP-Stack
 $tooltipObj.SetToolTip($btnDiskCleanup, "Startet den Windows Disk Cleanup-Tool zum Freigeben von Speicherplatz")
 $tooltipObj.SetToolTip($btnTempFiles, "Bereinigt temporäre Dateien, um Speicherplatz freizugeben")
 $tooltipObj.SetToolTip($btnRestart, "Neustart-Optionen: GUI neuladen oder System neustarten")
+$tooltipObj.SetToolTip($btnUpdate, "Prüft auf verfügbare Updates und installiert diese automatisch")
 $tooltipObj.SetToolTip($infoButton, "Zeigt Informationen über die Anwendung an")
 
 # Status-Informationen anzeigen
