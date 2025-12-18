@@ -1029,18 +1029,25 @@ function Get-ToolVersionInfo {
     # Hole Versionsinformationen neu ab
     $job = $null
     try {
-        # Verwende winget upgrade --include-unknown für bessere Performance
+        # WICHTIG: winget upgrade zeigt NUR Tools MIT verfügbarem Update
+        # Für installierte Version ohne Update müssen wir winget list verwenden
         $job = Start-Job -ScriptBlock {
             param($wingetId)
             
-            # NUR winget upgrade Aufruf (schneller als list + upgrade)
-            $upgradeOutput = winget upgrade --id $wingetId --exact --include-unknown 2>$null | Out-String
+            # Hole installierte Version mit winget list
+            $listOutput = winget list --id $wingetId --exact 2>$null | Out-String
             
-            return $upgradeOutput
+            # Prüfe ob Update verfügbar mit winget upgrade
+            $upgradeOutput = winget upgrade --id $wingetId --exact 2>$null | Out-String
+            
+            return @{
+                List = $listOutput
+                Upgrade = $upgradeOutput
+            }
         } -ArgumentList $Tool.Winget
         
-        # Reduzierter Timeout von 12s auf 6s
-        $completed = Wait-Job -Job $job -Timeout 6
+        # Timeout von 8 Sekunden (Kompromiss zwischen Geschwindigkeit und Zuverlässigkeit)
+        $completed = Wait-Job -Job $job -Timeout 8
         
         if ($completed) {
             $result = Receive-Job -Job $job
@@ -1048,21 +1055,66 @@ function Get-ToolVersionInfo {
             $availableVersion = $null
             $hasUpdate = $false
             
-            # Parse Versionsinformationen aus winget upgrade
-            if ($result -match [regex]::Escape($Tool.Winget)) {
-                $lines = $result -split "`n"
+            # Parse installierte Version aus winget list
+            if ($result.List -match [regex]::Escape($Tool.Winget)) {
+                $lines = $result.List -split "`n"
+                foreach ($line in $lines) {
+                    # Zeile muss die Winget-ID enthalten (nicht nur teilweise Match)
+                    if ($line -match [regex]::Escape($Tool.Winget)) {
+                        # Typisches Format: "Name    ID    Version    Source"
+                        # Beispiel: "7-Zip 25.01 (x64)  7zip.7zip  25.01  winget"
+                        $parts = $line -split '\s+' | Where-Object { $_ -ne '' }
+                        
+                        # Finde Index der Winget-ID
+                        $idIndex = -1
+                        for ($i = 0; $i -lt $parts.Count; $i++) {
+                            if ($parts[$i] -eq $Tool.Winget) {
+                                $idIndex = $i
+                                break
+                            }
+                        }
+                        
+                        # Version steht direkt nach der ID
+                        if ($idIndex -ge 0 -and ($idIndex + 1) -lt $parts.Count) {
+                            $installedVersion = $parts[$idIndex + 1]
+                            Write-Verbose "Gefunden in winget list: Version $installedVersion für $($Tool.Name)"
+                        }
+                        break
+                    }
+                }
+            }
+            
+            # Parse verfügbare Version aus winget upgrade (nur wenn Update vorhanden)
+            # winget upgrade Format: "Name  ID  Version  Available  Source"
+            # Beispiel: "Python  Python.Python.3.12  3.12.0  3.12.1  winget"
+            if ($result.Upgrade -match [regex]::Escape($Tool.Winget) -and 
+                $result.Upgrade -notmatch "Kein verf.*gbares Upgrade" -and
+                $result.Upgrade -notmatch "No upgrades available" -and
+                $result.Upgrade -notmatch "Es wurde kein installiertes Paket gefunden") {
+                
+                $lines = $result.Upgrade -split "`n"
                 foreach ($line in $lines) {
                     if ($line -match [regex]::Escape($Tool.Winget)) {
-                        # Format: "Name ID Version Available Source"
                         $parts = $line -split '\s+' | Where-Object { $_ -ne '' }
-                        if ($parts.Count -ge 3) {
-                            # Installierte Version (Position 2)
-                            $installedVersion = $parts[2]
-                            
-                            # Verfügbare Version (Position 3, wenn vorhanden)
-                            if ($parts.Count -ge 4 -and $parts[3] -ne '<' -and $parts[3] -notmatch '^[a-zA-Z]') {
-                                $availableVersion = $parts[3]
+                        
+                        # Finde Index der Winget-ID
+                        $idIndex = -1
+                        for ($i = 0; $i -lt $parts.Count; $i++) {
+                            if ($parts[$i] -eq $Tool.Winget) {
+                                $idIndex = $i
+                                break
+                            }
+                        }
+                        
+                        # Bei winget upgrade: Version an Position +1, Available an Position +2
+                        if ($idIndex -ge 0) {
+                            if (($idIndex + 1) -lt $parts.Count -and -not $installedVersion) {
+                                $installedVersion = $parts[$idIndex + 1]
+                            }
+                            if (($idIndex + 2) -lt $parts.Count) {
+                                $availableVersion = $parts[$idIndex + 2]
                                 $hasUpdate = $true
+                                Write-Verbose "Update gefunden für $($Tool.Name): $installedVersion → $availableVersion"
                             }
                         }
                         break
@@ -1085,7 +1137,7 @@ function Get-ToolVersionInfo {
         }
         else {
             Stop-Job -Job $job -ErrorAction SilentlyContinue
-            Write-Verbose "Timeout beim Abrufen der Versionsinfo für $($Tool.Name) (>6s)"
+            Write-Verbose "Timeout beim Abrufen der Versionsinfo für $($Tool.Name) (>8s)"
         }
     }
     catch {
