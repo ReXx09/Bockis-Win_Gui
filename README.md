@@ -19,16 +19,33 @@ Das Bockis System-Tool bietet eine umfassende Sammlung von Windows-Systemtools i
 - **Keine manuellen Downloads mehr**: Ab v4.1 vollautomatisch
 
 ### 📦 Tool-Download-Manager (NEU in v4.1)
-- **50+ professionelle Tools**: Direkt aus der GUI installierbar
-- **Winget-Integration**: Sichere Installation über Windows Package Manager
-- **Kategorisierte Übersicht**:
-  - System-Tools (Diagnose, Wartung, Optimierung)
-  - Anwendungen (Browser, Office, Kommunikation)
-  - Audio/TV (Media-Player, Streaming, Bearbeitung)
-  - Coding/IT (IDEs, Editoren, Entwickler-Tools)
-- **Such- und Filterfunktion**: Schnelles Finden gewünschter Tools
-- **Tool-Cache**: Optimierte Ladezeiten durch intelligentes Caching
-- **Installations-Status**: Live-Überwachung des Installationsfortschritts
+Ein vollständiges Tool-Management-System mit **50+ vorgefertigten professionellen Tools**:
+
+**Kernfunktionen:**
+- **Winget-Integration**: Sichere Installation über Windows Package Manager (winget)
+- **Ein-Klick-Installation**: Tools mit einem Button-Klick installieren
+- **Automatische Status-Erkennung**: Zeigt sofort an, welche Tools bereits installiert sind
+- **Intelligentes Cache-System**: Reduziert Ladezeiten (5-15 Min Cache-Dauer)
+- **Such- und Filterfunktion**: Schnelles Finden nach Name, Kategorie oder Tags
+- **Live-Installations-Status**: Echtzeit-Feedback während der Installation
+- **Moderne WPF-Kachel-Darstellung**: Scrollbarer Bereich mit Kacheln pro Tool
+
+**Verfügbare Kategorien:**
+- **System-Tools** (14 Tools): 7-Zip, CPU-Z, GPU-Z, HWiNFO, LibreHardwareMonitor, OCCT, CoreTemp, CrystalDiskInfo, CrystalDiskMark, Autoruns, Process Explorer, UniGetUI, WizTree, TreeSize
+- **Browser** (7 Tools): Brave, Firefox, Chrome, Vivaldi, Waterfox, Opera, Edge
+- **Kommunikation** (8 Tools): Discord, Skype, WhatsApp, Zoom, Teams, Telegram, Slack, Signal
+- **Gaming** (9 Tools): Steam, Epic Games, Battle.net, EA App, GOG Galaxy, Ubisoft Connect, Xbox App, Playnite, Parsec
+- **Multimedia** (11 Tools): VLC, Spotify, Audacity, OBS Studio, GIMP, Blender, Handbrake, Kodi, MPC-HC, Shotcut, Inkscape
+- **Office** (4 Tools): LibreOffice, Apache OpenOffice, Notion, PDFCreator
+- **Entwicklung** (10 Tools): VS Code, Git, Python, Node.js, Docker, WSL, GitHub Desktop, Notepad++, Postman, FileZilla
+- **Cloud Storage** (3 Tools): Nextcloud Desktop, Dropbox, Google Drive
+
+**Technische Features:**
+- **WPF ScrollViewer**: Smooth Scrolling und moderne Darstellung
+- **WrapPanel Layout**: Automatische Kachel-Anordnung
+- **Tool-Cache-Modul**: Reduziert redundante Winget-Aufrufe
+- **Installation-Status-Icons**: Visuelles Feedback (✓ Installiert / ⬇ Installieren)
+- **Kategorie-Filter**: Navigation über aufklappbare Menü-Panels
 
 ### 🛡️ System & Sicherheit
 - **MRT Quick Scan**: Schnelle Malware-Erkennung mit Microsoft Malicious Software Removal Tool
@@ -71,22 +88,7 @@ Das Bockis System-Tool bietet eine umfassende Sammlung von Windows-Systemtools i
 - **Hardware-History-Datenbank**: Automatische Protokollierung aller Sensor-Werte
 - **Debug-Modi**: Erweiterte Diagnose-Informationen für CPU/GPU/RAM
 
-### 🔽 Tool-Downloads & Winget-Integration
-- **50+ vordefinierte Tools**: Kategorisiert nach System/Browser/Gaming/Dev/Multimedia
-- **Winget-Integration**: Automatische Installations-Status-Erkennung
-- **Intelligentes Cache-System**: Reduziert Winget-Aufrufe (5-15 Min Cache)
-- **Such-Funktion**: Filter nach Tool-Name, Kategorie oder Tags
-- **Tool-Kategorien**:
-  - System-Tools (7-Zip, CPU-Z, GPU-Z, OCCT, LibreHardwareMonitor, UniGetUI)
-  - Browser (Brave, Firefox, Chrome, Vivaldi, Waterfox)
-  - Kommunikation (Discord, Skype, WhatsApp, Zoom, Teams, Telegram)
-  - Gaming (Steam, Epic Games, Battle.net, EA App, GOG Galaxy)
-  - Multimedia (VLC, Audacity, OBS Studio, GIMP, Blender, Handbrake)
-  - Office (LibreOffice, Apache OpenOffice)
-  - Entwicklung (VS Code, Git, Python, Node.js, Docker)
-  - Cloud Storage (Nextcloud Desktop, Dropbox, Google Drive)
-- **WPF-ScrollViewer**: Moderne Kachel-Darstellung mit Smooth Scrolling
-- **Installation per Klick**: Direkte Installation via Winget
+
 
 ### 🗄️ Erweiterte Funktionen
 - **SQLite-Datenbank-Integration**: Automatische Protokollierung aller Tool-Ausführungen
@@ -262,6 +264,24 @@ Bockis-Win_Gui-v4.0/
 - **RAM**: Zeigt Speichernutzung und verfügbaren Speicher
 - **GPU**: Zeigt Grafikkarten-Auslastung und Temperatur
 - **Tooltips**: Bewegen Sie die Maus über die Hardware-Boxen für Details
+
+### Tool-Download-Manager (Verwendung)
+1. **Navigation öffnen**: Klicken Sie auf "▼ Tools" im linken Navigations-Menü
+2. **Kategorie wählen**: Wählen Sie eine Kategorie (Alle/System/Browser/Gaming/Dev/Office/Multimedia/Cloud)
+3. **Tool suchen**: Nutzen Sie die Such-Funktion oder scrollen Sie durch die Kacheln
+4. **Status prüfen**: 
+   - ✅ **Grün** = Tool ist bereits installiert
+   - ⬇️ **Blau** = Tool kann installiert werden
+5. **Installation**: Klicken Sie auf "Installieren" - Winget lädt und installiert das Tool automatisch
+6. **Fortschritt**: Die Ausgabe zeigt den Installations-Fortschritt in Echtzeit
+7. **Fertig**: Nach erfolgreicher Installation wird der Status auf "Installiert" aktualisiert
+
+**Vorteile:**
+- ✅ Keine manuelle Suche nach Download-Links
+- ✅ Automatische Updates über Winget
+- ✅ Sichere Quellen (offizieller Microsoft Package Manager)
+- ✅ Über 50 vorgefertigte Tools sofort verfügbar
+- ✅ Kein Browser-Download nötig
 
 ### Erweiterte Funktionen
 - **Scan-Historie**: Tooltips auf Status-Indikatoren zeigen Zeitstempel des letzten Scans
