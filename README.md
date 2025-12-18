@@ -1,14 +1,34 @@
-# Bocki's Windows Tool-Kit v4.0
+# Bocki's Windows Tool-Kit v4.1
 
-Ein professionelles PowerShell-basiertes Systemwartungs-Tool mit moderner grafischer Benutzeroberfläche, WPF-Integration und umfassenden Diagnose-Funktionen für Windows-Systeme.
+Ein professionelles PowerShell-basiertes Systemwartungs-Tool mit moderner grafischer Benutzeroberfläche, WPF-Integration, automatischem Update-System und umfassenden Diagnose-Funktionen für Windows-Systeme.
 
 [![PowerShell](https://img.shields.io/badge/PowerShell-5.1+-blue.svg)](https://github.com/PowerShell/PowerShell)
 [![Windows](https://img.shields.io/badge/Windows-10%2F11-blue.svg)](https://www.microsoft.com/windows)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE.txt)
+[![Version](https://img.shields.io/badge/Version-4.1-brightgreen.svg)](https://github.com/ReXx09/Bockis-Win_Gui/releases)
 
 ## 🔑 Hauptfunktionen
 
 Das Bockis System-Tool bietet eine umfassende Sammlung von Windows-Systemtools in einer benutzerfreundlichen grafischen Oberfläche:
+
+### 🔄 Auto-Update-System (NEU in v4.1)
+- **Automatische Update-Prüfung**: Verbindung zu GitHub Releases
+- **Ein-Klick-Installation**: Download und Installation neuer Versionen
+- **Integrierter Update-Button**: Direkt in der GUI verfügbar
+- **Versionskontrolle**: Automatischer Versionsvergleich
+- **Keine manuellen Downloads mehr**: Ab v4.1 vollautomatisch
+
+### 📦 Tool-Download-Manager (NEU in v4.1)
+- **50+ professionelle Tools**: Direkt aus der GUI installierbar
+- **Winget-Integration**: Sichere Installation über Windows Package Manager
+- **Kategorisierte Übersicht**:
+  - System-Tools (Diagnose, Wartung, Optimierung)
+  - Anwendungen (Browser, Office, Kommunikation)
+  - Audio/TV (Media-Player, Streaming, Bearbeitung)
+  - Coding/IT (IDEs, Editoren, Entwickler-Tools)
+- **Such- und Filterfunktion**: Schnelles Finden gewünschter Tools
+- **Tool-Cache**: Optimierte Ladezeiten durch intelligentes Caching
+- **Installations-Status**: Live-Überwachung des Installationsfortschritts
 
 ### 🛡️ System & Sicherheit
 - **MRT Quick Scan**: Schnelle Malware-Erkennung mit Microsoft Malicious Software Removal Tool
@@ -439,16 +459,80 @@ Diese müssen separat installiert werden und sind nicht im Repository enthalten.
 - Winget muss installiert sein für Tool-Download-Feature
 - Windows Defender kann das Tool als "Trojan:Win32/Vigorf.A" melden (Fehlalarm)
 
+## � Changelog
+
+### Version 4.1 (18. Dezember 2025) - AKTUELL
+**🎉 Hauptfeatures:**
+- 🔄 **Auto-Update-System**: Automatische Update-Prüfung und Installation über GitHub Releases
+- 📦 **Tool-Download-Manager**: 50+ Tools direkt aus der GUI installierbar via Winget
+- 🏗️ **Modulare Architektur**: Vollständig refaktorierte Codebasis mit separaten Modulen
+- 🎨 **UI-Verbesserungen**: Optimierte Button-Layouts und Positionierung
+- ⚡ **Performance-Optimierungen**: Tool-Cache-System für schnellere Ladezeiten
+
+**Neue Funktionen:**
+- Integrierter "Update"-Button in der Hauptoberfläche
+- GitHub API-Integration für Release-Management
+- Automatischer Download und Installation von Updates
+- Kategorisierte Tool-Bibliothek (System, Apps, Audio/TV, Coding)
+- Such- und Filterfunktion für Tool-Downloads
+- Verbesserte Progressbar mit detailliertem Status
+- Tool-Installation-Tracking und Status-Anzeige
+
+**Verbesserungen:**
+- Button-Positionierung optimiert (Update-Button rechts neben Progressbar)
+- Modulstruktur erweitert (ToolLibrary, ToolCache)
+- Bessere Fehlerbehandlung bei Updates
+- Optimierte Speicherverwaltung
+- Verbesserte Code-Organisation
+
+**Bugfixes:**
+- Fensterpositionierung korrigiert
+- Modul-Ladezeiten optimiert
+- GUI-Rendering verbessert
+
+**⚠️ Wichtig für Upgrade von v4.0:**
+Dies ist das letzte manuelle Update! Nach Installation von v4.1 erfolgen alle zukünftigen Updates automatisch.
+
+### Version 4.0 (November 2025)
+**Hauptfeatures:**
+- Vollständige UI-Überarbeitung mit moderner WPF-Integration
+- LibreHardwareMonitor-Integration für detailliertes Hardware-Monitoring
+- SQLite-Datenbank für Tool-Ausführungs-Logs
+- Tool-Download-System Basis-Implementation
+- Modulare Code-Architektur
+
+**Neue Funktionen:**
+- Echtzeit-Hardware-Überwachung (CPU, RAM, GPU)
+- Status-Indikatoren für alle System-Tools
+- Scan-Historie mit Zeitstempeln
+- Erweiterte DISM-Tool-Suite
+- Custom-Cleanup-Optionen
+- Automatische Settings-Persistenz
+
+### Version 3.1
+- Tab-basierte Navigation
+- Basis Hardware-Monitoring
+- Erste Modul-Implementierungen
+- SQLite-Integration
+
+### Version 3.0
+- Grafische Benutzeroberfläche
+- Grundlegende System-Tools
+- Windows Forms-basiert
+
 ## 🔍 FAQ
 
 **Q: Warum meldet Windows Defender das Tool als Malware?**  
 A: Dies ist ein Fehlalarm (False Positive). Das Tool verwendet Windows-APIs zur Fenstersteuerung, die manchmal von Malware missbraucht werden. Der Code ist vollständig transparent und Open Source.
 
+**Q: Wie funktioniert das Auto-Update?**  
+A: Das Tool prüft über die GitHub API auf neue Releases, lädt das ZIP-Asset herunter, entpackt es automatisch und startet die Anwendung neu. Keine manuelle Interaktion nötig!
+
 **Q: Benötige ich Administratorrechte?**  
 A: Ja, die meisten System-Diagnose- und Reparatur-Tools erfordern erhöhte Rechte. Das Tool fordert diese automatisch beim Start an.
 
 **Q: Werden meine Daten gesammelt?**  
-A: Nein. Alle Daten werden lokal in SQLite-Datenbank gespeichert. Es erfolgt keine Datenübertragung ins Internet (außer für Windows Update und Tool-Downloads).
+A: Nein. Alle Daten werden lokal in SQLite-Datenbank gespeichert. Es erfolgt keine Datenübertragung ins Internet (außer für Windows Update, GitHub-Updates und Tool-Downloads).
 
 **Q: Kann ich eigene Tools hinzufügen?**  
 A: Ja, über `ToolLibrary.psm1` können Sie die `$script:toolLibrary`-Hashtable erweitern.
@@ -459,12 +543,16 @@ A: Logs werden in `%LOCALAPPDATA%\BockisSystemTool\Logs\` gespeichert.
 **Q: Funktioniert das Tool mit Nextcloud/OneDrive?**  
 A: Ja, das Tool hat spezielle Fehlerbehandlung für Cloud-Sync-Provider implementiert.
 
+**Q: Warum sind manche Tools nicht verfügbar?**  
+A: Einige Tools im Download-Manager benötigen Winget. Stellen Sie sicher, dass Windows Package Manager installiert ist.
+
 ## 🙏 Danksagungen
 
 - **LibreHardwareMonitor** - Exzellente Hardware-Monitoring-Bibliothek
 - **SQLite-NET** - Robuste Datenbank-Integration
 - **PowerShell-Community** - Unzählige hilfreiche Ressourcen
 - **Microsoft** - Winget Package Manager
+- **GitHub** - Release-Management und Hosting
 - **Alle Beta-Tester** - Wertvolles Feedback und Bug-Reports
 
 ## 🤝 Mitwirken
@@ -479,4 +567,4 @@ Beiträge sind willkommen! Bitte:
 ---
 
 **Entwickelt mit ❤️ von Bocki**  
-*Version 4.0 - November 2025*
+*Version 4.1 - Dezember 2025*
