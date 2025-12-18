@@ -118,20 +118,43 @@ Das Bockis System-Tool bietet eine umfassende Sammlung von Windows-Systemtools i
 
 ## 📥 Installation
 
-### Methode 1: Installer (Empfohlen)
-1. Laden Sie `BockisSystemTool-Setup.exe` herunter
-2. Führen Sie den Installer mit Administratorrechten aus
-3. Der Installer fügt automatisch Windows Defender-Ausnahmen hinzu
-4. Starten Sie das Tool über das Startmenü oder Desktop-Verknüpfung
+### Methode 1: Windows Installer (Empfohlen) 🎯
+Der einfachste und sicherste Weg für die meisten Nutzer:
 
-### Methode 2: Portable/ZIP
-1. Laden Sie das Tool als ZIP herunter
-2. Entpacken Sie die ZIP-Datei in ein Verzeichnis Ihrer Wahl
-3. Starten Sie `Win_Gui_Module.ps1` mit Administratorrechten:
+1. **Download:** `BockisSystemTool-Setup-v4.1.exe` vom Release
+2. **Ausführen:** Installer mit Administratorrechten starten
+3. **Automatische Konfiguration:**
+   - Erstellt Windows Defender-Ausnahmen
+   - Registriert das Tool im System
+   - Erstellt Start-Menü und Desktop-Verknüpfungen
+   - Richtet Auto-Update ein
+4. **Fertig:** Tool über Startmenü oder Desktop starten
+
+**Vorteile:**
+- ✅ Automatische Defender-Ausnahmen
+- ✅ Saubere Deinstallation möglich
+- ✅ Systemweite Installation
+- ✅ Windows-Registrierung
+
+### Methode 2: Portable/ZIP 📦
+Für erfahrene Nutzer oder portable Installation:
+
+1. **Download:** `Bockis-Win-Gui-v4.1.zip` vom Release
+2. **Entpacken:** ZIP-Datei in ein Verzeichnis Ihrer Wahl
+3. **Ausnahme hinzufügen:** (Wichtig!) Windows Defender-Ausnahme manuell erstellen
+4. **Starten:** `Win_Gui_Module.ps1` mit Administratorrechten:
 
 ```powershell
 powershell.exe -ExecutionPolicy Bypass -File "Win_Gui_Module.ps1"
 ```
+
+**Vorteile:**
+- ✅ Keine Installation nötig
+- ✅ Portable (USB-Stick, Cloud)
+- ✅ Mehrere Versionen parallel
+- ✅ Volle Kontrolle
+
+**Hinweis:** Bei der Portable-Version müssen Sie Windows Defender-Ausnahmen manuell erstellen. Siehe [DEFENDER-AUSNAHMEN.md](DEFENDER-AUSNAHMEN.md) für Details.
 
 ### ⚠️ Windows Defender Warnung
 
