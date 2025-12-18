@@ -472,6 +472,196 @@ $script:toolResourceDictionary = @{
     CategoryForegroundColor     = [Windows.Media.Brushes]::Gray
 }
 
+# Funktion zum Abrufen verfügbarer Versionen eines Tools
+function Get-ToolAvailableVersions {
+    param (
+        [Parameter(Mandatory = $true)]
+        [object]$Tool
+    )
+    
+    if (-not $Tool.Winget) {
+        return @()
+    }
+    
+    try {
+        $versionsOutput = winget show --id $Tool.Winget --versions 2>$null | Out-String
+        
+        # Parse Versionen aus der Ausgabe
+        $versions = @()
+        $lines = $versionsOutput -split "`n"
+        $inVersionSection = $false
+        
+        foreach ($line in $lines) {
+            if ($line -match "^Version" -or $line -match "^-+$") {
+                $inVersionSection = $true
+                continue
+            }
+            
+            if ($inVersionSection -and $line.Trim() -ne "") {
+                $version = $line.Trim()
+                if ($version -match '^\d+[\d\.\-]+') {
+                    $versions += $version
+                }
+            }
+        }
+        
+        return $versions
+    }
+    catch {
+        Write-Verbose "Fehler beim Abrufen der Versionen für $($Tool.Name): $_"
+        return @()
+    }
+}
+
+# Funktion zum Downgrade eines installierten Tools
+function Invoke-ToolDowngrade {
+    param (
+        [Parameter(Mandatory = $true)]
+        [object]$Tool,
+        
+        [Parameter(Mandatory = $false)]
+        [object]$ParentWindow
+    )
+    
+    if (-not $Tool.Winget) {
+        [System.Windows.Forms.MessageBox]::Show(
+            "Dieses Tool unterstützt kein Downgrade über Winget.",
+            "Downgrade nicht möglich",
+            [System.Windows.Forms.MessageBoxButtons]::OK,
+            [System.Windows.Forms.MessageBoxIcon]::Warning
+        )
+        return
+    }
+    
+    # Sicherheitswarnung
+    $warningResult = [System.Windows.Forms.MessageBox]::Show(
+        "⚠️ SICHERHEITSWARNUNG ⚠️`n`nDas Downgrade auf eine ältere Version kann Sicherheitsrisiken mit sich bringen:`n`n" +
+        "• Ältere Versionen können bekannte Sicherheitslücken haben`n" +
+        "• Sie erhalten keine automatischen Sicherheitsupdates`n" +
+        "• Kompatibilitätsprobleme sind möglich`n`n" +
+        "Führen Sie ein Downgrade nur durch, wenn die aktuelle Version nachweislich Probleme verursacht.`n`n" +
+        "Möchten Sie fortfahren?",
+        "Downgrade-Warnung - $($Tool.Name)",
+        [System.Windows.Forms.MessageBoxButtons]::YesNo,
+        [System.Windows.Forms.MessageBoxIcon]::Warning
+    )
+    
+    if ($warningResult -ne [System.Windows.Forms.DialogResult]::Yes) {
+        return
+    }
+    
+    # Verfügbare Versionen abrufen
+    Write-Host "Lade verfügbare Versionen für $($Tool.Name)..." -ForegroundColor Cyan
+    $versions = Get-ToolAvailableVersions -Tool $Tool
+    
+    if ($versions.Count -eq 0) {
+        [System.Windows.Forms.MessageBox]::Show(
+            "Keine verfügbaren Versionen gefunden.`n`nMöglicherweise bietet dieses Paket keine älteren Versionen an.",
+            "Keine Versionen verfügbar",
+            [System.Windows.Forms.MessageBoxButtons]::OK,
+            [System.Windows.Forms.MessageBoxIcon]::Information
+        )
+        return
+    }
+    
+    # Versionsauswahl-Dialog erstellen
+    $selectForm = New-Object System.Windows.Forms.Form
+    $selectForm.Text = "Version auswählen - $($Tool.Name)"
+    $selectForm.Size = New-Object System.Drawing.Size(400, 400)
+    $selectForm.StartPosition = "CenterScreen"
+    $selectForm.FormBorderStyle = "FixedDialog"
+    $selectForm.MaximizeBox = $false
+    $selectForm.MinimizeBox = $false
+    
+    # Label
+    $label = New-Object System.Windows.Forms.Label
+    $label.Text = "Wählen Sie eine Version zum Installieren:"
+    $label.Location = New-Object System.Drawing.Point(10, 10)
+    $label.Size = New-Object System.Drawing.Size(380, 20)
+    $selectForm.Controls.Add($label)
+    
+    # ListBox für Versionen
+    $listBox = New-Object System.Windows.Forms.ListBox
+    $listBox.Location = New-Object System.Drawing.Point(10, 35)
+    $listBox.Size = New-Object System.Drawing.Size(370, 280)
+    $listBox.SelectionMode = "One"
+    
+    foreach ($version in $versions) {
+        [void]$listBox.Items.Add($version)
+    }
+    
+    if ($listBox.Items.Count -gt 0) {
+        $listBox.SelectedIndex = 0
+    }
+    
+    $selectForm.Controls.Add($listBox)
+    
+    # Buttons
+    $okButton = New-Object System.Windows.Forms.Button
+    $okButton.Location = New-Object System.Drawing.Point(120, 325)
+    $okButton.Size = New-Object System.Drawing.Size(75, 25)
+    $okButton.Text = "OK"
+    $okButton.DialogResult = [System.Windows.Forms.DialogResult]::OK
+    $selectForm.Controls.Add($okButton)
+    $selectForm.AcceptButton = $okButton
+    
+    $cancelButton = New-Object System.Windows.Forms.Button
+    $cancelButton.Location = New-Object System.Drawing.Point(205, 325)
+    $cancelButton.Size = New-Object System.Drawing.Size(75, 25)
+    $cancelButton.Text = "Abbrechen"
+    $cancelButton.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
+    $selectForm.Controls.Add($cancelButton)
+    $selectForm.CancelButton = $cancelButton
+    
+    $result = $selectForm.ShowDialog()
+    
+    if ($result -eq [System.Windows.Forms.DialogResult]::OK -and $listBox.SelectedItem) {
+        $selectedVersion = $listBox.SelectedItem.ToString()
+        
+        # Bestätigungsdialog
+        $confirmResult = [System.Windows.Forms.MessageBox]::Show(
+            "Version $selectedVersion von $($Tool.Name) installieren?`n`n" +
+            "Die aktuelle Version wird automatisch deinstalliert.",
+            "Downgrade bestätigen",
+            [System.Windows.Forms.MessageBoxButtons]::YesNo,
+            [System.Windows.Forms.MessageBoxIcon]::Question
+        )
+        
+        if ($confirmResult -eq [System.Windows.Forms.DialogResult]::Yes) {
+            try {
+                # Winget Downgrade starten
+                Write-Host "Starte Downgrade auf Version $selectedVersion..." -ForegroundColor Yellow
+                Start-Process "winget" -ArgumentList "install", "--id", $Tool.Winget, "--version", $selectedVersion, "--force", "--uninstall-previous", "--accept-source-agreements", "--accept-package-agreements" -Verb RunAs
+                
+                [System.Windows.Forms.MessageBox]::Show(
+                    "Downgrade auf Version $selectedVersion wurde gestartet.`n`n" +
+                    "Die vorherige Version wird automatisch deinstalliert.`n" +
+                    "Bitte warten Sie, bis die Installation abgeschlossen ist.",
+                    "Downgrade gestartet - $($Tool.Name)",
+                    [System.Windows.Forms.MessageBoxButtons]::OK,
+                    [System.Windows.Forms.MessageBoxIcon]::Information
+                )
+                
+                # Cache invalidieren
+                if (Get-Command -Name Update-ToolInstallationStatus -ErrorAction SilentlyContinue) {
+                    Start-Sleep -Seconds 2
+                    Update-ToolInstallationStatus -Tool $Tool -IsInstalled $true
+                }
+            }
+            catch {
+                [System.Windows.Forms.MessageBox]::Show(
+                    "Fehler beim Downgrade: $($_.Exception.Message)",
+                    "Fehler",
+                    [System.Windows.Forms.MessageBoxButtons]::OK,
+                    [System.Windows.Forms.MessageBoxIcon]::Error
+                )
+            }
+        }
+    }
+    
+    $selectForm.Dispose()
+}
+
 # Funktion zum Setzen von Ressourcen
 function Set-ToolResource {
     param ($control, $property, $key)
@@ -924,8 +1114,28 @@ function Initialize-ToolEntry {
         })
     $buttonPanel.Children.Add($webButton)
 
-    # Deinstallations-Button (falls Winget verfügbar)
-    if ($Tool.Winget) {
+    # Deinstallations-Button (falls Winget verfügbar und installiert)
+    if ($Tool.Winget -and $isInstalled) {
+        # Downgrade-Button (nur für installierte Tools)
+        $downgradeButton = New-Object Windows.Controls.Button
+        $downgradeButton.Width = 45
+        $downgradeButton.Height = 35
+        $downgradeButton.Margin = New-Object Windows.Thickness(2)
+        $downgradeIcon = New-Object Windows.Controls.TextBlock
+        $downgradeIcon.Text = [char]0xE74A  # Zurück/Downgrade-Symbol
+        $downgradeIcon.FontFamily = New-Object Windows.Media.FontFamily("Segoe MDL2 Assets")
+        $downgradeIcon.FontSize = 20
+        $downgradeIcon.Foreground = [Windows.Media.Brushes]::Orange
+        $downgradeButton.Content = $downgradeIcon
+        $downgradeButton.ToolTip = "Auf ältere Version downgraden (Achtung: Sicherheitsrisiko!)"
+        $downgradeButton.Tag = $Tool
+        $downgradeButton.Add_Click({
+                $toolInfo = $this.Tag
+                Invoke-ToolDowngrade -Tool $toolInfo
+            })
+        $buttonPanel.Children.Add($downgradeButton)
+        
+        # Deinstallations-Button
         $uninstallButton = New-Object Windows.Controls.Button
         $uninstallButton.Width = 45
         $uninstallButton.Height = 35
@@ -1637,4 +1847,4 @@ function Update-ToolsDisplay {
 }
 
 # Exportiere die Funktionen
-Export-ModuleMember -Function Get-AllTools, Get-ToolsByCategory, Get-ToolsByTag, Get-ToolByName, Install-ToolPackage, Get-ToolDownload, Flatten, Update-ToolProgress, Set-ToolResource, Initialize-ToolEntry, Show-ToolTileList, Test-ToolInstalled, Test-ToolUpdateAvailable, Get-ToolVersionInfo, Update-ToolsDisplay
+Export-ModuleMember -Function Get-AllTools, Get-ToolsByCategory, Get-ToolsByTag, Get-ToolByName, Install-ToolPackage, Get-ToolDownload, Flatten, Update-ToolProgress, Set-ToolResource, Initialize-ToolEntry, Show-ToolTileList, Test-ToolInstalled, Test-ToolUpdateAvailable, Get-ToolVersionInfo, Update-ToolsDisplay, Get-ToolAvailableVersions, Invoke-ToolDowngrade
