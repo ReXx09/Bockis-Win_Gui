@@ -1,0 +1,21 @@
+﻿2026-01-21 19:16:42 - [INFO] GUI-Reload wurde vom Benutzer initiiert
+2026-01-21 19:16:42 - [INFO] Reload-GUI: GUI-Reload gestartet
+2026-01-21 19:16:42 - [INFO] Reload-GUI: Alle Timer werden gestoppt
+2026-01-21 19:16:42 - [INFO] Reload-GUI: Datenbankverbindung wird geschlossen
+2026-01-21 19:16:42 - [INFO] Reload-GUI: Controls werden aufgeräumt
+2026-01-21 19:16:42 - [INFO] Reload-GUI: Tool-Cache wird geleert
+2026-01-21 19:16:42 - [INFO] Reload-GUI: Neuer GUI-Prozess wird gestartet
+2026-01-21 19:16:42 - [INFO] Reload-GUI: Neuer Prozess gestartet (PID: 14576)
+2026-01-21 19:16:43 - [INFO] Reload-GUI: Garbage Collection durchgeführt
+2026-01-21 19:16:43 - [INFO] Reload-GUI: Formular wird geschlossen
+2026-01-21 19:16:43 - [INFO] Anwendung wird geschlossen
+2026-01-21 19:16:43 - [INFO] Fensterposition wurde gespeichert
+2026-01-21 19:16:43 - [INFO] Schließvorgang initiiert
+2026-01-21 19:16:43 - [INFO] Tool-Cache wurde geleert
+2026-01-21 19:16:43 - [INFO] Garbage Collection durchgeführt
+2026-01-21 19:16:43 - [INFO] Anwendung wurde ordnungsgemäß beendet
+2026-01-21 19:17:13 - [INFO] Close-FormSafely: Schließvorgang gestartet
+2026-01-21 19:17:13 - [INFO] Close-FormSafely: Datenbankverbindung wird geschlossen
+2026-01-21 19:17:13 - [INFO] Close-FormSafely: Controls deaktiviert
+2026-01-21 19:17:13 - [INFO] Close-FormSafely: Garbage Collection durchgeführt
+2026-01-21 19:17:13 - [INFO] Close-FormSafely: Anwendung wird beendet

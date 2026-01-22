@@ -236,7 +236,7 @@ Source: "Logo.bmp"; DestDir: "{app}"; Flags: ignoreversion
 ; Konfiguration
 ; -------------------------------------------------------------------
 ; Konfigurationsdatei (nicht überschreiben bei Update)
-Source: "config.json"; DestDir: "{app}"; Flags: onlyifdoesntexist uninsneveruninstall
+Source: "config.json"; DestDir: "{app}"; Flags: onlyifdoesntexist
 
 ; -------------------------------------------------------------------
 ; Dokumentation und Lizenzen
@@ -250,6 +250,26 @@ Source: "LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
 ; Lizenzen von Drittanbieter-Komponenten
 Source: "THIRD-PARTY-LICENSES.md"; DestDir: "{app}"; Flags: ignoreversion
 
+; -------------------------------------------------------------------
+; Daten-Ordner (zentrale Speicherung aller Anwendungsdaten)
+; -------------------------------------------------------------------
+; HINWEIS: Ordner werden leer erstellt - Daten werden zur Laufzeit generiert
+; Database-Ordner für SQLite-Datenbank
+; Logs-Ordner für alle Log-Dateien
+; ToolDownloads-Ordner für heruntergeladene Tools
+; Temp-Ordner für temporäre Dateien
+
+
+[Dirs]
+; ===================================================================
+; VERZEICHNISSE ERSTELLEN
+; ===================================================================
+; Zentrale Datenordner im Installationsverzeichnis
+Name: "{app}\Data"; Permissions: users-modify
+Name: "{app}\Data\Database"; Permissions: users-modify
+Name: "{app}\Data\Logs"; Permissions: users-modify
+Name: "{app}\Data\ToolDownloads"; Permissions: users-modify
+Name: "{app}\Data\Temp"; Permissions: users-modify
 
 
 [Icons]
@@ -289,8 +309,13 @@ Name: "desktopicon"; Description: "Desktop-Verknüpfung erstellen"; GroupDescrip
 ; ===================================================================
 ; REGISTRY-EINTRÄGE (für Dateizuordnungen etc.)
 ; ===================================================================
-; HINWEIS: Aktuell keine Registry-Einträge erforderlich
-; Zukünftige Verwendung für Kontextmenü-Integration möglich
+
+; -------------------------------------------------------------------
+; Versionsinformationen speichern (für Update-Erkennung)
+; -------------------------------------------------------------------
+Root: HKCU; Subkey: "Software\Bockis\SystemTool"; ValueType: string; ValueName: "Version"; ValueData: "{#MyAppVersion}"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Bockis\SystemTool"; ValueType: string; ValueName: "InstallPath"; ValueData: "{app}"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Bockis\SystemTool"; ValueType: string; ValueName: "LastRun"; ValueData: "{code:GetCurrentDateTime}"; Flags: uninsdeletekey
 
 [Code]
 
@@ -761,6 +786,12 @@ begin
   // Keine Post-Installation Tasks
 end;
 
+// Gibt das aktuelle Datum und die Uhrzeit zurück (für Registry)
+function GetCurrentDateTime(Param: String): String;
+begin
+  Result := GetDateTimeString('yyyy-mm-dd hh:nn:ss', '-', ':');
+end;
+
 [CustomMessages]
 ; ===================================================================
 ; BENUTZERDEFINIERTE MELDUNGEN (Deutsch)
@@ -797,16 +828,22 @@ Filename: "{app}\README.md"; Description: "README-Datei anzeigen"; Flags: postin
 ; ===================================================================
 ; BEIM DEINSTALLIEREN ZU LÖSCHENDE DATEIEN
 ; ===================================================================
+; WICHTIG: Alle Daten werden jetzt zentral im Data-Ordner gespeichert!
+; Der Deinstaller muss nur noch das Installations-Verzeichnis löschen.
 
 ; -------------------------------------------------------------------
-; Temporäre Dateien und Logs löschen
+; Zentrale Daten-Ordner löschen
 ; -------------------------------------------------------------------
-Type: filesandordirs; Name: "{app}\Logs"
+Type: filesandordirs; Name: "{app}\Data"
+
+; -------------------------------------------------------------------
+; Temporäre Dateien und alte Logs löschen
+; -------------------------------------------------------------------
 Type: files; Name: "{app}\*.tmp"
 Type: files; Name: "{app}\*.log"
 
 ; -------------------------------------------------------------------
-; Archiv-Ordner löschen (alte Backups)
+; Archiv-Ordner löschen (alte Backups, falls vorhanden)
 ; -------------------------------------------------------------------
 Type: filesandordirs; Name: "{app}\_Archive"
 
@@ -816,11 +853,6 @@ Type: filesandordirs; Name: "{app}\_Archive"
 ; ===================================================================
 
 ; -------------------------------------------------------------------
-; Temporäre Datenbank-Dateien im AppData-Ordner bereinigen
+; Registry-Einträge löschen (zusätzliche Sicherheit)
 ; -------------------------------------------------------------------
-Filename: "powershell.exe"; Parameters: "-Command ""Remove-Item -Path '{localappdata}\BockisSystemTool' -Recurse -Force -ErrorAction SilentlyContinue"""; Flags: runhidden
-
-; -------------------------------------------------------------------
-; Cache-Dateien bereinigen
-; -------------------------------------------------------------------
-Filename: "powershell.exe"; Parameters: "-Command ""Remove-Item -Path '$env:TEMP\BockisSystemTool*' -Recurse -Force -ErrorAction SilentlyContinue"""; Flags: runhidden
+Filename: "reg.exe"; Parameters: "delete ""HKCU\Software\Bockis\SystemTool"" /f"; Flags: runhidden; RunOnceId: "CleanupRegistry"

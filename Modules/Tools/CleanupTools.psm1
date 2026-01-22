@@ -241,8 +241,8 @@ function Start-DiskCleanup {
         
         # Log-Eintrag erstellen
         try {
-            $logFilePath = "$env:TEMP\cleanup_log.txt"
-            $skippedFilePath = "$env:TEMP\skipped_files.txt"
+            $logFilePath = Join-Path $PSScriptRoot "..\..\Data\Temp\cleanup_log.txt"
+            $skippedFilePath = Join-Path $PSScriptRoot "..\..\Data\Temp\skipped_files.txt"
             
             # Log-Eintrag für entfernte Dateien
             if ($totalFilesRemoved -gt 0) {
@@ -2189,7 +2189,8 @@ function Write-SkippedFileInfo {
         { $_ -gt 1KB } { "{0:N2} KB" -f ($_ / 1KB) }
         default { "$_ Bytes" }
     }    # Schreibe die Information in die Protokolldatei
-    "$filePath | $sizeString" | Out-File -Append -FilePath "$env:TEMP\skipped_files.txt"
+    $skippedLog = Join-Path $PSScriptRoot "..\..\Data\Temp\skipped_files.txt"
+    "$filePath | $sizeString" | Out-File -Append -FilePath $skippedLog
 }
 
 # Funktion zum Bereinigen temporärer Dateien
@@ -2204,8 +2205,10 @@ function Start-Cleanup {
     Write-ToolLog -ToolName "SystemCleanup" -Message "System-Bereinigung wird gestartet" -OutputBox $outputBox -Style 'Action' -Level "Information" -SaveToDatabase
     
     # Protokolldateien initialisieren
-    "" | Out-File -FilePath "$env:TEMP\cleanup_log.txt" -Force
-    "" | Out-File -FilePath "$env:TEMP\skipped_files.txt" -Force
+    $cleanupLog = Join-Path $PSScriptRoot "..\..\Data\Temp\cleanup_log.txt"
+    $skippedLog = Join-Path $PSScriptRoot "..\..\Data\Temp\skipped_files.txt"
+    "" | Out-File -FilePath $cleanupLog -Force
+    "" | Out-File -FilePath $skippedLog -Force
     
     try {
         # Sammle Informationen über zu bereinigende Dateien

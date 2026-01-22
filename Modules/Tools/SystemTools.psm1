@@ -110,7 +110,7 @@ function Start-QuickMRT {
         $logPath = "$env:windir\debug\mrt.log"
         
         # Log-Datei für den aktuellen Scan sichern
-        $backupLogPath = "$env:TEMP\mrt_$(Get-Date -Format 'yyyyMMdd_HHmmss').log"
+        $backupLogPath = Join-Path $PSScriptRoot "..\..\Data\Temp\mrt_$(Get-Date -Format 'yyyyMMdd_HHmmss').log"
         if (Test-Path $logPath) {
             Copy-Item -Path $logPath -Destination $backupLogPath -Force
         }
@@ -344,7 +344,7 @@ function Start-QuickMRT {
             # Nur Fallback verwenden, wenn der erste Versuch fehlgeschlagen ist
             if (-not $logSuccess) {
                 try {
-                    $logFilePath = Join-Path $env:LOCALAPPDATA "BockisSystemTool\Logs\QuickMRT.log"
+                    $logFilePath = Join-Path $PSScriptRoot "..\..\Data\Logs\QuickMRT.log"
                     $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
                     $logEntry = "$timestamp - [INFO] $resultMessage"
                     
@@ -815,7 +815,7 @@ function Start-FullMRT {
         
         # Zusätzlicher Fallback: direkt mit IO.File
         try {
-            $logFilePath = Join-Path $env:LOCALAPPDATA "BockisSystemTool\Logs\FullMRT.log"
+            $logFilePath = Join-Path $PSScriptRoot "..\..\Data\Logs\FullMRT.log"
             $logEntry = "$timestamp - [INFO] $resultMessage"
             
             # Direktes Schreiben als zusätzliche Sicherheit mit Cloud-Fehlerbehandlung
@@ -1072,7 +1072,7 @@ function Start-MemoryDiagnostic {
         $outputBox.AppendText("[+] Starte Windows Memory Diagnostic...`r`n")
         
         # Marker-Datei erstellen, um nach dem Neustart zu erkennen, dass wir die Ergebnisse prüfen sollen
-        $markerFile = "$env:TEMP\memory_diagnostic_marker.txt"
+        $markerFile = Join-Path $PSScriptRoot "..\..\Data\Temp\memory_diagnostic_marker.txt"
         Set-Content -Path $markerFile -Value (Get-Date -Format "yyyy-MM-dd HH:mm:ss")        # Memory Diagnostic starten und Prozess überwachen
         $outputBox.AppendText("[►] Starte Memory Diagnostic Dialog...`r`n")
         
@@ -1647,7 +1647,7 @@ function Start-SFCCheck {
                 # Falls Standard-Logging fehlschlägt, direkten Fallback versuchen
                 if (-not $logSuccess) {
                     try {
-                        $logFilePath = Join-Path $env:LOCALAPPDATA "BockisSystemTool\Logs\SFCCheck.log"
+                        $logFilePath = Join-Path $PSScriptRoot "..\..\Data\Logs\SFCCheck.log"
                         $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
                         $logEntry = "$timestamp - [WARNING] $resultMessage"
                         
@@ -1702,7 +1702,7 @@ function Start-SFCCheck {
                 # Falls Standard-Logging fehlschlägt, direkten Fallback versuchen
                 if (-not $logSuccess) {
                     try {
-                        $logFilePath = Join-Path $env:LOCALAPPDATA "BockisSystemTool\Logs\SFCCheck.log"
+                        $logFilePath = Join-Path $PSScriptRoot "..\..\Data\Logs\SFCCheck.log"
                         $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
                         $logEntry = "$timestamp - [ERROR] $resultMessage"
                         
@@ -1761,7 +1761,7 @@ function Start-SFCCheck {
                 # Falls Standard-Logging fehlschlägt, direkten Fallback versuchen
                 if (-not $logSuccess) {
                     try {
-                        $logFilePath = Join-Path $env:LOCALAPPDATA "BockisSystemTool\Logs\SFCCheck.log"
+                        $logFilePath = Join-Path $PSScriptRoot "..\..\Data\Logs\SFCCheck.log"
                         $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
                         $logEntry = "$timestamp - [ERROR] $resultMessage"
                         
@@ -1834,7 +1834,7 @@ function Start-MRTTest {
     Write-ToolLog -ToolName "MRTTest" -Message "MRT-Test wird vorbereitet" -OutputBox $outputBox -Style 'Action' -Level "Information" -SaveToDatabase
     
     # Verzeichnis für temporäre Dateien erstellen
-    $tempDir = "$env:TEMP\MRTTest"
+    $tempDir = Join-Path $PSScriptRoot "..\..\Data\Temp\MRTTest"
     if (-not (Test-Path $tempDir)) {
         New-Item -Path $tempDir -ItemType Directory -Force | Out-Null
     }

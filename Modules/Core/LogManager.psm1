@@ -2,8 +2,8 @@
 # Modul für zentralisierte Logging-Funktionen
 
 # Globale Variablen für das Logging
-# WICHTIG: Logs werden in lokalem AppData gespeichert, um Cloud-Sync-Probleme zu vermeiden
-$script:logDirectory = Join-Path $env:LOCALAPPDATA "BockisSystemTool\Logs"
+# WICHTIG: Logs werden zentral im Data-Ordner der GUI gespeichert
+$script:logDirectory = Join-Path $PSScriptRoot "..\..\Data\Logs"
 $script:maxLogSize = 5MB  # Maximale Logfile-Größe (5 MB)
 $script:maxLogAge = 30    # Maximales Alter der Logs in Tagen
 
@@ -35,8 +35,9 @@ function Remove-OldLogs {
     }
 }
 
-# Hauptfunktion zum Schreiben von Logs für Tools
-function Write-ToolLog {
+# Interne Funktion zum Schreiben von Logs für Tools
+# HINWEIS: Diese Funktion wird intern verwendet. Externe Aufrufe verwenden die globale Version.
+function Write-ToolLogInternal {
     param (
         [Parameter(Mandatory = $true)]
         [string]$ToolName,
@@ -51,9 +52,9 @@ function Write-ToolLog {
         
         [switch]$CreateNew,
         
-        [System.Windows.Forms.RichTextBox]$OutputBox,
+        [object]$OutputBox,  # Geändert von [System.Windows.Forms.RichTextBox] zu [object] für bessere Kompatibilität
         
-        [System.Drawing.Color]$Color,
+        [object]$Color,  # Geändert von [System.Drawing.Color] zu [object] für bessere Kompatibilität
         
         [string]$Style,
         
@@ -295,9 +296,9 @@ function Write-GuiClosingLog {
     
     # GUI-Closing-Logs werden in einer separaten Datei gespeichert
     $toolName = "GUI-Closing"
-    # Verwende die bestehende Write-ToolLog Funktion ohne problematische Color-Parameter
+    # Verwende die interne Write-ToolLogInternal Funktion
     try {
-        Write-ToolLog -ToolName $toolName -Message $Message -Level $Level -NoTimestamp:$false
+        Write-ToolLogInternal -ToolName $toolName -Message $Message -Level $Level -NoTimestamp:$false
         return $true
     }
     catch {
@@ -359,7 +360,9 @@ function Get-GuiClosingLog {
 }
 
 # Module-Member exportieren
-Export-ModuleMember -Function Write-ToolLog, Get-ToolLog, Clear-ToolLog, Get-AvailableLogs, Initialize-LogDirectory, Save-LogToDatabase, Write-GuiClosingLog, Initialize-GuiClosingLog, Get-GuiClosingLog
+# HINWEIS: Write-ToolLog wird NICHT exportiert, da es eine globale Version im Hauptskript gibt
+# Die globale Version überschreibt diese Modul-Version nach dem Import
+Export-ModuleMember -Function Get-ToolLog, Clear-ToolLog, Get-AvailableLogs, Initialize-LogDirectory, Save-LogToDatabase, Write-GuiClosingLog, Initialize-GuiClosingLog, Get-GuiClosingLog
 
 # SIG # Begin signature block
 # MIIcSgYJKoZIhvcNAQcCoIIcOzCCHDcCAQExDzANBglghkgBZQMEAgEFADB5Bgor

@@ -318,7 +318,7 @@ function Start-WindowsDefender {
                         Write-ConsoleAndOutputBox -Message "MpCmdRun-Fehler: $errorMsg" -Type "Error" -OutputBox $outputBox -ToolName "WindowsDefender" -NoTimestamp -SaveToDatabase
                         
                         # Prüfe Log-Datei
-                        $logPath = "$env:TEMP\MpCmdRun.log"
+                        $logPath = Join-Path $PSScriptRoot "..\..\Data\Temp\MpCmdRun.log"
                         if (Test-Path $logPath) {
                             Write-ConsoleAndOutputBox -Message "Details in Log-Datei: $logPath" -Type "Info" -OutputBox $outputBox -ToolName "WindowsDefender" -NoTimestamp
                         }

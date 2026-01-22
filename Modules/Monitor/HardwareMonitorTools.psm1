@@ -1080,96 +1080,23 @@ function Initialize-LibreHardwareMonitor {
             $script:computerObj.IsNetworkEnabled = $false
             $script:computerObj.IsControllerEnabled = $false
             
-            # Computer öffnen - Ring-0-Treiber wird automatisch aktiviert
+            # Computer öffnen - PawnIO-Treiber wird verwendet (muss vorher registriert sein)
             Write-Host "  ⚙️ Öffne Hardware-Monitor..." -ForegroundColor Cyan
             $script:computerObj.Open()
             
-            # Prüfe ob Ring-0-Treiber funktioniert (Temperature-Sensoren testen)
+            # Prüfe ob PawnIO-Treiber funktioniert (Temperature-Sensoren testen)
             $cpuHardware = $script:computerObj.Hardware | Where-Object { $_.HardwareType -eq 'Cpu' } | Select-Object -First 1
             if ($cpuHardware) {
                 $cpuHardware.Update()
                 $tempSensors = $cpuHardware.Sensors | Where-Object { $_.SensorType -eq 'Temperature' -and $_.Value -ne $null }
                 
                 if ($tempSensors.Count -gt 0) {
-                    Write-Host "  ✓ Hardware-Monitor initialisiert (Ring-0-Treiber aktiv - $($tempSensors.Count) Temp-Sensoren)" -ForegroundColor Green
+                    Write-Host "  ✓ Hardware-Monitor initialisiert (PawnIO-Treiber aktiv - $($tempSensors.Count) Temp-Sensoren)" -ForegroundColor Green
                     $script:useLibreHardware = $true
                 }
                 else {
-                    Write-Host "  ⚠️ Hardware-Monitor geöffnet, aber Ring-0-Treiber NICHT aktiv" -ForegroundColor Yellow
-                    
-                    # VERSUCHE TREIBER-AKTIVIERUNG durch kurzes Starten der .exe
-                    $lhmExePath = $null
-                    $dllDir = Split-Path -Parent $libPath
-                    
-                    # Sammle mögliche Pfade zur .exe
-                    $possibleExePaths = @()
-                    
-                    # 1. Im gleichen Verzeichnis wie die DLL
-                    $possibleExePaths += Join-Path $dllDir "LibreHardwareMonitor.exe"
-                    
-                    # 2. In WinGet-Packages mit Wildcard-Auflösung
-                    try {
-                        $wingetExePaths = Get-ChildItem -Path "${env:LOCALAPPDATA}\Microsoft\WinGet\Packages" -Filter "LibreHardwareMonitor.LibreHardwareMonitor*" -Directory -ErrorAction SilentlyContinue
-                        foreach ($dir in $wingetExePaths) {
-                            $exeInDir = Join-Path $dir.FullName "LibreHardwareMonitor.exe"
-                            if (Test-Path $exeInDir) {
-                                $possibleExePaths += $exeInDir
-                            }
-                        }
-                    }
-                    catch {
-                        Write-Verbose "Fehler beim Suchen der WinGet-Installation: $_"
-                    }
-                    
-                    # Suche erste existierende .exe
-                    foreach ($exePath in $possibleExePaths) {
-                        if (Test-Path $exePath) {
-                            $lhmExePath = $exePath
-                            break
-                        }
-                    }
-                    
-                    if ($lhmExePath) {
-                        Write-Host "  🔧 Versuche Treiber-Aktivierung durch Starten von LibreHardwareMonitor.exe..." -ForegroundColor Cyan
-                        try {
-                            # Starte .exe kurz im Hintergrund (minimiert)
-                            $proc = Start-Process -FilePath $lhmExePath -WindowStyle Hidden -PassThru -ErrorAction Stop
-                            Start-Sleep -Milliseconds 2000
-                            
-                            # Beende Prozess wieder
-                            if (-not $proc.HasExited) {
-                                $proc | Stop-Process -Force -ErrorAction SilentlyContinue
-                            }
-                            
-                            Write-Host "  ⏳ Warte auf Treiber-Registrierung..." -ForegroundColor Cyan
-                            Start-Sleep -Milliseconds 1000
-                            
-                            # Computer-Objekt neu öffnen
-                            $script:computerObj.Close()
-                            $script:computerObj = New-Object LibreHardwareMonitor.Hardware.Computer
-                            $script:computerObj.IsCpuEnabled = $true
-                            $script:computerObj.IsGpuEnabled = $true
-                            $script:computerObj.IsMotherboardEnabled = $true
-                            $script:computerObj.IsMemoryEnabled = $true
-                            $script:computerObj.Open()
-                            
-                            # Erneuter Sensor-Test
-                            $cpuHardware = $script:computerObj.Hardware | Where-Object { $_.HardwareType -eq 'Cpu' } | Select-Object -First 1
-                            $cpuHardware.Update()
-                            $tempSensors = $cpuHardware.Sensors | Where-Object { $_.SensorType -eq 'Temperature' -and $_.Value -ne $null }
-                            
-                            if ($tempSensors.Count -gt 0) {
-                                Write-Host "  ✓ Treiber erfolgreich aktiviert! ($($tempSensors.Count) Temp-Sensoren verfügbar)" -ForegroundColor Green
-                                $script:useLibreHardware = $true
-                                return $script:computerObj
-                            } else {
-                                Write-Host "  ⚠️ Treiber-Aktivierung fehlgeschlagen" -ForegroundColor Yellow
-                            }
-                        }
-                        catch {
-                            Write-Host "  ⚠️ Fehler bei Treiber-Aktivierung: $_" -ForegroundColor Yellow
-                        }
-                    }
+                    Write-Host "  ⚠️ Hardware-Monitor geöffnet, aber PawnIO-Treiber NICHT aktiv" -ForegroundColor Yellow
+                    Write-Host "  💡 Tipp: Führen Sie bitte einmal die Erstinitialisierung durch (Tool neu installieren)" -ForegroundColor Yellow
                     
                     # Fallback zu Performance Counters
                     Write-Host "  ℹ️ CPU-Temperaturen nicht verfügbar - wechsle zu Fallback-Sensoren" -ForegroundColor Cyan

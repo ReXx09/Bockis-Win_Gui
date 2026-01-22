@@ -74,7 +74,7 @@ function Start-CheckDISM {
     Start-Sleep -Seconds 3
 
     # Ergebnis-Pfad für JSON definieren (logPath wurde entfernt, da nicht verwendet)
-    $resultPath = "$env:TEMP\dism_check_result.json"
+    $resultPath = Join-Path $PSScriptRoot "..\..\Data\Temp\dism_check_result.json"
 
     # Header für die Ausgabe
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
@@ -210,8 +210,8 @@ function Start-ScanDISM {
     Start-Sleep -Seconds 3
 
     # Log-Datei-Pfad definieren
-    $logPath = "$env:TEMP\dism_scan.log"
-    $resultPath = "$env:TEMP\dism_scan_result.json"
+    $logPath = Join-Path $PSScriptRoot "..\..\Data\Temp\dism_scan.log"
+    $resultPath = Join-Path $PSScriptRoot "..\..\Data\Temp\dism_scan_result.json"
 
     # Header für die Ausgabe
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
@@ -359,8 +359,8 @@ function Start-RestoreDISM {
     Start-Sleep -Seconds 3
 
     # Log-Datei-Pfad definieren
-    $logPath = "$env:TEMP\dism_restore.log"
-    $resultPath = "$env:TEMP\dism_restore_result.json"
+    $logPath = Join-Path $PSScriptRoot "..\..\Data\Temp\dism_restore.log"
+    $resultPath = Join-Path $PSScriptRoot "..\..\Data\Temp\dism_restore_result.json"
 
     # Header für die Ausgabe
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'

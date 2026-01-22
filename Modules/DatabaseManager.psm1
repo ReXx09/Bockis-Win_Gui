@@ -21,7 +21,7 @@ function Initialize-Database {
             }
         }
         
-        $dbPath = Join-Path $env:LOCALAPPDATA "BockisSystemTool\Database\system_data.db"
+        $dbPath = Join-Path $PSScriptRoot "..\Data\Database\system_data.db"
         $dbDirectory = Split-Path -Parent $dbPath
         if (-not (Test-Path $dbDirectory)) {
             New-Item -ItemType Directory -Path $dbDirectory -Force | Out-Null

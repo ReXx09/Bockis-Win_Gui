@@ -60,6 +60,15 @@ public class RoundedCorners {
 "@ -ReferencedAssemblies System.Windows.Forms -ErrorAction SilentlyContinue
 }
 
+# ===================================================================
+# HINWEIS: Globale Write-ToolLog Funktion wird NACH Modul-Imports definiert
+# siehe unten nach "Import-Module" Bereich
+# ===================================================================
+
+# ===================================================================
+# MODULE IMPORTIEREN
+# ===================================================================
+
 # Settings-Modul importieren
 Import-Module "$PSScriptRoot\Modules\Core\Settings.psm1" -Force
 
@@ -81,11 +90,155 @@ Import-Module "$PSScriptRoot\Modules\ToolCache.psm1" -Force
 # ToolLibrary-Modul importieren
 Import-Module "$PSScriptRoot\Modules\ToolLibrary.psm1" -Force
 
+# ===================================================================
+# WICHTIG: Globale Write-ToolLog Funktion erneut definieren
+# Der LogManager-Import überschreibt die globale Funktion,
+# daher muss sie nach den Imports erneut gesetzt werden
+# ===================================================================
+function global:Write-ToolLog {
+    param(
+        [string]$ToolName,
+        [string]$Message,
+        [System.Windows.Forms.RichTextBox]$OutputBox,
+        [System.Drawing.Color]$Color = [System.Drawing.Color]::Empty,
+        [ValidateSet('Information', 'Warning', 'Error', 'Success')]
+        [string]$Level = 'Information',
+        [string]$Style,
+        [switch]$NoTimestamp,
+        [switch]$SaveToDatabase
+    )
+
+    # Ausgabe in der RichTextBox
+    if ($OutputBox) {
+        $styleKey = if ($Style) { $Style } else {
+            switch ($Level) {
+                'Error' { 'Error' }
+                'Warning' { 'Warning' }
+                'Success' { 'Success' }
+                default { 'Info' }
+            }
+        }
+
+        if ($Style -or $Color.IsEmpty) {
+            Set-OutputSelectionStyle -OutputBox $OutputBox -Style $styleKey
+        }
+        else {
+            Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Default'
+        }
+
+        if (-not $Color.IsEmpty) {
+            $OutputBox.SelectionColor = $Color
+        }
+
+        if ($NoTimestamp) {
+            $OutputBox.AppendText("$Message`r`n")
+        }
+        else {
+            $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+            $OutputBox.AppendText("[$timestamp] [$ToolName] $Message`r`n")
+        }
+    }
+
+    # Schreibe direkt in die Log-Datei (LogManager-Funktionalität eingebettet)
+    # Verhindert Namenskollision durch direkten Dateizugriff
+    try {
+        $logDirectory = Join-Path $PSScriptRoot "Data\Logs"
+        if (-not (Test-Path $logDirectory)) {
+            New-Item -ItemType Directory -Path $logDirectory -Force | Out-Null
+        }
+        
+        $sanitizedToolName = $ToolName -replace '[\\/:*?"<>|]', '_'
+        $logFileName = "$sanitizedToolName.log"
+        $logPath = Join-Path $logDirectory $logFileName
+        
+        # Log-Eintrag formatieren
+        $timestamp = if (-not $NoTimestamp) { "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - " } else { "" }
+        $levelPrefix = switch ($Level) {
+            'Information' { 'INFO' }
+            'Warning' { 'WARN' }
+            'Error' { 'ERROR' }
+            'Success' { 'SUCCESS' }
+        }
+        
+        $logEntry = "$timestamp[$levelPrefix] $Message"
+        
+        # Schreibe in Log-Datei mit Retry-Logik
+        $retryCount = 0
+        $maxRetries = 3
+        do {
+            try {
+                [System.IO.File]::AppendAllText($logPath, "$logEntry`r`n", [System.Text.Encoding]::UTF8)
+                break
+            }
+            catch {
+                $retryCount++
+                if ($retryCount -ge $maxRetries) {
+                    Write-Verbose "Konnte nicht auf Log-Datei zugreifen: $_"
+                    break
+                }
+                Start-Sleep -Milliseconds 100
+            }
+        } while ($retryCount -lt $maxRetries)
+    }
+    catch {
+        Write-Verbose "Fehler beim Schreiben in Log-Datei: $_"
+    }
+
+    # Speichere in der Datenbank, wenn angefordert
+    if ($SaveToDatabase -and $script:dbConnection) {
+        # Konvertiere Color/Level zur Ergebnis-Darstellung
+        $result = switch ($Level) {
+            'Error' { "Fehler" }
+            'Warning' { "Warnung" }
+            'Success' { "Erfolgreich" }
+            default { "Information" }
+        }
+        
+        # Exitcode basierend auf Level
+        $exitCode = switch ($Level) {
+            'Error' { 1 }
+            'Warning' { 2 }
+            'Success' { 0 }
+            default { 0 }
+        }
+        
+        # In Datenbank speichern
+        Save-DiagnosticToDatabase -ToolName $ToolName -Result $result -ExitCode $exitCode -Details $Message
+    }
+}
+
 # Globale Einstellungen - werden vom Settings-Modul verwaltet
 $script:settings = $null
 
 # Globale Datenbankverbindung
 $script:dbConnection = $null
+
+# Funktion zum Sicherstellen, dass alle Data-Verzeichnisse existieren
+function Initialize-DataDirectories {
+    $dataRoot = Join-Path $PSScriptRoot "Data"
+    $directories = @(
+        $dataRoot
+        (Join-Path $dataRoot "Database")
+        (Join-Path $dataRoot "Logs")
+        (Join-Path $dataRoot "Temp")
+        (Join-Path $dataRoot "ToolDownloads")
+    )
+    
+    foreach ($dir in $directories) {
+        if (-not (Test-Path $dir)) {
+            try {
+                New-Item -ItemType Directory -Path $dir -Force | Out-Null
+                Write-Verbose "Verzeichnis erstellt: $dir"
+            }
+            catch {
+                Write-Warning "Konnte Verzeichnis nicht erstellen: $dir - $_"
+            }
+        }
+    }
+}
+
+# Data-Verzeichnisse beim Start initialisieren
+Initialize-DataDirectories
 
 # Funktion zum Initialisieren der Systemdatenbank - wird früher definiert, damit sie überall verfügbar ist
 function Initialize-SystemDatabase {
@@ -180,83 +333,6 @@ if (-not (Test-Admin)) {
         Write-Host "Fehler beim Anfordern von Administratorrechten: $_" -ForegroundColor Red
         Write-Host "Bitte starten Sie das Skript manuell mit Administratorrechten." -ForegroundColor Yellow
         exit
-    }
-}
-
-# Funktion für einheitliches Logging
-function Write-ToolLog {
-    param(
-        [string]$ToolName,
-        [string]$Message,
-        [System.Windows.Forms.RichTextBox]$OutputBox,
-        [System.Drawing.Color]$Color = [System.Drawing.Color]::Empty,
-        [ValidateSet('Information', 'Warning', 'Error', 'Success')]
-        [string]$Level = 'Information',
-        [string]$Style,
-        [switch]$NoTimestamp,
-        [switch]$SaveToDatabase
-    )
-
-    # Ausgabe in der RichTextBox
-    if ($OutputBox) {
-        $styleKey = if ($Style) { $Style } else {
-            switch ($Level) {
-                'Error' { 'Error' }
-                'Warning' { 'Warning' }
-                'Success' { 'Success' }
-                default { 'Info' }
-            }
-        }
-
-        if ($Style -or $Color.IsEmpty) {
-            Set-OutputSelectionStyle -OutputBox $OutputBox -Style $styleKey
-        }
-        else {
-            Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Default'
-        }
-
-        if (-not $Color.IsEmpty) {
-            $OutputBox.SelectionColor = $Color
-        }
-
-        if ($NoTimestamp) {
-            $OutputBox.AppendText("$Message`r`n")
-        }
-        else {
-            $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-            $OutputBox.AppendText("[$timestamp] [$ToolName] $Message`r`n")
-        }
-    }
-
-    # Verwende LogManager, um in die Logdatei zu schreiben
-    if (Get-Command -Name 'Write-ToolLog' -Module 'LogManager' -ErrorAction SilentlyContinue) {
-        & (Get-Command -Name 'Write-ToolLog' -Module 'LogManager') `
-            -ToolName $ToolName `
-            -Message $Message `
-            -Level $Level `
-            -NoTimestamp:$NoTimestamp
-    }
-
-    # Speichere in der Datenbank, wenn angefordert
-    if ($SaveToDatabase -and $script:dbConnection) {
-        # Konvertiere Color/Level zur Ergebnis-Darstellung
-        $result = switch ($Level) {
-            'Error' { "Fehler" }
-            'Warning' { "Warnung" }
-            'Success' { "Erfolgreich" }
-            default { "Information" }
-        }
-        
-        # Exitcode basierend auf Level
-        $exitCode = switch ($Level) {
-            'Error' { 1 }
-            'Warning' { 2 }
-            'Success' { 0 }
-            default { 0 }
-        }
-        
-        # In Datenbank speichern
-        Save-DiagnosticToDatabase -ToolName $ToolName -Result $result -ExitCode $exitCode -Details $Message
     }
 }
 
@@ -1061,13 +1137,22 @@ function Update-LogFile {
         # Bestimme den Log-Level basierend auf dem IsError-Parameter
         $level = if ($IsError) { 'Error' } else { 'Information' }
         
-        # Verwende das LogManager-System für GUI-Closing-Logs
-        Write-GuiClosingLog -Message $Message -Level $level
+        # Verwende die globale Write-ToolLog Funktion (immer verfügbar, auch beim Schließen)
+        if (Get-Command -Name Write-ToolLog -ErrorAction SilentlyContinue) {
+            Write-ToolLog -ToolName "GUI-Closing" -Message $Message -Level $level
+        }
+        else {
+            # Fallback: Direktes Schreiben in Log-Datei
+            $logPath = Join-Path $PSScriptRoot "Data\Logs\GUI-Closing.log"
+            $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+            $logEntry = "$timestamp - [$level] $Message"
+            [System.IO.File]::AppendAllText($logPath, "$logEntry`r`n", [System.Text.Encoding]::UTF8)
+        }
         
         return $true
     }
     catch {
-        Write-Warning "Fehler beim Schreiben des Logs über LogManager: $_"
+        # Fehler still ignorieren beim Schließen
         return $false
     }
 }
@@ -2701,9 +2786,9 @@ function Set-ConsolePositionNextToGUI {
             [System.Windows.Forms.Application]::DoEvents()
             
             # Konsolengröße an GUI-ClientSize anpassen (nicht skalierte Pixel)
-            # Breite: gleich wie GUI ClientSize
+            # Breite: GUI ClientSize minus 100 Pixel
             # Höhe: 70% der GUI ClientSize
-            $consoleWidth = [int]($mainform.ClientSize.Width)
+            $consoleWidth = [int]($mainform.ClientSize.Width - 100)
             $consoleHeight = [int]($mainform.ClientSize.Height * 0.7)
             
             # Neue Position für PowerShell-Fenster berechnen (links neben der GUI)
@@ -2721,7 +2806,7 @@ function Set-ConsolePositionNextToGUI {
                     try {
                         $consoleHandle = [ConsoleHelper]::GetConsoleWindow()
                         if ($consoleHandle -ne [IntPtr]::Zero -and [ConsoleHelper]::IsConsoleVisible()) {
-                            $consoleWidth = [int]($mainform.ClientSize.Width)
+                            $consoleWidth = [int]($mainform.ClientSize.Width - 100)
                             $consoleHeight = [int]($mainform.ClientSize.Height * 0.7)
                             $newConsoleLeft = [Math]::Max(0, $mainform.Left - $consoleWidth - 10)
                             $newConsoleTop = $mainform.Top
@@ -3410,12 +3495,12 @@ $downloadsPanel = New-CollapsiblePanel -Title "Tool-Downloads" -YPosition 157 -T
     $downloadsPanel.Header.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
     
     # Setze Info-Panel-Header zurück
-    $infoPanel.Header.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
+    $infoHorizontalPanel.Header.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
     
     # Setze alle Info-Buttons zurück
-    $btnStatusInfo.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
-    $btnHardwareInfo.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
-    $btnToolInfo.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
+    $btnStatusInfoH.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
+    $btnHardwareInfoH.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
+    $btnToolInfoH.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
 }
 $mainButtonPanel.Controls.Add($downloadsPanel.Container)
 
@@ -3639,7 +3724,7 @@ $troubleshootPanel = New-CollapsiblePanel -Title "Problembehandlung" -YPosition 
     if ($diskPanel) { $diskPanel.Header.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38) }
     if ($networkPanel) { $networkPanel.Header.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38) }
     if ($cleanupPanel) { $cleanupPanel.Header.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38) }
-    if ($infoPanel) { $infoPanel.Header.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38) }
+    if ($infoHorizontalPanel) { $infoHorizontalPanel.Header.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38) }
     $btnToolDownloads.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
     if ($restartPanel) { $restartPanel.Header.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38) }
 }
@@ -3703,7 +3788,7 @@ $restartPanel = New-CollapsiblePanel -Title "Neustart" -YPosition 5 -Tag "restar
     if ($diskPanel) { $diskPanel.Header.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38) }
     if ($networkPanel) { $networkPanel.Header.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38) }
     if ($cleanupPanel) { $cleanupPanel.Header.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38) }
-    if ($infoPanel) { $infoPanel.Header.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38) }
+    if ($infoHorizontalPanel) { $infoHorizontalPanel.Header.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38) }
     if ($downloadsPanel) { $downloadsPanel.Header.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38) }
     if ($troubleshootPanel) { $troubleshootPanel.Header.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38) }
     $restartPanel.Header.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
@@ -3858,12 +3943,6 @@ function Switch-OutputView {
     # Vorherige Buttons zurücksetzen
     $btnOutput.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
     $btnOutput.ForeColor = [System.Drawing.Color]::White
-    $btnStatusInfo.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
-    $btnStatusInfo.ForeColor = [System.Drawing.Color]::White
-    $btnHardwareInfo.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
-    $btnHardwareInfo.ForeColor = [System.Drawing.Color]::White
-    $btnToolInfo.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
-    $btnToolInfo.ForeColor = [System.Drawing.Color]::White
     $btnToolDownloads.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
     $btnToolDownloads.ForeColor = [System.Drawing.Color]::White
     
@@ -4009,7 +4088,7 @@ $btnOutput.Add_Click({
     $btnTroubleshoot.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
     
     # Setze Info-Panel-Header zurück
-    $infoPanel.Header.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
+    $infoHorizontalPanel.Header.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
     # Setze Downloads-Panel-Header zurück
     $downloadsPanel.Header.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
     # Setze Problembehandlung-Panel-Header zurück
@@ -5738,6 +5817,163 @@ $mainform.Add_Shown({
         # ===================================================================
         # HARDWARE-MONITORING INITIALISIERUNG
         # ===================================================================
+        # ZWEI-PHASEN-START: Prüfe ob Initialisierung erforderlich
+        # ===================================================================
+        
+        $initMarkerPath = Join-Path $PSScriptRoot "Data\system_initialized.flag"
+        $needsInitialization = -not (Test-Path $initMarkerPath)
+        
+        if ($needsInitialization) {
+            # ═══════════════════════════════════════════════════════════
+            # PHASE 1: ERSTE INITIALISIERUNG
+            # ═══════════════════════════════════════════════════════════
+            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
+            $outputBox.AppendText("`r`n╔═══════════════════════════════════════════════════════╗`r`n")
+            $outputBox.AppendText("║  BOCKIS SYSTEM-TOOL - ERSTE INITIALISIERUNG        ║`r`n")
+            $outputBox.AppendText("╚═══════════════════════════════════════════════════════╝`r`n`r`n")
+            
+            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
+            $outputBox.AppendText("[►] Willkommen! Das Tool wird jetzt einmalig initialisiert...`r`n`r`n")
+            
+            # Prüfe Abhängigkeiten
+            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
+            $outputBox.AppendText("[🔍] Schritt 1: Prüfe System-Abhängigkeiten...`r`n")
+            
+            # Importiere DependencyChecker falls nicht geladen
+            if (-not (Get-Command -Name 'Test-LibreHardwareMonitorAvailability' -ErrorAction SilentlyContinue)) {
+                Import-Module "$PSScriptRoot\Modules\Core\DependencyChecker.psm1" -Force
+            }
+            
+            # Prüfe LibreHardwareMonitor
+            $lhmStatus = Find-LibreHardwareMonitor
+            
+            if (-not $lhmStatus.Found) {
+                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
+                $outputBox.AppendText("`r`n[⚠️] LibreHardwareMonitor ist nicht installiert!`r`n")
+                $outputBox.AppendText("[►] Für Hardware-Monitoring wird LibreHardwareMonitor benötigt.`r`n`r`n")
+                
+                # Frage Benutzer
+                $result = [System.Windows.Forms.MessageBox]::Show(
+                    "LibreHardwareMonitor wurde nicht gefunden.`r`n`r`n" +
+                    "Für Hardware-Monitoring (CPU/GPU/RAM-Temperaturen) wird LibreHardwareMonitor benötigt.`r`n`r`n" +
+                    "Möchten Sie LibreHardwareMonitor jetzt installieren?`r`n`r`n" +
+                    "WICHTIG: Die Installation erfordert Administrator-Rechte und installiert einen signierten Kernel-Treiber (PawnIO).`r`n" +
+                    "Ihr Antivirus könnte eine Warnung anzeigen - dies ist normal.",
+                    "Hardware-Monitor Installation",
+                    [System.Windows.Forms.MessageBoxButtons]::YesNo,
+                    [System.Windows.Forms.MessageBoxIcon]::Question
+                )
+                
+                if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
+                    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
+                    $outputBox.AppendText("`r`n[►] Installiere LibreHardwareMonitor via WinGet...`r`n")
+                    
+                    try {
+                        $installProcess = Start-Process -FilePath "powershell.exe" `
+                            -ArgumentList "-NoProfile","-ExecutionPolicy","Bypass","-Command","winget install --id LibreHardwareMonitor.LibreHardwareMonitor --exact --silent --accept-source-agreements --accept-package-agreements" `
+                            -Wait -PassThru -NoNewWindow
+                        
+                        if ($installProcess.ExitCode -eq 0 -or $installProcess.ExitCode -eq -1978335189) {
+                            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
+                            $outputBox.AppendText("[✓] LibreHardwareMonitor erfolgreich installiert!`r`n")
+                            
+                            # Neu suchen
+                            $lhmStatus = Find-LibreHardwareMonitor
+                        }
+                        else {
+                            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
+                            $outputBox.AppendText("[✗] Installation fehlgeschlagen (Code: $($installProcess.ExitCode))`r`n")
+                        }
+                    }
+                    catch {
+                        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
+                        $outputBox.AppendText("[✗] Fehler bei Installation: $_`r`n")
+                    }
+                }
+                else {
+                    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
+                    $outputBox.AppendText("`r`n[⚠️] Installation übersprungen. Hardware-Monitoring wird eingeschränkt funktionieren.`r`n")
+                }
+            }
+            else {
+                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
+                $outputBox.AppendText("[✓] LibreHardwareMonitor gefunden: $($lhmStatus.Path)`r`n")
+            }
+            
+            # Schritt 2: PawnIO-Treiber registrieren
+            if ($lhmStatus.Found) {
+                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
+                $outputBox.AppendText("`r`n[🔍] Schritt 2: Registriere Hardware-Monitor-Treiber...`r`n")
+                
+                $dllDir = Split-Path -Parent $lhmStatus.Path
+                $exePath = Join-Path $dllDir "LibreHardwareMonitor.exe"
+                
+                if (Test-Path $exePath) {
+                    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
+                    $outputBox.AppendText("[►] Starte LibreHardwareMonitor zur Treiber-Registrierung...`r`n")
+                    $outputBox.AppendText("[i] Dies installiert den signierten PawnIO-Kernel-Treiber.`r`n")
+                    $outputBox.AppendText("[i] Ihr Antivirus könnte eine Warnung anzeigen - bitte erlauben Sie dies.`r`n`r`n")
+                    
+                    try {
+                        # Starte .exe kurz (registriert PawnIO-Treiber)
+                        $proc = Start-Process -FilePath $exePath -WindowStyle Minimized -PassThru
+                        Start-Sleep -Seconds 3
+                        
+                        if (-not $proc.HasExited) {
+                            $proc | Stop-Process -Force -ErrorAction SilentlyContinue
+                        }
+                        
+                        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
+                        $outputBox.AppendText("[✓] Treiber erfolgreich registriert!`r`n")
+                    }
+                    catch {
+                        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
+                        $outputBox.AppendText("[⚠️] Treiber-Registrierung möglicherweise fehlgeschlagen: $_`r`n")
+                    }
+                }
+            }
+            
+            # Initialisierung abgeschlossen - Marker setzen
+            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
+            $outputBox.AppendText("`r`n[🎉] Initialisierung abgeschlossen!`r`n")
+            
+            try {
+                $markerDir = Split-Path -Parent $initMarkerPath
+                if (-not (Test-Path $markerDir)) {
+                    New-Item -ItemType Directory -Path $markerDir -Force | Out-Null
+                }
+                @{
+                    InitializedAt = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+                    LibreHardwareMonitorPath = $lhmStatus.Path
+                    Version = $lhmStatus.Version
+                } | ConvertTo-Json | Set-Content -Path $initMarkerPath -Encoding UTF8
+            }
+            catch {
+                Write-Warning "Konnte Initialisierungs-Marker nicht erstellen: $_"
+            }
+            
+            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
+            $outputBox.AppendText("`r`n[►] Bitte starten Sie das Tool neu, um Hardware-Monitoring zu aktivieren.`r`n")
+            
+            # Zeige Neustart-Dialog
+            [System.Windows.Forms.MessageBox]::Show(
+                "Initialisierung erfolgreich abgeschlossen!`r`n`r`n" +
+                "Bitte starten Sie das Bockis System-Tool neu, um alle Funktionen zu nutzen.`r`n`r`n" +
+                "Das Hardware-Monitoring wird beim nächsten Start automatisch aktiviert.",
+                "Neustart erforderlich",
+                [System.Windows.Forms.MessageBoxButtons]::OK,
+                [System.Windows.Forms.MessageBoxIcon]::Information
+            )
+            
+            # Beende GUI sauber
+            $progressBar.Value = 0
+            return
+        }
+        
+        # ═══════════════════════════════════════════════════════════
+        # PHASE 2: NORMALER START (Nach Initialisierung)
+        # ═══════════════════════════════════════════════════════════
+        
         # Kurze Verzögerung, damit GUI vollständig geladen ist
         Start-Sleep -Milliseconds 300
         Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'

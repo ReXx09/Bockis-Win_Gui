@@ -394,7 +394,7 @@ function Install-ToolPackage {
         [string]$ToolName,
         
         [Parameter(Mandatory = $false)]
-        [string]$DownloadPath = "$env:TEMP\ToolDownloads",
+        [string]$DownloadPath = (Join-Path $PSScriptRoot "..\Data\ToolDownloads"),
         
         [Parameter(Mandatory = $false)]
         [switch]$AutoInstall

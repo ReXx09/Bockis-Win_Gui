@@ -210,7 +210,7 @@ function Initialize-SystemToolSettings {
         EnableNotifications = $true
         LogLevel            = "Standard"
         AutoSaveLogs        = $false
-        LogPath             = Join-Path $env:LOCALAPPDATA "BockisSystemTool\Logs"
+        LogPath             = Join-Path ($PSScriptRoot | Split-Path | Split-Path) "Data\Logs"
         ConfirmActions      = $true
         AdvancedCleanup     = $false
         CheckUpdates        = $true
@@ -249,14 +249,15 @@ function Import-SystemToolSettings {
             
             # Prüfe und migriere alte Log-Pfade
             $needsSave = $false
-            $newLogPath = Join-Path $env:LOCALAPPDATA "BockisSystemTool\Logs"
+            $guiRoot = $PSScriptRoot | Split-Path | Split-Path
+            $newLogPath = Join-Path $guiRoot "Data\Logs"
             
-            # Wenn LogPath existiert und NICHT der neue lokale Pfad ist, migriere ihn
+            # Wenn LogPath existiert und NICHT der neue Data-Pfad ist, migriere ihn
             if ($settingsHashtable.ContainsKey("LogPath")) {
                 $currentLogPath = $settingsHashtable["LogPath"]
-                # Prüfe ob es ein alter Pfad ist (enthält nicht LOCALAPPDATA oder BockisSystemTool)
-                if ($currentLogPath -notmatch "LOCALAPPDATA|BockisSystemTool") {
-                    Write-Host "Migration: Alter Log-Pfad erkannt, aktualisiere auf neuen lokalen Pfad..." -ForegroundColor Yellow
+                # Prüfe ob es ein alter Pfad ist (LOCALAPPDATA oder nicht im Data-Ordner)
+                if ($currentLogPath -match "LOCALAPPDATA" -or $currentLogPath -notmatch "Data\\Logs") {
+                    Write-Host "Migration: Alter Log-Pfad erkannt, aktualisiere auf neuen Data-Pfad..." -ForegroundColor Yellow
                     $settingsHashtable["LogPath"] = $newLogPath
                     $needsSave = $true
                 }
@@ -1151,7 +1152,7 @@ function Show-SettingsDialog {
             if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
                 try {
                     # Log-Verzeichnis aus dem lokalen AppData-Ordner
-                    $logsPath = Join-Path $env:LOCALAPPDATA "BockisSystemTool\Logs"
+                    $logsPath = Join-Path ($PSScriptRoot | Split-Path | Split-Path) "Data\Logs"
                     $resolvedLogsPath = Resolve-Path $logsPath -ErrorAction SilentlyContinue
                     
                     if ($resolvedLogsPath) {
@@ -1238,8 +1239,9 @@ function Show-SettingsDialog {
     $btnOpenLogFolder.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
     $btnOpenLogFolder.Add_Click({
             try {
-                # Log-Verzeichnis aus dem lokalen AppData-Ordner
-                $logsPath = Join-Path $env:LOCALAPPDATA "BockisSystemTool\Logs"
+                # Log-Verzeichnis aus dem Data-Ordner der GUI
+                $guiRoot = $PSScriptRoot | Split-Path | Split-Path
+                $logsPath = Join-Path $guiRoot "Data\Logs"
                 $resolvedLogsPath = Resolve-Path $logsPath -ErrorAction SilentlyContinue
                 
                 if ($resolvedLogsPath) {
@@ -1402,11 +1404,12 @@ function Show-SettingsDialog {
     $lblPathsDesc.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Italic)
     $tabPaths.Controls.Add($lblPathsDesc)
     
-    # Pfade definieren
-    $logsPath = Join-Path $env:LOCALAPPDATA "BockisSystemTool\Logs"
-    $databasePath = Join-Path $env:LOCALAPPDATA "BockisSystemTool\Database"
-    $installPath = $PSScriptRoot | Split-Path | Split-Path  # Zwei Ebenen hoch zum Installationsordner
-    $downloadPath = "$env:TEMP\ToolDownloads"
+    # Pfade definieren (alle im Data-Ordner der GUI)
+    $guiRoot = $PSScriptRoot | Split-Path | Split-Path  # Zwei Ebenen hoch zum Installationsordner
+    $logsPath = Join-Path $guiRoot "Data\Logs"
+    $databasePath = Join-Path $guiRoot "Data\Database"
+    $installPath = $guiRoot
+    $downloadPath = Join-Path $guiRoot "Data\ToolDownloads"
     $toolsInstallPath = $env:ProgramFiles
     
     # Y-Position für Elemente
