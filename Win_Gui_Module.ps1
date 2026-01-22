@@ -523,30 +523,15 @@ if ($missingModules.Count -gt 0) {
     $OutputEncoding = [System.Text.Encoding]::UTF8
 }
 
-# PowerShell-Fenster anpassen - mit Fehlerbehandlung
+# ===================================================================
+# KONSOLENFENSTER-INITIALISIERUNG
+# ===================================================================
+# Nur Titel setzen - Größe wird später im Add_Shown Event angepasst
 try {
-    # Aktuelle Fenstergröße abrufen
-    $currentBufferSize = $Host.UI.RawUI.BufferSize
-
-    # Neue Fenstergröße setzen (nicht größer als der aktuelle Puffer)
-    $newWindowSize = New-Object System.Management.Automation.Host.Size(
-        [Math]::Min(80, $currentBufferSize.Width),
-        [Math]::Min(50, $currentBufferSize.Height)
-    )
-
-    # Neue Puffergröße setzen (nicht zu groß)
-    $newBufferSize = New-Object System.Management.Automation.Host.Size(
-        [Math]::Min(100, $currentBufferSize.Width),
-        [Math]::Min(2000, $currentBufferSize.Height)
-    )
-
-    # Größen anwenden
-    $Host.UI.RawUI.WindowSize = $newWindowSize
-    $Host.UI.RawUI.BufferSize = $newBufferSize
-    $Host.UI.RawUI.WindowTitle = "System Tools"
+    $Host.UI.RawUI.WindowTitle = "System Tools - Console Output"
 }
 catch {
-    Write-Host "Hinweis: Konnte PowerShell-Fenster nicht anpassen: $_" -ForegroundColor Yellow
+    Write-Verbose "Hinweis: Konnte PowerShell-Fenster-Titel nicht setzen: $_"
 }
 
 
@@ -556,8 +541,6 @@ Write-Host "`n" + ("═" * 70) -ForegroundColor Cyan
 # Erstelle das Hauptformular
 $mainform = New-Object System.Windows.Forms.Form
 $mainform.Text = "$script:AppName $script:AppVersion"
-$mainform.Size = New-Object System.Drawing.Size(1000, 800)
-$mainform.StartPosition = "CenterScreen"  # Immer zentriert starten
 $mainform.Font = New-Object System.Drawing.Font("Segoe UI", 10)
 $mainform.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::None  # Kein Rahmen
 $mainform.MinimumSize = New-Object System.Drawing.Size(1000, 850)
@@ -567,6 +550,46 @@ $mainform.BackColor = [System.Drawing.Color]::FromArgb(30, 30, 30)  # Dunkles Gr
 # Dies passt die GUI automatisch an HD, Full HD, 4K, 8K und alle DPI-Einstellungen an
 $mainform.AutoScaleMode = [System.Windows.Forms.AutoScaleMode]::Dpi
 $mainform.AutoScaleDimensions = New-Object System.Drawing.SizeF(96.0, 96.0)
+
+# Gespeicherte Fenstergröße und Position laden mit Boundary-Checking
+$mainform.StartPosition = "Manual"
+$savedWidth = if ($settings.WindowWidth) { [int]$settings.WindowWidth } else { 1000 }
+$savedHeight = if ($settings.WindowHeight) { [int]$settings.WindowHeight } else { 850 }
+$savedLeft = if ($settings.WindowLeft) { [int]$settings.WindowLeft } else { $null }
+$savedTop = if ($settings.WindowTop) { [int]$settings.WindowTop } else { $null }
+
+# Fenstergröße setzen
+$mainform.Size = New-Object System.Drawing.Size($savedWidth, $savedHeight)
+
+# Boundary-Checking: Prüfen, ob die gespeicherte Position auf einem sichtbaren Monitor liegt
+$positionValid = $false
+if ($null -ne $savedLeft -and $null -ne $savedTop) {
+    # Prüfen, ob die Position auf einem der verfügbaren Monitore liegt
+    $testPoint = New-Object System.Drawing.Point($savedLeft, $savedTop)
+    $screens = [System.Windows.Forms.Screen]::AllScreens
+    
+    foreach ($screen in $screens) {
+        if ($screen.WorkingArea.Contains($testPoint) -or 
+            ($savedLeft -ge $screen.WorkingArea.Left -and 
+             $savedLeft -lt ($screen.WorkingArea.Left + $screen.WorkingArea.Width) -and
+             $savedTop -ge $screen.WorkingArea.Top -and 
+             $savedTop -lt ($screen.WorkingArea.Top + $screen.WorkingArea.Height))) {
+            $positionValid = $true
+            break
+        }
+    }
+}
+
+# Position setzen: Entweder gespeicherte Position oder zentriert auf primärem Monitor
+if ($positionValid) {
+    $mainform.Location = New-Object System.Drawing.Point($savedLeft, $savedTop)
+} else {
+    # Zentriert auf dem primären Monitor
+    $primaryScreen = [System.Windows.Forms.Screen]::PrimaryScreen
+    $centerX = $primaryScreen.WorkingArea.Left + (($primaryScreen.WorkingArea.Width - $savedWidth) / 2)
+    $centerY = $primaryScreen.WorkingArea.Top + (($primaryScreen.WorkingArea.Height - $savedHeight) / 2)
+    $mainform.Location = New-Object System.Drawing.Point($centerX, $centerY)
+}
 
 # Tastatur-Events aktivieren für Shortcuts
 $mainform.KeyPreview = $true
@@ -2788,7 +2811,7 @@ function Set-ConsolePositionNextToGUI {
             # Konsolengröße an GUI-ClientSize anpassen (nicht skalierte Pixel)
             # Breite: GUI ClientSize minus 100 Pixel
             # Höhe: 70% der GUI ClientSize
-            $consoleWidth = [int]($mainform.ClientSize.Width - 100)
+            $consoleWidth = [int]($mainform.ClientSize.Width - 120)
             $consoleHeight = [int]($mainform.ClientSize.Height * 0.7)
             
             # Neue Position für PowerShell-Fenster berechnen (links neben der GUI)
@@ -2806,7 +2829,7 @@ function Set-ConsolePositionNextToGUI {
                     try {
                         $consoleHandle = [ConsoleHelper]::GetConsoleWindow()
                         if ($consoleHandle -ne [IntPtr]::Zero -and [ConsoleHelper]::IsConsoleVisible()) {
-                            $consoleWidth = [int]($mainform.ClientSize.Width - 100)
+                            $consoleWidth = [int]($mainform.ClientSize.Width - 120)
                             $consoleHeight = [int]($mainform.ClientSize.Height * 0.7)
                             $newConsoleLeft = [Math]::Max(0, $mainform.Left - $consoleWidth - 10)
                             $newConsoleTop = $mainform.Top
@@ -3364,6 +3387,9 @@ $btnCheckDependenciesH.Add_Click({
     $statusViewPanel.Visible = $false
     $hardwareViewPanel.Visible = $false
     $toolInfoViewPanel.Visible = $false
+    
+    # Outputbox zurücksetzen
+    $outputBox.Clear()
     
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'BannerTitle'
     $outputBox.AppendText("`r`n`t╔═══════════════════════════════════════════════════════════════╗`r`n")
@@ -3962,8 +3988,8 @@ function Switch-OutputView {
         }
         "statusView" {
             $statusViewPanel.Visible = $true
-            $btnStatusInfo.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
-            $btnStatusInfo.ForeColor = [System.Drawing.Color]::White
+            $btnStatusInfoH.BackColor = [System.Drawing.Color]::FromArgb(55, 55, 55)
+            $btnStatusInfoH.ForeColor = [System.Drawing.Color]::White
             
             # System-Status aktualisieren
             if (-not $script:statusInfoLoaded) {
@@ -3984,8 +4010,8 @@ function Switch-OutputView {
         }
         "hardwareView" {
             $hardwareViewPanel.Visible = $true
-            $btnHardwareInfo.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
-            $btnHardwareInfo.ForeColor = [System.Drawing.Color]::White
+            $btnHardwareInfoH.BackColor = [System.Drawing.Color]::FromArgb(55, 55, 55)
+            $btnHardwareInfoH.ForeColor = [System.Drawing.Color]::White
             
             # Hardware-Informationen aktualisieren
             if (-not $script:hardwareInfoLoaded) {
@@ -3995,8 +4021,8 @@ function Switch-OutputView {
         }
         "toolInfoView" {
             $toolInfoViewPanel.Visible = $true
-            $btnToolInfo.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
-            $btnToolInfo.ForeColor = [System.Drawing.Color]::White
+            $btnToolInfoH.BackColor = [System.Drawing.Color]::FromArgb(55, 55, 55)
+            $btnToolInfoH.ForeColor = [System.Drawing.Color]::White
             
             # Tool-Informationen aktualisieren
             if (-not $script:toolInfoLoaded) {
@@ -4081,11 +4107,11 @@ $btnOutput.Add_Click({
     
     # Visuelles Feedback
     $btnOutput.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
-    $btnStatusInfo.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
-    $btnHardwareInfo.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
-    $btnToolInfo.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
+    $btnStatusInfoH.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
+    $btnHardwareInfoH.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
+    $btnToolInfoH.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
     $btnToolDownloads.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
-    $btnTroubleshoot.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
+    $troubleshootPanel.Header.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
     
     # Setze Info-Panel-Header zurück
     $infoHorizontalPanel.Header.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
@@ -4312,41 +4338,43 @@ function Get-HardwareInfo {
         $infoBox.AppendText("Fehler beim Abrufen der Grafikkarten-Informationen: $_`r`n`r`n")
     }
 
-    # Festplatten-Informationen
+    # Festplatten- und Laufwerk-Informationen (zusammengefasst)
     Set-OutputSelectionStyle -OutputBox $infoBox -Style 'Info'
-    $infoBox.AppendText("FESTPLATTEN-INFORMATIONEN:`r`n")
+    $infoBox.AppendText("FESTPLATTEN & LAUFWERKE:`r`n")
 
     try {
+        # Physische Festplatten abrufen
         $drives = Get-WmiObject -Class Win32_DiskDrive
+        
         foreach ($drive in $drives) {
             $sizeGB = [math]::Round($drive.Size / 1GB, 2)
             Set-OutputSelectionStyle -OutputBox $infoBox -Style 'Default'
-            $infoBox.AppendText("Laufwerk: $($drive.Model)`r`n")
+            $infoBox.AppendText("`r`n[Physisch] $($drive.Model)`r`n")
             Set-OutputSelectionStyle -OutputBox $infoBox -Style 'Default'
-            $infoBox.AppendText("Größe: $sizeGB GB`r`n")
-            Set-OutputSelectionStyle -OutputBox $infoBox -Style 'Default'
-            $infoBox.AppendText("Schnittstelle: $($drive.InterfaceType)`r`n`r`n")
+            $infoBox.AppendText("  Größe: $sizeGB GB | Schnittstelle: $($drive.InterfaceType)`r`n")
+            
+            # Zugehörige Partitionen und logische Laufwerke finden
+            $partitions = Get-WmiObject -Query "ASSOCIATORS OF {Win32_DiskDrive.DeviceID='$($drive.DeviceID)'} WHERE AssocClass=Win32_DiskDriveToDiskPartition"
+            
+            foreach ($partition in $partitions) {
+                $logicalDisks = Get-WmiObject -Query "ASSOCIATORS OF {Win32_DiskPartition.DeviceID='$($partition.DeviceID)'} WHERE AssocClass=Win32_LogicalDiskToPartition"
+                
+                foreach ($logicalDisk in $logicalDisks) {
+                    $freeGB = [math]::Round($logicalDisk.FreeSpace / 1GB, 2)
+                    $totalGB = [math]::Round($logicalDisk.Size / 1GB, 2)
+                    $usedPercent = [math]::Round(($logicalDisk.Size - $logicalDisk.FreeSpace) / $logicalDisk.Size * 100, 1)
+                    $volumeName = if ($logicalDisk.VolumeName) { $logicalDisk.VolumeName } else { "Unbenannt" }
+                    
+                    Set-OutputSelectionStyle -OutputBox $infoBox -Style 'Default'
+                    $infoBox.AppendText("    └─ Laufwerk $($logicalDisk.DeviceID) ($volumeName)`r`n")
+                    Set-OutputSelectionStyle -OutputBox $infoBox -Style 'Default'
+                    $infoBox.AppendText("       Größe: $totalGB GB | Frei: $freeGB GB | Belegung: $usedPercent%`r`n")
+                }
+            }
         }
-
-        # Logische Laufwerke und freier Speicherplatz
-        Set-OutputSelectionStyle -OutputBox $infoBox -Style 'Info'
-        $infoBox.AppendText("LOGISCHE LAUFWERKE:`r`n")
-
-        $logicalDrives = Get-WmiObject -Class Win32_LogicalDisk -Filter "DriveType=3"
-        foreach ($logicalDrive in $logicalDrives) {
-            $freeGB = [math]::Round($logicalDrive.FreeSpace / 1GB, 2)
-            $sizeGB = [math]::Round($logicalDrive.Size / 1GB, 2)
-            $usedPercent = [math]::Round(($logicalDrive.Size - $logicalDrive.FreeSpace) / $logicalDrive.Size * 100, 1)
-
-            Set-OutputSelectionStyle -OutputBox $infoBox -Style 'Default'
-            $infoBox.AppendText("Laufwerk $($logicalDrive.DeviceID) ($($logicalDrive.VolumeName))`r`n")
-            Set-OutputSelectionStyle -OutputBox $infoBox -Style 'Default'
-            $infoBox.AppendText("Gesamtgröße: $sizeGB GB`r`n")
-            Set-OutputSelectionStyle -OutputBox $infoBox -Style 'Default'
-            $infoBox.AppendText("Freier Speicher: $freeGB GB`r`n")
-            Set-OutputSelectionStyle -OutputBox $infoBox -Style 'Default'
-            $infoBox.AppendText("Belegung: $usedPercent%`r`n`r`n")
-        }
+        
+        Set-OutputSelectionStyle -OutputBox $infoBox -Style 'Default'
+        $infoBox.AppendText("`r`n")
     }
     catch {
         Set-OutputSelectionStyle -OutputBox $infoBox -Style 'Error'
@@ -4368,7 +4396,11 @@ function Get-HardwareInfo {
             $config = Get-WmiObject -Class Win32_NetworkAdapterConfiguration | Where-Object { $_.Index -eq $adapter.Index }
             if ($config -and $config.IPAddress) {
                 Set-OutputSelectionStyle -OutputBox $infoBox -Style 'Default'
-                $infoBox.AppendText("IP-Adressen: $($config.IPAddress -join ', ')`r`n")
+                $infoBox.AppendText("IP-Adressen:`r`n")
+                foreach ($ip in $config.IPAddress) {
+                    Set-OutputSelectionStyle -OutputBox $infoBox -Style 'Default'
+                    $infoBox.AppendText("  • $ip`r`n")
+                }
             }
             Set-OutputSelectionStyle -OutputBox $infoBox -Style 'Default'
             $infoBox.AppendText("`r`n")
@@ -5802,17 +5834,216 @@ $mainform.Add_Shown({
             Initialize-LogDirectory
         }
 
+        # ═══════════════════════════════════════════════════════════
+        # KONSOLENFENSTER: Finale Position und Größe (NACH Hardware-Init)
+        # ═══════════════════════════════════════════════════════════
+        # Warte bis Hardware-Initialisierung und Willkommenstext komplett sind
+        # DANN erst Konsole anpassen - so gibt es nur EINE sichtbare Anpassung
+        
+        $outputBox.Clear()
+        
+        # ═══════════════════════════════════════════════════════════
+        # HARDWARE-MONITORING INITIALISIERUNG (SOFORT NACH GUI-START)
+        # ═══════════════════════════════════════════════════════════
+        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
+        $outputBox.AppendText("[🔧] Initialisiere Hardware-Monitoring...`r`n")
+        
+        # ProgressBar für Hardware-Init
+        $progressBar.Value = 0
+        $progressBar.Maximum = 100
+        $progressBar.CustomText = "Hardware-Monitoring wird initialisiert..."
+        $progressBar.TextColor = [System.Drawing.Color]::White
+        [System.Windows.Forms.Application]::DoEvents()
+        
+        try {
+            # Schritt 1: LibreHardwareMonitor-Bibliothek laden (0-30%)
+            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
+            $outputBox.AppendText("  [►] Lade LibreHardwareMonitor-Bibliothek...`r`n")
+            $progressBar.Value = 10
+            [System.Windows.Forms.Application]::DoEvents()
+            Start-Sleep -Milliseconds 200
+            
+            # Schritt 2: Hardware-Timer initialisieren (30-60%)
+            $progressBar.Value = 30
+            $progressBar.CustomText = "Initialisiere Hardware-Sensoren..."
+            [System.Windows.Forms.Application]::DoEvents()
+            
+            $hardwareResult = Initialize-HardwareMonitoring `
+                -cpuLabel $cpuLabel `
+                -gpuLabel $gpuLabel `
+                -ramLabel $ramLabel `
+                -gbCPU $gbCPU `
+                -gbGPU $gbGPU `
+                -gbRAM $gbRAM `
+                -SuppressVisualFeedback `
+                -GlobalTooltip $tooltipObj
+            
+            $progressBar.Value = 60
+            [System.Windows.Forms.Application]::DoEvents()
+            
+            # Schritt 3: Hardware-Schwellenwerte setzen (60-80%)
+            if ($hardwareResult) {
+                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
+                $outputBox.AppendText("  [►] Konfiguriere Hardware-Schwellenwerte...`r`n")
+                $progressBar.Value = 70
+                $progressBar.CustomText = "Konfiguriere Schwellenwerte..."
+                [System.Windows.Forms.Application]::DoEvents()
+                
+                $currentSettings = Get-SystemToolSettings
+                if ($currentSettings) {
+                    try {
+                        $params = @{}
+                        if ($currentSettings.CpuThreshold) { $params['CpuThreshold'] = [int]$currentSettings.CpuThreshold }
+                        if ($currentSettings.RamThreshold) { $params['RamThreshold'] = [int]$currentSettings.RamThreshold }
+                        if ($currentSettings.GpuThreshold) { $params['GpuThreshold'] = [int]$currentSettings.GpuThreshold }
+                        if ($params.Count -gt 0) {
+                            Set-HardwareThresholds @params
+                        }
+                    }
+                    catch {
+                        Write-Verbose "Hardware-Schwellenwerte konnten nicht gesetzt werden: $_"
+                    }
+                }
+                $progressBar.Value = 80
+            }
+            
+            # Schritt 4: Abschluss (80-100%)
+            $progressBar.Value = 90
+            $progressBar.CustomText = "Schließe Initialisierung ab..."
+            [System.Windows.Forms.Application]::DoEvents()
+            
+            if ($hardwareResult) {
+                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
+                $outputBox.AppendText("[✓] Hardware-Monitoring erfolgreich initialisiert!`r`n`r`n")
+                $script:HardwareMonitoringReady = $true
+                
+                # Erste Sensor-Werte laden
+                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
+                $outputBox.AppendText("  [►] Lade initiale Hardware-Werte...`r`n")
+                $progressBar.Value = 95
+                $progressBar.CustomText = "Lade Sensor-Daten..."
+                [System.Windows.Forms.Application]::DoEvents()
+                
+                # Warte auf ersten Timer-Tick (Timer läuft mit 2s Intervall)
+                Start-Sleep -Seconds 3
+                [System.Windows.Forms.Application]::DoEvents()
+                
+                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
+                $outputBox.AppendText("[✓] Hardware-Werte geladen und werden angezeigt!`r`n`r`n")
+                
+                # Sicherheitsinformation anzeigen
+                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
+                $outputBox.AppendText("╔══════════════════════════════════════════════════════════════════════╗`r`n")
+                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
+                $outputBox.AppendText("║                    ✓  SICHERHEITSINFORMATION  ✓                      ║`r`n")
+                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
+                $outputBox.AppendText("╚══════════════════════════════════════════════════════════════════════╝`r`n`r`n")
+                
+                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
+                $outputBox.AppendText("[✓] Windows-API-Kompatibilität wurde optimiert`r`n")
+                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
+                $outputBox.AppendText("[i] Hardware-Monitor verwendet nun Fallback-Mechanismen für Windows 11.`r`n`r`n")
+                
+                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Accent'
+                $outputBox.AppendText("Anpassungen:`r`n")
+                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'BodySmall'
+                $outputBox.AppendText("  • Optimierte Windows-API-Aufrufe für bessere Kompatibilität`r`n")
+                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'BodySmall'
+                $outputBox.AppendText("  • Hardware-Monitoring mit automatischer Fallback-Erkennung`r`n")
+                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'BodySmall'
+                $outputBox.AppendText("  • Verbesserte Sensor-Auslesung auch ohne Ring0-Treiber`r`n`r`n")
+                
+                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
+                $outputBox.AppendText("💡 Falls Windows Defender dennoch Warnungen anzeigt: Dies sind Fehlalarme.`r`n")
+                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'BodySmall'
+                $outputBox.AppendText("   Der Code ist vollständig transparent und Open Source.`r`n`r`n")
+            } else {
+                # Prüfe ob Fallback-Sensoren aktiv sind
+                $useFallback = $false
+                if (Get-Command Get-Variable -ErrorAction SilentlyContinue) {
+                    $fallbackVar = Get-Variable -Name 'useFallbackSensors' -Scope Script -ValueOnly -ErrorAction SilentlyContinue
+                    $useFallback = ($fallbackVar -eq $true)
+                }
+                
+                if ($useFallback) {
+                    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
+                    $outputBox.AppendText("[ℹ] Hardware-Monitoring im Fallback-Modus`r`n")
+                    $outputBox.AppendText("    CPU-Last und RAM-Auslastung verfügbar`r`n`r`n")
+                    $script:HardwareMonitoringReady = $true
+                } else {
+                    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
+                    $outputBox.AppendText("[⚠] Hardware-Monitoring eingeschränkt verfügbar`r`n`r`n")
+                }
+            }
+            
+            $progressBar.Value = 100
+            [System.Windows.Forms.Application]::DoEvents()
+            Start-Sleep -Milliseconds 300
+            
+            # ProgressBar zurücksetzen
+            $progressBar.Value = 0
+            $progressBar.CustomText = "Bereit"
+            $progressBar.TextColor = [System.Drawing.Color]::CornflowerBlue
+            [System.Windows.Forms.Application]::DoEvents()
+        }
+        catch {
+            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
+            $outputBox.AppendText("[✗] Fehler bei Hardware-Monitoring-Init: $($_.Exception.Message)`r`n`r`n")
+            
+            $progressBar.Value = 0
+            $progressBar.CustomText = "Fehler"
+            $progressBar.TextColor = [System.Drawing.Color]::Red
+            [System.Windows.Forms.Application]::DoEvents()
+        }
+
+        # ═══════════════════════════════════════════════════════════
+        # PAUSE: Hardware-Werte sind jetzt geladen, kurze Anzeigezeit
+        # ═══════════════════════════════════════════════════════════
+        Start-Sleep -Seconds 7  # Reduziert auf 7s, da 3s bereits für Laden verwendet
+        
+        # OutputBox für Willkommenstext vorbereiten
         $outputBox.Clear()
 
         Set-OutputSelectionStyle -OutputBox $outputBox -Style 'BannerFrame'
-        $outputBox.AppendText("`t`t╔══════════════════════════════════════════════════════════════╗`r`n")
+        $outputBox.AppendText("`t╔═══════════════════════════════════════════════════════════════╗`r`n")
         Set-OutputSelectionStyle -OutputBox $outputBox -Style 'BannerTitle'
-        $outputBox.AppendText("`t`t║                 BOCKIS WINDOWS TOOL-KIT                      ║`r`n")
+        $outputBox.AppendText("`t║            WILLKOMMEN BEI BOCKI'S WINDOWS TOOL-KIT            ║`r`n")
         Set-OutputSelectionStyle -OutputBox $outputBox -Style 'BannerFrame'
-        $outputBox.AppendText("`t`t╚══════════════════════════════════════════════════════════════╝`r`n`r`n")
+        $outputBox.AppendText("`t╚═══════════════════════════════════════════════════════════════╝`r`n`r`n")
 
         Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
         $outputBox.AppendText("[✓] System-Tool wurde erfolgreich gestartet`r`n`r`n")
+        
+        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
+        $outputBox.AppendText("📋 Alle verfügbaren Tools und Funktionen finden Sie im linken Menü.`r`n")
+        $outputBox.AppendText("   Klappen Sie einen Bereich auf, um zu starten!`r`n`r`n")
+        
+        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Accent'
+        $outputBox.AppendText("💡 Tipp: `r`n")
+        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
+        $outputBox.AppendText("   • Verwenden Sie den '►' Button, um die Konsole ein-/auszublenden`r`n")
+        $outputBox.AppendText("   • Hardware-Monitoring läuft im Hintergrund (siehe Statusleiste)`r`n")
+        
+        # ═══════════════════════════════════════════════════════════
+        # KONSOLENFENSTER: Jetzt finale Größe/Position setzen
+        # ═══════════════════════════════════════════════════════════
+        # Alle Initialisierungen sind abgeschlossen - jetzt Konsole anpassen
+        try {
+            $consoleHandle = [ConsoleHelper]::GetConsoleWindow()
+            if ($consoleHandle -ne [IntPtr]::Zero) {
+                # Finale Konsolengröße berechnen
+                $consoleWidth = [int]($mainform.ClientSize.Width - 120)
+                $consoleHeight = [int]($mainform.ClientSize.Height * 0.7)
+                $newConsoleLeft = [Math]::Max(0, $mainform.Left - $consoleWidth - 10)
+                $newConsoleTop = $mainform.Top
+                
+                # EINMALIGE Anpassung - danach nur noch via Toggle-Button
+                [void][ConsoleHelper]::MoveWindow($consoleHandle, $newConsoleLeft, $newConsoleTop, $consoleWidth, $consoleHeight, $true)
+            }
+        }
+        catch {
+            Write-Verbose "Fehler beim Positionieren der Konsole: $_"
+        }
         
         # ===================================================================
         # HARDWARE-MONITORING INITIALISIERUNG
@@ -5974,119 +6205,9 @@ $mainform.Add_Shown({
         # PHASE 2: NORMALER START (Nach Initialisierung)
         # ═══════════════════════════════════════════════════════════
         
-        # Kurze Verzögerung, damit GUI vollständig geladen ist
-        Start-Sleep -Milliseconds 300
-        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
-        $outputBox.AppendText("[🔧] Initialisiere Hardware-Monitoring...`r`n")
-        
-        # ProgressBar für Hardware-Init (ist bereits sichtbar, nur konfigurieren)
-        $progressBar.Value = 0
-        $progressBar.Maximum = 100
-        $progressBar.CustomText = "Hardware-Monitoring wird initialisiert..."
-        $progressBar.TextColor = [System.Drawing.Color]::White
-        [System.Windows.Forms.Application]::DoEvents()
-        
-        try {
-            # Schritt 1: LibreHardwareMonitor-Bibliothek laden (0-30%)
-            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
-            $outputBox.AppendText("  [►] Lade LibreHardwareMonitor-Bibliothek...`r`n")
-            $progressBar.Value = 10
-            [System.Windows.Forms.Application]::DoEvents()
-            
-            # Schritt 2: Hardware-Timer initialisieren (30-60%)
-            $progressBar.Value = 30
-            $hardwareResult = Initialize-HardwareMonitoring `
-                -cpuLabel $cpuLabel `
-                -gpuLabel $gpuLabel `
-                -ramLabel $ramLabel `
-                -gbCPU $gbCPU `
-                -gbGPU $gbGPU `
-                -gbRAM $gbRAM `
-                -SuppressVisualFeedback `
-                -GlobalTooltip $tooltipObj
-            
-            $progressBar.Value = 60
-            [System.Windows.Forms.Application]::DoEvents()
-            
-            # Schritt 3: Hardware-Schwellenwerte setzen (60-80%)
-            if ($hardwareResult) {
-                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
-                $outputBox.AppendText("  [►] Konfiguriere Hardware-Schwellenwerte...`r`n")
-                $progressBar.Value = 70
-                
-                $currentSettings = Get-SystemToolSettings
-                if ($currentSettings) {
-                    try {
-                        $params = @{}
-                        if ($currentSettings.CpuThreshold) { $params['CpuThreshold'] = [int]$currentSettings.CpuThreshold }
-                        if ($currentSettings.RamThreshold) { $params['RamThreshold'] = [int]$currentSettings.RamThreshold }
-                        if ($currentSettings.GpuThreshold) { $params['GpuThreshold'] = [int]$currentSettings.GpuThreshold }
-                        if ($params.Count -gt 0) {
-                            Set-HardwareThresholds @params
-                        }
-                    }
-                    catch {
-                        Write-Verbose "Hardware-Schwellenwerte konnten nicht gesetzt werden: $_"
-                    }
-                }
-                $progressBar.Value = 80
-            }
-            
-            # Schritt 4: Abschluss (80-100%)
-            $progressBar.Value = 90
-            [System.Windows.Forms.Application]::DoEvents()
-            
-            if ($hardwareResult) {
-                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
-                $outputBox.AppendText("[✓] Hardware-Monitoring erfolgreich initialisiert!`r`n`r`n")
-                $script:HardwareMonitoringReady = $true
-            } else {
-                # Prüfe ob Fallback-Sensoren aktiv sind
-                $useFallback = $false
-                if (Get-Command Get-Variable -ErrorAction SilentlyContinue) {
-                    $fallbackVar = Get-Variable -Name 'useFallbackSensors' -Scope Script -ValueOnly -ErrorAction SilentlyContinue
-                    $useFallback = ($fallbackVar -eq $true)
-                }
-                
-                if ($useFallback) {
-                    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
-                    $outputBox.AppendText("[ℹ] Hardware-Monitoring im Fallback-Modus (ohne Ring-0-Treiber)`r`n")
-                    $outputBox.AppendText("    CPU-Last und RAM-Auslastung verfügbar`r`n")
-                    $outputBox.AppendText("    CPU-Temperaturen benötigen Administrator-Rechte und Ring-0-Treiber`r`n`r`n")
-                    $script:HardwareMonitoringReady = $true  # Auch im Fallback-Modus ist es "bereit"
-                } else {
-                    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
-                    $outputBox.AppendText("[⚠] Hardware-Monitoring konnte nicht vollständig initialisiert werden`r`n")
-                    $outputBox.AppendText("    Das System läuft trotzdem, aber Hardware-Überwachung ist eingeschränkt`r`n`r`n")
-                }
-            }
-            
-            $progressBar.Value = 100
-            [System.Windows.Forms.Application]::DoEvents()
-            Start-Sleep -Milliseconds 300
-            
-            # ProgressBar zurücksetzen (nicht ausblenden!)
-            $progressBar.Value = 0
-            $progressBar.CustomText = "Bereit"
-            $progressBar.TextColor = [System.Drawing.Color]::CornflowerBlue
-            [System.Windows.Forms.Application]::DoEvents()
-            
-            # JETZT kann die Konsole versteckt werden (GUI ist vollständig geladen)
-            Hide-ConsoleAutomatically
-        }
-        catch {
-            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
-            $outputBox.AppendText("[✗] Fehler bei Hardware-Monitoring-Init: $($_.Exception.Message)`r`n`r`n")
-            
-            # ProgressBar zurücksetzen (nicht ausblenden!)
-            $progressBar.Value = 0
-            $progressBar.CustomText = "Fehler"
-            $progressBar.TextColor = [System.Drawing.Color]::Red
-            [System.Windows.Forms.Application]::DoEvents()
-            
-            # Auch bei Fehler Konsole verstecken
-            Hide-ConsoleAutomatically
-        }
+        # ===================================================================
+        # KONSOLEN-FENSTER: Bleibt sichtbar und wird über Toggle-Button gesteuert
+        # Das gleiche Fenster, das den Ladeprozess zeigt, wird vom Toggle-Button verwendet
         # ===================================================================
 
         if (-not (Test-Admin)) {
@@ -6148,34 +6269,6 @@ $mainform.Add_Shown({
                 
                 $this.Dispose()
             })
-
-    # WICHTIGER SICHERHEITSHINWEIS für Windows Defender
-        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
-        $outputBox.AppendText("╔══════════════════════════════════════════════════════════════════════╗`r`n")
-        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
-        $outputBox.AppendText("║                ⚠  WICHTIGER SICHERHEITSHINWEIS  ⚠                    ║`r`n")
-        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
-        $outputBox.AppendText("╚══════════════════════════════════════════════════════════════════════╝`r`n`r`n")
-        
-        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
-        $outputBox.AppendText("[!] Windows Defender könnte dieses Tool als 'Trojan:Win32/Vigorf.A' melden.`r`n")
-        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
-        $outputBox.AppendText("[i] Dies ist ein FEHLALARM (False Positive).`r`n`r`n")
-        
-        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Accent'
-        $outputBox.AppendText("Grund:`r`n")
-        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'BodySmall'
-        $outputBox.AppendText("  • Dieses Tool verwendet Windows-APIs zur Fenstersteuerung`r`n")
-        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'BodySmall'
-        $outputBox.AppendText("  • Diese Techniken werden manchmal von Malware missbraucht`r`n")
-        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'BodySmall'
-        $outputBox.AppendText("  • Der Defender reagiert daher vorsichtshalber auf den Code`r`n`r`n")
-        
-        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
-        $outputBox.AppendText("✓ Dieses Tool ist SICHER - der Code ist vollständig transparent!`r`n")
-        
-        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Divider'
-        $outputBox.AppendText("════════════════════════════════════════════════════════════════════════════`r`n`r`n")
 
         $applySettingsTimer.Start()
 
@@ -6290,63 +6383,6 @@ if ($btnToggleConsole) {
     $btnToggleConsole.Text = "►"
     $btnToggleConsole.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
 }
-
-# Initiale Willkommensnachricht in der OutputBox anzeigen
-$outputBox.Clear()
-Set-OutputSelectionStyle -OutputBox $outputBox -Style 'BannerFrame'
-$outputBox.AppendText("`t╔═══════════════════════════════════════════════════════════════╗`r`n")
-Set-OutputSelectionStyle -OutputBox $outputBox -Style 'BannerTitle'
-$outputBox.AppendText("`t║            WILLKOMMEN BEI BOCKI'S WINDOWS TOOL-KIT            ║`r`n")
-Set-OutputSelectionStyle -OutputBox $outputBox -Style 'BannerFrame'
-$outputBox.AppendText("`t╚═══════════════════════════════════════════════════════════════╝`r`n`r`n")
-
-Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Heading'
-$outputBox.AppendText("Verfügbare Bereiche:`r`n`r`n")
-
-Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Accent'
-$outputBox.AppendText("🛡️ SYSTEM/SICHERHEIT:`r`n")
-Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
-$outputBox.AppendText("  • Windows Defender: Scan & Optimierung`r`n")
-$outputBox.AppendText("  • Firewall: Regeln & Verwaltung`r`n")
-$outputBox.AppendText("  • AppLocker: Anwendungssteuerung`r`n`r`n")
-
-Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Accent'
-$outputBox.AppendText("🔧 DIAGNOSE/REPARATUR:`r`n")
-Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
-$outputBox.AppendText("  • DISM & SFC: System-Integritätsprüfung`r`n")
-$outputBox.AppendText("  • CHKDSK: Datenträger-Analyse`r`n")
-$outputBox.AppendText("  • Windows Update: Reparatur & Wartung`r`n`r`n")
-
-Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Accent'
-$outputBox.AppendText("🌐 NETZWERK-TOOLS:`r`n")
-Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
-$outputBox.AppendText("  • Netzwerk-Diagnose & Adapter-Reset`r`n")
-$outputBox.AppendText("  • DNS-Cache & IP-Konfiguration`r`n")
-$outputBox.AppendText("  • Verbindungsanalyse & Ping-Tests`r`n`r`n")
-
-Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Accent'
-$outputBox.AppendText("🧹 BEREINIGUNG:`r`n")
-Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
-$outputBox.AppendText("  • Temp-Dateien & Cache bereinigen`r`n")
-$outputBox.AppendText("  • Windows Update-Cache entfernen`r`n")
-$outputBox.AppendText("  • Browser-Daten löschen`r`n`r`n")
-
-Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Accent'
-$outputBox.AppendText("📊 INFORMATIONEN:`r`n")
-Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
-$outputBox.AppendText("  • System-Status & Betriebssystem-Details`r`n")
-$outputBox.AppendText("  • Hardware-Informationen (CPU, RAM, GPU)`r`n")
-$outputBox.AppendText("  • Tool-Dokumentation & Beschreibungen`r`n`r`n")
-
-Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Accent'
-$outputBox.AppendText("📦 TOOL-DOWNLOADS:`r`n")
-Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
-$outputBox.AppendText("  • 50+ professionelle Tools via Winget`r`n")
-$outputBox.AppendText("  • Kategorien: System, Anwendungen, Audio/TV, Coding/IT`r`n")
-$outputBox.AppendText("  • Automatische Installation & Update-Verwaltung`r`n`r`n")
-
-Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
-$outputBox.AppendText("✨ Tipp: Klappen Sie ein Menü auf der linken Seite auf, um zu starten!`r`n")
 
 # ===================================================================
 # VERSIONS-REGISTRIERUNG (für Installer-Updates)
