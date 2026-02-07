@@ -1607,6 +1607,13 @@ function Start-SFCCheck {
                 if (-not $logSuccess) {
                     try {
                         $logFilePath = Join-Path $env:LOCALAPPDATA "BockisSystemTool\Logs\SFCCheck.log"
+                        $logDir = Split-Path -Path $logFilePath -Parent
+                        
+                        # Verzeichnis erstellen, falls es nicht existiert
+                        if (-not (Test-Path -Path $logDir)) {
+                            New-Item -Path $logDir -ItemType Directory -Force | Out-Null
+                        }
+                        
                         $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
                         $logEntry = "$timestamp - [SUCCESS] $resultMessage"
                         
@@ -1648,6 +1655,13 @@ function Start-SFCCheck {
                 if (-not $logSuccess) {
                     try {
                         $logFilePath = Join-Path $PSScriptRoot "..\..\Data\Logs\SFCCheck.log"
+                        $logDir = Split-Path -Path $logFilePath -Parent
+                        
+                        # Verzeichnis erstellen, falls es nicht existiert
+                        if (-not (Test-Path -Path $logDir)) {
+                            New-Item -Path $logDir -ItemType Directory -Force | Out-Null
+                        }
+                        
                         $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
                         $logEntry = "$timestamp - [WARNING] $resultMessage"
                         
@@ -1703,6 +1717,13 @@ function Start-SFCCheck {
                 if (-not $logSuccess) {
                     try {
                         $logFilePath = Join-Path $PSScriptRoot "..\..\Data\Logs\SFCCheck.log"
+                        $logDir = Split-Path -Path $logFilePath -Parent
+                        
+                        # Verzeichnis erstellen, falls es nicht existiert
+                        if (-not (Test-Path -Path $logDir)) {
+                            New-Item -Path $logDir -ItemType Directory -Force | Out-Null
+                        }
+                        
                         $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
                         $logEntry = "$timestamp - [ERROR] $resultMessage"
                         

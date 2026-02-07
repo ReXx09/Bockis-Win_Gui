@@ -1,115 +1,340 @@
 ﻿# DependencyChecker.psm1
-# Modul zur Prüfung und Installation von Abhängigkeiten
+# Modul zur Prüfung von System-Abhängigkeiten
 
 # Importiere LogManager für strukturiertes Logging
 Import-Module "$PSScriptRoot\LogManager.psm1" -Force -ErrorAction SilentlyContinue
 
-#region LibreHardwareMonitor Erkennung
+#region Hardware Monitor Mode Decision
 
 <#
 .SYNOPSIS
-Sucht nach einer installierten Version von LibreHardwareMonitor im System.
+Prüft ob Hardware-Monitoring verfügbar ist (lokale DLL + PawnIO).
 
 .DESCRIPTION
-Prüft verschiedene Standard-Installationspfade und Registry-Einträge, 
-um eine aktuelle LibreHardwareMonitor-Installation zu finden.
+Lädt LibreHardwareMonitorLib.dll aus dem Lib-Ordner und prüft PawnIO-Treiber:
+- Hardware-Monitor ENABLED: DLL geladen UND PawnIO-Treiber funktioniert
+- Hardware-Monitor DISABLED: DLL nicht gefunden ODER PawnIO-Treiber fehlt
 
 .OUTPUTS
-Hashtable mit Informationen über die gefundene Installation:
-- Found: Boolean, ob Installation gefunden wurde
-- Path: String, Pfad zur LibreHardwareMonitorLib.dll
-- Version: String, Versionsnummer (falls verfügbar)
-- IsSigned: Boolean, ob die DLL gültig signiert ist
+Hashtable mit:
+- Available: Boolean - True wenn Hardware-Monitor nutzbar ist
+- LibrePath: String - Pfad zur DLL (falls gefunden)
+- PawnIOActive: Boolean - True wenn PawnIO-Treiber funktioniert
+- Message: String - Statusmeldung für den User
 #>
-function Find-LibreHardwareMonitor {
-    $result = @{
-        Found = $false
-        Path = $null
-        Version = $null
-        IsSigned = $false
-    }
-    
-    # Standard-Installationspfade prüfen (inkl. Winget-Pfade)
-    $searchPaths = @(
-        # Winget installiert oft in verschachtelte Ordner mit Version-Hash
-        "${env:LOCALAPPDATA}\Microsoft\WinGet\Packages\LibreHardwareMonitor.LibreHardwareMonitor_*",
-        "${env:ProgramFiles}\LibreHardwareMonitor\LibreHardwareMonitor",
-        # Standard-Pfade
-        "${env:ProgramFiles}\LibreHardwareMonitor",
-        "${env:ProgramFiles(x86)}\LibreHardwareMonitor",
-        "$env:LOCALAPPDATA\Programs\LibreHardwareMonitor",
-        "$env:APPDATA\LibreHardwareMonitor"
+function Initialize-HardwareMonitoringMode {
+    [CmdletBinding()]
+    param(
+        [System.Windows.Forms.ProgressBar]$ProgressBar = $null,
+        $StatusLabel = $null  # Kann Label, ToolStripStatusLabel oder andere Controls mit .Text Property sein
     )
     
-    foreach ($basePath in $searchPaths) {
-        # Wildcard-Pfade auflösen (für Winget-Packages)
-        $resolvedPaths = @()
-        if ($basePath -match '\*') {
-            $resolvedPaths = @(Resolve-Path $basePath -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Path)
-        } else {
-            $resolvedPaths = @($basePath)
+    $result = @{
+        Available = $false
+        LibrePath = $null
+        PawnIOActive = $false
+        Message = ""
+        MissingDLLs = @()
+    }
+    
+    # ProgressBar-Update Hilfsfunktion
+    function Update-Progress {
+        param([int]$Value, [string]$Text)
+        if ($ProgressBar) {
+            $ProgressBar.Value = $Value
+        }
+        if ($StatusLabel -and (Get-Member -InputObject $StatusLabel -Name 'Text' -MemberType Property)) {
+            $StatusLabel.Text = $Text
+        }
+        [System.Windows.Forms.Application]::DoEvents()
+    }
+    
+    Update-Progress -Value 10 -Text "Prüfe Hardware-Monitor-Abhängigkeiten..."
+    
+    # WICHTIG: ZUERST PawnIO-Treiber prüfen (BEVOR LibreHardwareMonitorLib geladen wird!)
+    # LibreHardwareMonitorLib hat einen eigenen Ring-0 Treiber der als Malware erkannt wird
+    # PawnIO ist die sichere Alternative und MUSS vorhanden sein
+    Update-Progress -Value 15 -Text "Prüfe PawnIO-Treiber..."
+    
+    $pawnIOAvailable = $false
+    try {
+        # Prüfe ob PawnIO-Dienst installiert und laufend ist
+        $pawnIOService = Get-Service -Name "PawnIO" -ErrorAction SilentlyContinue
+        if ($pawnIOService -and $pawnIOService.Status -eq 'Running') {
+            $pawnIOAvailable = $true
+            Write-Verbose "✓ PawnIO-Treiber gefunden und aktiv"
+        }
+        else {
+            Write-Verbose "✗ PawnIO-Treiber nicht verfügbar oder nicht gestartet"
+        }
+    }
+    catch {
+        Write-Verbose "✗ PawnIO-Treiber-Prüfung fehlgeschlagen: $_"
+    }
+    
+    # Wenn PawnIO fehlt, sofort abbrechen (LibreHardwareMonitorLib NICHT laden!)
+    if (-not $pawnIOAvailable) {
+        $result.Message = @"
+Hardware-Monitor deaktiviert: PawnIO-Treiber nicht verfügbar
+
+WICHTIG: LibreHardwareMonitorLib benötigt PawnIO für sicheren Hardware-Zugriff.
+Ohne PawnIO würde ein unsicherer Ring-0 Treiber geladen werden, der von
+Windows Defender als Malware erkannt wird!
+
+Installation:
+    winget install namazso.PawnIO
+
+Nach Installation: System neu starten
+"@
+        Update-Progress -Value 100 -Text "Hardware-Monitor deaktiviert (PawnIO fehlt)"
+        Write-Verbose $result.Message
+        return $result
+    }
+    
+    # PawnIO verfügbar - fahre mit DLL-Prüfung fort
+    Update-Progress -Value 20 -Text "PawnIO aktiv, prüfe DLL-Dateien..."
+    
+    # Schritt 1: Pfad zum Lib-Ordner ermitteln
+    $scriptRoot = Split-Path -Parent $PSScriptRoot
+    $scriptRoot = Split-Path -Parent $scriptRoot  # Gehe zwei Ebenen hoch (von Modules/Core zu Root)
+    $libPath = Join-Path $scriptRoot "Lib"
+    
+    # PowerShell-Version erkennen für kompatibles DLL-Loading
+    $isPowerShell7 = $PSVersionTable.PSVersion.Major -ge 7
+    
+    # Definiere benötigte DLLs (kritisch für LibreHardwareMonitorLib)
+    # REIHENFOLGE IST WICHTIG! Abhängigkeiten müssen ZUERST geladen werden
+    # PowerShell 5.1: System.*.dll aus Lib-Ordner (.NET Framework 4.x)
+    # PowerShell 7: System.*.dll NICHT laden (verwendet eigene .NET 9 Versionen)
+    $requiredDLLs = [ordered]@{}
+    
+    # System-DLLs nur für PowerShell 5.1 (Windows PowerShell)
+    if (-not $isPowerShell7) {
+        $requiredDLLs['System.Security.AccessControl.dll'] = @{ Description = 'Sicherheits-API (.NET Framework 4.x)'; Optional = $false }
+        $requiredDLLs['System.Security.Principal.Windows.dll'] = @{ Description = 'Windows-Identitäten (.NET Framework 4.x)'; Optional = $false }
+        $requiredDLLs['System.Threading.AccessControl.dll'] = @{ Description = 'Thread/Mutex-API (.NET Framework 4.x)'; Optional = $true }
+    }
+    
+    # Basis-DLLs für beide PowerShell-Versionen
+    $requiredDLLs['System.Memory.dll'] = @{ Description = 'Memory-Management (Abhängigkeit)'; Optional = $false }
+    $requiredDLLs['System.Runtime.CompilerServices.Unsafe.dll'] = @{ Description = 'Low-Level Operationen'; Optional = $false }
+    $requiredDLLs['BlackSharp.Core.dll'] = @{ Description = 'Core-Funktionen'; Optional = $false }
+    $requiredDLLs['RAMSPDToolkit-NDD.dll'] = @{ Description = 'RAM SPD-Auslese'; Optional = $false }
+    $requiredDLLs['DiskInfoToolkit.dll'] = @{ Description = 'Festplatten-Informationen'; Optional = $false }
+    $requiredDLLs['LibreHardwareMonitorLib.dll'] = @{ Description = 'Hauptmodul für Hardware-Monitoring'; Optional = $false }
+    
+    Write-Verbose "PowerShell $($PSVersionTable.PSVersion.Major): Lade $($requiredDLLs.Count) DLLs"
+    
+    Update-Progress -Value 30 -Text "Prüfe $($requiredDLLs.Count) benötigte DLL-Dateien..."
+    
+    # Schritt 2: Prüfe alle benötigten DLLs
+    $missingDLLs = @()
+    $dllCheckProgress = 30
+    $dllCheckStep = 20 / $requiredDLLs.Count
+    
+    foreach ($dll in $requiredDLLs.Keys) {
+        $dllFullPath = Join-Path $libPath $dll
+        $dllCheckProgress += $dllCheckStep
+        Update-Progress -Value ([int]$dllCheckProgress) -Text "Prüfe $dll..."
+        
+        if (-not (Test-Path $dllFullPath)) {
+            $missingDLLs += [PSCustomObject]@{
+                FileName = $dll
+                Description = $requiredDLLs[$dll].Description
+                Path = $dllFullPath
+            }
+            Write-Verbose "Fehlende DLL: $dll ($($requiredDLLs[$dll].Description))"
+        }
+    }
+    
+    # Wenn DLLs fehlen, gebe detaillierte Fehlermeldung zurück
+    if ($missingDLLs.Count -gt 0) {
+        $result.MissingDLLs = $missingDLLs
+        $missingList = ($missingDLLs | ForEach-Object { "  - $($_.FileName) ($($_.Description))" }) -join "`n"
+        $result.Message = "Hardware-Monitor deaktiviert: $($missingDLLs.Count) DLL(s) fehlen:`n$missingList"
+        Update-Progress -Value 100 -Text "Hardware-Monitor nicht verfügbar"
+        Write-Verbose $result.Message
+        return $result
+    }
+    
+    Update-Progress -Value 50 -Text "Alle DLLs gefunden, lade Abhängigkeiten..."
+    
+    # Schritt 3: Lade alle DLLs in der richtigen Reihenfolge
+    $loadProgress = 50
+    $loadStep = 30 / $requiredDLLs.Count
+    
+    foreach ($dllName in $requiredDLLs.Keys) {
+        $dllFullPath = Join-Path $libPath $dllName
+        $dllInfo = $requiredDLLs[$dllName]
+        $loadProgress += $loadStep
+        Update-Progress -Value ([int]$loadProgress) -Text "Lade $dllName..."
+        
+        try {
+            # Versuche DLL zu laden (ignoriere wenn bereits geladen)
+            Add-Type -Path $dllFullPath -ErrorAction Stop
+            Write-Verbose "✓ $dllName geladen"
+        }
+        catch {
+            if ($_.Exception.Message.Contains("bereits geladen") -or 
+                $_.Exception.Message.Contains("already loaded")) {
+                Write-Verbose "✓ $dllName bereits geladen"
+            }
+            elseif ($dllInfo.Optional) {
+                # Optionale DLL konnte nicht geladen werden - Warnung aber weitermachen
+                Write-Verbose "⚠ $dllName (optional) konnte nicht geladen werden: $($_.Exception.Message)"
+            }
+            else {
+                $result.Message = "DLL konnte nicht geladen werden: $dllName`n$($_.Exception.Message)"
+                Update-Progress -Value 100 -Text "Fehler beim Laden von $dllName"
+                Write-Verbose $result.Message
+                return $result
+            }
+        }
+    }
+    
+    # Setze LibrePath auf die Haupt-DLL
+    $result.LibrePath = Join-Path $libPath "LibreHardwareMonitorLib.dll"
+    
+    Update-Progress -Value 80 -Text "Teste Hardware-Monitor Initialisierung..."
+    
+    # Schritt 4: LibreHardwareMonitorLib initialisieren und testen
+    try {
+        $testComputer = New-Object LibreHardwareMonitor.Hardware.Computer
+        $testComputer.IsCpuEnabled = $true
+        $testComputer.IsGpuEnabled = $false
+        $testComputer.IsMotherboardEnabled = $false
+        $testComputer.IsMemoryEnabled = $false
+        $testComputer.IsStorageEnabled = $false
+        $testComputer.IsNetworkEnabled = $false
+        $testComputer.IsControllerEnabled = $false
+        
+        Update-Progress -Value 85 -Text "Öffne Hardware-Zugriff..."
+        
+        try {
+            $testComputer.Open()
+        }
+        catch {
+            # Mutex-Error in PowerShell 7 abfangen
+            if ($_.Exception.Message -like "*System.Threading.Mutex*" -and $isPowerShell7) {
+                $result.Message = "WARNUNG: LibreHardwareMonitorLib ist für PowerShell 5.1 optimiert.`n" + `
+                                  "In PowerShell 7 kann es zu Kompatibilitätsproblemen kommen.`n" + `
+                                  "Empfehlung: Starte mit 'powershell.exe' statt 'pwsh.exe'"
+                Update-Progress -Value 100 -Text "Hardware-Monitor: PowerShell 7 Kompatibilitätsproblem"
+                Write-Verbose $result.Message
+                return $result
+            }
+            else {
+                # Anderer Fehler - weiterwerfen
+                throw
+            }
         }
         
-        foreach ($path in $resolvedPaths) {
-            if (-not $path) { continue }
+        Update-Progress -Value 90 -Text "Prüfe verfügbare Sensoren..."
+        # Prüfe ob Sensoren verfügbar sind (Funktionstest)
+        $cpuHardware = $testComputer.Hardware | Where-Object { $_.HardwareType -eq 'Cpu' } | Select-Object -First 1
+        if ($cpuHardware) {
+            $cpuHardware.Update()
+            $tempSensors = $cpuHardware.Sensors | Where-Object { $_.SensorType -eq 'Temperature' -and $null -ne $_.Value }
             
-            $dllPath = Join-Path $path "LibreHardwareMonitorLib.dll"
-            
-            if (Test-Path $dllPath) {
-            Write-Verbose "LibreHardwareMonitor gefunden in: $dllPath"
-            
-            # Prüfe Signatur der DLL
-            try {
-                $signature = Get-AuthenticodeSignature -FilePath $dllPath -ErrorAction SilentlyContinue
-                $isSigned = ($signature.Status -eq 'Valid')
+            if ($tempSensors.Count -gt 0) {
+                # Hardware-Monitor erfolgreich initialisiert!
+                $result.Available = $true
+                $result.PawnIOActive = $true
+                $psVersion = if ($isPowerShell7) { "PS7" } else { "PS5.1" }
+                $result.Message = "Hardware-Monitoring aktiv ($psVersion, PawnIO, $($tempSensors.Count) Sensoren)"
+                Update-Progress -Value 100 -Text "Hardware-Monitor erfolgreich initialisiert"
+                Write-Verbose $result.Message
+                
+                $testComputer.Close()
+                return $result
             }
-            catch {
-                $isSigned = $false
-            }
-            
-            # Prüfe Version über FileInfo
-            try {
-                $fileInfo = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($dllPath)
-                $version = $fileInfo.FileVersion
-            }
-            catch {
-                $version = "Unknown"
-            }
-            
-            $result.Found = $true
-            $result.Path = $dllPath
-            $result.Version = $version
-            $result.IsSigned = $isSigned
-            
-            return $result
+            else {
+                # Sensoren gefunden aber keine Werte (ungewöhnlich aber möglich)
+                Write-Verbose "⚠ Sensoren gefunden aber keine Werte verfügbar"
             }
         }
+        
+        # Keine Sensoren verfügbar (sollte nicht passieren wenn PawnIO läuft)
+        $testComputer.Close()
+        $result.Message = "Hardware-Monitor Initialisierung fehlgeschlagen: Keine Sensoren verfügbar"
+        Update-Progress -Value 100 -Text "Keine Hardware-Sensoren verfügbar"
+        Write-Verbose $result.Message
+        return $result
+    }
+    catch {
+        $errorMsg = $_.Exception.Message
+        
+        # Spezielle Behandlung für bekannte Kompatibilitätsprobleme
+        if ($errorMsg -like "*System.Threading.Mutex*") {
+            $result.Message = "LibreHardwareMonitorLib Kompatibilitätsproblem: $errorMsg`n`n" + `
+                              "LÖSUNG: Verwende Windows PowerShell 5.1 statt PowerShell 7"
+        }
+        else {
+            $result.Message = "Fehler bei Hardware-Monitor Initialisierung: $errorMsg"
+        }
+        
+        Update-Progress -Value 100 -Text "Hardware-Monitor-Initialisierung fehlgeschlagen"
+        Write-Verbose $result.Message
+        return $result
+    }
+}
+
+#endregion
+
+#region System Requirements Checks
+
+<#
+.SYNOPSIS
+Prüft die .NET Framework Version.
+
+.DESCRIPTION
+Prüft ob .NET Framework 4.7.2 oder höher installiert ist.
+Dies ist für Windows Forms und WPF Assemblies erforderlich.
+
+.OUTPUTS
+Hashtable mit Informationen:
+- Found: Boolean - True wenn 4.7.2+ gefunden
+- Version: String - Versionsnummer
+- Release: Int - Release-Nummer aus Registry
+#>
+function Test-DotNetFrameworkVersion {
+    $result = @{
+        Found = $false
+        Version = $null
+        Release = $null
     }
     
-    # Zusätzlich in Registry nach Installation suchen
-    $regPaths = @(
-        "HKCU:\Software\LibreHardwareMonitor",
-        "HKLM:\Software\LibreHardwareMonitor",
-        "HKLM:\Software\WOW6432Node\LibreHardwareMonitor"
-    )
-    
-    foreach ($regPath in $regPaths) {
+    try {
+        # Prüfe .NET Framework 4.x Version via Registry
+        $regPath = 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full'
+        
         if (Test-Path $regPath) {
-            try {
-                $installPath = (Get-ItemProperty -Path $regPath -Name "InstallPath" -ErrorAction SilentlyContinue).InstallPath
-                if ($installPath) {
-                    $dllPath = Join-Path $installPath "LibreHardwareMonitorLib.dll"
-                    if (Test-Path $dllPath) {
-                        $result.Found = $true
-                        $result.Path = $dllPath
-                        return $result
+            $release = (Get-ItemProperty -Path $regPath -Name Release -ErrorAction SilentlyContinue).Release
+            
+            if ($release) {
+                $result.Release = $release
+                
+                # .NET Framework 4.7.2 = Release 461808
+                # Versions-Mapping: https://docs.microsoft.com/de-de/dotnet/framework/migration-guide/versions-and-dependencies
+                if ($release -ge 461808) {
+                    $result.Found = $true
+                    
+                    # Bestimme Version basierend auf Release-Nummer
+                    if ($release -ge 533320) {
+                        $result.Version = "4.8.1 oder höher"
+                    }
+                    elseif ($release -ge 528040) {
+                        $result.Version = "4.8"
+                    }
+                    elseif ($release -ge 461808) {
+                        $result.Version = "4.7.2"
                     }
                 }
             }
-            catch {
-                continue
-            }
         }
+    }
+    catch {
+        Write-Verbose "Fehler bei .NET Framework Prüfung: $_"
     }
     
     return $result
@@ -117,117 +342,123 @@ function Find-LibreHardwareMonitor {
 
 <#
 .SYNOPSIS
-Prüft ob LibreHardwareMonitor über Winget verfügbar ist.
+Prüft die PowerShell Version.
+
+.DESCRIPTION
+Prüft ob PowerShell 5.1 oder höher verwendet wird.
+Dies ist für moderne PowerShell-Features erforderlich.
 
 .OUTPUTS
-Boolean - True wenn verfügbar, False wenn nicht
+Hashtable mit Informationen:
+- Found: Boolean - True wenn 5.1+ gefunden
+- Version: Version - PowerShell Version
+- Edition: String - Desktop oder Core
 #>
-function Test-LibreHardwareMonitorAvailability {
+function Test-PowerShellVersion {
+    $result = @{
+        Found = $false
+        Version = $null
+        Edition = $null
+    }
+    
     try {
-        # Prüfe ob Winget installiert ist
-        $winget = Get-Command winget -ErrorAction SilentlyContinue
-        if (-not $winget) {
-            return $false
-        }
+        $psVersion = $PSVersionTable.PSVersion
+        $result.Version = $psVersion
+        $result.Edition = $PSVersionTable.PSEdition
         
-        # Suche nach LibreHardwareMonitor
-        $search = winget search "LibreHardwareMonitor" --exact 2>&1
-        return ($search -match "LibreHardwareMonitor")
+        # PowerShell 5.1 oder höher erforderlich
+        if ($psVersion.Major -ge 6 -or ($psVersion.Major -eq 5 -and $psVersion.Minor -ge 1)) {
+            $result.Found = $true
+        }
     }
     catch {
-        return $false
+        Write-Verbose "Fehler bei PowerShell Version Prüfung: $_"
     }
+    
+    return $result
 }
 
 <#
 .SYNOPSIS
-Installiert LibreHardwareMonitor über Winget.
+Prüft die Windows Version.
 
-.PARAMETER Silent
-Installiert ohne Benutzerinteraktion (automatisch akzeptiert)
+.DESCRIPTION
+Prüft ob Windows 10 Build 17763 (Version 1809) oder höher verwendet wird.
+Dies entspricht den Mindestanforderungen für moderne Windows APIs.
 
 .OUTPUTS
-Boolean - True wenn erfolgreich installiert, False bei Fehler
+Hashtable mit Informationen:
+- Found: Boolean - True wenn Build 17763+ gefunden
+- Version: Version - Windows Version
+- Build: Int - Build-Nummer
+- Name: String - Windows-Produktname
 #>
-function Install-LibreHardwareMonitor {
-    param(
-        [switch]$Silent
-    )
+function Test-WindowsVersion {
+    $result = @{
+        Found = $false
+        Version = $null
+        Build = $null
+        Name = $null
+    }
     
     try {
-        Write-Host "`n📦 Installiere LibreHardwareMonitor..." -ForegroundColor Cyan
+        # Hole Windows Version
+        $osVersion = [System.Environment]::OSVersion.Version
+        $result.Version = $osVersion
+        $result.Build = $osVersion.Build
         
-        $wingetArgs = @(
-            "install",
-            "--id", "LibreHardwareMonitor.LibreHardwareMonitor",
-            "--exact",
-            "--accept-source-agreements"
-        )
-        
-        if ($Silent) {
-            $wingetArgs += "--silent"
-            $wingetArgs += "--accept-package-agreements"
+        # Versuche Produktnamen zu ermitteln
+        try {
+            $productName = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -Name ProductName -ErrorAction SilentlyContinue).ProductName
+            $result.Name = $productName
+        }
+        catch {
+            $result.Name = "Windows $($osVersion.Major).$($osVersion.Minor)"
         }
         
-        # Führe Winget-Installation aus
-        $process = Start-Process -FilePath "winget" `
-                                  -ArgumentList $wingetArgs `
-                                  -Wait `
-                                  -PassThru `
-                                  -NoNewWindow
-        
-        # Exit Codes:
-        # 0 = Erfolg
-        # -1978335189 (0x8A15000B) = Bereits installiert / Kein Upgrade verfügbar
-        if ($process.ExitCode -eq 0 -or $process.ExitCode -eq -1978335189) {
-            if ($process.ExitCode -eq -1978335189) {
-                Write-Host "ℹ️  LibreHardwareMonitor ist bereits installiert" -ForegroundColor Cyan
-            } else {
-                Write-Host "✓ LibreHardwareMonitor erfolgreich installiert!" -ForegroundColor Green
-            }
-            
-            # Suche nach Installation nach 2 Sekunden Wartezeit
-            Start-Sleep -Seconds 2
-            $found = Find-LibreHardwareMonitor
-            
-            if ($found.Found) {
-                Write-Host "✓ Installation verifiziert: $($found.Path)" -ForegroundColor Green
-                return $true
-            }
-            else {
-                Write-Warning "Installation abgeschlossen, aber DLL nicht gefunden!"
-                Write-Host "  Hinweis: Versuche manuelle Suche mit erweiterten Pfaden..." -ForegroundColor Yellow
-                
-                # Erweiterte Suche nach Installation
-                $manualSearchPaths = @(
-                    "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\*LibreHardware*",
-                    "$env:ProgramFiles\*LibreHardware*",
-                    "$env:LOCALAPPDATA\Programs\*LibreHardware*"
-                )
-                
-                foreach ($searchPattern in $manualSearchPaths) {
-                    $paths = Get-ChildItem -Path (Split-Path $searchPattern) -Filter (Split-Path $searchPattern -Leaf) -Directory -ErrorAction SilentlyContinue
-                    foreach ($dir in $paths) {
-                        $dllPath = Get-ChildItem -Path $dir.FullName -Filter "LibreHardwareMonitorLib.dll" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-                        if ($dllPath) {
-                            Write-Host "✓ DLL gefunden: $($dllPath.FullName)" -ForegroundColor Green
-                            return $true
-                        }
-                    }
-                }
-                
-                return $false
-            }
-        }
-        else {
-            Write-Warning "Installation fehlgeschlagen (Exit Code: $($process.ExitCode))"
-            return $false
+        # Windows 10 Build 17763 (1809) oder höher
+        if ($osVersion.Build -ge 17763) {
+            $result.Found = $true
         }
     }
     catch {
-        Write-Warning "Fehler bei der Installation: $_"
-        return $false
+        Write-Verbose "Fehler bei Windows Version Prüfung: $_"
     }
+    
+    return $result
+}
+
+<#
+.SYNOPSIS
+Prüft ob Administrator-Rechte vorhanden sind.
+
+.DESCRIPTION
+Prüft ob das aktuelle PowerShell-Fenster mit Administrator-Rechten läuft.
+Viele System-Tools benötigen diese Rechte.
+
+.OUTPUTS
+Hashtable mit Informationen:
+- Found: Boolean - True wenn Admin-Rechte vorhanden
+- User: String - Aktueller Benutzername
+#>
+function Test-AdministratorRights {
+    $result = @{
+        Found = $false
+        User = $null
+    }
+    
+    try {
+        $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent()
+        $result.User = $currentUser.Name
+        
+        $principal = New-Object Security.Principal.WindowsPrincipal($currentUser)
+        $result.Found = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    }
+    catch {
+        Write-Verbose "Fehler bei Administrator-Rechte Prüfung: $_"
+    }
+    
+    return $result
 }
 
 #endregion
@@ -308,6 +539,63 @@ function Find-WingetPackageManager {
     }
     catch {
         # Winget nicht gefunden
+    }
+    
+    return $result
+}
+
+<#
+.SYNOPSIS
+Prüft ob der PawnIO-Treiber installiert ist.
+
+.DESCRIPTION
+Prüft ob PawnIO als Service installiert und laufend ist.
+PawnIO ist erforderlich für sicheren Ring-0 Hardware-Zugriff.
+
+.OUTPUTS
+Hashtable mit Informationen:
+- Found: Boolean - True wenn PawnIO Service existiert
+- Running: Boolean - True wenn PawnIO läuft
+- Version: String - Version des PawnIO-Treibers
+- WingetId: String - Winget Package ID
+#>
+function Find-PawnIODriver {
+    $result = @{
+        Found = $false
+        Running = $false
+        Version = $null
+        WingetId = "namazso.PawnIO"
+    }
+    
+    try {
+        # Prüfe ob PawnIO-Dienst existiert
+        $pawnIOService = Get-Service -Name "PawnIO" -ErrorAction SilentlyContinue
+        
+        if ($pawnIOService) {
+            $result.Found = $true
+            $result.Running = ($pawnIOService.Status -eq 'Running')
+            
+            # Version über winget ermitteln (wenn installiert)
+            try {
+                $wingetList = winget list --id namazso.PawnIO --exact 2>$null | Out-String
+                if ($wingetList -match 'namazso\.PawnIO\s+([\d\.]+)') {
+                    $result.Version = $matches[1]
+                }
+                elseif ($result.Found) {
+                    # Service existiert aber keine Version über winget - manuelle Installation
+                    $result.Version = "Installiert (Version unbekannt)"
+                }
+            }
+            catch {
+                # Winget nicht verfügbar oder Fehler
+                if ($result.Found) {
+                    $result.Version = "Installiert (Version unbekannt)"
+                }
+            }
+        }
+    }
+    catch {
+        Write-Verbose "Fehler bei PawnIO-Prüfung: $_"
     }
     
     return $result
@@ -546,6 +834,229 @@ function Show-DependencyDialog {
 
 #endregion
 
+#region Integrated GUI Dependency Check
+
+<#
+.SYNOPSIS
+Erstellt Dependency-Informationen für die GUI-Integration.
+
+.DESCRIPTION
+Gibt strukturierte Dependency-Daten zurück, die in der Haupt-GUI
+angezeigt werden können (Outputbox + Buttons im mainContentPanel).
+
+.OUTPUTS
+Hashtable mit:
+- Dependencies: Array mit allen Abhängigkeiten
+- AllSatisfied: Boolean
+- HasInstallableItems: Boolean
+- OutputText: String für die Outputbox
+#>
+function Get-DependencyStatusForGUI {
+    $dependencies = @()
+    $allSatisfied = $true
+    
+    # .NET Framework
+    $dotNet = Test-DotNetFrameworkVersion
+    if ($dotNet.Found) {
+        $dependencies += @{
+            Name = ".NET Framework"
+            Description = "Microsoft .NET Framework für Windows Forms"
+            Found = $true
+            Required = $false
+            Available = $false
+            Version = $dotNet.Version
+            Status = "✓ Installiert"
+            StatusColor = "Green"
+            WingetId = $null
+        }
+    }
+    
+    # PowerShell Version
+    $psVersion = Test-PowerShellVersion
+    if ($psVersion.Found) {
+        $dependencies += @{
+            Name = "PowerShell"
+            Description = "Windows PowerShell für Skript-Ausführung"
+            Found = $true
+            Required = $false
+            Available = $false
+            Version = $psVersion.Version.ToString()
+            Status = "✓ Installiert"
+            StatusColor = "Green"
+            WingetId = $null
+        }
+    }
+    
+    # Windows Version
+    $winVersion = Test-WindowsVersion
+    if ($winVersion.Found) {
+        $dependencies += @{
+            Name = "Windows Version"
+            Description = "Betriebssystem-Version"
+            Found = $true
+            Required = $false
+            Available = $false
+            Version = "Build $($winVersion.Build)"
+            Status = "✓ Kompatibel"
+            StatusColor = "Green"
+            WingetId = $null
+        }
+    }
+    
+    # Administrator-Rechte
+    $adminRights = Test-AdministratorRights
+    if ($adminRights.Found) {
+        $dependencies += @{
+            Name = "Administrator-Rechte"
+            Description = "Erhöhte Rechte für System-Tools"
+            Found = $true
+            Required = $false
+            Available = $false
+            Version = $adminRights.User
+            Status = "✓ Aktiv"
+            StatusColor = "Green"
+            WingetId = $null
+        }
+    } else {
+        $dependencies += @{
+            Name = "Administrator-Rechte"
+            Description = "Erhöhte Rechte für System-Tools"
+            Found = $false
+            Required = $false
+            Available = $false
+            Version = $adminRights.User
+            Status = "⚠ Nicht aktiv"
+            StatusColor = "Yellow"
+            WingetId = $null
+        }
+    }
+    
+    # Winget Package Manager
+    $winget = Find-WingetPackageManager
+    if ($winget.Found) {
+        $dependencies += @{
+            Name = "Winget Package Manager"
+            Description = "Windows Paketmanager für Installationen"
+            Found = $true
+            Required = $false
+            Available = $false
+            Version = $winget.Version.ToString()
+            Status = "✓ Verfügbar"
+            StatusColor = "Green"
+            WingetId = $null
+        }
+    } else {
+        $allSatisfied = $false
+        $dependencies += @{
+            Name = "Winget Package Manager"
+            Description = "Erforderlich für Auto-Installation"
+            Found = $false
+            Required = $true
+            Available = $false
+            Version = $null
+            Status = "❌ Fehlt"
+            StatusColor = "Red"
+            WingetId = $null
+        }
+    }
+    
+    # PawnIO-Treiber
+    $pawnIO = Find-PawnIODriver
+    if ($pawnIO.Running) {
+        $dependencies += @{
+            Name = "PawnIO Ring-0 Treiber"
+            Description = "Sicherer Kernel-Treiber für Hardware-Zugriff"
+            Found = $true
+            Required = $false
+            Available = $true
+            Version = $pawnIO.Version
+            Status = "✓ Läuft"
+            StatusColor = "Green"
+            WingetId = $pawnIO.WingetId
+        }
+    } elseif ($pawnIO.Found) {
+        $dependencies += @{
+            Name = "PawnIO Ring-0 Treiber"
+            Description = "Service installiert, aber nicht gestartet"
+            Found = $true
+            Required = $false
+            Available = $true
+            Version = $pawnIO.Version
+            Status = "⚠ Neustart nötig"
+            StatusColor = "Yellow"
+            WingetId = $pawnIO.WingetId
+        }
+    } else {
+        $allSatisfied = $false
+        $dependencies += @{
+            Name = "PawnIO Ring-0 Treiber"
+            Description = "Erforderlich für Hardware-Monitoring"
+            Found = $false
+            Required = $false
+            Available = $true
+            Version = $null
+            Status = "⚠ Nicht installiert"
+            StatusColor = "Yellow"
+            WingetId = $pawnIO.WingetId
+        }
+    }
+    
+    # Hardware-Monitoring
+    $lhm = Initialize-HardwareMonitoringMode
+    if ($lhm.Available) {
+        $dependencies += @{
+            Name = "Hardware-Monitoring"
+            Description = "LibreHardwareMonitorLib + PawnIO"
+            Found = $true
+            Required = $false
+            Available = $true
+            Version = $lhm.Message
+            Status = "✓ Aktiv"
+            StatusColor = "Green"
+            WingetId = $null
+        }
+    } else {
+        $dependencies += @{
+            Name = "Hardware-Monitoring"
+            Description = "Lokale DLL-Bibliothek"
+            Found = $false
+            Required = $false
+            Available = $false
+            Version = $null
+            Status = "⚠ Deaktiviert"
+            StatusColor = "Yellow"
+            WingetId = $null
+        }
+    }
+    
+    # PowerShell Core (optional)
+    $pwsh = Find-PowerShellCore
+    if ($pwsh.Found) {
+        $dependencies += @{
+            Name = "PowerShell Core"
+            Description = "Moderne PowerShell 7+ (optional)"
+            Found = $true
+            Required = $false
+            Available = $false
+            Version = $pwsh.Version.ToString()
+            Status = "✓ Installiert"
+            StatusColor = "Green"
+            WingetId = $null
+        }
+    }
+    
+    # Prüfe ob installierbare Items vorhanden sind
+    $hasInstallableItems = ($dependencies | Where-Object { -not $_.Found -and $_.Available }).Count -gt 0
+    
+    return @{
+        Dependencies = $dependencies
+        AllSatisfied = $allSatisfied
+        HasInstallableItems = $hasInstallableItems
+    }
+}
+
+#endregion
+
 #region Main Dependency Check
 
 <#
@@ -572,7 +1083,120 @@ function Test-SystemDependencies {
     $dependencies = @()
     $allSatisfied = $true
     
-    # 0. Winget Package Manager prüfen (wichtig für Installationen)
+    # 0. System-Anforderungen prüfen
+    
+    # .NET Framework Version
+    $dotNet = Test-DotNetFrameworkVersion
+    if ($dotNet.Found) {
+        $dependencies += @{
+            Name = ".NET Framework"
+            Description = "Erforderlich für Windows Forms und WPF Assemblies"
+            Required = $true
+            Available = $false  # Systemkomponente
+            Found = $true
+            Version = "$($dotNet.Version) (Release $($dotNet.Release))"
+            Path = $null
+        }
+        Write-Host "  ✓ .NET Framework $($dotNet.Version) gefunden" -ForegroundColor Green
+    }
+    else {
+        $allSatisfied = $false
+        $dependencies += @{
+            Name = ".NET Framework"
+            Description = "⚠️ .NET Framework 4.7.2+ erforderlich! Bitte über Windows Update installieren."
+            Required = $true
+            Available = $false
+            Found = $false
+            Version = if ($dotNet.Release) { "Gefunden: Release $($dotNet.Release) (zu alt)" } else { "Nicht gefunden" }
+            Path = $null
+        }
+        Write-Host "  ❌ .NET Framework 4.7.2+ nicht gefunden!" -ForegroundColor Red
+    }
+    
+    # PowerShell Version
+    $psVersion = Test-PowerShellVersion
+    if ($psVersion.Found) {
+        $dependencies += @{
+            Name = "PowerShell"
+            Description = "PowerShell 5.1+ für moderne Features"
+            Required = $true
+            Available = $false  # Systemkomponente
+            Found = $true
+            Version = "$($psVersion.Version) ($($psVersion.Edition))"
+            Path = $null
+        }
+        Write-Host "  ✓ PowerShell $($psVersion.Version) gefunden" -ForegroundColor Green
+    }
+    else {
+        $allSatisfied = $false
+        $dependencies += @{
+            Name = "PowerShell"
+            Description = "⚠️ PowerShell 5.1+ erforderlich! Bitte aktualisieren."
+            Required = $true
+            Available = $false
+            Found = $false
+            Version = if ($psVersion.Version) { "$($psVersion.Version) (zu alt)" } else { "Nicht gefunden" }
+            Path = $null
+        }
+        Write-Host "  ❌ PowerShell 5.1+ nicht gefunden!" -ForegroundColor Red
+    }
+    
+    # Windows Version
+    $winVersion = Test-WindowsVersion
+    if ($winVersion.Found) {
+        $dependencies += @{
+            Name = "Windows Version"
+            Description = "Windows 10 1809+ (Build 17763+) für moderne APIs"
+            Required = $true
+            Available = $false  # Systemkomponente
+            Found = $true
+            Version = "$($winVersion.Name) Build $($winVersion.Build)"
+            Path = $null
+        }
+        Write-Host "  ✓ $($winVersion.Name) Build $($winVersion.Build) gefunden" -ForegroundColor Green
+    }
+    else {
+        $allSatisfied = $false
+        $dependencies += @{
+            Name = "Windows Version"
+            Description = "⚠️ Windows 10 Build 17763+ erforderlich! Bitte System aktualisieren."
+            Required = $true
+            Available = $false
+            Found = $false
+            Version = if ($winVersion.Build) { "Build $($winVersion.Build) (zu alt)" } else { "Nicht ermittelbar" }
+            Path = $null
+        }
+        Write-Host "  ❌ Windows 10 Build 17763+ nicht gefunden!" -ForegroundColor Red
+    }
+    
+    # Administrator-Rechte (Warnung, nicht kritisch)
+    $adminRights = Test-AdministratorRights
+    if ($adminRights.Found) {
+        $dependencies += @{
+            Name = "Administrator-Rechte"
+            Description = "Mit Administrator-Rechten (empfohlen für System-Tools)"
+            Required = $false
+            Available = $false  # Status
+            Found = $true
+            Version = "Benutzer: $($adminRights.User)"
+            Path = $null
+        }
+        Write-Host "  ✓ Administrator-Rechte vorhanden" -ForegroundColor Green
+    }
+    else {
+        $dependencies += @{
+            Name = "Administrator-Rechte"
+            Description = "⚠️ Einige Tools benötigen Admin-Rechte. Bitte als Administrator ausführen."
+            Required = $false
+            Available = $false
+            Found = $false
+            Version = "Benutzer: $($adminRights.User)"
+            Path = $null
+        }
+        Write-Host "  ⚠️  Keine Administrator-Rechte (einige Tools eingeschränkt)" -ForegroundColor Yellow
+    }
+    
+    # 1. Winget Package Manager prüfen (wichtig für Installationen)
     $winget = Find-WingetPackageManager
     if ($winget.Found) {
         $dependencies += @{
@@ -600,38 +1224,86 @@ function Test-SystemDependencies {
         Write-Host "  ⚠️  Winget Package Manager nicht gefunden (manuelle Installation erforderlich)" -ForegroundColor Yellow
     }
     
-    # 1. LibreHardwareMonitor prüfen
-    $lhm = Find-LibreHardwareMonitor
-    if (-not $lhm.Found) {
+    # 2. PawnIO-Treiber prüfen (erforderlich für sicheres Hardware-Monitoring)
+    $pawnIO = Find-PawnIODriver
+    if ($pawnIO.Found) {
+        # PawnIO installiert - prüfe ob es läuft
+        if ($pawnIO.Running) {
+            $dependencies += @{
+                Name = "PawnIO Ring-0 Treiber"
+                Description = "Sicherer Kernel-Treiber für Hardware-Zugriff (erforderlich für Monitoring)"
+                Required = $false
+                Available = $true  # Über winget installierbar
+                Found = $true
+                Version = $pawnIO.Version
+                Path = "Service: PawnIO (Läuft)"
+                WingetId = $pawnIO.WingetId
+            }
+            Write-Host "  ✓ PawnIO-Treiber $($pawnIO.Version) installiert und läuft" -ForegroundColor Green
+        }
+        else {
+            # Service existiert aber läuft nicht
+            $dependencies += @{
+                Name = "PawnIO Ring-0 Treiber"
+                Description = "⚠️ PawnIO-Service ist installiert, läuft aber nicht. Bitte System neu starten."
+                Required = $false
+                Available = $true
+                Found = $true
+                Version = "$($pawnIO.Version) (Nicht gestartet)"
+                Path = "Service: PawnIO (Gestoppt)"
+                WingetId = $pawnIO.WingetId
+            }
+            Write-Host "  ⚠️  PawnIO-Treiber installiert, aber nicht gestartet (Neustart erforderlich)" -ForegroundColor Yellow
+        }
+    }
+    else {
+        # PawnIO fehlt - kritisch für Hardware-Monitoring
         $allSatisfied = $false
         $dependencies += @{
-            Name = "LibreHardwareMonitor"
-            Description = "Hardware-Überwachung mit aktuellen Sensoren (CPU/GPU/RAM Temperaturen)"
+            Name = "PawnIO Ring-0 Treiber"
+            Description = "Sicherer Kernel-Treiber für Hardware-Zugriff. Ohne PawnIO kein Hardware-Monitoring!"
             Required = $false
-            Available = (Test-LibreHardwareMonitorAvailability)
+            Available = $true  # Über winget installierbar
             Found = $false
             Version = $null
             Path = $null
+            WingetId = $pawnIO.WingetId
         }
-        Write-Host "  ⚠️  LibreHardwareMonitor nicht gefunden (Fallback auf integrierte Lib)" -ForegroundColor Yellow
+        Write-Host "  ⚠️  PawnIO-Treiber nicht installiert (erforderlich für Hardware-Monitoring)" -ForegroundColor Yellow
+    }
+    
+    # 3. Hardware-Monitoring (LibreHardwareMonitorLib + PawnIO) prüfen
+    $lhm = Initialize-HardwareMonitoringMode
+    if (-not $lhm.Available) {
+        $allSatisfied = $false
+        $dependencies += @{
+            Name = "Hardware-Monitoring (LibreHardwareMonitorLib)"
+            Description = "Lokale DLL-Bibliothek für Hardware-Sensoren (CPU/GPU/RAM) + PawnIO-Treiber"
+            Required = $false
+            Available = $lhm.Available
+            Found = $lhm.Available
+            Version = $null
+            Path = $lhm.LibrePath
+        }
+        Write-Host "  ⚠️  Hardware-Monitoring nicht verfügbar: $($lhm.Message)" -ForegroundColor Yellow
     }
     else {
         # Auch bereits installierte Komponenten in Liste aufnehmen (für Dialog-Anzeige)
         $dependencies += @{
-            Name = "LibreHardwareMonitor"
-            Description = "Hardware-Überwachung mit aktuellen Sensoren (CPU/GPU/RAM Temperaturen)"
+            Name = "Hardware-Monitoring (LibreHardwareMonitorLib)"
+            Description = "Lokale DLL-Bibliothek für Hardware-Sensoren (CPU/GPU/RAM) + PawnIO-Treiber aktiv"
             Required = $false
             Available = $true
             Found = $true
-            Version = $lhm.Version
-            Path = $lhm.Path
+            Version = $lhm.Message
+            Path = $lhm.LibrePath
         }
-        Write-Host "  ✓ LibreHardwareMonitor gefunden: $($lhm.Path)" -ForegroundColor Green
-        Write-Host "    Version: $($lhm.Version) | Signiert: $($lhm.IsSigned)" -ForegroundColor Gray
+        Write-Host "  ✓ Hardware-Monitoring verfügbar (lokale Bibliothek): $($lhm.LibrePath)" -ForegroundColor Green
+        Write-Host "    Status: $($lhm.Message)" -ForegroundColor Gray
 
     }
     
-    # 2. PowerShell Core prüfen (optional)
+    # 4. PowerShell Core prüfen (optional)
     $pwsh = Find-PowerShellCore
     if ($pwsh.Found) {
         # Auch installierte PowerShell Core anzeigen
@@ -672,17 +1344,14 @@ function Test-SystemDependencies {
     
     # Auto-Install ohne Dialog
     if ($AutoInstall) {
-        foreach ($dep in $dependencies) {
-            if ($dep.Name -eq "LibreHardwareMonitor" -and $dep.Available) {
-                Install-LibreHardwareMonitor -Silent
-            }
-        }
+        # LibreHardwareMonitor wird nicht mehr installiert - DLLs sind im Lib-Ordner enthalten
+        # PawnIO muss manuell installiert werden: winget install namazso.PawnIO
         
         # Nach Installation erneut prüfen
-        $lhm = Find-LibreHardwareMonitor
+        $lhm = Initialize-HardwareMonitoringMode
         
         return @{
-            AllSatisfied = $lhm.Found
+            AllSatisfied = $lhm.Available
         }
     }
     
@@ -692,13 +1361,42 @@ function Test-SystemDependencies {
         
         if ($dialogResult.DialogResult -eq [System.Windows.Forms.DialogResult]::OK) {
             # Installiere ausgewählte Abhängigkeiten
-            foreach ($dep in $dependencies) {
-                if ($dialogResult.Choices[$dep.Name].Install) {
-                    if ($dep.Name -eq "LibreHardwareMonitor") {
-                        Install-LibreHardwareMonitor
+            Write-Host "`n📦 Installiere ausgewählte Komponenten...`n" -ForegroundColor Cyan
+            
+            foreach ($choice in $dialogResult.Choices.Keys) {
+                if ($dialogResult.Choices[$choice].Install) {
+                    $dep = $dependencies | Where-Object { $_.Name -eq $choice } | Select-Object -First 1
+                    
+                    # PawnIO-Installation
+                    if ($choice -eq "PawnIO Ring-0 Treiber" -and $dep.WingetId) {
+                        Write-Host "  → Installiere PawnIO-Treiber..." -ForegroundColor Yellow
+                        try {
+                            # Prüfe ob Winget verfügbar ist
+                            $wingetCheck = Find-WingetPackageManager
+                            if (-not $wingetCheck.Found) {
+                                Write-Host "    ❌ Winget nicht verfügbar - kann PawnIO nicht installieren" -ForegroundColor Red
+                                continue
+                            }
+                            
+                            # Installiere PawnIO über winget
+                            $installProcess = Start-Process -FilePath "winget" -ArgumentList "install", "--id", $dep.WingetId, "--silent", "--accept-package-agreements", "--accept-source-agreements" -Wait -NoNewWindow -PassThru
+                            
+                            if ($installProcess.ExitCode -eq 0) {
+                                Write-Host "    ✓ PawnIO erfolgreich installiert" -ForegroundColor Green
+                                Write-Host "    ⚠️  Bitte System neu starten, damit der Treiber geladen wird!" -ForegroundColor Yellow
+                            }
+                            else {
+                                Write-Host "    ❌ PawnIO-Installation fehlgeschlagen (Exit Code: $($installProcess.ExitCode))" -ForegroundColor Red
+                            }
+                        }
+                        catch {
+                            Write-Host "    ❌ Fehler bei PawnIO-Installation: $_" -ForegroundColor Red
+                        }
                     }
                 }
             }
+            
+            Write-Host "`n✓ Installation abgeschlossen`n" -ForegroundColor Green
         }
     }
     
@@ -711,12 +1409,16 @@ function Test-SystemDependencies {
 
 # Exportiere Funktionen
 Export-ModuleMember -Function `
-    Find-LibreHardwareMonitor, `
-    Test-LibreHardwareMonitorAvailability, `
-    Install-LibreHardwareMonitor, `
+    Initialize-HardwareMonitoringMode, `
     Find-PowerShellCore, `
     Find-WingetPackageManager, `
+    Find-PawnIODriver, `
+    Test-DotNetFrameworkVersion, `
+    Test-PowerShellVersion, `
+    Test-WindowsVersion, `
+    Test-AdministratorRights, `
     Show-DependencyDialog, `
+    Get-DependencyStatusForGUI, `
     Test-SystemDependencies
 
 # SIG # Begin signature block

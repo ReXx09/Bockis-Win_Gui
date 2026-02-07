@@ -280,15 +280,18 @@ function Import-SystemToolSettings {
             if ($needsSave) {
                 try {
                     Export-SystemToolSettings -ConfigPath $ConfigPath -Silent
-                    Write-Host "Log-Pfad wurde automatisch auf lokalen AppData-Ordner migriert." -ForegroundColor Green
                 }
                 catch {
                     Write-Verbose "Konnte config.json nicht automatisch speichern: $_"
                 }
             }
             
-            Write-Host "Einstellungen wurden aus $ConfigPath geladen." -ForegroundColor Green
-            return $true
+            # Rückgabe-Objekt mit allen relevanten Informationen
+            return [PSCustomObject]@{
+                Success = $true
+                Migrated = $needsSave
+                ConfigPath = $ConfigPath
+            }
         }
         catch {
             Write-Host "Fehler beim Laden der Einstellungen: $_" -ForegroundColor Red
@@ -1758,12 +1761,15 @@ function Show-SettingsDialog {
                 
                 # TextStyle mit neuen Farben neu initialisieren
                 Initialize-TextStyle -Settings $script:settings -OutputBox $OutputBox
+                
+                # OutputBox komplett leeren, da bereits formatierter Text die alten Farben behält
+                $OutputBox.Clear()
             }
             catch {
                 Write-Host "Fehler beim Speichern der Einstellungen: $_" -ForegroundColor Red
             }
             
-            # Ausgabe in der OutputBox
+            # Ausgabe in der OutputBox (nach Clear, damit neue Farben sofort sichtbar sind)
             Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Success'
             $OutputBox.AppendText("`r`nEinstellungen wurden aktualisiert und angewendet:`r`n")
             Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Default'

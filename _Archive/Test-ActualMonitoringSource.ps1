@@ -59,15 +59,9 @@ try {
     Write-Host "  ❌ Fehler: $_" -ForegroundColor Red
 }
 
-Write-Host "`n═══ 5. HWiNFO Shared Memory ═══" -ForegroundColor Yellow
-$hwinfo = Test-HWiNFOAvailable
-if ($hwinfo) {
-    Write-Host "  ✅ HWiNFO läuft (könnte Sensor-Quelle sein!)" -ForegroundColor Green
-} else {
-    Write-Host "  ⚠️  HWiNFO nicht aktiv" -ForegroundColor Yellow
-}
+# HWiNFO wurde entfernt - nicht mehr unterstützt
 
-Write-Host "`n═══ 6. WMI GPU-Controller ═══" -ForegroundColor Yellow
+Write-Host "`n═══ 5. WMI GPU-Controller ═══" -ForegroundColor Yellow
 try {
     $gpuControllers = Get-WmiObject -Namespace "root\CIMV2" -Class "Win32_VideoController" | 
         Where-Object { $_.Name -match "NVIDIA|AMD|Radeon|GeForce|Intel.*Graphics" }

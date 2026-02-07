@@ -29,25 +29,24 @@ catch {
 Write-Host "`n[TEST 1] Suche nach LibreHardwareMonitor..." -ForegroundColor Yellow
 Write-Host "─────────────────────────────────────────────────────────────" -ForegroundColor Gray
 
-$lhm = Find-LibreHardwareMonitor
+$lhm = Initialize-HardwareMonitoringMode
 
-if ($lhm.Found) {
-    Write-Host "✓ LibreHardwareMonitor gefunden!" -ForegroundColor Green
-    Write-Host "  Pfad:      $($lhm.Path)" -ForegroundColor Cyan
-    Write-Host "  Version:   $($lhm.Version)" -ForegroundColor Cyan
-    Write-Host "  Signiert:  $($lhm.IsSigned)" -ForegroundColor $(if ($lhm.IsSigned) { 'Green' } else { 'Yellow' })
+if ($lhm.Available) {
+    Write-Host "✓ Hardware-Monitor verfügbar!" -ForegroundColor Green
+    Write-Host "  Pfad:      $($lhm.LibrePath)" -ForegroundColor Cyan
+    Write-Host "  PawnIO:    $($lhm.PawnIOActive)" -ForegroundColor $(if ($lhm.PawnIOActive) { 'Green' } else { 'Yellow' })
+    Write-Host "  Status:    $($lhm.Message)" -ForegroundColor Cyan
     
-    # Zeige Details zur Signatur
-    if ($lhm.IsSigned) {
+    # Zeige Details zur DLL
+    if ($lhm.LibrePath -and (Test-Path $lhm.LibrePath)) {
         try {
-            $sig = Get-AuthenticodeSignature -FilePath $lhm.Path
-            Write-Host "`n  Zertifikat-Details:" -ForegroundColor Gray
-            Write-Host "    Subject:  $($sig.SignerCertificate.Subject)" -ForegroundColor Gray
-            Write-Host "    Issuer:   $($sig.SignerCertificate.Issuer)" -ForegroundColor Gray
-            Write-Host "    Gültig:   $($sig.SignerCertificate.NotBefore) bis $($sig.SignerCertificate.NotAfter)" -ForegroundColor Gray
+            $dllInfo = Get-Item $lhm.LibrePath
+            Write-Host "`n  DLL-Details:" -ForegroundColor Gray
+            Write-Host "    Größe:    $([math]::Round($dllInfo.Length/1KB, 2)) KB" -ForegroundColor Gray
+            Write-Host "    Datum:    $($dllInfo.LastWriteTime)" -ForegroundColor Gray
         }
         catch {
-            Write-Host "  (Zertifikat-Details nicht verfügbar)" -ForegroundColor Gray
+            Write-Host "  (DLL-Details nicht verfügbar)" -ForegroundColor Gray
         }
     }
 }

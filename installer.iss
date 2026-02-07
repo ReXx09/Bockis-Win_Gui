@@ -1,5 +1,5 @@
 ; ===================================================================
-; INSTALLATIONS-SKRIPT FÜR BOCKIS SYSTEM-TOOL V4.0
+; INSTALLATIONS-SKRIPT FÜR BOCKIS SYSTEM-TOOL V4.1.1
 ; ===================================================================
 ;
 ; BESCHREIBUNG:
@@ -36,7 +36,7 @@
 ; • LZMA2 Maximum-Kompression für kleinere Setup-Datei
 ;
 ; AUTOR: Bockis
-; VERSION: 4.0
+; VERSION: 4.1.1
 ; ERSTELLT MIT: Inno Setup 6.x
 ; DATUM: 2025
 ; LIZENZ: Siehe LICENSE.txt
@@ -109,11 +109,23 @@ SetupIconFile=IMG_0382.ico
 UninstallDisplayIcon={app}\IMG_0382.ico
 
 ; Wizard-Bilder für Installations-Assistent
-WizardImageFile=Logo.bmp
+; HINWEIS: Für optimale Darstellung ohne Verzerrung:
+; - WizardImageFile: 164x314 px (moderner Wizard-Stil)
+; - WizardSmallImageFile: 55x55 px (kleines Icon oben rechts)
+; AKTUELL: Logo.bmp wird für beide verwendet - kann zu Verzerrung führen
+; EMPFEHLUNG: Erstellen Sie zwei separate Dateien:
+;   - Logo_Sidebar.bmp (164x314 px) für WizardImageFile
+;   - Logo_Small.bmp (55x55 px) für WizardSmallImageFile
+; ALTERNATIVE: Nur kleines Logo verwenden für cleanen Look:
+;WizardImageFile=
 WizardSmallImageFile=Logo.bmp
 
 ; Moderner Wizard-Stil (Windows 11 Design)
 WizardStyle=modern
+
+; Moderne Farbgebung (Dunkles Theme passend zur GUI)
+WizardResizable=yes
+WizardSizePercent=120
 
 ; Installations-Seiten aktivieren (informative Installation)
 DisableWelcomePage=no
@@ -800,7 +812,9 @@ german.AppName=Bockis System-Tool
 german.SetupWindowTitle=Installation - Bockis System-Tool
 german.UninstallAppTitle=Deinstallation - Bockis System-Tool
 german.LaunchProgram={#MyAppName} jetzt starten
-german.WelcomeLabel2=Willkommen beim Installations-Assistenten für Bockis System-Tool!%n%nDieses Tool hilft Ihnen bei der Wartung, Diagnose und Optimierung Ihres Windows-Systems.%n%nFunktionen:%n• System-Reparatur (SFC, DISM, CHKDSK)%n• Hardware-Monitoring (CPU, GPU, RAM)%n• Netzwerk-Tools und Diagnose%n• System-Bereinigung%n• 29 integrierte Wartungstools%n%nEs wird empfohlen, alle anderen Anwendungen zu schließen, bevor Sie fortfahren.
+
+; Moderne, übersichtliche Willkommensnachricht
+german.WelcomeLabel2=Willkommen zur Installation von%n%n{#MyAppName} v{#MyAppVersion}%n%n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%n%nProfessionelles Windows System-Wartungstool%nmit moderner GUI und umfangreichen Funktionen:%n%n  ✓  System-Reparatur & Diagnose%n  ✓  Echtzeit Hardware-Monitoring%n  ✓  Netzwerk-Tools & Optimierung%n  ✓  Intelligente Bereinigung%n  ✓  29+ integrierte Wartungstools%n%n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%n%nBitte schließen Sie alle laufenden Anwendungen%nund klicken Sie auf "Weiter" zum Fortfahren.
 
 [Run]
 ; ===================================================================

@@ -1,252 +1,109 @@
-# FallbackSensors.psm1
-# Alternative Sensor-Auslese ohne Ring-0-Treiber
-# Autor: Bockis
-# Version: 1.0
+# Test-FallbackSensors.ps1
+# Testet das Fallback-Sensor-System ohne Ring-0-Treiber
 
-# Importiere Core-Module
-Import-Module "$PSScriptRoot\..\Core\LogManager.psm1" -Force -ErrorAction SilentlyContinue
+Write-Host "`n========================================" -ForegroundColor Cyan
+Write-Host " Fallback-Sensoren Test" -ForegroundColor Cyan
+Write-Host "========================================`n" -ForegroundColor Cyan
 
-<#
-.SYNOPSIS
-Liest CPU-Last via Windows Performance Counters (kein Ring-0 nötig)
+Import-Module ".\Modules\Monitor\FallbackSensors.psm1" -Force
 
-.DESCRIPTION
-Nutzt die Windows Performance Counter API für CPU-Load.
-Funktioniert IMMER, auch ohne Admin-Rechte oder Ring-0-Treiber.
-Unterstützt deutsche und englische Counter-Namen.
-#>
-function Get-CpuLoadFallback {
-    try {
-        # Versuche erst deutsche Counter-Namen
-        $cpuCounter = Get-Counter '\Prozessor(_Total)\Prozessorzeit (%)' -ErrorAction SilentlyContinue
-        
-        if (-not $cpuCounter) {
-            # Falls deutsch nicht funktioniert, versuche englisch
-            $cpuCounter = Get-Counter '\Processor(_Total)\% Processor Time' -ErrorAction Stop
-        }
-        
-        return [math]::Round($cpuCounter.CounterSamples[0].CookedValue, 1)
-    }
-    catch {
-        Write-Verbose "CPU-Load via Performance Counter fehlgeschlagen: $_"
-        return $null
-    }
+# Test 1: CPU-Load
+Write-Host "[1] CPU-Load (Performance Counter):" -ForegroundColor Yellow
+$cpuLoad = Get-CpuLoadFallback
+if ($cpuLoad) {
+    Write-Host "    CPU-Auslastung: $cpuLoad%" -ForegroundColor Green
+}
+else {
+    Write-Host "    FEHLER: Nicht verfuegbar" -ForegroundColor Red
 }
 
-<#
-.SYNOPSIS
-Liest System-Temperaturen via WMI (ACPI Thermal Zones)
-
-.DESCRIPTION
-Versucht MSAcpi_ThermalZoneTemperature auszulesen.
-HINWEIS: Zeigt oft nur Mainboard-Sensoren, NICHT CPU-Kern-Temperaturen!
-Werte sind in Zehntel-Kelvin (z.B. 3020 = 302.0K = 28.85°C)
-
-.RETURNS
-Hashtable mit Thermal Zone Namen und Temperaturen in °C
-#>
-function Get-ThermalZonesFallback {
-    try {
-        $thermalZones = Get-WmiObject -Namespace "root\wmi" -Class MSAcpi_ThermalZoneTemperature -ErrorAction Stop
-        
-        $result = @{}
-        $index = 1
-        
-        foreach ($zone in $thermalZones) {
-            if ($zone.CurrentTemperature -gt 0) {
-                # Konvertierung: Zehntel-Kelvin -> Celsius
-                $tempKelvin = $zone.CurrentTemperature / 10
-                $tempCelsius = $tempKelvin - 273.15
-                
-                $zoneName = if ($zone.InstanceName) { 
-                    $zone.InstanceName 
-                } else { 
-                    "Thermal Zone $index" 
-                }
-                
-                $result[$zoneName] = [math]::Round($tempCelsius, 1)
-                $index++
-            }
-        }
-        
-        if ($result.Count -eq 0) {
-            Write-Verbose "Keine WMI Thermal Zones gefunden (normal bei vielen Systemen)"
-            return $null
-        }
-        
-        return $result
-    }
-    catch {
-        Write-Verbose "WMI Thermal Zones nicht verfügbar: $_"
-        return $null
-    }
+# Test 2: Memory Usage
+Write-Host "`n[2] Memory Usage (CIM):" -ForegroundColor Yellow
+$memory = Get-MemoryUsageFallback
+if ($memory) {
+    Write-Host "    Total: $($memory.TotalGB) GB" -ForegroundColor Gray
+    Write-Host "    Used: $($memory.UsedGB) GB ($($memory.UsedPercent)%)" -ForegroundColor Green
+    Write-Host "    Free: $($memory.FreeGB) GB" -ForegroundColor Gray
+}
+else {
+    Write-Host "    FEHLER: Nicht verfuegbar" -ForegroundColor Red
 }
 
-<#
-.SYNOPSIS
-Liest Speicher-Auslastung via WMI/CIM
-
-.DESCRIPTION
-Nutzt CIM_OperatingSystem für RAM-Statistiken.
-Funktioniert ohne Ring-0-Treiber.
-#>
-function Get-MemoryUsageFallback {
-    try {
-        $os = Get-CimInstance -ClassName CIM_OperatingSystem -ErrorAction Stop
-        
-        $totalGB = [math]::Round($os.TotalVisibleMemorySize / 1MB, 2)
-        $freeGB = [math]::Round($os.FreePhysicalMemory / 1MB, 2)
-        $usedGB = $totalGB - $freeGB
-        $usedPercent = [math]::Round(($usedGB / $totalGB) * 100, 1)
-        
-        return @{
-            TotalGB = $totalGB
-            UsedGB = $usedGB
-            FreeGB = $freeGB
-            UsedPercent = $usedPercent
-        }
-    }
-    catch {
-        Write-Warning "Memory-Auslese via CIM fehlgeschlagen: $_"
-        return $null
-    }
+# Test 3: Disk Activity
+Write-Host "`n[3] Disk Activity (Performance Counter):" -ForegroundColor Yellow
+$disk = Get-DiskActivityFallback
+if ($disk) {
+    Write-Host "    Reads/sec: $($disk.ReadsPerSec)" -ForegroundColor Green
+    Write-Host "    Writes/sec: $($disk.WritesPerSec)" -ForegroundColor Green
+}
+else {
+    Write-Host "    FEHLER: Nicht verfuegbar" -ForegroundColor Red
 }
 
-<#
-.SYNOPSIS
-Liest Disk I/O via Performance Counters
-
-.DESCRIPTION
-Nutzt PhysicalDisk Performance Counters für Read/Write-Statistiken.
-Funktioniert ohne Ring-0-Treiber.
-Unterstützt deutsche und englische Counter-Namen.
-#>
-function Get-DiskActivityFallback {
-    try {
-        # Versuche erst deutsche Counter-Namen
-        $diskReads = Get-Counter '\Physikalischer Datenträger(_Total)\Lesevorgänge/Sek.' -ErrorAction SilentlyContinue
-        $diskWrites = Get-Counter '\Physikalischer Datenträger(_Total)\Schreibvorgänge/Sek.' -ErrorAction SilentlyContinue
-        
-        if (-not $diskReads -or -not $diskWrites) {
-            # Falls deutsch nicht funktioniert, versuche englisch
-            $diskReads = Get-Counter '\PhysicalDisk(_Total)\Disk Reads/sec' -ErrorAction Stop
-            $diskWrites = Get-Counter '\PhysicalDisk(_Total)\Disk Writes/sec' -ErrorAction Stop
-        }
-        
-        return @{
-            ReadsPerSec = [math]::Round($diskReads.CounterSamples[0].CookedValue, 2)
-            WritesPerSec = [math]::Round($diskWrites.CounterSamples[0].CookedValue, 2)
-        }
-    }
-    catch {
-        Write-Verbose "Disk Activity via Performance Counter fehlgeschlagen: $_"
-        return $null
+# Test 4: Thermal Zones (WMI)
+Write-Host "`n[4] Thermal Zones (WMI ACPI):" -ForegroundColor Yellow
+$thermalZones = Get-ThermalZonesFallback
+if ($thermalZones -and $thermalZones.Count -gt 0) {
+    Write-Host "    $($thermalZones.Count) Zone(n) gefunden:" -ForegroundColor Green
+    foreach ($zone in $thermalZones.GetEnumerator()) {
+        Write-Host "    - $($zone.Key): $($zone.Value) C" -ForegroundColor White
     }
 }
-
-<#
-.SYNOPSIS
-Prüft ob HWiNFO läuft und Shared Memory verfügbar ist
-
-.DESCRIPTION
-HWiNFO64 bietet ein Shared Memory Interface für Sensor-Daten.
-Wenn der User HWiNFO laufen hat, können wir dessen Sensoren lesen.
-Mehr Info: https://www.hwinfo.com/forum/threads/shared-memory.4092/
-
-.RETURNS
-$true wenn HWiNFO Shared Memory verfügbar, sonst $false
-#>
-function Test-HWiNFOAvailable {
-    try {
-        # Prüfe ob HWiNFO-Prozess läuft
-        $hwinfo = Get-Process -Name "HWiNFO64","HWiNFO32","HWiNFO" -ErrorAction SilentlyContinue
-        
-        if ($hwinfo) {
-            Write-Host "[INFO] HWiNFO läuft - Shared Memory könnte verfügbar sein" -ForegroundColor Cyan
-            return $true
-        }
-        
-        return $false
-    }
-    catch {
-        return $false
-    }
+else {
+    Write-Host "    Keine Thermal Zones verfuegbar (normal bei vielen Systemen)" -ForegroundColor Gray
 }
 
-<#
-.SYNOPSIS
-Gibt einen Überblick über verfügbare Fallback-Sensoren
+# HWiNFO wurde entfernt - nicht mehr unterstützt
 
-.DESCRIPTION
-Testet alle Fallback-Methoden und gibt eine Zusammenfassung zurück.
-#>
-function Get-FallbackSensorsInfo {
-    $info = @{
-        CpuLoad = $false
-        ThermalZones = $false
-        MemoryUsage = $false
-        DiskActivity = $false
-        HWiNFO = $false
-    }
+# Zusammenfassung
+Write-Host "`n========================================" -ForegroundColor Cyan
+Write-Host " Zusammenfassung" -ForegroundColor Cyan
+Write-Host "========================================`n" -ForegroundColor Cyan
+
+$info = Get-FallbackSensorsInfo
+
+$available = 0
+$total = $info.Count
+
+if ($info.CpuLoad) { $available++ }
+if ($info.MemoryUsage) { $available++ }
+if ($info.DiskActivity) { $available++ }
+if ($info.ThermalZones) { $available++ }
+
+Write-Host "Verfuegbare Sensoren: $available von $total" -ForegroundColor $(if ($available -eq $total) { 'Green' } else { 'Yellow' })
+Write-Host ""
+Write-Host "Details:" -ForegroundColor Gray
+Write-Host "  CPU-Load: " -NoNewline; Write-Host $(if ($info.CpuLoad) { "OK" } else { "FEHLT" }) -ForegroundColor $(if ($info.CpuLoad) { 'Green' } else { 'Red' })
+Write-Host "  Memory: " -NoNewline; Write-Host $(if ($info.MemoryUsage) { "OK" } else { "FEHLT" }) -ForegroundColor $(if ($info.MemoryUsage) { 'Green' } else { 'Red' })
+Write-Host "  Disk I/O: " -NoNewline; Write-Host $(if ($info.DiskActivity) { "OK" } else { "FEHLT" }) -ForegroundColor $(if ($info.DiskActivity) { 'Green' } else { 'Red' })
+Write-Host "  Thermal Zones: " -NoNewline; Write-Host $(if ($info.ThermalZones) { "OK" } else { "N/A (normal)" }) -ForegroundColor $(if ($info.ThermalZones) { 'Green' } else { 'Gray' })
+# HWiNFO wurde entfernt
+
+Write-Host "`n========================================`n" -ForegroundColor Cyan
+
+# Live-Update-Test (5 Sekunden)
+Write-Host "Live-Update-Test (5 Sekunden)..." -ForegroundColor Yellow
+Write-Host "Druecke Strg+C zum Abbrechen`n" -ForegroundColor Gray
+
+for ($i = 1; $i -le 5; $i++) {
+    $update = Get-FallbackMonitorUpdate
     
-    # Test CPU-Load
-    $cpuLoad = Get-CpuLoadFallback
-    $info.CpuLoad = ($null -ne $cpuLoad)
+    Write-Host "[$($update.Timestamp)] " -NoNewline -ForegroundColor Cyan
+    Write-Host "CPU: $($update.CpuLoad)% | " -NoNewline -ForegroundColor White
+    Write-Host "RAM: $($update.Memory.UsedPercent)% | " -NoNewline -ForegroundColor White
+    Write-Host "Disk R: $($update.DiskActivity.ReadsPerSec)/s W: $($update.DiskActivity.WritesPerSec)/s" -ForegroundColor White
     
-    # Test Thermal Zones
-    $thermalZones = Get-ThermalZonesFallback
-    $info.ThermalZones = ($null -ne $thermalZones -and $thermalZones.Count -gt 0)
-    
-    # Test Memory
-    $memory = Get-MemoryUsageFallback
-    $info.MemoryUsage = ($null -ne $memory)
-    
-    # Test Disk
-    $disk = Get-DiskActivityFallback
-    $info.DiskActivity = ($null -ne $disk)
-    
-    # Test HWiNFO
-    $info.HWiNFO = Test-HWiNFOAvailable
-    
-    return $info
+    if ($i -lt 5) { Start-Sleep -Seconds 1 }
 }
 
-<#
-.SYNOPSIS
-Erstellt ein Monitor-Update mit Fallback-Sensoren
-
-.DESCRIPTION
-Sammelt alle verfügbaren Fallback-Sensoren und gibt sie formatiert zurück.
-Wird als Alternative zu LibreHardwareMonitor verwendet wenn Ring-0 nicht verfügbar.
-#>
-function Get-FallbackMonitorUpdate {
-    $update = @{
-        Timestamp = Get-Date -Format "HH:mm:ss"
-        CpuLoad = Get-CpuLoadFallback
-        Memory = Get-MemoryUsageFallback
-        DiskActivity = Get-DiskActivityFallback
-        ThermalZones = Get-ThermalZonesFallback
-    }
-    
-    return $update
-}
-
-# Exportiere Funktionen
-Export-ModuleMember -Function @(
-    'Get-CpuLoadFallback',
-    'Get-ThermalZonesFallback',
-    'Get-MemoryUsageFallback',
-    'Get-DiskActivityFallback',
-    'Test-HWiNFOAvailable',
-    'Get-FallbackSensorsInfo',
-    'Get-FallbackMonitorUpdate'
-)
+Write-Host "`nTest abgeschlossen!" -ForegroundColor Green
+Write-Host ""
 
 # SIG # Begin signature block
 # MIIcSgYJKoZIhvcNAQcCoIIcOzCCHDcCAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCBOrd3J8cJ5vEan
-# F5UDfngRqfKoeLFPoe0BJXRLtAkcKKCCFnowggM8MIICJKADAgECAhBJfyGrXBJT
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCAkbZWMXEwCjSDx
+# ci/hqvZA6hwK5zfB/OPM7QY7unSIraCCFnowggM8MIICJKADAgECAhBJfyGrXBJT
 # oUbCYkBRRxacMA0GCSqGSIb3DQEBCwUAMDYxCzAJBgNVBAYTAkRFMQ4wDAYDVQQK
 # DAVCb2NraTEXMBUGA1UEAwwOQm9ja2kgU29mdHdhcmUwHhcNMjYwMTIwMTc0NjIy
 # WhcNMzEwMTIwMTc1NjIyWjA2MQswCQYDVQQGEwJERTEOMAwGA1UECgwFQm9ja2kx
@@ -370,28 +227,28 @@ Export-ModuleMember -Function @(
 # MQ4wDAYDVQQKDAVCb2NraTEXMBUGA1UEAwwOQm9ja2kgU29mdHdhcmUCEEl/Iatc
 # ElOhRsJiQFFHFpwwDQYJYIZIAWUDBAIBBQCggYQwGAYKKwYBBAGCNwIBDDEKMAig
 # AoAAoQKAADAZBgkqhkiG9w0BCQMxDAYKKwYBBAGCNwIBBDAcBgorBgEEAYI3AgEL
-# MQ4wDAYKKwYBBAGCNwIBFTAvBgkqhkiG9w0BCQQxIgQgjxdvuAV5jlFK56w6j0oN
-# RUIydScdqjr1CTBKKiihemcwDQYJKoZIhvcNAQEBBQAEggEAgJgwNCWqXt5Yec3I
-# il6yllHHyZkzhyGwd2yGjEkpJXmdcpNDS+I8hMVFNzsaRs00StmAIbj0jOS8352x
-# TE4fGX/I537P4HltDD+AXdsWVXifZ2LUCFaVR3xjRAgEqLoApk2yMB+/QBUsKXYM
-# Xqk2Lgo+UTGO8DaGZV2cBXoZj9I3Gl3qUDUnLZoLJbWmPPreV01GyK7wvp0hSrxG
-# W3K4h6MUdCfXcBooYbv9YJQLjIb3XNoHRFWp+egobQvcyhDxf6wAo5/7a0snp833
-# udSsMkSq3e4j3lADOsImjPAv4GzKldFPrSLgWKfZyofBqgMDph75WB+UvVbA1lTB
-# EvyqxaGCAyYwggMiBgkqhkiG9w0BCQYxggMTMIIDDwIBATB9MGkxCzAJBgNVBAYT
+# MQ4wDAYKKwYBBAGCNwIBFTAvBgkqhkiG9w0BCQQxIgQgtOY1fB8M7LgTo6HcY5Wy
+# 2S4txuYMgiS+GzjMLx0dPTMwDQYJKoZIhvcNAQEBBQAEggEAGWWZsnAMS/lsudI2
+# x1sIcabmYQ2SdJ1pLJMKvtG/KTjX/BlodhPyAJCJc7tpTC8SnPXwAM/GxK0fCLJC
+# 2OMahhhsy8d6gWTnracvuJ8+RDn1JXLj32KNN4UnBX/i/YjNYz9J5eiw/INojsRS
+# lWYRiGxuavlUnVrF42ey+ekrwHcAQn6PKo4sE2u88VQTqU6jxEY+aReS4km9D8dX
+# g3imnNwq+7hvqaQamkXzZdsLMeUzetddlVxjbnEHj4TGBmcYiKp38jbKFFhoCLJM
+# otfNS4JFgT0ney+Z3GUB/azCqv1cfRnr/JlLoDKHtR1bvDn0669JFBxHg7FWhPzL
+# uZvdGKGCAyYwggMiBgkqhkiG9w0BCQYxggMTMIIDDwIBATB9MGkxCzAJBgNVBAYT
 # AlVTMRcwFQYDVQQKEw5EaWdpQ2VydCwgSW5jLjFBMD8GA1UEAxM4RGlnaUNlcnQg
 # VHJ1c3RlZCBHNCBUaW1lU3RhbXBpbmcgUlNBNDA5NiBTSEEyNTYgMjAyNSBDQTEC
 # EAqA7xhLjfEFgtHEdqeVdGgwDQYJYIZIAWUDBAIBBQCgaTAYBgkqhkiG9w0BCQMx
-# CwYJKoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAxMjAxODAyNTRaMC8GCSqG
-# SIb3DQEJBDEiBCAQlwhAYWK3E8RWfHCAWa+lS6vbXJwMYuiKDTBdpQmvUTANBgkq
-# hkiG9w0BAQEFAASCAgB+nZRsXkYPeAUP3nqID9IDOK5deq/yQ+bROSx0x1QAkVFj
-# cc7bPN0bL8LnPfPUwqQQGgtI9QmqQhFghClWI0QvaDbs+ZmPhiRXLpIbEFYKMzep
-# MZ8g5tGrWgTGfZWI+1Xkk5zHMTSNdzwe7F8G+XjjogTpH165bwsxyQxalrY3N+Hf
-# TbIERrvAcohARYOLH8A12W8M+p78XmySV1tAeFDhE0e2sE9U7FWk8vO1doh6vbZb
-# wzL05XBMQCrk7xhO/K37b2uwENs6J0KRBi76u00LFQx1h9ocQtGGUUHTCAMiSl+Z
-# LOjF/fD0zCtaDUPsLNsNy0qDyXjnsja1DD0XL7shqO8S7F2AEkAUD6PZi9qxk1m8
-# YLA8p/Ta3xAp5j2/XL7SvMKVAInSefMcaOslrdJdDuAvlOXakT9h4RBTkB9+9scH
-# s/9/YUCI1pqchodR2nlc7752KJPjtRa8Cvhq3wlNRRv8X8YC5wxXZCF17epjY0pN
-# xQkAR9r3mrZuXDz3sNxY7BWDSowabQX4SZOfivwPTdvGgm8S5l+uyDbWD5QhHiq+
-# kRGnjB9CLAv2Tv1IcgZXnQOPex4CQ/uC+FWVliknCIN46bqGH082FOFAJMws1jzo
-# TiOLfSJiDDlZbL/qOSZcOBZYRVWGUP+1rYxKZCZPnZRQ1bnh8CjErRYIEWezXQ==
+# CwYJKoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAxMjAxODAyNTlaMC8GCSqG
+# SIb3DQEJBDEiBCB6QSjN4dsCqRVn+l74m9Ivr1jcFfktXp4d8Mf+8IDOajANBgkq
+# hkiG9w0BAQEFAASCAgBRzV4X1nNoX1bRQNAdabHX0vsQzkJFL1MZ7OZElmh/guWn
+# e1jnzTPCMGLnBhijc2o/nbx1wPhnsKWt+jdY2go95LKf2dYDj0quzlV9Gg8aGlVM
+# HLRvA/D+a6FtSJ2y2YPImQfNH08DtFYecWCI3LRkyZAGerH7QTSE10tk30Q07m1X
+# pUeDf693tv/R3nqSpALtr+LJPPYZuVBzjafmwFDAQ5/foHt0c80BrifgyIdDhhyF
+# VuzrKO9Npk8Dzf4OjIs0yBagK6qzbnih2Ehgrj8XuUsmfTSu3NbKdvYjIPNYINXO
+# vdhdPFd3vfD5nfqnFrh9E7W7/DAtTVdAE70WGjjLC9LhxAobVcuHjpUZ8qAqCrIf
+# hJPxU0bFoUUYUo1gb9UjBOmkD6UNFkAeM35nu7w0YqTZYFB0SBGdlnGvMnlJ4gxB
+# 0eR15FeWVM8bQ9uBTJ5kWu3CJORiALrXxqBRFDJGK9l1KGUKaQQcu9uQFtu9ziTl
+# XEQv2wsAZean+Dk4LJUSN5f/fsfQRJv00GsePvHS6jW+j4Y1BPwsQ+GC90k/DHam
+# YOdobwlhGSNqUbS0j9SBKvRekSYBgX2yBKb/a4YyHXpX4m4BGDqKR+Xm00kbVONk
+# TmYw5Wy/m76CdKe9DMzWUsCl6vrKPgEjZu7MYcqV/81E3jmV2r7iD6mA1AGS2w==
 # SIG # End signature block

@@ -7,8 +7,13 @@ config.json
 *.user
 *.suo
 
-# Logs
+# Logs and Runtime Data
 Logs/*.log
+Data/Logs/*.log
+Data/Temp/*.log
+Data/Temp/*.json
+Data/Database/*.db
+Data/ToolDownloads/
 
 # Temporary files
 *.tmp

@@ -18,7 +18,7 @@ $script:toolLibrary['system'] = @(
         Name        = '7-Zip'
         Description = 'Komprimierungsprogramm für Dateien und Ordner'
         Version     = '23.01'
-        DownloadUrl = 'https://www.7-zip.org/download.html'
+        DownloadUrl = 'https://www.7-zip.org/a/7z2501-x64.exe'
         Category    = 'System-Tools'
         Tags        = @('Compression', 'Archive', 'Utility')
         Winget      = '7zip.7zip'
@@ -27,7 +27,7 @@ $script:toolLibrary['system'] = @(
         Name        = 'CCleaner'
         Description = 'Systembereinigung und Optimierung'
         Version     = '6.10'
-        DownloadUrl = 'https://www.ccleaner.com/download'
+        DownloadUrl = 'https://bits.avcdn.net/productfamily_CCLEANER/insttype_SLIM/platform_WIN_PIR/installertype_ONLINE/build_RELEASE'
         Category    = 'System-Tools'
         Tags        = @('Cleanup', 'Optimization', 'System')
         Winget      = 'Piriform.CCleaner'
@@ -36,7 +36,7 @@ $script:toolLibrary['system'] = @(
         Name        = 'CPU-Z'
         Description = 'Detaillierte CPU- und Systeminformationen'
         Version     = '2.05'
-        DownloadUrl = 'https://www.cpuid.com/softwares/cpu-z.html'
+        DownloadUrl = 'https://download.cpuid.com/cpu-z/cpu-z_2.18-en.exe'
         Category    = 'System-Tools'
         Tags        = @('Hardware', 'Monitoring', 'CPU')
         Winget      = 'CPUID.CPU-Z'
@@ -45,7 +45,7 @@ $script:toolLibrary['system'] = @(
         Name        = 'GPU-Z'
         Description = 'Grafikkarten-Informationen'
         Version     = '2.45'
-        DownloadUrl = 'https://www.techpowerup.com/gpuz/'
+        DownloadUrl = 'https://www.techpowerup.com/download/techpowerup-gpu-z/GPU-Z.2.68.0.exe'
         Category    = 'System-Tools'
         Tags        = @('Hardware', 'Monitoring', 'GPU')
         Winget      = 'TechPowerUp.GPU-Z'
@@ -54,7 +54,7 @@ $script:toolLibrary['system'] = @(
         Name        = 'OCCT'
         Description = 'Umfassendes System-Stabilitäts- und Stress-Test-Tool für CPU, GPU und Netzteil'
         Version     = 'Aktuell'
-        DownloadUrl = 'https://www.ocbase.com/'
+        DownloadUrl = 'https://dl.ocbase.com/per/stable/OCCT.exe'
         Category    = 'System-Tools'
         Tags        = @('Stress Test', 'Stability', 'Benchmark', 'Hardware')
         Winget      = 'OCBase.OCCT.Personal'
@@ -63,7 +63,7 @@ $script:toolLibrary['system'] = @(
         Name        = 'Intel Driver & Support Assistant'
         Description = 'Automatische Treiber-Updates und Support für Intel-Hardware'
         Version     = 'Aktuell'
-        DownloadUrl = 'https://www.intel.com/content/www/us/en/support/detect.html'
+        DownloadUrl = 'https://dsadata.intel.com/installer/Intel-Driver-and-Support-Assistant-Installer.exe'
         Category    = 'System-Tools'
         Tags        = @('Drivers', 'Intel', 'Update', 'Hardware')
         Winget      = 'Intel.IntelDriverAndSupportAssistant'
@@ -71,11 +71,20 @@ $script:toolLibrary['system'] = @(
     @{
         Name        = 'LibreHardwareMonitor'
         Description = 'Open-Source Hardware-Monitoring-Tool für Temperaturen, Lüfter und Sensoren'
-        Version     = 'Aktuell'
-        DownloadUrl = 'https://github.com/LibreHardwareMonitor/LibreHardwareMonitor'
+        Version     = '0.9.5'
+        DownloadUrl = 'https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases/download/v0.9.5/LibreHardwareMonitor.zip'
         Category    = 'System-Tools'
         Tags        = @('Hardware', 'Monitoring', 'Temperature', 'Sensors', 'Open-Source')
         Winget      = 'LibreHardwareMonitor.LibreHardwareMonitor'
+    },
+    @{
+        Name        = 'PawnIO'
+        Description = 'Ring0-Treiber für Hardware-Monitoring (benötigt für LibreHardwareMonitor)'
+        Version     = '2.0.1'
+        DownloadUrl = 'https://github.com/namazso/PawnIO.Setup/releases/download/2.0.1/PawnIO_setup.exe'
+        Category    = 'System-Tools'
+        Tags        = @('Driver', 'Ring0', 'Hardware', 'Monitoring', 'PawnIO')
+        Winget      = 'namazso.PawnIO'
     },
     @{
         Name        = 'UniGetUI'
@@ -143,6 +152,24 @@ $script:toolLibrary['applications'] = @(
         Category    = 'Anwendungen'
         Tags        = @('Office', 'Productivity', 'Documents', 'Open-Source')
         Winget      = 'Apache.OpenOffice'
+    },
+    @{
+        Name        = 'Tutanota'
+        Description = 'Sicherer E-Mail-Client mit End-to-End-Verschlüsselung und privatem Kalender'
+        Version     = 'Aktuell'
+        DownloadUrl = 'https://github.com/tutao/tutanota/releases'
+        Category    = 'Anwendungen'
+        Tags        = @('Email', 'Communication', 'Privacy', 'Security', 'Encryption')
+        Winget      = 'Tutanota.Tutanota'
+    },
+    @{
+        Name        = 'Nextcloud'
+        Description = 'Open-Source Cloud-Speicher und Collaboration-Plattform für Dateisynchronisation'
+        Version     = 'Aktuell'
+        DownloadUrl = 'https://nextcloud.com/install/#install-clients'
+        Category    = 'Anwendungen'
+        Tags        = @('Cloud', 'Storage', 'Sync', 'Collaboration', 'Open-Source')
+        Winget      = 'Nextcloud.NextcloudDesktop'
     }
 )
 
@@ -387,7 +414,701 @@ function Get-ToolDownload {
     }
 }
 
+# Funktion für benutzerdefinierten Dialog mit klaren Button-Bezeichnungen
+function Show-ToolAcquisitionDialog {
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]$ToolName
+    )
+    
+    # Erstelle WPF-Fenster
+    $dialog = New-Object System.Windows.Window
+    $dialog.Title = "Download/Installation - $ToolName"
+    $dialog.Width = 500
+    $dialog.Height = 220
+    $dialog.WindowStartupLocation = "CenterScreen"
+    $dialog.ResizeMode = "NoResize"
+    $dialog.WindowStyle = "SingleBorderWindow"
+    
+    # Hauptcontainer
+    $grid = New-Object System.Windows.Controls.Grid
+    $grid.Margin = New-Object System.Windows.Thickness(20)
+    
+    # Zeilen definieren
+    $row1 = New-Object System.Windows.Controls.RowDefinition
+    $row1.Height = [System.Windows.GridLength]::Auto
+    $row2 = New-Object System.Windows.Controls.RowDefinition
+    $row2.Height = [System.Windows.GridLength]::Auto
+    $row3 = New-Object System.Windows.Controls.RowDefinition
+    $row3.Height = "*"
+    $row4 = New-Object System.Windows.Controls.RowDefinition
+    $row4.Height = [System.Windows.GridLength]::Auto
+    
+    $grid.RowDefinitions.Add($row1)
+    $grid.RowDefinitions.Add($row2)
+    $grid.RowDefinitions.Add($row3)
+    $grid.RowDefinitions.Add($row4)
+    
+    # Titel
+    $title = New-Object System.Windows.Controls.TextBlock
+    $title.Text = "Wie möchten Sie $ToolName erhalten?"
+    $title.FontSize = 16
+    $title.FontWeight = "Bold"
+    $title.Margin = New-Object System.Windows.Thickness(0, 0, 0, 15)
+    [System.Windows.Controls.Grid]::SetRow($title, 0)
+    $grid.Children.Add($title)
+    
+    # Option 1: Installieren
+    $installText = New-Object System.Windows.Controls.TextBlock
+    $installText.Text = "• Direkt via Winget installieren (empfohlen)"
+    $installText.FontSize = 12
+    $installText.Margin = New-Object System.Windows.Thickness(10, 0, 0, 5)
+    [System.Windows.Controls.Grid]::SetRow($installText, 1)
+    $grid.Children.Add($installText)
+    
+    # Option 2: Download
+    $downloadText = New-Object System.Windows.Controls.TextBlock
+    $downloadText.Text = "• Nur herunterladen (ins lokale Verzeichnis)"
+    $downloadText.FontSize = 12
+    $downloadText.Margin = New-Object System.Windows.Thickness(10, 0, 0, 0)
+    [System.Windows.Controls.Grid]::SetRow($downloadText, 2)
+    $grid.Children.Add($downloadText)
+    
+    # Button-Panel
+    $buttonPanel = New-Object System.Windows.Controls.StackPanel
+    $buttonPanel.Orientation = "Horizontal"
+    $buttonPanel.HorizontalAlignment = "Right"
+    $buttonPanel.Margin = New-Object System.Windows.Thickness(0, 20, 0, 0)
+    [System.Windows.Controls.Grid]::SetRow($buttonPanel, 3)
+    
+    # Button: Installieren
+    $installButton = New-Object System.Windows.Controls.Button
+    $installButton.Content = "Installieren"
+    $installButton.Width = 100
+    $installButton.Height = 30
+    $installButton.Margin = New-Object System.Windows.Thickness(0, 0, 10, 0)
+    $installButton.Background = [System.Windows.Media.Brushes]::LightGreen
+    $installButton.Add_Click({
+        $dialog.Tag = "Install"
+        $dialog.Close()
+    })
+    $buttonPanel.Children.Add($installButton)
+    
+    # Button: Download
+    $downloadButton = New-Object System.Windows.Controls.Button
+    $downloadButton.Content = "Download"
+    $downloadButton.Width = 100
+    $downloadButton.Height = 30
+    $downloadButton.Margin = New-Object System.Windows.Thickness(0, 0, 10, 0)
+    $downloadButton.Background = [System.Windows.Media.Brushes]::LightSkyBlue
+    $downloadButton.Add_Click({
+        $dialog.Tag = "Download"
+        $dialog.Close()
+    })
+    $buttonPanel.Children.Add($downloadButton)
+    
+    # Button: Abbrechen
+    $cancelButton = New-Object System.Windows.Controls.Button
+    $cancelButton.Content = "Abbrechen"
+    $cancelButton.Width = 100
+    $cancelButton.Height = 30
+    $cancelButton.Add_Click({
+        $dialog.Tag = "Cancel"
+        $dialog.Close()
+    })
+    $buttonPanel.Children.Add($cancelButton)
+    
+    $grid.Children.Add($buttonPanel)
+    $dialog.Content = $grid
+    
+    # Zeige Dialog modal
+    $dialog.ShowDialog() | Out-Null
+    
+    return $dialog.Tag
+}
+
 # Funktion zum Herunterladen und Installieren von Tools
+# Funktion zum Prüfen, ob ein Tool bereits heruntergeladen wurde
+function Test-ToolDownloaded {
+    param (
+        [Parameter(Mandatory = $true)]
+        [object]$Tool,
+        
+        [Parameter(Mandatory = $false)]
+        [string]$DownloadPath = (Join-Path $PSScriptRoot "..\Data\ToolDownloads")
+    )
+    
+    if (-not (Test-Path $DownloadPath)) {
+        return $false
+    }
+    
+    # Hole alle Installer-Dateien im Download-Ordner
+    $allFiles = Get-ChildItem -Path $DownloadPath -ErrorAction SilentlyContinue | 
+                Where-Object { $_.Extension -in @('.exe', '.zip', '.msi') }
+    
+    if ($allFiles.Count -eq 0) {
+        return $false
+    }
+    
+    # Erstelle verschiedene Suchmuster für flexiblere Erkennung
+    $toolName = $Tool.Name
+    $searchPatterns = @(
+        # Originaler Name ohne Sonderzeichen (normalisiert)
+        $toolName -replace '[^a-zA-Z0-9]', '_'
+        # Name ohne Sonderzeichen und Leerzeichen
+        $toolName -replace '[^a-zA-Z0-9]', ''
+        # Name mit Bindestrichen statt Leerzeichen
+        $toolName -replace '\s+', '-'
+        # Name mit Unterstrichen statt Leerzeichen
+        $toolName -replace '\s+', '_'
+        # Originaler Name
+        $toolName
+    )
+    
+    # Suche nach Dateien, die eines der Muster enthalten (case-insensitive)
+    foreach ($file in $allFiles) {
+        $fileName = $file.BaseName
+        foreach ($pattern in $searchPatterns) {
+            if ($fileName -like "*$pattern*") {
+                return $true
+            }
+        }
+        
+        # Zusätzliche Token-basierte Suche für komplexe Namen wie "7-Zip" -> "7z"
+        # Teile Tool-Name in Tokens auf (Zahlen und Wörter)
+        $tokens = [regex]::Matches($toolName, '[a-zA-Z]+|\d+') | ForEach-Object { $_.Value }
+        if ($tokens.Count -gt 1) {
+            # Erstelle kompakte Variante (z.B. "7-Zip" -> "7z")
+            $compactName = ($tokens | ForEach-Object { $_.Substring(0, [Math]::Min(1, $_.Length)) }) -join ''
+            if ($compactName.Length -ge 2 -and $fileName -like "*$compactName*") {
+                return $true
+            }
+            
+            # Erstelle zusammengesetzte Variante ohne Bindestriche (z.B. "CPU-Z" -> "cpuz")
+            $joinedName = $tokens -join ''
+            if ($joinedName.Length -ge 3 -and $fileName -like "*$joinedName*") {
+                return $true
+            }
+        }
+    }
+    
+    return $false
+}
+
+# Funktion zum Abrufen des Pfads zum lokalen Installer
+function Get-ToolLocalInstallerPath {
+    param (
+        [Parameter(Mandatory = $true)]
+        [object]$Tool,
+        
+        [Parameter(Mandatory = $false)]
+        [string]$DownloadPath = (Join-Path $PSScriptRoot "..\Data\ToolDownloads")
+    )
+    
+    if (-not (Test-Path $DownloadPath)) {
+        return $null
+    }
+    
+    # Hole alle Installer-Dateien im Download-Ordner
+    $allFiles = Get-ChildItem -Path $DownloadPath -ErrorAction SilentlyContinue | 
+                Where-Object { $_.Extension -in @('.exe', '.zip', '.msi') } |
+                Sort-Object LastWriteTime -Descending
+    
+    if ($allFiles.Count -eq 0) {
+        return $null
+    }
+    
+    # Erstelle verschiedene Suchmuster für flexiblere Erkennung
+    $toolName = $Tool.Name
+    $searchPatterns = @(
+        # Originaler Name ohne Sonderzeichen (normalisiert)
+        $toolName -replace '[^a-zA-Z0-9]', '_'
+        # Name ohne Sonderzeichen und Leerzeichen
+        $toolName -replace '[^a-zA-Z0-9]', ''
+        # Name mit Bindestrichen statt Leerzeichen
+        $toolName -replace '\s+', '-'
+        # Name mit Unterstrichen statt Leerzeichen
+        $toolName -replace '\s+', '_'
+        # Originaler Name
+        $toolName
+    )
+    
+    # Suche nach Dateien, die eines der Muster enthalten (case-insensitive)
+    # Rückgabe der neuesten passenden Datei
+    foreach ($file in $allFiles) {
+        $fileName = $file.BaseName
+        foreach ($pattern in $searchPatterns) {
+            if ($fileName -like "*$pattern*") {
+                return $file.FullName
+            }
+        }
+        
+        # Zusätzliche Token-basierte Suche für komplexe Namen wie "7-Zip" -> "7z"
+        # Teile Tool-Name in Tokens auf (Zahlen und Wörter)
+        $tokens = [regex]::Matches($toolName, '[a-zA-Z]+|\d+') | ForEach-Object { $_.Value }
+        if ($tokens.Count -gt 1) {
+            # Erstelle kompakte Variante (z.B. "7-Zip" -> "7z")
+            $compactName = ($tokens | ForEach-Object { $_.Substring(0, [Math]::Min(1, $_.Length)) }) -join ''
+            if ($compactName.Length -ge 2 -and $fileName -like "*$compactName*") {
+                return $file.FullName
+            }
+            
+            # Erstelle zusammengesetzte Variante ohne Bindestriche (z.B. "CPU-Z" -> "cpuz")
+            $joinedName = $tokens -join ''
+            if ($joinedName.Length -ge 3 -and $fileName -like "*$joinedName*") {
+                return $file.FullName
+            }
+        }
+    }
+    
+    return $null
+}
+
+# Funktion zum Herunterladen eines Tools (direkter Download)
+function Invoke-ToolDownload {
+    param (
+        [Parameter(Mandatory = $true)]
+        [object]$Tool,
+        
+        [Parameter(Mandatory = $false)]
+        [string]$DownloadPath = (Join-Path $PSScriptRoot "..\Data\ToolDownloads"),
+        
+        [Parameter(Mandatory = $false)]
+        [object]$ProgressBar = $null
+    )
+    
+    # Erstelle Download-Verzeichnis, falls es nicht existiert
+    if (-not (Test-Path $DownloadPath)) {
+        New-Item -ItemType Directory -Path $DownloadPath | Out-Null
+    }
+    
+    try {
+        # Generiere einen Basis-Dateinamen
+        $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+        $safeName = $Tool.Name -replace '[^a-zA-Z0-9]', '_'
+        
+        Write-Host "Starte Download von $($Tool.Name)..." -ForegroundColor Cyan
+        Write-Host "URL: $($Tool.DownloadUrl)" -ForegroundColor Gray
+        
+        # Debug: ProgressBar Status
+        if ($ProgressBar) {
+            Write-Host "[DEBUG] ProgressBar verfügbar: Ja" -ForegroundColor Green
+        } else {
+            Write-Host "[DEBUG] ProgressBar verfügbar: Nein (keine Fortschrittsanzeige in GUI)" -ForegroundColor Yellow
+        }
+        Write-Host "" # Leerzeile für bessere Lesbarkeit
+        
+        # Aktiviere TLS 1.2 für sichere HTTPS-Verbindungen
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        
+        # Temporärer Pfad
+        $tempFile = Join-Path $DownloadPath "temp_${safeName}_${timestamp}"
+        
+        try {
+            # Verwende WebClient für Progress-Tracking
+            $webClient = New-Object System.Net.WebClient
+            $webClient.Headers.Add('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
+            $webClient.Headers.Add('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8')
+            $webClient.Headers.Add('Accept-Language', 'de-DE,de;q=0.9,en;q=0.8')
+            
+            Write-Host "Lade Datei herunter..." -ForegroundColor Yellow
+            
+            # Variablen für Progress-Tracking
+            $script:bytesReceived = 0
+            $script:totalBytes = 0
+            $script:lastUpdate = [DateTime]::Now
+            
+            # Progress-Event mit vereinfachter Logik
+            $progressHandler = {
+                param($sender, $e)
+                $script:bytesReceived = $e.BytesReceived
+                $script:totalBytes = $e.TotalBytesToReceive
+            }
+            
+            # Registriere Event-Handler
+            $webClient.add_DownloadProgressChanged($progressHandler)
+            
+            # Starte asynchronen Download
+            $downloadTask = $webClient.DownloadFileTaskAsync($Tool.DownloadUrl, $tempFile)
+            
+            # Warte und zeige Fortschritt
+            while (-not $downloadTask.IsCompleted) {
+                [System.Windows.Forms.Application]::DoEvents()
+                
+                if ($script:totalBytes -gt 0) {
+                    $receivedMB = [Math]::Round($script:bytesReceived / 1MB, 2)
+                    $totalMB = [Math]::Round($script:totalBytes / 1MB, 2)
+                    $percent = [Math]::Round(($script:bytesReceived / $script:totalBytes) * 100)
+                    
+                    # Throttle Updates (nur alle 200ms)
+                    $now = [DateTime]::Now
+                    if (($now - $script:lastUpdate).TotalMilliseconds -gt 200) {
+                        $script:lastUpdate = $now
+                        
+                        # PowerShell Write-Progress
+                        Write-Progress -Activity "Download: $($Tool.Name)" -Status "Download läuft: $receivedMB MB / $totalMB MB" -PercentComplete $percent
+                        
+                        # GUI ProgressBar
+                        if ($ProgressBar) {
+                            try {
+                                $ProgressBar.Value = $percent
+                                $ProgressBar.CustomText = "Download: $receivedMB MB / $totalMB MB ($percent%)"
+                                $ProgressBar.TextColor = [System.Drawing.Color]::Cyan
+                                $ProgressBar.Refresh()
+                            } catch {
+                                # Ignoriere Fehler
+                            }
+                        }
+                        
+                        Write-Host "`rDownload: $receivedMB MB / $totalMB MB ($percent%)    " -NoNewline -ForegroundColor Cyan
+                    }
+                }
+                
+                Start-Sleep -Milliseconds 50
+            }
+            
+            # Prüfe auf Fehler
+            if ($downloadTask.IsFaulted) {
+                throw $downloadTask.Exception.InnerException
+            }
+            
+            # Cleanup
+            Write-Progress -Activity "Download: $($Tool.Name)" -Completed
+            $webClient.remove_DownloadProgressChanged($progressHandler)
+            $webClient.Dispose()
+            
+            Write-Host "`n✓ Download abgeschlossen, verarbeite Datei..." -ForegroundColor Green
+            
+            # Dateiname aus URL extrahieren
+            $finalFileName = $null
+            
+            # Versuche Dateiname aus der finalen URL zu extrahieren
+            $uri = [System.Uri]$Tool.DownloadUrl
+            $urlFileName = [System.IO.Path]::GetFileName($uri.LocalPath)
+            if ($urlFileName -and $urlFileName -match '\.(exe|msi|zip|7z|rar)$') {
+                $finalFileName = $urlFileName
+                Write-Host "Dateiname aus URL: $finalFileName" -ForegroundColor Gray
+            }
+            
+            # 4. Fallback: Verwende generierten Namen mit .exe Endung
+            if (-not $finalFileName) {
+                $finalFileName = "${safeName}_${timestamp}.exe"
+                Write-Host "Verwende generierten Dateinamen: $finalFileName" -ForegroundColor Gray
+            }
+            
+            # Stelle sicher, dass der Dateiname sicher ist
+            $finalFileName = $finalFileName -replace '[<>:"/\\|?*]', '_'
+            $finalPath = Join-Path $DownloadPath $finalFileName
+            
+            # Umbenennen der temporären Datei
+            Move-Item -Path $tempFile -Destination $finalPath -Force
+            
+            if (Test-Path $finalPath) {
+                $fileInfo = Get-Item $finalPath
+                $fileSizeMB = [Math]::Round($fileInfo.Length / 1MB, 2)
+                
+                # Prüfe ob Datei verdächtig klein ist (< 1MB könnte Fehlerseite sein)
+                if ($fileInfo.Length -lt 1MB) {
+                    # Prüfe auf HTML-Inhalt
+                    $firstBytes = [System.IO.File]::ReadAllBytes($finalPath) | Select-Object -First 512
+                    $firstText = [System.Text.Encoding]::ASCII.GetString($firstBytes)
+                    
+                    if ($firstText -match '<html|<!DOCTYPE|<head>|<body>') {
+                        Remove-Item $finalPath -Force -ErrorAction SilentlyContinue
+                        return @{
+                            Success = $false
+                            FilePath = $null
+                            Message = "Download fehlgeschlagen: Es wurde eine HTML-Seite statt der Datei heruntergeladen.`n`nDie URL führt wahrscheinlich zu einer Webseite.`n`nBitte:`n1. Besuchen Sie $($Tool.DownloadUrl) im Browser`n2. Laden Sie die Datei manuell herunter`n3. Speichern Sie sie in: $DownloadPath"
+                        }
+                    }
+                }
+                
+                Write-Host "✓ Download erfolgreich: $finalFileName ($fileSizeMB MB)" -ForegroundColor Green
+                
+                # Resette ProgressBar (Windows Forms - direkter Zugriff)
+                if ($ProgressBar) {
+                    try {
+                        $ProgressBar.Value = 0
+                        $ProgressBar.CustomText = "Bereit"
+                        $ProgressBar.TextColor = [System.Drawing.Color]::White
+                        $ProgressBar.Refresh()
+                    } catch {
+                        Write-Host "ProgressBar-Reset-Fehler: $($_.Exception.Message)" -ForegroundColor Yellow
+                    }
+                }
+                
+                return @{
+                    Success = $true
+                    FilePath = $finalPath
+                    Message = "Download erfolgreich: $finalFileName ($fileSizeMB MB)`n`nGespeichert in: $DownloadPath"
+                }
+            } else {
+                return @{
+                    Success = $false
+                    FilePath = $null
+                    Message = "Download fehlgeschlagen: Datei konnte nicht erstellt werden"
+                }
+            }
+        }
+        finally {
+            # Aufräumen: Temporäre Datei löschen falls noch vorhanden
+            if (Test-Path $tempFile) {
+                Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
+            }
+            
+            # Resette ProgressBar
+            if ($ProgressBar) {
+                try {
+                    $ProgressBar.Value = 0
+                    $ProgressBar.CustomText = "Bereit"
+                    $ProgressBar.TextColor = [System.Drawing.Color]::White
+                    $ProgressBar.Refresh()
+                } catch {}
+            }
+        }
+    }
+    catch {
+        $errorMsg = $_.Exception.Message
+        
+        # Detaillierte Fehleranalyse
+        $detailMsg = "Download fehlgeschlagen: $errorMsg`n`nURL: $($Tool.DownloadUrl)"
+        
+        if ($_.Exception.Response) {
+            $statusCode = $_.Exception.Response.StatusCode.value__
+            $statusDesc = $_.Exception.Response.StatusDescription
+            $detailMsg += "`nHTTP-Status: $statusCode - $statusDesc"
+        }
+        
+        $detailMsg += "`n`nMögliche Lösungen:`n"
+        $detailMsg += "1. Prüfen Sie Ihre Internetverbindung`n"
+        $detailMsg += "2. Verwenden Sie 'Installieren' statt 'Download' (funktioniert über Winget)`n"
+        $detailMsg += "3. Laden Sie die Datei manuell herunter und speichern Sie sie in:`n   $DownloadPath"
+        
+        return @{
+            Success = $false
+            FilePath = $null
+            Message = $detailMsg
+        }
+    }
+}
+
+# Funktion zum Installieren eines Tools von lokalem Installer
+function Expand-ZipAndFindInstaller {
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]$ZipPath
+    )
+    
+    try {
+        # Erstelle temporäres Entpack-Verzeichnis
+        $tempExtractPath = Join-Path $env:TEMP "ToolExtract_$(Get-Date -Format 'yyyyMMdd_HHmmss')"
+        New-Item -ItemType Directory -Path $tempExtractPath -Force | Out-Null
+        
+        Write-Host "Entpacke ZIP: $ZipPath..." -ForegroundColor Cyan
+        Write-Host "Ziel: $tempExtractPath" -ForegroundColor Gray
+        
+        # Entpacke ZIP
+        Expand-Archive -Path $ZipPath -DestinationPath $tempExtractPath -Force
+        
+        # Suche nach installierbaren Dateien (EXE, MSI, Setup)
+        $installerFiles = Get-ChildItem -Path $tempExtractPath -Recurse -Include *.exe, *.msi | 
+            Where-Object { -not $_.PSIsContainer } |
+            Sort-Object { 
+                # Priorisiere Setup/Install-Dateien
+                if ($_.Name -match 'setup|install') { 0 }
+                elseif ($_.Name -match '\.exe$') { 1 }
+                else { 2 }
+            }
+        
+        if ($installerFiles.Count -eq 0) {
+            return @{
+                Success = $false
+                Message = "Keine Installer-Datei (.exe/.msi) im ZIP gefunden.`n`nDas Paket scheint portable zu sein.`nBitte verwenden Sie die WinGet-Installation oder entpacken Sie manuell."
+                ExtractPath = $tempExtractPath
+            }
+        }
+        
+        # Wähle den besten Installer
+        $installerFile = $installerFiles[0]
+        
+        Write-Host "✓ Installer gefunden: $($installerFile.Name)" -ForegroundColor Green
+        
+        return @{
+            Success = $true
+            InstallerPath = $installerFile.FullName
+            ExtractPath = $tempExtractPath
+            Message = "ZIP erfolgreich entpackt. Installer gefunden: $($installerFile.Name)"
+        }
+    }
+    catch {
+        return @{
+            Success = $false
+            Message = "Fehler beim Entpacken der ZIP: $($_.Exception.Message)"
+            ExtractPath = $tempExtractPath
+        }
+    }
+}
+
+function Install-ToolFromLocal {
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]$InstallerPath,
+        
+        [Parameter(Mandatory = $false)]
+        [switch]$Silent
+    )
+    
+    # Prüfe ob Datei existiert
+    if (-not (Test-Path $InstallerPath)) {
+        return @{
+            Success = $false
+            Message = "Installer nicht gefunden: $InstallerPath"
+        }
+    }
+    
+    # Hole Datei-Informationen
+    $fileInfo = Get-Item $InstallerPath
+    $fileExtension = $fileInfo.Extension.ToLower()
+    
+    # ===== NEUE LOGIK: ZIP-Behandlung =====
+    if ($fileExtension -eq '.zip') {
+        Write-Host "ZIP-Datei erkannt - starte automatisches Entpacken..." -ForegroundColor Yellow
+        
+        $extractResult = Expand-ZipAndFindInstaller -ZipPath $InstallerPath
+        
+        if (-not $extractResult.Success) {
+            # Aufräumen bei Fehler
+            if ($extractResult.ExtractPath -and (Test-Path $extractResult.ExtractPath)) {
+                Remove-Item -Path $extractResult.ExtractPath -Recurse -Force -ErrorAction SilentlyContinue
+            }
+            return $extractResult
+        }
+        
+        # Rekursiver Aufruf mit extrahierter EXE
+        Write-Host "Starte Installation der extrahierten Datei..." -ForegroundColor Cyan
+        $installResult = Install-ToolFromLocal -InstallerPath $extractResult.InstallerPath -Silent:$Silent
+        
+        # Aufräumen nach Installation
+        Write-Host "Räume temporäre Dateien auf..." -ForegroundColor Gray
+        if ($extractResult.ExtractPath -and (Test-Path $extractResult.ExtractPath)) {
+            Start-Sleep -Seconds 2  # Kurze Pause damit Installer Dateien freigeben kann
+            Remove-Item -Path $extractResult.ExtractPath -Recurse -Force -ErrorAction SilentlyContinue
+        }
+        
+        return $installResult
+    }
+    
+    # Prüfe ob es eine gültige Installer-Datei ist
+    $validExtensions = @('.exe', '.msi', '.bat', '.cmd')
+    if ($fileExtension -notin $validExtensions) {
+        return @{
+            Success = $false
+            Message = "Ungültiger Dateityp: $fileExtension`n`nErwartet: .exe, .msi, .bat, .cmd oder .zip`n`nDie heruntergeladene Datei scheint kein Installer zu sein.`nBitte überprüfen Sie die Download-URL."
+        }
+    }
+    
+    # Prüfe Dateigröße (zu klein = wahrscheinlich Fehlerdatei)
+    if ($fileInfo.Length -lt 1KB) {
+        return @{
+            Success = $false
+            Message = "Die Datei ist verdächtig klein ($($fileInfo.Length) Bytes).`n`nWahrscheinlich wurde eine Fehlerseite statt der echten Datei heruntergeladen.`n`nBitte löschen Sie die Datei und versuchen Sie den Download erneut."
+        }
+    }
+    
+    # Prüfe ob Datei Text/HTML enthält (falsche Download-URL)
+    try {
+        $firstBytes = [System.IO.File]::ReadAllBytes($InstallerPath) | Select-Object -First 512
+        $firstText = [System.Text.Encoding]::ASCII.GetString($firstBytes)
+        
+        if ($firstText -match '<html|<!DOCTYPE|<head>|<body>') {
+            return @{
+                Success = $false
+                Message = "Die heruntergeladene Datei ist eine HTML-Webseite, kein Installer!`n`nDie Download-URL führt zu einer Webseite statt zur Installer-Datei.`n`nBitte:`n1. Löschen Sie die Datei aus dem ToolDownloads-Ordner`n2. Besuchen Sie die Download-Webseite manuell`n3. Laden Sie die richtige Installer-Datei herunter`n4. Speichern Sie diese im ToolDownloads-Ordner"
+            }
+        }
+    }
+    catch {
+        # Fehler beim Lesen ignorieren, Datei könnte gesperrt sein
+    }
+    
+    Write-Host "Starte Installer: $($fileInfo.Name)..." -ForegroundColor Cyan
+    
+    try {
+        # Verwende Start-Process für bessere Kompatibilität
+        $startParams = @{
+            FilePath = $InstallerPath
+            Verb = 'RunAs'
+            PassThru = $true
+        }
+        
+        # Füge Argumente hinzu falls vorhanden
+        if ($Silent) {
+            # Versuche verschiedene Silent-Parameter je nach Dateityp
+            $silentArgs = switch ($fileExtension) {
+                '.msi' { '/quiet /norestart' }
+                '.exe' { '/S /silent /quiet' }
+                default { '/S' }
+            }
+            $startParams['ArgumentList'] = $silentArgs
+        }
+        
+        $process = Start-Process @startParams
+        
+        if ($Silent) {
+            Write-Host "Warte auf Installations-Abschluss..." -ForegroundColor Yellow
+            
+            # Warte auf Prozessende (max 5 Minuten)
+            if ($process.WaitForExit(300000)) {
+                $exitCode = $process.ExitCode
+                
+                if ($exitCode -eq 0) {
+                    Write-Host "✓ Installation erfolgreich abgeschlossen" -ForegroundColor Green
+                    return @{
+                        Success = $true
+                        Message = "Installation erfolgreich abgeschlossen!"
+                    }
+                } else {
+                    Write-Host "✗ Installation mit Fehlercode $exitCode beendet" -ForegroundColor Red
+                    return @{
+                        Success = $false
+                        Message = "Installation fehlgeschlagen (Exit-Code: $exitCode)`n`nMöglicherweise wurden Admin-Rechte verweigert oder die Installation wurde abgebrochen."
+                    }
+                }
+            } else {
+                Write-Host "⚠ Installation-Timeout" -ForegroundColor Yellow
+                return @{
+                    Success = $false
+                    Message = "Installation dauert zu lange (>5 Min).`n`nBitte prüfen Sie manuell, ob die Installation erfolgreich war."
+                }
+            }
+        } else {
+            # Bei manueller Installation nur Start bestätigen
+            Write-Host "✓ Installer wurde gestartet" -ForegroundColor Green
+            return @{
+                Success = $true
+                Message = "Installer wurde erfolgreich gestartet.`n`nBitte folgen Sie den Anweisungen des Installers."
+            }
+        }
+    }
+    catch {
+        $errorMsg = $_.Exception.Message
+        Write-Host "✗ Fehler beim Starten des Installers: $errorMsg" -ForegroundColor Red
+        
+        # Spezifische Fehlermeldungen
+        if ($errorMsg -match 'keine gültige Anwendung|not a valid Win32 application') {
+            return @{
+                Success = $false
+                Message = "Die Datei ist keine gültige Windows-Anwendung!`n`n$errorMsg`n`nMögliche Ursachen:`n• Die heruntergeladene Datei ist beschädigt`n• Es wurde eine Fehlerseite statt der Datei heruntergeladen`n• Die Datei ist für ein anderes Betriebssystem`n`nLösung:`n1. Löschen Sie die Datei aus dem ToolDownloads-Ordner`n2. Laden Sie die Datei erneut herunter`n3. Oder laden Sie sie manuell von der Webseite herunter"
+            }
+        }
+        
+        return @{
+            Success = $false
+            Message = "Fehler beim Starten des Installers:`n`n$errorMsg`n`nBitte versuchen Sie:`n• Die Datei manuell als Administrator auszuführen`n• Die Datei erneut herunterzuladen`n• Die Datei von der Webseite manuell zu laden"
+        }
+    }
+}
+
 function Install-ToolPackage {
     param (
         [Parameter(Mandatory = $true)]
@@ -577,20 +1298,23 @@ function Initialize-ToolEntry {
     $hasUpdate = $false
     $versionInfo = $null
     
+    # Prüfen, ob das Tool bereits heruntergeladen wurde
+    $isDownloaded = Test-ToolDownloaded -Tool $Tool
+    
     # Wenn installiert, hole Versionsinformationen
     if ($isInstalled -and $Tool.Winget) {
         $versionInfo = Get-ToolVersionInfo -Tool $Tool
         $hasUpdate = $versionInfo.HasUpdate
     }
     
-    # DEBUG: Ausgabe für Fehlersuche
-    $debugMsg = "Tool: $($Tool.Name) | Winget: $($Tool.Winget) | Installiert: $isInstalled | Update: $hasUpdate"
+    # DEBUG: Ausgabe für Fehlersuche (nur in Logs, nicht in Konsole)
+    $debugMsg = "Tool: $($Tool.Name) | Winget: $($Tool.Winget) | Installiert: $isInstalled | Download: $isDownloaded | Update: $hasUpdate"
     if ($versionInfo) {
         $debugMsg += " | Installiert: $($versionInfo.InstalledVersion) | Verfügbar: $($versionInfo.AvailableVersion)"
     }
     $debugMsg += " | Cache-Status: $(if ($null -ne $script:installedPackagesCache) { 'Geladen' } else { 'Leer' })"
     Write-Verbose $debugMsg
-    Write-Host $debugMsg -ForegroundColor Cyan
+    # Write-Host $debugMsg -ForegroundColor Cyan  # Deaktiviert - nur noch in Logs
     
     # Farben basierend auf Status
     if ($hasUpdate) {
@@ -603,6 +1327,11 @@ function Initialize-ToolEntry {
         $border.Background = [Windows.Media.Brushes]::LightGreen
         $border.BorderBrush = [Windows.Media.Brushes]::Green
     } 
+    elseif ($isDownloaded) {
+        # Heruntergeladen, nicht installiert - Hellblau/Lavender
+        $border.Background = [Windows.Media.Brushes]::Lavender
+        $border.BorderBrush = [Windows.Media.Brushes]::SteelBlue
+    }
     else {
         # Nicht installiert - Standard
         $border.Background = $script:toolResourceDictionary["ToolInstallUnselectedColor"]
@@ -625,11 +1354,15 @@ function Initialize-ToolEntry {
         }
         $tooltipText += "] " + $Tool.Description
     }
+    elseif ($isDownloaded) {
+        $tooltipText = "[HERUNTERGELADEN - BEREIT ZUR INSTALLATION] " + $Tool.Description
+    }
     $border.ToolTip = $tooltipText
 
     # Hover-Effekt mit Berücksichtigung des installierten Status und Update-Status
     $installedStatus = $isInstalled
     $updateStatus = $hasUpdate
+    $downloadedStatus = $isDownloaded
     
     # Farben direkt in lokale Variablen speichern, um auf Dictionary-Zugriffe zu verzichten
     $highlightColor = if ($script:toolResourceDictionary -and $script:toolResourceDictionary["ToolInstallHighlightedColor"]) {
@@ -651,6 +1384,9 @@ function Initialize-ToolEntry {
             }
             elseif ($installedStatus) {
                 $this.Background = [Windows.Media.Brushes]::MediumSeaGreen
+            }
+            elseif ($downloadedStatus) {
+                $this.Background = [Windows.Media.Brushes]::LightSkyBlue
             } else {
                 $this.Background = $highlightColor
             }
@@ -661,6 +1397,9 @@ function Initialize-ToolEntry {
             }
             elseif ($installedStatus) {
                 $this.Background = [Windows.Media.Brushes]::LightGreen
+            }
+            elseif ($downloadedStatus) {
+                $this.Background = [Windows.Media.Brushes]::Lavender
             } else {
                 $this.Background = $unselectedColor
             }
@@ -864,45 +1603,68 @@ function Initialize-ToolEntry {
         })
     $buttonPanel.Children.Add($infoButton)
 
-    # Download Button (Winget, falls verfügbar)
-    if ($Tool.Winget) {
-        $wingetButton = New-Object Windows.Controls.Button
-        $wingetButton.Width = if ($isListView) { 40 } else { 45 }
-        $wingetButton.Height = if ($isListView) { 28 } else { 35 }
-        $wingetButton.Margin = if ($isListView) { New-Object Windows.Thickness(1) } else { New-Object Windows.Thickness(2) }
-        $wingetIcon = New-Object Windows.Controls.TextBlock
+    # Universal Download/Install/Update Button (3-Zustands-Logik)
+    if ($Tool.Winget -or $Tool.DownloadUrl) {
+        # Prüfe ob Tool bereits heruntergeladen wurde
+        $isDownloaded = Test-ToolDownloaded -Tool $Tool
+        $localInstallerPath = if ($isDownloaded) { Get-ToolLocalInstallerPath -Tool $Tool } else { $null }
         
-        # Icon und Tooltip basierend auf Status
-        if ($hasUpdate) {
-            $wingetIcon.Text = [char]0xE117  # Update-Symbol (Sync)
-            $wingetIcon.Foreground = [Windows.Media.Brushes]::DarkOrange
-            $wingetButton.ToolTip = "Update mit Winget durchführen"
-            $wingetButton.Background = [Windows.Media.Brushes]::LightYellow
+        $actionButton = New-Object Windows.Controls.Button
+        $actionButton.Width = if ($isListView) { 40 } else { 45 }
+        $actionButton.Height = if ($isListView) { 28 } else { 35 }
+        $actionButton.Margin = if ($isListView) { New-Object Windows.Thickness(1) } else { New-Object Windows.Thickness(2) }
+        $actionIcon = New-Object Windows.Controls.TextBlock
+        
+        # Icon und Tooltip basierend auf 3-Zustands-Logik
+        if ($isInstalled -and $hasUpdate) {
+            # Zustand 3: Installiert mit verfügbarem Update → Aktualisieren
+            $actionIcon.Text = [char]0xE117  # Update-Symbol (Sync)
+            $actionIcon.Foreground = [Windows.Media.Brushes]::DarkOrange
+            $actionButton.ToolTip = "Update durchführen"
+            $actionButton.Background = [Windows.Media.Brushes]::LightYellow
         }
         elseif ($isInstalled) {
-            $wingetIcon.Text = [char]0xE117  # Sync-Symbol
-            $wingetIcon.Foreground = [Windows.Media.Brushes]::Green
-            $wingetButton.ToolTip = "Mit Winget neu installieren/reparieren"
+            # Installiert und aktuell → Neu installieren/reparieren
+            $actionIcon.Text = [char]0xE117  # Sync-Symbol
+            $actionIcon.Foreground = [Windows.Media.Brushes]::Green
+            $actionButton.ToolTip = "Neu installieren/reparieren"
+        }
+        elseif ($isDownloaded) {
+            # Zustand 2: Heruntergeladen, nicht installiert → Installieren
+            $actionIcon.Text = [char]0xE8B5  # Install-Symbol
+            $actionIcon.Foreground = [Windows.Media.Brushes]::Blue
+            $actionButton.ToolTip = "Von lokalem Download installieren"
+            $actionButton.Background = [Windows.Media.Brushes]::LightCyan
         }
         else {
-            $wingetIcon.Text = [char]0xE118  # Download-Symbol
-            $wingetIcon.Foreground = [Windows.Media.Brushes]::Green
-            $wingetButton.ToolTip = "Mit Winget installieren"
+            # Zustand 1: Nicht heruntergeladen → Herunterladen
+            $actionIcon.Text = [char]0xE896  # Download-Symbol
+            $actionIcon.Foreground = [Windows.Media.Brushes]::Green
+            $actionButton.ToolTip = "Tool herunterladen"
         }
         
-        $wingetIcon.FontFamily = New-Object Windows.Media.FontFamily("Segoe MDL2 Assets")
-        $wingetIcon.FontSize = 20
-        $wingetButton.Content = $wingetIcon
-        $wingetButton.Tag = @{ Tool = $Tool; HasUpdate = $hasUpdate; IsInstalled = $isInstalled }
+        $actionIcon.FontFamily = New-Object Windows.Media.FontFamily("Segoe MDL2 Assets")
+        $actionIcon.FontSize = 20
+        $actionButton.Content = $actionIcon
+        $actionButton.Tag = @{ 
+            Tool = $Tool
+            HasUpdate = $hasUpdate
+            IsInstalled = $isInstalled
+            IsDownloaded = $isDownloaded
+            LocalInstallerPath = $localInstallerPath
+        }
         
-        $wingetButton.Add_Click({
+        $actionButton.Add_Click({
                 $buttonData = $this.Tag
                 $toolInfo = $buttonData.Tool
                 $hasUpdate = $buttonData.HasUpdate
                 $isInstalled = $buttonData.IsInstalled
+                $isDownloaded = $buttonData.IsDownloaded
+                $localInstallerPath = $buttonData.LocalInstallerPath
                 
                 try {
-                    if ($hasUpdate) {
+                    # ===== Zustand 3: UPDATE =====
+                    if ($isInstalled -and $hasUpdate) {
                         # Prüfe ob Prozess läuft (z.B. LibreHardwareMonitor)
                         $processName = $toolInfo.Name -replace '\s+', ''  # Entferne Leerzeichen
                         $canContinue = Stop-ToolProcess -ProcessName $processName
@@ -959,8 +1721,233 @@ function Initialize-ToolEntry {
                             )
                         }
                     }
-                    elseif ($isInstalled) {
-                        # Neu installieren/reparieren
+                    # ===== Zustand 2: INSTALLIEREN (von lokal) =====
+                    elseif ($isDownloaded -and -not $isInstalled) {
+                        $result = [System.Windows.Forms.MessageBox]::Show(
+                            "Möchten Sie $($toolInfo.Name) aus dem lokalen Download installieren?`n`nDatei: $localInstallerPath",
+                            "Installation - $($toolInfo.Name)",
+                            [System.Windows.Forms.MessageBoxButtons]::YesNo,
+                            [System.Windows.Forms.MessageBoxIcon]::Question
+                        )
+                        
+                        if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
+                            [System.Windows.Forms.MessageBox]::Show(
+                                "Installation von $($toolInfo.Name) wird gestartet.`n`nBitte folgen Sie den Anweisungen des Installers.",
+                                "Installation - $($toolInfo.Name)",
+                                [System.Windows.Forms.MessageBoxButtons]::OK,
+                                [System.Windows.Forms.MessageBoxIcon]::Information
+                            )
+                            
+                            # Installiere von lokalem Installer
+                            $installResult = Install-ToolFromLocal -InstallerPath $localInstallerPath
+                            
+                            if ($installResult.Success) {
+                                [System.Windows.Forms.MessageBox]::Show(
+                                    "$($toolInfo.Name) wurde gestartet!`n`n$($installResult.Message)",
+                                    "Installation",
+                                    [System.Windows.Forms.MessageBoxButtons]::OK,
+                                    [System.Windows.Forms.MessageBoxIcon]::Information
+                                )
+                                
+                                # Cache aktualisieren
+                                if (Get-Command -Name Update-ToolInstallationStatus -ErrorAction SilentlyContinue) {
+                                    Update-ToolInstallationStatus -Tool $toolInfo -IsInstalled $true
+                                }
+                            } else {
+                                [System.Windows.Forms.MessageBox]::Show(
+                                    "Installation fehlgeschlagen!`n`n$($installResult.Message)",
+                                    "Fehler",
+                                    [System.Windows.Forms.MessageBoxButtons]::OK,
+                                    [System.Windows.Forms.MessageBoxIcon]::Warning
+                                )
+                            }
+                        }
+                    }
+                    # ===== Zustand 1: HERUNTERLADEN =====
+                    elseif (-not $isDownloaded -and -not $isInstalled) {
+                        # Wenn Winget verfügbar ist, Auswahl anbieten
+                        if ($toolInfo.Winget) {
+                            $choice = Show-ToolAcquisitionDialog -ToolName $toolInfo.Name
+                            
+                            if ($choice -eq "Install") {
+                                # Via Winget installieren
+                                [System.Windows.Forms.MessageBox]::Show(
+                                    "Installation von $($toolInfo.Name) wird gestartet.`n`nBitte warten Sie, bis die Installation abgeschlossen ist.",
+                                    "Installation - $($toolInfo.Name)",
+                                    [System.Windows.Forms.MessageBoxButtons]::OK,
+                                    [System.Windows.Forms.MessageBoxIcon]::Information
+                                )
+                                
+                                $psi = New-Object System.Diagnostics.ProcessStartInfo
+                                $psi.FileName = "winget"
+                                $psi.Arguments = "install --id `"$($toolInfo.Winget)`" --silent --accept-source-agreements --accept-package-agreements"
+                                $psi.Verb = "RunAs"
+                                $psi.UseShellExecute = $true
+                                $psi.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
+                                
+                                $process = [System.Diagnostics.Process]::Start($psi)
+                                if ($process.WaitForExit(300000)) {
+                                    if ($process.ExitCode -eq 0) {
+                                        [System.Windows.Forms.MessageBox]::Show(
+                                            "$($toolInfo.Name) wurde erfolgreich installiert!",
+                                            "Installation erfolgreich",
+                                            [System.Windows.Forms.MessageBoxButtons]::OK,
+                                            [System.Windows.Forms.MessageBoxIcon]::Information
+                                        )
+                                    } else {
+                                        $errorDesc = Get-WingetErrorDescription -ErrorCode $process.ExitCode
+                                        [System.Windows.Forms.MessageBox]::Show(
+                                            "Installation fehlgeschlagen!`n`nFehlercode: $($process.ExitCode)`n`n$errorDesc",
+                                            "Fehler",
+                                            [System.Windows.Forms.MessageBoxButtons]::OK,
+                                            [System.Windows.Forms.MessageBoxIcon]::Warning
+                                        )
+                                    }
+                                }
+                            }
+                            elseif ($choice -eq "Download") {
+                                # Herunterladen
+                                [System.Windows.Forms.MessageBox]::Show(
+                                    "Download von $($toolInfo.Name) wird gestartet...",
+                                    "Download - $($toolInfo.Name)",
+                                    [System.Windows.Forms.MessageBoxButtons]::OK,
+                                    [System.Windows.Forms.MessageBoxIcon]::Information
+                                )
+                                
+                                # Übergebe globale ProgressBar falls verfügbar
+                                $downloadParams = @{ Tool = $toolInfo }
+                                if ($global:progressBar) {
+                                    $downloadParams['ProgressBar'] = $global:progressBar
+                                }
+                                $downloadResult = Invoke-ToolDownload @downloadParams
+                                
+                                $dlgTitle = if ($downloadResult.Success) { "Download erfolgreich" } else { "Download" }
+                                $dlgIcon = if ($downloadResult.Success) { [System.Windows.Forms.MessageBoxIcon]::Information } else { [System.Windows.Forms.MessageBoxIcon]::Warning }
+                                [System.Windows.Forms.MessageBox]::Show(
+                                    $downloadResult.Message,
+                                    $dlgTitle,
+                                    [System.Windows.Forms.MessageBoxButtons]::OK,
+                                    $dlgIcon
+                                )
+                                
+                                # Bei erfolgreichem Download: Button und Kachel visuell aktualisieren
+                                if ($downloadResult.Success) {
+                                    try {
+                                        # Finde die Border (Kachel) dieses Buttons
+                                        $currentButton = $this
+                                        $border = $currentButton
+                                        while ($border -and $border.GetType().Name -ne 'Border') {
+                                            $border = [System.Windows.Media.VisualTreeHelper]::GetParent($border)
+                                        }
+                                        
+                                        if ($border) {
+                                            # Aktualisiere Kachelfarbe auf Lavender (heruntergeladen)
+                                            $border.Background = [Windows.Media.Brushes]::Lavender
+                                            $border.BorderBrush = [Windows.Media.Brushes]::SteelBlue
+                                            
+                                            # Aktualisiere Tooltip
+                                            $border.ToolTip = "[HERUNTERGELADEN - BEREIT ZUR INSTALLATION] " + $toolInfo.Description
+                                        }
+                                        
+                                        # Aktualisiere Button-Icon und Style
+                                        $buttonContent = $currentButton.Content
+                                        if ($buttonContent -and $buttonContent.GetType().Name -eq 'TextBlock') {
+                                            $buttonContent.Text = [char]0xE8B5  # Install-Symbol
+                                            $buttonContent.Foreground = [Windows.Media.Brushes]::Blue
+                                        }
+                                        $currentButton.ToolTip = "Von lokalem Download installieren"
+                                        $currentButton.Background = [Windows.Media.Brushes]::LightCyan
+                                        
+                                        # Aktualisiere Button-Tag mit neuen Daten
+                                        $newLocalPath = Get-ToolLocalInstallerPath -Tool $toolInfo
+                                        $currentButton.Tag = @{
+                                            Tool = $toolInfo
+                                            HasUpdate = $hasUpdate
+                                            IsInstalled = $false
+                                            IsDownloaded = $true
+                                            LocalInstallerPath = $newLocalPath
+                                        }
+                                        
+                                        Write-Host "✓ UI erfolgreich aktualisiert - Kachel zeigt jetzt 'Heruntergeladen'-Status" -ForegroundColor Green
+                                    }
+                                    catch {
+                                        Write-Host "⚠ UI-Aktualisierung fehlgeschlagen: $($_.Exception.Message)" -ForegroundColor Yellow
+                                    }
+                                }
+                            }
+                        } else {
+                            # Nur Download verfügbar (kein Winget)
+                            [System.Windows.Forms.MessageBox]::Show(
+                                "Download von $($toolInfo.Name) wird gestartet...",
+                                "Download - $($toolInfo.Name)",
+                                [System.Windows.Forms.MessageBoxButtons]::OK,
+                                [System.Windows.Forms.MessageBoxIcon]::Information
+                            )
+                            
+                            # Übergebe globale ProgressBar falls verfügbar
+                            $downloadParams = @{ Tool = $toolInfo }
+                            if ($global:progressBar) {
+                                $downloadParams['ProgressBar'] = $global:progressBar
+                            }
+                            $downloadResult = Invoke-ToolDownload @downloadParams
+                            
+                            $dlgTitle = if ($downloadResult.Success) { "Download erfolgreich" } else { "Download" }
+                            $dlgIcon = if ($downloadResult.Success) { [System.Windows.Forms.MessageBoxIcon]::Information } else { [System.Windows.Forms.MessageBoxIcon]::Warning }
+                            [System.Windows.Forms.MessageBox]::Show(
+                                $downloadResult.Message,
+                                $dlgTitle,
+                                [System.Windows.Forms.MessageBoxButtons]::OK,
+                                $dlgIcon
+                            )
+                            
+                            # Bei erfolgreichem Download: Button und Kachel visuell aktualisieren
+                            if ($downloadResult.Success) {
+                                try {
+                                    # Finde die Border (Kachel) dieses Buttons
+                                    $currentButton = $this
+                                    $border = $currentButton
+                                    while ($border -and $border.GetType().Name -ne 'Border') {
+                                        $border = [System.Windows.Media.VisualTreeHelper]::GetParent($border)
+                                    }
+                                    
+                                    if ($border) {
+                                        # Aktualisiere Kachelfarbe auf Lavender (heruntergeladen)
+                                        $border.Background = [Windows.Media.Brushes]::Lavender
+                                        $border.BorderBrush = [Windows.Media.Brushes]::SteelBlue
+                                        
+                                        # Aktualisiere Tooltip
+                                        $border.ToolTip = "[HERUNTERGELADEN - BEREIT ZUR INSTALLATION] " + $toolInfo.Description
+                                    }
+                                    
+                                    # Aktualisiere Button-Icon und Style
+                                    $buttonContent = $currentButton.Content
+                                    if ($buttonContent -and $buttonContent.GetType().Name -eq 'TextBlock') {
+                                        $buttonContent.Text = [char]0xE8B5  # Install-Symbol
+                                        $buttonContent.Foreground = [Windows.Media.Brushes]::Blue
+                                    }
+                                    $currentButton.ToolTip = "Von lokalem Download installieren"
+                                    $currentButton.Background = [Windows.Media.Brushes]::LightCyan
+                                    
+                                    # Aktualisiere Button-Tag mit neuen Daten
+                                    $newLocalPath = Get-ToolLocalInstallerPath -Tool $toolInfo
+                                    $currentButton.Tag = @{
+                                        Tool = $toolInfo
+                                        HasUpdate = $hasUpdate
+                                        IsInstalled = $false
+                                        IsDownloaded = $true
+                                        LocalInstallerPath = $newLocalPath
+                                    }
+                                    
+                                    Write-Host "✓ UI erfolgreich aktualisiert - Kachel zeigt jetzt 'Heruntergeladen'-Status" -ForegroundColor Green
+                                }
+                                catch {
+                                    Write-Host "⚠ UI-Aktualisierung fehlgeschlagen: $($_.Exception.Message)" -ForegroundColor Yellow
+                                }
+                            }
+                        }
+                    }
+                    # ===== Installiert, kein Update → Neu installieren/reparieren =====
+                    elseif ($isInstalled -and -not $hasUpdate) {
                         $result = [System.Windows.Forms.MessageBox]::Show(
                             "Möchten Sie $($toolInfo.Name) neu installieren/reparieren?",
                             "Neuinstallation",
@@ -968,8 +1955,7 @@ function Initialize-ToolEntry {
                             [System.Windows.Forms.MessageBoxIcon]::Question
                         )
                         if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
-                            # Prüfe ob Prozess läuft (z.B. LibreHardwareMonitor)
-                            $processName = $toolInfo.Name -replace '\s+', ''  # Entferne Leerzeichen
+                            $processName = $toolInfo.Name -replace '\s+', ''
                             $canContinue = Stop-ToolProcess -ProcessName $processName
                             
                             if (-not $canContinue) {
@@ -999,25 +1985,8 @@ function Initialize-ToolEntry {
                             $process = [System.Diagnostics.Process]::Start($psi)
                             if ($process.WaitForExit(300000)) {
                                 if ($process.ExitCode -eq 0) {
-                                    # Spezialbehandlung für LibreHardwareMonitor
-                                    $driverActivated = $false
-                                    if ($toolInfo.Winget -eq "LibreHardwareMonitor.LibreHardwareMonitor") {
-                                        if (Get-Command -Name Invoke-LibreHardwareMonitorDriverActivation -ErrorAction SilentlyContinue) {
-                                            $driverActivated = Invoke-LibreHardwareMonitorDriverActivation
-                                        }
-                                    }
-                                    
-                                    $message = "$($toolInfo.Name) wurde erfolgreich neu installiert!"
-                                    if ($toolInfo.Winget -eq "LibreHardwareMonitor.LibreHardwareMonitor") {
-                                        if ($driverActivated) {
-                                            $message += "`n`n✅ Hardware-Treiber wurde aktiviert!`n`nBitte starten Sie Bockis System-Tool neu."
-                                        } else {
-                                            $message += "`n`n⚠️ Bitte starten Sie Bockis System-Tool neu."
-                                        }
-                                    }
-                                    
                                     [System.Windows.Forms.MessageBox]::Show(
-                                        $message,
+                                        "$($toolInfo.Name) wurde erfolgreich neu installiert!",
                                         "Neuinstallation erfolgreich",
                                         [System.Windows.Forms.MessageBoxButtons]::OK,
                                         [System.Windows.Forms.MessageBoxIcon]::Information
@@ -1025,113 +1994,31 @@ function Initialize-ToolEntry {
                                 } else {
                                     $errorDesc = Get-WingetErrorDescription -ErrorCode $process.ExitCode
                                     [System.Windows.Forms.MessageBox]::Show(
-                                        "Neuinstallation fehlgeschlagen!`n`nFehlercode: $($process.ExitCode)`n`n$errorDesc`n`nDebug-Tipp: Führen Sie 'winget install --id $($toolInfo.Winget) --force' in PowerShell aus.",
+                                        "Neuinstallation fehlgeschlagen!`n`nFehlercode: $($process.ExitCode)`n`n$errorDesc",
                                         "Fehler",
                                         [System.Windows.Forms.MessageBoxButtons]::OK,
                                         [System.Windows.Forms.MessageBoxIcon]::Warning
                                     )
                                 }
-                            } else {
-                                [System.Windows.Forms.MessageBox]::Show(
-                                    "Neuinstallation-Timeout (>5 Min). Bitte manuell prüfen.",
-                                    "Timeout",
-                                    [System.Windows.Forms.MessageBoxButtons]::OK,
-                                    [System.Windows.Forms.MessageBoxIcon]::Warning
-                                )
                             }
-                        }
-                    }
-                    else {
-                        # Erstinstallation mit Fortschrittsanzeige
-                        [System.Windows.Forms.MessageBox]::Show(
-                            "Installation von $($toolInfo.Name) wird gestartet.`n`nBitte warten Sie, bis die Installation abgeschlossen ist.`n`nDie Anwendung wird nach Abschluss automatisch benachrichtigt.",
-                            "Installation - $($toolInfo.Name)",
-                            [System.Windows.Forms.MessageBoxButtons]::OK,
-                            [System.Windows.Forms.MessageBoxIcon]::Information
-                        )
-                        
-                        # Starte Installation und warte auf Fertigstellung
-                        $psi = New-Object System.Diagnostics.ProcessStartInfo
-                        $psi.FileName = "winget"
-                        $psi.Arguments = "install --id `"$($toolInfo.Winget)`" --silent --accept-source-agreements --accept-package-agreements"
-                        $psi.Verb = "RunAs"
-                        $psi.UseShellExecute = $true
-                        $psi.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
-                        
-                        try {
-                            $process = [System.Diagnostics.Process]::Start($psi)
-                            
-                            # Warte auf Prozessende (max 5 Minuten)
-                            if ($process.WaitForExit(300000)) {
-                                $exitCode = $process.ExitCode
-                                if ($exitCode -eq 0) {
-                                    # Spezialbehandlung für LibreHardwareMonitor
-                                    $driverActivated = $false
-                                    if ($toolInfo.Winget -eq "LibreHardwareMonitor.LibreHardwareMonitor") {
-                                        # Versuche Treiber-Aktivierung
-                                        if (Get-Command -Name Invoke-LibreHardwareMonitorDriverActivation -ErrorAction SilentlyContinue) {
-                                            $driverActivated = Invoke-LibreHardwareMonitorDriverActivation
-                                        }
-                                    }
-                                    
-                                    $message = "$($toolInfo.Name) wurde erfolgreich installiert!"
-                                    if ($toolInfo.Winget -eq "LibreHardwareMonitor.LibreHardwareMonitor") {
-                                        if ($driverActivated) {
-                                            $message += "`n`n✅ Hardware-Treiber wurde aktiviert!`n`nBitte starten Sie Bockis System-Tool neu."
-                                        } else {
-                                            $message += "`n`n⚠️ Bitte starten Sie LibreHardwareMonitor.exe einmal manuell,`num den Hardware-Treiber zu aktivieren.`n`nDanach: Bockis System-Tool neu starten."
-                                        }
-                                    }
-                                    
-                                    [System.Windows.Forms.MessageBox]::Show(
-                                        $message,
-                                        "Installation erfolgreich",
-                                        [System.Windows.Forms.MessageBoxButtons]::OK,
-                                        [System.Windows.Forms.MessageBoxIcon]::Information
-                                    )
-                                } else {
-                                    $errorDesc = Get-WingetErrorDescription -ErrorCode $exitCode
-                                    [System.Windows.Forms.MessageBox]::Show(
-                                        "Installation fehlgeschlagen!`n`nFehlercode: $exitCode`n`n$errorDesc`n`nDebug-Tipp: Führen Sie 'winget install --id $($toolInfo.Winget)' in PowerShell aus.",
-                                        "Installation fehlgeschlagen",
-                                        [System.Windows.Forms.MessageBoxButtons]::OK,
-                                        [System.Windows.Forms.MessageBoxIcon]::Warning
-                                    )
-                                }
-                            } else {
-                                [System.Windows.Forms.MessageBox]::Show(
-                                    "Installation von $($toolInfo.Name) dauert zu lange (>5 Min).`n`nBitte prüfen Sie manuell, ob die Installation erfolgreich war.",
-                                    "Timeout",
-                                    [System.Windows.Forms.MessageBoxButtons]::OK,
-                                    [System.Windows.Forms.MessageBoxIcon]::Warning
-                                )
-                            }
-                        }
-                        catch {
-                            [System.Windows.Forms.MessageBox]::Show(
-                                "Fehler beim Starten der Installation: $($_.Exception.Message)",
-                                "Fehler",
-                                [System.Windows.Forms.MessageBoxButtons]::OK,
-                                [System.Windows.Forms.MessageBoxIcon]::Error
-                            )
                         }
                     }
                     
-                    # Cache aktualisieren, wenn die Funktion verfügbar ist
+                    # Cache aktualisieren
                     if (Get-Command -Name Update-ToolInstallationStatus -ErrorAction SilentlyContinue) {
                         Update-ToolInstallationStatus -Tool $toolInfo -IsInstalled $true
                     }
                 }
                 catch {
                     [System.Windows.Forms.MessageBox]::Show(
-                        "Fehler beim Starten der Winget-Aktion: $($_.Exception.Message)",
+                        "Fehler beim Ausführen der Aktion: $($_.Exception.Message)",
                         "Fehler",
                         [System.Windows.Forms.MessageBoxButtons]::OK,
                         [System.Windows.Forms.MessageBoxIcon]::Error
                     )
                 }
             })
-        $buttonPanel.Children.Add($wingetButton)
+        $buttonPanel.Children.Add($actionButton)
     }
 
     # Web-Download Button
@@ -1497,6 +2384,12 @@ function Update-ToolsDisplay {
     # Bestehenden Content löschen
     $WrapPanel.Children.Clear()
     
+    # Wenn keine Kategorie gewählt wurde (leerer String), nichts anzeigen
+    if ([string]::IsNullOrWhiteSpace($Category)) {
+        Write-Verbose "Keine Kategorie gewählt - zeige keine Tools an"
+        return 0
+    }
+    
     # Installierte Pakete im Cache initialisieren (synchron, aber mit Timeout)
     # WICHTIG: MUSS VOR dem Anzeigen der Tools abgeschlossen sein!
     if (Get-Command -Name Initialize-InstalledPackagesCache -ErrorAction SilentlyContinue) {
@@ -1857,7 +2750,7 @@ function Update-ToolsDisplay {
 }
 
 # Exportiere die Funktionen
-Export-ModuleMember -Function Get-AllTools, Get-ToolsByCategory, Get-ToolsByTag, Get-ToolByName, Install-ToolPackage, Get-ToolDownload, Flatten, Update-ToolProgress, Set-ToolResource, Initialize-ToolEntry, Show-ToolTileList, Test-ToolInstalled, Test-ToolUpdateAvailable, Get-ToolVersionInfo, Update-ToolsDisplay, Stop-ToolProcess, Get-WingetErrorDescription
+Export-ModuleMember -Function Get-AllTools, Get-ToolsByCategory, Get-ToolsByTag, Get-ToolByName, Install-ToolPackage, Get-ToolDownload, Flatten, Update-ToolProgress, Set-ToolResource, Initialize-ToolEntry, Show-ToolTileList, Test-ToolInstalled, Test-ToolUpdateAvailable, Get-ToolVersionInfo, Update-ToolsDisplay, Stop-ToolProcess, Get-WingetErrorDescription, Show-ToolAcquisitionDialog, Test-ToolDownloaded, Get-ToolLocalInstallerPath, Invoke-ToolDownload, Install-ToolFromLocal
 
 # SIG # Begin signature block
 # MIIcSgYJKoZIhvcNAQcCoIIcOzCCHDcCAQExDzANBglghkgBZQMEAgEFADB5Bgor
