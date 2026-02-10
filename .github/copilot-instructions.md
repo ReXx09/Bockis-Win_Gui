@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**Bockis System-Tool v4.1.1** ist ein umfassendes PowerShell-basiertes Windows-Systemwartungs-Tool mit moderner WPF-GUI (~15.000 LOC). Es kombiniert Diagnose-, Reparatur- und Überwachungsfunktionen in einer benutzerfreundlichen Oberfläche mit LibreHardwareMonitor-Integration, SQLite-Datenbank und Winget-Paketmanagement.
+**Bockis System-Tool v4.1.2** ist ein umfassendes PowerShell-basiertes Windows-Systemwartungs-Tool mit moderner WPF-GUI (~15.000 LOC). Es kombiniert Diagnose-, Reparatur- und Überwachungsfunktionen in einer benutzerfreundlichen Oberfläche mit LibreHardwareMonitor-Integration, SQLite-Datenbank und Winget-Paketmanagement.
 
 **Ziel**: Admin-freundliches Tool für Windows 10/11 Systemwartung, Malware-Scans, Hardware-Monitoring und Software-Installation.
 
@@ -248,4 +248,4 @@ Start-QuickMRT -outputBox $null -progressBar $null  # Konsolen-Output
 
 ---
 
-**Version**: 4.1.1 | **Letzte Aktualisierung**: 2026-01-20 | **Autor**: Bockis
+**Version**: 4.1.2 | **Letzte Aktualisierung**: 2026-02-09 | **Autor**: Bockis

@@ -390,7 +390,21 @@ Bei Problemen:
 
 ## 📋 Changelog
 
-### Version 4.1.1 (20. Januar 2026) - Aktuell
+### Version 4.1.2 (9. Februar 2026) - Aktuell
+- ✨ **Automatisches DLL-Update**: Integrierte Update-Funktion in DependencyChecker
+- 🔍 **Versionserkennung**: Automatische Prüfung auf veraltete LibreHardwareMonitorLib.dll
+- � **DLL-Versionsabfragen**: Erweiterte Test-SystemDependencies mit 5 DLL-Checks
+  - LibreHardwareMonitorLib.dll >= 0.9.5 (PawnIO-Kompatibilität) - ERFORDERLICH
+  - BlackSharp.Core.dll - ERFORDERLICH
+  - HidSharp.dll - OPTIONAL (nur für spezielle HID-Geräte)
+  - RAMSPDToolkit-NDD.dll, DiskInfoToolkit.dll - OPTIONAL
+- 👍 **Benutzerfreundlich**: Interaktiver Dialog mit Erklärung (Winring0 vs PawnIO)
+- 📦 **NuGet-Integration**: Direkter Download von v0.9.5 bei Bedarf
+- 💾 **Smart-Caching**: Nutzt Temp-Cache für schnellere Updates
+- 🛡️ **Sicher**: Automatisches Backup vor DLL-Ersetzung
+- 📝 **Dokumentation**: README-DLL-VERSION-CHECKS.md für DLL-Versionsabfragen
+
+### Version 4.1.1 (20. Januar 2026)
 - 🔧 **LibreHardwareMonitor Auto-Installation**: WinGet-Integration im Installer
 - 🛡️ **PawnIO-Treiber**: Moderne Ring-0-Treiber-Unterstützung (v0.9.4+)
 - 🔄 **Fallback-System**: Performance Counter-basierte Sensoren ohne LibreHWM

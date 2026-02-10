@@ -1,5 +1,5 @@
 ; ===================================================================
-; INSTALLATIONS-SKRIPT FÜR BOCKIS SYSTEM-TOOL V4.1.1
+; INSTALLATIONS-SKRIPT FÜR BOCKIS SYSTEM-TOOL V4.1.2
 ; ===================================================================
 ;
 ; BESCHREIBUNG:
@@ -36,7 +36,7 @@
 ; • LZMA2 Maximum-Kompression für kleinere Setup-Datei
 ;
 ; AUTOR: Bockis
-; VERSION: 4.1.1
+; VERSION: 4.1.2
 ; ERSTELLT MIT: Inno Setup 6.x
 ; DATUM: 2025
 ; LIZENZ: Siehe LICENSE.txt
@@ -46,7 +46,7 @@
 ; ANWENDUNGS-DEFINITIONEN
 ; -------------------------------------------------------------------
 #define MyAppName "Bockis System-Tool"
-#define MyAppVersion "4.1.1"
+#define MyAppVersion "4.1.2"
 #define MyAppPublisher "Bockis"
 #define MyAppURL "https://github.com/bockis"
 #define MyAppExeName "Win_Gui_Module.ps1"
@@ -822,11 +822,13 @@ german.WelcomeLabel2=Willkommen zur Installation von%n%n{#MyAppName} v{#MyAppVer
 ; ===================================================================
 
 ; -------------------------------------------------------------------
-; LibreHardwareMonitor über WinGet installieren (kritisch für Hardware-Monitoring)
+; PawnIO Ring-0 Treiber über WinGet installieren (kritisch für Hardware-Monitoring)
 ; -------------------------------------------------------------------
-; WICHTIG: PawnIO-Treiber wird nur bei WinGet-Installation korrekt installiert!
-; Die gebündelte DLL in Lib\ kann den Kernel-Treiber NICHT selbst installieren.
-Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""& {{ try {{ $null = Get-Command winget -ErrorAction Stop; Write-Host 'Installiere LibreHardwareMonitor...'; winget install --id LibreHardwareMonitor.LibreHardwareMonitor --exact --silent --accept-source-agreements --accept-package-agreements | Out-Null; if ($LASTEXITCODE -eq 0 -or $LASTEXITCODE -eq -1978335189) {{ Write-Host 'LibreHardwareMonitor installiert!' -ForegroundColor Green }} else {{ Write-Warning 'Installation fehlgeschlagen (Code: $LASTEXITCODE)' }} }} catch {{ Write-Warning 'WinGet nicht verfuegbar - Hardware-Monitoring wird eingeschraenkt funktionieren' }} }}"""; Description: "Hardware-Monitor-Abhängigkeit installieren (empfohlen)"; StatusMsg: "Installiere LibreHardwareMonitor via WinGet..."; Flags: runhidden
+; WICHTIG: PawnIO ist der sichere Kernel-Treiber für Hardware-Zugriff!
+; LibreHardwareMonitorLib.dll ist bereits im Lib-Ordner enthalten und
+; benötigt PawnIO für sicheren Ring-0 Zugriff.
+; OHNE PawnIO funktioniert Hardware-Monitoring NICHT!
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""& {{ try {{ $null = Get-Command winget -ErrorAction Stop; Write-Host 'Installiere PawnIO-Treiber...'; winget install --id namazso.PawnIO --exact --silent --accept-source-agreements --accept-package-agreements | Out-Null; if ($LASTEXITCODE -eq 0 -or $LASTEXITCODE -eq -1978335189) {{ Write-Host 'PawnIO-Treiber installiert! Neustart erforderlich!' -ForegroundColor Green }} else {{ Write-Warning 'Installation fehlgeschlagen (Code: $LASTEXITCODE)' }} }} catch {{ Write-Warning 'WinGet nicht verfuegbar - Hardware-Monitoring wird NICHT funktionieren' }} }}"""; Description: "PawnIO Ring-0 Treiber installieren (ERFORDERLICH für Hardware-Monitoring)"; StatusMsg: "Installiere PawnIO-Treiber via WinGet..."; Flags: runhidden
 
 ; -------------------------------------------------------------------
 ; Anwendung nach Installation starten (optional)

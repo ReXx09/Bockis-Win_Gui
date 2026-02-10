@@ -1,14 +1,14 @@
 ﻿# Win_Gui_Module.ps1 - Hauptskript für die PowerShell-GUI
 # Autor: Bocki
-# Version: 4.1.1
+# Version: 4.1.2
 
 # ===================================================================
 # VERSIONS-INFORMATION
 # ===================================================================
-$script:AppVersion = "4.1.1"
+$script:AppVersion = "4.1.2"
 $script:AppName = "Bockis System-Tool"
 $script:AppPublisher = "Bockis"
-$script:VersionDate = "2025-11-29"
+$script:VersionDate = "2026-02-09"
 
 # WPF-Assemblies für moderne UI-Komponenten laden
 Add-Type -AssemblyName PresentationFramework
@@ -5153,8 +5153,6 @@ $btnWinUpdate.Add_Click({
     })
 $global:tblSystem.Controls.Add($btnWinUpdate)
 
-# Windows Update Button wurde zu tblSystem hinzugefügt, Tag ist maintenanceControl
-
 
 # Buttons für Festplatten-Tools - Direkt im tblDisk platziert (ohne GroupBox) - Horizontal nebeneinander
 $btnCheckDISM = New-Object System.Windows.Forms.Button
@@ -5831,11 +5829,26 @@ function Check-ForUpdates {
         $repoName = "Bockis-Win_Gui"
         $apiUrl = "https://api.github.com/repos/$repoOwner/$repoName/releases/latest"
         
+        # GitHub Token für private Repos (während Beta-Phase)
+        # WICHTIG: Nach Public-Release diesen Token entfernen!
+        $githubToken = "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"  # TODO: Ersetzen mit deinem Token
+        
         Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
         $outputBox.AppendText("[i] Prüfe auf Updates...`r`n")
         
+        # Headers mit Authentication vorbereiten
+        $headers = @{
+            "User-Agent" = "Bockis-System-Tool"
+            "Accept" = "application/vnd.github+json"
+        }
+        
+        # Token nur hinzufügen, wenn vorhanden (für spätere Public-Version)
+        if ($githubToken -and $githubToken -ne "ghp_DEIN_TOKEN_HIER") {
+            $headers["Authorization"] = "Bearer $githubToken"
+        }
+        
         # GitHub API abfragen
-        $latestRelease = Invoke-RestMethod -Uri $apiUrl -Headers @{ "User-Agent" = "Bockis-System-Tool" }
+        $latestRelease = Invoke-RestMethod -Uri $apiUrl -Headers $headers
         $latestVersion = $latestRelease.tag_name -replace 'v', ''
         
         Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
@@ -5857,8 +5870,14 @@ function Check-ForUpdates {
             }
             
             # Benutzer fragen
+            $releaseNotesPreview = if ($latestRelease.body.Length -gt 200) {
+                $latestRelease.body.Substring(0, 200) + "..."
+            } else {
+                $latestRelease.body
+            }
+            
             $result = [System.Windows.Forms.MessageBox]::Show(
-                "Neue Version verfügbar: v$latestVersion`n`nAktuell installiert: v$currentVersion`n`nRelease-Notes:`n$($latestRelease.body.Substring(0, [Math]::Min(200, $latestRelease.body.Length)))...`n`nMöchten Sie jetzt updaten?",
+                "Neue Version verfügbar: v$latestVersion`n`nAktuell installiert: v$currentVersion`n`nRelease-Notes:`n$releaseNotesPreview`n`nMöchten Sie jetzt updaten?",
                 "Update verfügbar",
                 [System.Windows.Forms.MessageBoxButtons]::YesNo,
                 [System.Windows.Forms.MessageBoxIcon]::Information
@@ -5872,22 +5891,31 @@ function Check-ForUpdates {
                 
                 Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
                 $outputBox.AppendText("[i] Download wird gestartet...`r`n")
-                $outputBox.AppendText("Quelle: $($asset.browser_download_url)`r`n")
+                $outputBox.AppendText("Quelle: $($asset.name)`r`n")
                 $outputBox.AppendText("Ziel: $zipPath`r`n`r`n")
                 
                 # Progressbar vorbereiten
                 Update-ProgressStatus -StatusText "Download läuft..." -ProgressValue 0 -TextColor ([System.Drawing.Color]::Blue)
                 
-                # Download mit Fortschrittsanzeige
+                # Download mit Authentication
                 $webClient = New-Object System.Net.WebClient
                 $webClient.Headers.Add("User-Agent", "Bockis-System-Tool")
+                
+                # Token für Download hinzufügen (private Repo Assets)
+                if ($githubToken -and $githubToken -ne "ghp_DEIN_TOKEN_HIER") {
+                    $webClient.Headers.Add("Authorization", "Bearer $githubToken")
+                }
                 
                 Register-ObjectEvent -InputObject $webClient -EventName DownloadProgressChanged -SourceIdentifier WebClient.DownloadProgressChanged -Action {
                     $progressBar.Value = $EventArgs.ProgressPercentage
                     Update-ProgressStatus -StatusText "Download: $($EventArgs.ProgressPercentage)%" -ProgressValue $EventArgs.ProgressPercentage -TextColor ([System.Drawing.Color]::Blue)
                 } | Out-Null
                 
-                $webClient.DownloadFileAsync($asset.browser_download_url, $zipPath)
+                # Für private Repos: API-Download-URL verwenden statt browser_download_url
+                $downloadUrl = $asset.url
+                $webClient.Headers.Add("Accept", "application/octet-stream")
+                
+                $webClient.DownloadFileAsync($downloadUrl, $zipPath)
                 
                 # Warten auf Download-Abschluss
                 while ($webClient.IsBusy) {
@@ -5895,7 +5923,7 @@ function Check-ForUpdates {
                     Start-Sleep -Milliseconds 100
                 }
                 
-                Unregister-Event -SourceIdentifier WebClient.DownloadProgressChanged
+                Unregister-Event -SourceIdentifier WebClient.DownloadProgressChanged -ErrorAction SilentlyContinue
                 $webClient.Dispose()
                 
                 Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
@@ -5972,24 +6000,6 @@ Start-Process powershell.exe -ArgumentList '-ExecutionPolicy Bypass -File "$PSSc
     }
 }
 
-# Update-Button erstellen (rechts neben Progressbar)
-$btnUpdate = New-Object System.Windows.Forms.Button
-$btnUpdate.Text = "↻ Update"
-$btnUpdate.Location = New-Object System.Drawing.Point(850, 755)  # 190 + 650 + 10 = rechts neben Progressbar
-$btnUpdate.Size = New-Object System.Drawing.Size(140, 30)
-$btnUpdate.BackColor = [System.Drawing.Color]::FromArgb(16, 124, 16)  # Grün
-$btnUpdate.ForeColor = [System.Drawing.Color]::White
-$btnUpdate.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
-$btnUpdate.FlatAppearance.BorderSize = 0
-$btnUpdate.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
-
-# Click-Event: Update prüfen
-$btnUpdate.Add_Click({
-    Check-ForUpdates
-})
-
-$mainform.Controls.Add($btnUpdate)
-
 # Tooltip-Texte zu den Funktionsbuttons hinzufügen (tooltipObj wurde bereits weiter oben initialisiert)
 $tooltipObj.SetToolTip($btnQuickMRT, "Führt einen schnellen Malware-Scan mit Microsoft Malicious Software Removal Tool durch")
 $tooltipObj.SetToolTip($btnFullMRT, "Führt einen vollständigen Systemscan mit Microsoft Malicious Software Removal Tool durch")
@@ -6010,7 +6020,6 @@ $tooltipObj.SetToolTip($btnResetNetwork, "Setzt Netzwerkadapter und TCP/IP-Stack
 $tooltipObj.SetToolTip($btnDiskCleanup, "Startet den Windows Disk Cleanup-Tool zum Freigeben von Speicherplatz")
 $tooltipObj.SetToolTip($btnTempFiles, "Bereinigt temporäre Dateien, um Speicherplatz freizugeben")
 $tooltipObj.SetToolTip($btnRestart, "Neustart-Optionen: GUI neuladen oder System neustarten")
-$tooltipObj.SetToolTip($btnUpdate, "Prüft auf verfügbare Updates und installiert diese automatisch")
 $tooltipObj.SetToolTip($infoButton, "Zeigt Informationen über die Anwendung an")
 
 # Status-Informationen anzeigen

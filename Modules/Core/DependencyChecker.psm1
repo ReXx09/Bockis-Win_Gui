@@ -4,6 +4,127 @@
 # Importiere LogManager für strukturiertes Logging
 Import-Module "$PSScriptRoot\LogManager.psm1" -Force -ErrorAction SilentlyContinue
 
+# ===================================================================
+# HILFSFUNKTIONEN FÜR DLL-UPDATE
+# ===================================================================
+
+function Update-LibreHardwareMonitorDll {
+    <#
+    .SYNOPSIS
+        Aktualisiert LibreHardwareMonitorLib.dll auf v0.9.5
+    .DESCRIPTION
+        Lädt v0.9.5 von NuGet herunter, erstellt Backup und ersetzt die alte DLL.
+        v0.9.5+ nutzt PawnIO statt Winring0 (keine Defender-Alarme mehr).
+    .PARAMETER LibPath
+        Pfad zum Lib-Ordner
+    .PARAMETER ProgressCallback
+        Callback-Funktion für Fortschrittsanzeige (Scriptblock mit $Progress, $Text)
+    .OUTPUTS
+        Hashtable mit Success (bool), NewVersion (string), ErrorMessage (string)
+    #>
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$LibPath,
+        
+        [Parameter(Mandatory=$false)]
+        [scriptblock]$ProgressCallback
+    )
+    
+    $result = @{
+        Success = $false
+        NewVersion = $null
+        ErrorMessage = $null
+    }
+    
+    try {
+        # Pfade definieren
+        $targetDll = Join-Path $LibPath "LibreHardwareMonitorLib.dll"
+        $backupDll = Join-Path $LibPath "LibreHardwareMonitorLib.dll.old"
+        $tempPath = [System.IO.Path]::GetTempPath()
+        $extractFolder = Join-Path $tempPath "LibreHardwareMonitorLib-0.9.5"
+        $sourceDll = Join-Path $extractFolder "runtimes\win-x64\lib\net472\LibreHardwareMonitorLib.dll"
+        
+        # Prüfe ob v0.9.5 bereits im Temp liegt
+        if (Test-Path $sourceDll) {
+            if ($ProgressCallback) { & $ProgressCallback 60 "v0.9.5 in Cache gefunden..." }
+            Write-Verbose "✓ v0.9.5 bereits im Cache"
+        }
+        else {
+            # Download von NuGet
+            if ($ProgressCallback) { & $ProgressCallback 55 "Lade v0.9.5 von NuGet..." }
+            
+            $nugetUrl = "https://www.nuget.org/api/v2/package/LibreHardwareMonitorLib/0.9.5"
+            $zipPath = Join-Path $tempPath "LibreHardwareMonitorLib-0.9.5.nupkg"
+            
+            # Download
+            $webClient = New-Object System.Net.WebClient
+            $webClient.Headers.Add("User-Agent", "Bockis-System-Tool")
+            $webClient.DownloadFile($nugetUrl, $zipPath)
+            $webClient.Dispose()
+            
+            if ($ProgressCallback) { & $ProgressCallback 58 "Entpacke Paket..." }
+            
+            # Entpacken
+            if (Test-Path $extractFolder) {
+                Remove-Item $extractFolder -Recurse -Force
+            }
+            Expand-Archive -Path $zipPath -DestinationPath $extractFolder -Force
+            
+            # Cleanup
+            Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
+            
+            Write-Verbose "✓ v0.9.5 von NuGet geladen"
+        }
+        
+        # Prüfe ob Source-DLL existiert
+        if (-not (Test-Path $sourceDll)) {
+            throw "v0.9.5 DLL nicht gefunden nach Download: $sourceDll"
+        }
+        
+        # Version der Source prüfen
+        $sourceVersion = (Get-Item $sourceDll).VersionInfo.ProductVersion
+        if (-not $sourceVersion.StartsWith("0.9.5")) {
+            throw "Heruntergeladene DLL ist nicht v0.9.5: $sourceVersion"
+        }
+        
+        if ($ProgressCallback) { & $ProgressCallback 62 "Erstelle Backup..." }
+        
+        # Backup erstellen
+        if (Test-Path $targetDll) {
+            Copy-Item $targetDll $backupDll -Force
+            Write-Verbose "✓ Backup erstellt"
+        }
+        
+        if ($ProgressCallback) { & $ProgressCallback 65 "Ersetze DLL..." }
+        
+        # DLL ersetzen
+        Copy-Item $sourceDll $targetDll -Force
+        
+        # Neue Version prüfen
+        $newVersion = (Get-Item $targetDll).VersionInfo.ProductVersion
+        
+        if ($newVersion.StartsWith("0.9.5")) {
+            $result.Success = $true
+            $result.NewVersion = $newVersion.Split('+')[0]
+            Write-Verbose "✓ Update erfolgreich: $($result.NewVersion)"
+        }
+        else {
+            throw "DLL wurde nicht korrekt aktualisiert: $newVersion"
+        }
+    }
+    catch {
+        $result.Success = $false
+        $result.ErrorMessage = $_.Exception.Message
+        Write-Verbose "✗ Update fehlgeschlagen: $($result.ErrorMessage)"
+    }
+    
+    return $result
+}
+
+# ===================================================================
+# HARDWARE MONITOR INITIALISIERUNG
+# ===================================================================
+
 #region Hardware Monitor Mode Decision
 
 <#
@@ -99,28 +220,38 @@ Nach Installation: System neu starten
     $scriptRoot = Split-Path -Parent $scriptRoot  # Gehe zwei Ebenen hoch (von Modules/Core zu Root)
     $libPath = Join-Path $scriptRoot "Lib"
     
+    Write-Verbose "Lib-Ordner Pfad: $libPath"
+    
+    # Prüfe ob Lib-Ordner existiert
+    if (-not (Test-Path $libPath)) {
+        $result.Message = "Hardware-Monitor deaktiviert: Lib-Ordner nicht gefunden`n`nErwarteter Pfad: $libPath`n`nBitte stelle sicher, dass der Lib-Ordner mit allen DLLs vorhanden ist."
+        Update-Progress -Value 100 -Text "Hardware-Monitor deaktiviert (Lib-Ordner fehlt)"
+        Write-Verbose $result.Message
+        return $result
+    }
+    
     # PowerShell-Version erkennen für kompatibles DLL-Loading
     $isPowerShell7 = $PSVersionTable.PSVersion.Major -ge 7
     
     # Definiere benötigte DLLs (kritisch für LibreHardwareMonitorLib)
     # REIHENFOLGE IST WICHTIG! Abhängigkeiten müssen ZUERST geladen werden
     # PowerShell 5.1: System.*.dll aus Lib-Ordner (.NET Framework 4.x)
-    # PowerShell 7: System.*.dll NICHT laden (verwendet eigene .NET 9 Versionen)
+    # PowerShell 7: System.*.dll MÜSSEN aus Lib-Ordner geladen werden (für .NET 9 Kompatibilität)
     $requiredDLLs = [ordered]@{}
     
-    # System-DLLs nur für PowerShell 5.1 (Windows PowerShell)
-    if (-not $isPowerShell7) {
-        $requiredDLLs['System.Security.AccessControl.dll'] = @{ Description = 'Sicherheits-API (.NET Framework 4.x)'; Optional = $false }
-        $requiredDLLs['System.Security.Principal.Windows.dll'] = @{ Description = 'Windows-Identitäten (.NET Framework 4.x)'; Optional = $false }
-        $requiredDLLs['System.Threading.AccessControl.dll'] = @{ Description = 'Thread/Mutex-API (.NET Framework 4.x)'; Optional = $true }
-    }
+    # System-DLLs für BEIDE PowerShell-Versionen!
+    # WICHTIG: In PowerShell 7 MÜSSEN diese DLLs geladen werden, da LibreHardwareMonitorLib
+    # für .NET Framework entwickelt wurde und APIs benötigt, die in .NET 9 anders sind
+    $requiredDLLs['System.Security.AccessControl.dll'] = @{ Description = 'Sicherheits-API (FileInfo.GetAccessControl)'; Optional = $false }
+    $requiredDLLs['System.Security.Principal.Windows.dll'] = @{ Description = 'Windows-Identitäten'; Optional = $false }
+    $requiredDLLs['System.Threading.AccessControl.dll'] = @{ Description = 'Thread/Mutex-API'; Optional = $true }
     
     # Basis-DLLs für beide PowerShell-Versionen
     $requiredDLLs['System.Memory.dll'] = @{ Description = 'Memory-Management (Abhängigkeit)'; Optional = $false }
     $requiredDLLs['System.Runtime.CompilerServices.Unsafe.dll'] = @{ Description = 'Low-Level Operationen'; Optional = $false }
     $requiredDLLs['BlackSharp.Core.dll'] = @{ Description = 'Core-Funktionen'; Optional = $false }
-    $requiredDLLs['RAMSPDToolkit-NDD.dll'] = @{ Description = 'RAM SPD-Auslese'; Optional = $false }
-    $requiredDLLs['DiskInfoToolkit.dll'] = @{ Description = 'Festplatten-Informationen'; Optional = $false }
+    $requiredDLLs['RAMSPDToolkit-NDD.dll'] = @{ Description = 'RAM SPD-Auslese'; Optional = $true }
+    $requiredDLLs['DiskInfoToolkit.dll'] = @{ Description = 'Festplatten-Informationen'; Optional = $true }
     $requiredDLLs['LibreHardwareMonitorLib.dll'] = @{ Description = 'Hauptmodul für Hardware-Monitoring'; Optional = $false }
     
     Write-Verbose "PowerShell $($PSVersionTable.PSVersion.Major): Lade $($requiredDLLs.Count) DLLs"
@@ -151,17 +282,166 @@ Nach Installation: System neu starten
     if ($missingDLLs.Count -gt 0) {
         $result.MissingDLLs = $missingDLLs
         $missingList = ($missingDLLs | ForEach-Object { "  - $($_.FileName) ($($_.Description))" }) -join "`n"
-        $result.Message = "Hardware-Monitor deaktiviert: $($missingDLLs.Count) DLL(s) fehlen:`n$missingList"
+        $result.Message = @"
+Hardware-Monitor deaktiviert: $($missingDLLs.Count) DLL(s) fehlen im Lib-Ordner
+
+Fehlende Dateien:
+$missingList
+
+Lib-Ordner: $libPath
+
+Bitte stelle sicher, dass alle benötigten DLL-Dateien im Lib-Ordner vorhanden sind.
+"@
         Update-Progress -Value 100 -Text "Hardware-Monitor nicht verfügbar"
         Write-Verbose $result.Message
         return $result
     }
     
-    Update-Progress -Value 50 -Text "Alle DLLs gefunden, lade Abhängigkeiten..."
+    Update-Progress -Value 50 -Text "Alle DLLs gefunden, prüfe Versionen..."
     
-    # Schritt 3: Lade alle DLLs in der richtigen Reihenfolge
-    $loadProgress = 50
-    $loadStep = 30 / $requiredDLLs.Count
+    # Schritt 3: Prüfe LibreHardwareMonitorLib.dll Version (Warnung bei < 0.9.5 wegen Winring0)
+    $libHwMonDllPath = Join-Path $libPath "LibreHardwareMonitorLib.dll"
+    if (Test-Path $libHwMonDllPath) {
+        try {
+            $versionInfo = (Get-Item $libHwMonDllPath).VersionInfo
+            $productVersion = $versionInfo.ProductVersion
+            
+            # Extrahiere Version (z.B. "0.9.4+hash" -> "0.9.4")
+            if ($productVersion -match '^(\d+\.\d+\.\d+)') {
+                $version = [version]$matches[1]
+                $minVersion = [version]"0.9.5"
+                
+                if ($version -lt $minVersion) {
+                    # Version ist älter als 0.9.5 -> Biete automatisches Update an
+                    Write-Verbose "⚠ LibreHardwareMonitorLib.dll v$version erkannt (veraltet, nutzt Winring0)"
+                    Update-Progress -Value 52 -Text "Veraltete DLL erkannt, biete Update an..."
+                    
+                    # Lade UI-Modul für MessageBox
+                    if (-not (Get-Command -Name Add-Type -ErrorAction SilentlyContinue)) {
+                        throw "Add-Type nicht verfügbar"
+                    }
+                    
+                    Add-Type -AssemblyName System.Windows.Forms -ErrorAction SilentlyContinue
+                    
+                    $updateMsg = @"
+LibreHardwareMonitorLib.dll ist veraltet!
+
+Aktuelle Version: $version
+Benötigte Version: 0.9.5+
+
+Problem:
+Version $version nutzt Winring0 (unsicher)
+→ Windows Defender erkennt dies als Malware!
+
+Lösung:
+Version 0.9.5+ nutzt PawnIO (sicher, signiert)
+→ Keine Defender-Alarme mehr!
+
+Möchten Sie JETZT auf v0.9.5 updaten?
+(Download von NuGet, ca. 1 MB)
+"@
+                    
+                    $dialogResult = [System.Windows.Forms.MessageBox]::Show(
+                        $updateMsg,
+                        "DLL-Update verfügbar",
+                        [System.Windows.Forms.MessageBoxButtons]::YesNo,
+                        [System.Windows.Forms.MessageBoxIcon]::Warning
+                    )
+                    
+                    if ($dialogResult -eq [System.Windows.Forms.DialogResult]::Yes) {
+                        # Benutzer möchte updaten
+                        Update-Progress -Value 55 -Text "Lade v0.9.5 von NuGet..."
+                        
+                        try {
+                            # Rufe Update-Funktion auf
+                            $updateResult = Update-LibreHardwareMonitorDll -LibPath $libPath -ProgressCallback {
+                                param($Progress, $Text)
+                                Update-Progress -Value $Progress -Text $Text
+                            }
+                            
+                            if ($updateResult.Success) {
+                                Write-Verbose "✓ Update erfolgreich: $($updateResult.NewVersion)"
+                                Update-Progress -Value 70 -Text "Update erfolgreich, starte neu..."
+                                
+                                # Erfolgsmeldung
+                                [System.Windows.Forms.MessageBox]::Show(
+                                    "Update erfolgreich!
+
+Neue Version: $($updateResult.NewVersion)
+
+Bitte starten Sie die Anwendung NEU,
+damit die neue DLL geladen wird.",
+                                    "Update abgeschlossen",
+                                    [System.Windows.Forms.MessageBoxButtons]::OK,
+                                    [System.Windows.Forms.MessageBoxIcon]::Information
+                                )
+                                
+                                # GUI neu starten erforderlich
+                                $result.Message = "Update erfolgreich! Bitte starten Sie die Anwendung neu."
+                                return $result
+                            }
+                            else {
+                                Write-Verbose "✗ Update fehlgeschlagen: $($updateResult.ErrorMessage)"
+                                
+                                # Fehlermeldung mit Fallback auf manuelles Update
+                                $result.Message = @"
+Hardware-Monitor deaktiviert: Automatisches Update fehlgeschlagen
+
+Fehler: $($updateResult.ErrorMessage)
+
+Bitte manuell updaten:
+  cd Tools
+  .\Update-LibreHardwareMonitor.ps1
+
+Oder:
+  https://www.nuget.org/packages/LibreHardwareMonitorLib/0.9.5
+
+Lib-Ordner: $libPath
+"@
+                                Update-Progress -Value 100 -Text "Update fehlgeschlagen"
+                                return $result
+                            }
+                        }
+                        catch {
+                            Write-Verbose "✗ Update-Fehler: $_"
+                            $result.Message = "Update fehlgeschlagen: $_\n\nBitte manuell updaten (siehe Tools\Update-LibreHardwareMonitor.ps1)"
+                            Update-Progress -Value 100 -Text "Update-Fehler"
+                            return $result
+                        }
+                    }
+                    else {
+                        # Benutzer hat Update abgelehnt
+                        $result.Message = @"
+Hardware-Monitor deaktiviert: LibreHardwareMonitorLib.dll veraltet
+
+Aktuelle Version: $version
+Benötigte Version: 0.9.5+
+
+WARNUNG: Version $version nutzt Winring0 (erkennt Defender als Malware)
+
+Update später durchführen:
+  cd Tools
+  .\Update-LibreHardwareMonitor.ps1
+"@
+                        Update-Progress -Value 100 -Text "Update abgelehnt"
+                        return $result
+                    }
+                }
+                else {
+                    Write-Verbose "✓ LibreHardwareMonitorLib.dll Version $productVersion (PawnIO-kompatibel)"
+                }
+            }
+        }
+        catch {
+            Write-Verbose "Warnung: Konnte Version von LibreHardwareMonitorLib.dll nicht prüfen: $_"
+        }
+    }
+    
+    Update-Progress -Value 55 -Text "Version OK, lade Abhängigkeiten..."
+    
+    # Schritt 4: Lade alle DLLs in der richtigen Reihenfolge
+    $loadProgress = 55
+    $loadStep = 25 / $requiredDLLs.Count
     
     foreach ($dllName in $requiredDLLs.Keys) {
         $dllFullPath = Join-Path $libPath $dllName
@@ -197,7 +477,7 @@ Nach Installation: System neu starten
     
     Update-Progress -Value 80 -Text "Teste Hardware-Monitor Initialisierung..."
     
-    # Schritt 4: LibreHardwareMonitorLib initialisieren und testen
+    # Schritt 5: LibreHardwareMonitorLib initialisieren und testen
     try {
         $testComputer = New-Object LibreHardwareMonitor.Hardware.Computer
         $testComputer.IsCpuEnabled = $true
@@ -256,7 +536,19 @@ Nach Installation: System neu starten
         
         # Keine Sensoren verfügbar (sollte nicht passieren wenn PawnIO läuft)
         $testComputer.Close()
-        $result.Message = "Hardware-Monitor Initialisierung fehlgeschlagen: Keine Sensoren verfügbar"
+        $result.Message = @"
+Hardware-Monitor Initialisierung fehlgeschlagen: Keine Sensoren verfügbar
+
+PawnIO-Treiber läuft, aber Hardware-Sensoren werden nicht erkannt.
+
+Mögliche Lösungen:
+  1. Stelle sicher, dass alle DLLs im Lib-Ordner aktuell sind
+  2. Prüfe ob Administrator-Rechte vorhanden sind
+  3. System neu starten
+  4. PawnIO neu installieren: winget uninstall namazso.PawnIO && winget install namazso.PawnIO
+
+Lib-Ordner: $libPath
+"@
         Update-Progress -Value 100 -Text "Keine Hardware-Sensoren verfügbar"
         Write-Verbose $result.Message
         return $result
@@ -1270,6 +1562,201 @@ function Test-SystemDependencies {
             WingetId = $pawnIO.WingetId
         }
         Write-Host "  ⚠️  PawnIO-Treiber nicht installiert (erforderlich für Hardware-Monitoring)" -ForegroundColor Yellow
+    }
+    
+    # 2a. DLL-VERSIONEN PRÜFEN
+    Write-Host "`n🔧 Prüfe benötigte Bibliotheken (DLLs)..." -ForegroundColor Cyan
+    
+    # Lib-Pfad ermitteln
+    $libPath = Join-Path $PSScriptRoot "..\..\Lib"
+    if (-not (Test-Path $libPath)) {
+        Write-Host "  ⚠️  Lib-Ordner nicht gefunden: $libPath" -ForegroundColor Yellow
+    }
+    else {
+        # 2a.1 LibreHardwareMonitorLib.dll (KRITISCH >= 0.9.5)
+        $lhmDllPath = Join-Path $libPath "LibreHardwareMonitorLib.dll"
+        if (Test-Path $lhmDllPath) {
+            try {
+                $lhmVersion = (Get-Item $lhmDllPath).VersionInfo.ProductVersion
+                $lhmVersionClean = if ($lhmVersion) { $lhmVersion.Split('+')[0] } else { "Unbekannt" }
+                
+                # Prüfe ob >= 0.9.5 (PawnIO-Version)
+                $versionOK = $false
+                if ($lhmVersion -and $lhmVersion -match '^(\d+\.\d+\.\d+)') {
+                    $v = [version]$Matches[1]
+                    if ($v -ge [version]"0.9.5") {
+                        $versionOK = $true
+                    }
+                }
+                
+                if ($versionOK) {
+                    $dependencies += @{
+                        Name = "LibreHardwareMonitorLib.dll"
+                        Description = "Hardware-Sensor-Bibliothek v$lhmVersionClean (PawnIO-kompatibel ✓)"
+                        Required = $true
+                        Available = $true
+                        Found = $true
+                        Version = $lhmVersionClean
+                        Path = $lhmDllPath
+                    }
+                    Write-Host "  ✓ LibreHardwareMonitorLib.dll v$lhmVersionClean (PawnIO-Version)" -ForegroundColor Green
+                }
+                else {
+                    # Veraltete Version (< 0.9.5 → nutzt WinRing0!)
+                    $allSatisfied = $false
+                    $dependencies += @{
+                        Name = "LibreHardwareMonitorLib.dll"
+                        Description = "⚠️ VERALTET v$lhmVersionClean (nutzt unsicheren WinRing0-Treiber statt PawnIO!)"
+                        Required = $true
+                        Available = $true
+                        Found = $false  # Als "nicht gefunden" markieren, da Version ungeeignet
+                        Version = "$lhmVersionClean (< 0.9.5)"
+                        Path = $lhmDllPath
+                    }
+                    Write-Host "  ⚠️  LibreHardwareMonitorLib.dll v$lhmVersionClean ist VERALTET!" -ForegroundColor Yellow
+                    Write-Host "      → Benötigt: v0.9.5+ (PawnIO statt WinRing0)" -ForegroundColor Yellow
+                    Write-Host "      → Update über Tools\Update-LibreHardwareMonitor.ps1" -ForegroundColor Gray
+                }
+            }
+            catch {
+                $dependencies += @{
+                    Name = "LibreHardwareMonitorLib.dll"
+                    Description = "Hardware-Sensor-Bibliothek (Version konnte nicht gelesen werden)"
+                    Required = $true
+                    Available = $true
+                    Found = $false
+                    Version = "Fehler beim Lesen"
+                    Path = $lhmDllPath
+                }
+                Write-Host "  ⚠️  LibreHardwareMonitorLib.dll: Version konnte nicht gelesen werden" -ForegroundColor Yellow
+            }
+        }
+        else {
+            $allSatisfied = $false
+            $dependencies += @{
+                Name = "LibreHardwareMonitorLib.dll"
+                Description = "Hardware-Sensor-Bibliothek (FEHLT!)"
+                Required = $true
+                Available = $false
+                Found = $false
+                Version = $null
+                Path = $lhmDllPath
+            }
+            Write-Host "  ❌ LibreHardwareMonitorLib.dll nicht gefunden!" -ForegroundColor Red
+        }
+        
+        # 2a.2 BlackSharp.Core.dll (ERFORDERLICH)
+        $blacksharpDllPath = Join-Path $libPath "BlackSharp.Core.dll"
+        if (Test-Path $blacksharpDllPath) {
+            try {
+                $blacksharpVersion = (Get-Item $blacksharpDllPath).VersionInfo.ProductVersion
+                $blacksharpVersionClean = if ($blacksharpVersion) { $blacksharpVersion } else { "Unbekannt" }
+                
+                $dependencies += @{
+                    Name = "BlackSharp.Core.dll"
+                    Description = "BlackSharp Basis-Bibliothek"
+                    Required = $true
+                    Available = $true
+                    Found = $true
+                    Version = $blacksharpVersionClean
+                    Path = $blacksharpDllPath
+                }
+                Write-Host "  ✓ BlackSharp.Core.dll v$blacksharpVersionClean" -ForegroundColor Green
+            }
+            catch {
+                Write-Host "  ⚠️  BlackSharp.Core.dll: Version konnte nicht gelesen werden" -ForegroundColor Yellow
+            }
+        }
+        else {
+            $dependencies += @{
+                Name = "BlackSharp.Core.dll"
+                Description = "BlackSharp Basis-Bibliothek (FEHLT!)"
+                Required = $true
+                Available = $false
+                Found = $false
+                Version = $null
+                Path = $blacksharpDllPath
+            }
+            Write-Host "  ⚠️  BlackSharp.Core.dll nicht gefunden" -ForegroundColor Yellow
+        }
+        
+        # 2a.3 HidSharp.dll (OPTIONAL - nur für spezielle HID-Geräte)
+        $hidsharpDllPath = Join-Path $libPath "HidSharp.dll"
+        if (Test-Path $hidsharpDllPath) {
+            try {
+                $hidsharpVersion = (Get-Item $hidsharpDllPath).VersionInfo.ProductVersion
+                $hidsharpVersionClean = if ($hidsharpVersion) { $hidsharpVersion } else { "Unbekannt" }
+                
+                $dependencies += @{
+                    Name = "HidSharp.dll"
+                    Description = "HID-Geräte-Bibliothek (optional für spezielle Hardware)"
+                    Required = $false
+                    Available = $true
+                    Found = $true
+                    Version = $hidsharpVersionClean
+                    Path = $hidsharpDllPath
+                }
+                Write-Host "  ✓ HidSharp.dll v$hidsharpVersionClean" -ForegroundColor Green
+            }
+            catch {
+                Write-Host "  ℹ️  HidSharp.dll: Version konnte nicht gelesen werden" -ForegroundColor Cyan
+            }
+        }
+        else {
+            Write-Host "  ℹ️  HidSharp.dll nicht gefunden (optional, nur für spezielle HID-Geräte)" -ForegroundColor Cyan
+        }
+        
+        # 2a.4 RAMSPDToolkit-NDD.dll (OPTIONAL)
+        $ramspdDllPath = Join-Path $libPath "RAMSPDToolkit-NDD.dll"
+        if (Test-Path $ramspdDllPath) {
+            try {
+                $ramspdVersion = (Get-Item $ramspdDllPath).VersionInfo.ProductVersion
+                $ramspdVersionClean = if ($ramspdVersion) { $ramspdVersion } else { "Unbekannt" }
+                
+                $dependencies += @{
+                    Name = "RAMSPDToolkit-NDD.dll"
+                    Description = "RAM-SPD-Informationen (optional)"
+                    Required = $false
+                    Available = $true
+                    Found = $true
+                    Version = $ramspdVersionClean
+                    Path = $ramspdDllPath
+                }
+                Write-Host "  ✓ RAMSPDToolkit-NDD.dll v$ramspdVersionClean" -ForegroundColor Green
+            }
+            catch {
+                Write-Host "  ℹ️  RAMSPDToolkit-NDD.dll: Version konnte nicht gelesen werden" -ForegroundColor Cyan
+            }
+        }
+        else {
+            Write-Host "  ℹ️  RAMSPDToolkit-NDD.dll nicht gefunden (optional)" -ForegroundColor Cyan
+        }
+        
+        # 2a.5 DiskInfoToolkit.dll (OPTIONAL)
+        $diskinfoPath = Join-Path $libPath "DiskInfoToolkit.dll"
+        if (Test-Path $diskinfoPath) {
+            try {
+                $diskinfoVersion = (Get-Item $diskinfoPath).VersionInfo.ProductVersion
+                $diskinfoVersionClean = if ($diskinfoVersion) { $diskinfoVersion } else { "Unbekannt" }
+                
+                $dependencies += @{
+                    Name = "DiskInfoToolkit.dll"
+                    Description = "Festplatten-Informationen (optional)"
+                    Required = $false
+                    Available = $true
+                    Found = $true
+                    Version = $diskinfoVersionClean
+                    Path = $diskinfoPath
+                }
+                Write-Host "  ✓ DiskInfoToolkit.dll v$diskinfoVersionClean" -ForegroundColor Green
+            }
+            catch {
+                Write-Host "  ℹ️  DiskInfoToolkit.dll: Version konnte nicht gelesen werden" -ForegroundColor Cyan
+            }
+        }
+        else {
+            Write-Host "  ℹ️  DiskInfoToolkit.dll nicht gefunden (optional)" -ForegroundColor Cyan
+        }
     }
     
     # 3. Hardware-Monitoring (LibreHardwareMonitorLib + PawnIO) prüfen

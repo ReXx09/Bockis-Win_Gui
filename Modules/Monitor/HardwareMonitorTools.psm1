@@ -24,6 +24,8 @@ $script:lastRamTempTime = $null  # Neuer Zeitstempel für RAM-Temperatur-Cache
 $script:isUpdating = $false
 $script:tooltipControl = $null
 $script:gpuName = $null
+$script:lastHardwareMonitorError = $null  # Speichert detaillierte Fehlermeldung vom DependencyChecker
+$script:hardwareMonitorInitAttempted = $false  # Flag ob bereits versucht wurde zu initialisieren
 
 # Neue Cache-Variablen für verbesserte Performance
 $script:ramCache = $null
@@ -678,11 +680,20 @@ function Initialize-LiveMonitoring {
             
             if ($null -eq $script:computerObj) {
                 Write-Host "`n⚠️ HARDWARE-MONITORING DEAKTIVIERT" -ForegroundColor Yellow
-                Write-Host "Grund: LibreHardwareMonitor oder PawnIO-Treiber nicht verfügbar" -ForegroundColor Gray
-                Write-Host "`nLösungen:" -ForegroundColor Cyan
-                Write-Host "  1. Installiere LibreHardwareMonitor: winget install LibreHardwareMonitor.LibreHardwareMonitor" -ForegroundColor Gray
-                Write-Host "  2. Starte LibreHardwareMonitor.exe einmal (registriert PawnIO-Treiber)" -ForegroundColor Gray
-                Write-Host "  3. Stelle sicher, dass du Administrator-Rechte hast" -ForegroundColor Gray
+                
+                # Zeige detaillierte Fehlermeldung vom DependencyChecker
+                if ($script:lastHardwareMonitorError) {
+                    Write-Host $script:lastHardwareMonitorError -ForegroundColor Gray
+                }
+                else {
+                    # Fallback für den Fall, dass keine detaillierte Meldung verfügbar ist
+                    Write-Host "Hardware-Monitor konnte nicht initialisiert werden." -ForegroundColor Gray
+                    Write-Host "Bitte prüfe:" -ForegroundColor Cyan
+                    Write-Host "  - DLL-Dateien im Lib-Ordner vorhanden?" -ForegroundColor Gray
+                    Write-Host "  - PawnIO-Treiber installiert und aktiv?" -ForegroundColor Gray
+                    Write-Host "  - Administrator-Rechte vorhanden?" -ForegroundColor Gray
+                }
+                
                 return $null
             }
             
@@ -818,6 +829,15 @@ function Initialize-LibreHardwareMonitor {
     if ($null -ne $script:computerObj -and $script:useLibreHardware) {
         return $script:computerObj
     }
+    
+    # Wenn bereits ein fehlgeschlagener Initialisierungsversuch stattgefunden hat, nicht erneut versuchen
+    if ($script:hardwareMonitorInitAttempted -and $null -eq $script:computerObj) {
+        Write-Verbose "Hardware-Monitor-Initialisierung wurde bereits versucht und ist fehlgeschlagen"
+        return $null
+    }
+    
+    # Markiere dass ein Initialisierungsversuch stattfindet
+    $script:hardwareMonitorInitAttempted = $true
 
     # Importiere DependencyChecker für zentrale Entscheidung
     if (-not (Get-Command -Name 'Initialize-HardwareMonitoringMode' -ErrorAction SilentlyContinue)) {
@@ -831,7 +851,10 @@ function Initialize-LibreHardwareMonitor {
     $hwStatus = Initialize-HardwareMonitoringMode -ProgressBar $progressBar -StatusLabel $null
     
     if (-not $hwStatus.Available) {
-        # Hardware-Monitor NICHT verfügbar - zeige detaillierte Fehlermeldung
+        # Hardware-Monitor NICHT verfügbar - speichere detaillierte Meldung für spätere Verwendung
+        $script:lastHardwareMonitorError = $hwStatus.Message
+        
+        # Zeige detaillierte Fehlermeldung wenn DLLs fehlen (nur beim ersten Versuch!)
         if ($hwStatus.MissingDLLs.Count -gt 0 -and -not $SuppressVisualFeedback) {
             # Zeige fehlende DLLs an
             $missingList = ($hwStatus.MissingDLLs | ForEach-Object { "  - $($_.FileName)`n    ($($_.Description))" }) -join "`n"
