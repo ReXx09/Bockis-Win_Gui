@@ -1,14 +1,14 @@
 ﻿# Win_Gui_Module.ps1 - Hauptskript für die PowerShell-GUI
 # Autor: Bocki
-# Version: 4.1.2
+# Version: 4.1.3
 
 # ===================================================================
 # VERSIONS-INFORMATION
 # ===================================================================
-$script:AppVersion = "4.1.2"
+$script:AppVersion = "4.1.3"
 $script:AppName = "Bockis System-Tool"
 $script:AppPublisher = "Bockis"
-$script:VersionDate = "2026-02-09"
+$script:VersionDate = "2026-02-10"
 
 # WPF-Assemblies für moderne UI-Komponenten laden
 Add-Type -AssemblyName PresentationFramework
@@ -364,7 +364,8 @@ $moduleOrder = @(
     # 'HardwareInfo               ', # DEPRECATED - Nicht mehr verwendet (direkt in Win_Gui_Module.ps1)
     'Tools\DefenderTools          ', # Windows Defender Tools
     'Tools\WindowsUpdateTools     ', # Windows Update Tools
-    'DatabaseManager              ' # Datenbank-Integration
+    'DatabaseManager              ', # Datenbank-Integration
+    'UpdateManager                ' # GitHub Update-Funktionalität
 )
 
 # Verbesserte Fehlerbehandlung beim Modul-Import
@@ -5816,189 +5817,66 @@ $btnRestart.Add_Click({
 # ===================================================================
 # AUTO-UPDATE BUTTON
 # ===================================================================
-
-# Funktion zum Prüfen und Durchführen von Updates
+# ===================================================================
+# UPDATE-FUNKTION (Wrapper für UpdateManager-Modul)
+# ===================================================================
 function Check-ForUpdates {
-    param(
-        [bool]$AutoInstall = $false
-    )
+    <#
+    .SYNOPSIS
+        Wrapper-Funktion für das UpdateManager-Modul
+    
+    .DESCRIPTION
+        Ruft Invoke-UpdateCheck aus dem UpdateManager-Modul auf
+        und übergibt alle notwendigen GUI-Komponenten und Parameter
+    #>
     
     try {
-        $currentVersion = $script:AppVersion
-        $repoOwner = "ReXx09"
-        $repoName = "Bockis-Win_Gui"
-        $apiUrl = "https://api.github.com/repos/$repoOwner/$repoName/releases/latest"
-        
-        # GitHub Token für private Repos (während Beta-Phase)
-        # WICHTIG: Nach Public-Release diesen Token entfernen!
-        $githubToken = "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"  # TODO: Ersetzen mit deinem Token
-        
-        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
-        $outputBox.AppendText("[i] Prüfe auf Updates...`r`n")
-        
-        # Headers mit Authentication vorbereiten
-        $headers = @{
-            "User-Agent" = "Bockis-System-Tool"
-            "Accept" = "application/vnd.github+json"
-        }
-        
-        # Token nur hinzufügen, wenn vorhanden (für spätere Public-Version)
-        if ($githubToken -and $githubToken -ne "ghp_DEIN_TOKEN_HIER") {
-            $headers["Authorization"] = "Bearer $githubToken"
-        }
-        
-        # GitHub API abfragen
-        $latestRelease = Invoke-RestMethod -Uri $apiUrl -Headers $headers
-        $latestVersion = $latestRelease.tag_name -replace 'v', ''
-        
-        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
-        $outputBox.AppendText("Aktuelle Version: $currentVersion`r`n")
-        $outputBox.AppendText("Neueste Version: $latestVersion`r`n`r`n")
-        
-        # Versionsvergleich
-        if ([version]$latestVersion -gt [version]$currentVersion) {
-            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
-            $outputBox.AppendText("[✓] Update verfügbar: v$latestVersion`r`n`r`n")
-            
-            # Asset-URL ermitteln (erstes ZIP-Asset)
-            $asset = $latestRelease.assets | Where-Object { $_.name -like "*.zip" } | Select-Object -First 1
-            
-            if (-not $asset) {
-                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
-                $outputBox.AppendText("[✗] Kein Download-Asset gefunden!`r`n")
-                return $false
-            }
-            
-            # Benutzer fragen
-            $releaseNotesPreview = if ($latestRelease.body.Length -gt 200) {
-                $latestRelease.body.Substring(0, 200) + "..."
-            } else {
-                $latestRelease.body
-            }
-            
-            $result = [System.Windows.Forms.MessageBox]::Show(
-                "Neue Version verfügbar: v$latestVersion`n`nAktuell installiert: v$currentVersion`n`nRelease-Notes:`n$releaseNotesPreview`n`nMöchten Sie jetzt updaten?",
-                "Update verfügbar",
-                [System.Windows.Forms.MessageBoxButtons]::YesNo,
-                [System.Windows.Forms.MessageBoxIcon]::Information
-            )
-            
-            if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
-                # Download-Pfad
-                $tempPath = [System.IO.Path]::GetTempPath()
-                $zipPath = Join-Path $tempPath "Bockis-Update-v$latestVersion.zip"
-                $extractPath = Join-Path $tempPath "Bockis-Update-Extract"
-                
-                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
-                $outputBox.AppendText("[i] Download wird gestartet...`r`n")
-                $outputBox.AppendText("Quelle: $($asset.name)`r`n")
-                $outputBox.AppendText("Ziel: $zipPath`r`n`r`n")
-                
-                # Progressbar vorbereiten
-                Update-ProgressStatus -StatusText "Download läuft..." -ProgressValue 0 -TextColor ([System.Drawing.Color]::Blue)
-                
-                # Download mit Authentication
-                $webClient = New-Object System.Net.WebClient
-                $webClient.Headers.Add("User-Agent", "Bockis-System-Tool")
-                
-                # Token für Download hinzufügen (private Repo Assets)
-                if ($githubToken -and $githubToken -ne "ghp_DEIN_TOKEN_HIER") {
-                    $webClient.Headers.Add("Authorization", "Bearer $githubToken")
-                }
-                
-                Register-ObjectEvent -InputObject $webClient -EventName DownloadProgressChanged -SourceIdentifier WebClient.DownloadProgressChanged -Action {
-                    $progressBar.Value = $EventArgs.ProgressPercentage
-                    Update-ProgressStatus -StatusText "Download: $($EventArgs.ProgressPercentage)%" -ProgressValue $EventArgs.ProgressPercentage -TextColor ([System.Drawing.Color]::Blue)
-                } | Out-Null
-                
-                # Für private Repos: API-Download-URL verwenden statt browser_download_url
-                $downloadUrl = $asset.url
-                $webClient.Headers.Add("Accept", "application/octet-stream")
-                
-                $webClient.DownloadFileAsync($downloadUrl, $zipPath)
-                
-                # Warten auf Download-Abschluss
-                while ($webClient.IsBusy) {
-                    [System.Windows.Forms.Application]::DoEvents()
-                    Start-Sleep -Milliseconds 100
-                }
-                
-                Unregister-Event -SourceIdentifier WebClient.DownloadProgressChanged -ErrorAction SilentlyContinue
-                $webClient.Dispose()
-                
-                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
-                $outputBox.AppendText("[✓] Download abgeschlossen!`r`n`r`n")
-                
-                # Entpacken
-                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
-                $outputBox.AppendText("[i] Extrahiere Update...`r`n")
-                Update-ProgressStatus -StatusText "Entpacken..." -ProgressValue 50 -TextColor ([System.Drawing.Color]::Green)
-                
-                if (Test-Path $extractPath) {
-                    Remove-Item $extractPath -Recurse -Force
-                }
-                
-                Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force
-                
-                # Update-Script erstellen
-                $updateScript = @"
-Start-Sleep -Seconds 2
-Write-Host 'Installiere Update...'
-`$source = '$extractPath\*'
-`$dest = '$PSScriptRoot'
-Copy-Item -Path `$source -Destination `$dest -Recurse -Force
-Remove-Item '$zipPath' -Force
-Remove-Item '$extractPath' -Recurse -Force
-Write-Host 'Update abgeschlossen! Starte Anwendung...'
-Start-Process powershell.exe -ArgumentList '-ExecutionPolicy Bypass -File "$PSScriptRoot\Win_Gui_Module.ps1"'
-"@
-                
-                $updateScriptPath = Join-Path $tempPath "BockisUpdate.ps1"
-                $updateScript | Out-File -FilePath $updateScriptPath -Encoding UTF8 -Force
-                
-                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
-                $outputBox.AppendText("[✓] Update wird installiert...`r`n")
-                $outputBox.AppendText("[i] Anwendung wird neu gestartet!`r`n")
-                
-                Update-ProgressStatus -StatusText "Installation..." -ProgressValue 100 -TextColor ([System.Drawing.Color]::LimeGreen)
-                
-                # Update-Script starten und GUI schließen
-                Start-Process powershell.exe -ArgumentList "-ExecutionPolicy Bypass -WindowStyle Hidden -File `"$updateScriptPath`"" -WindowStyle Hidden
-                
-                Start-Sleep -Milliseconds 500
-                $mainform.Close()
-            }
-            
-            return $true
-        }
-        else {
-            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
-            $outputBox.AppendText("[✓] Sie verwenden bereits die neueste Version!`r`n")
-            
+        # Prüfe ob UpdateManager-Modul geladen ist
+        if (-not (Get-Command -Name Invoke-UpdateCheck -ErrorAction SilentlyContinue)) {
+            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
+            $outputBox.AppendText("[✗] UpdateManager-Modul nicht geladen!`r`n")
             [System.Windows.Forms.MessageBox]::Show(
-                "Sie verwenden bereits die neueste Version: v$currentVersion",
-                "Keine Updates",
+                "Das UpdateManager-Modul konnte nicht geladen werden.`nUpdate-Funktion nicht verfügbar.",
+                "Modul-Fehler",
                 [System.Windows.Forms.MessageBoxButtons]::OK,
-                [System.Windows.Forms.MessageBoxIcon]::Information
+                [System.Windows.Forms.MessageBoxIcon]::Error
             )
-            
             return $false
         }
+        
+        # Rufe Update-Check aus Modul auf
+        return Invoke-UpdateCheck `
+            -CurrentVersion $script:AppVersion `
+            -OutputBox $outputBox `
+            -ProgressBar $progressBar `
+            -MainForm $mainform `
+            -ApplicationPath $PSScriptRoot
     }
     catch {
         Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
-        $outputBox.AppendText("[✗] Fehler beim Update-Check: $_`r`n")
-        
-        [System.Windows.Forms.MessageBox]::Show(
-            "Fehler beim Prüfen auf Updates:`n`n$_`n`nBitte überprüfen Sie Ihre Internetverbindung.",
-            "Update-Fehler",
-            [System.Windows.Forms.MessageBoxButtons]::OK,
-            [System.Windows.Forms.MessageBoxIcon]::Error
-        )
-        
+        $outputBox.AppendText("[✗] Fehler beim Aufruf der Update-Funktion: $($_.Exception.Message)`r`n")
         return $false
     }
 }
+
+# Update-Button erstellen (rechts neben Progressbar)
+$btnUpdate = New-Object System.Windows.Forms.Button
+$btnUpdate.Text = "↻ Update"
+$btnUpdate.Location = New-Object System.Drawing.Point(850, 755)  # 190 + 650 + 10 = rechts neben Progressbar
+$btnUpdate.Size = New-Object System.Drawing.Size(140, 30)
+$btnUpdate.BackColor = [System.Drawing.Color]::FromArgb(16, 124, 16)  # Grün
+$btnUpdate.ForeColor = [System.Drawing.Color]::White
+$btnUpdate.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+$btnUpdate.FlatAppearance.BorderSize = 0
+$btnUpdate.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+
+# Click-Event: Update prüfen
+$btnUpdate.Add_Click({
+    Check-ForUpdates
+})
+
+$mainform.Controls.Add($btnUpdate)
+
 
 # Tooltip-Texte zu den Funktionsbuttons hinzufügen (tooltipObj wurde bereits weiter oben initialisiert)
 $tooltipObj.SetToolTip($btnQuickMRT, "Führt einen schnellen Malware-Scan mit Microsoft Malicious Software Removal Tool durch")
@@ -6020,6 +5898,7 @@ $tooltipObj.SetToolTip($btnResetNetwork, "Setzt Netzwerkadapter und TCP/IP-Stack
 $tooltipObj.SetToolTip($btnDiskCleanup, "Startet den Windows Disk Cleanup-Tool zum Freigeben von Speicherplatz")
 $tooltipObj.SetToolTip($btnTempFiles, "Bereinigt temporäre Dateien, um Speicherplatz freizugeben")
 $tooltipObj.SetToolTip($btnRestart, "Neustart-Optionen: GUI neuladen oder System neustarten")
+$tooltipObj.SetToolTip($btnUpdate, "Prüft auf verfügbare Updates und installiert diese automatisch")
 $tooltipObj.SetToolTip($infoButton, "Zeigt Informationen über die Anwendung an")
 
 # Status-Informationen anzeigen
@@ -6260,16 +6139,7 @@ $toolWrapPanel.Background = [Windows.Media.SolidColorBrush]::new([Windows.Media.
 $toolScrollViewer.Content = $toolWrapPanel
 $toolDownloadsHost.Child = $toolScrollViewer
 
-# Hinweis: Die Tool-Ressourcen und -Funktionen wurden ins ToolLibrary-Modul verschoben
 
-# Funktion zum Erstellen einer Tool-Kachel
-# Hinweis: Die Initialize-ToolEntry-Funktion wurde ins ToolLibrary-Modul verschoben
-
-# Funktion zum Anzeigen der Tool-Kacheln
-# Hinweis: Die Show-ToolTileList-Funktion wurde ins ToolLibrary-Modul verschoben
-
-# Hinweis: CategoryPanel und zugehörige Buttons wurden entfernt, 
-# da die Kategorien jetzt im Dropdown-Menü "Tool-Downloads" integriert sind
 
 # Variable zur Verfolgung, ob Tools bereits geladen wurden
 $script:toolsAlreadyLoaded = $false
