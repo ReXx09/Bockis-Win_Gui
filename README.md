@@ -1,4 +1,4 @@
-# Bocki's Windows Tool-Kit v4.0
+# Bocki's Windows Tool-Kit v4.2
 
 Ein professionelles PowerShell-basiertes Systemwartungs-Tool mit moderner grafischer Benutzeroberfläche, WPF-Integration und umfassenden Diagnose-Funktionen für Windows-Systeme.
 
