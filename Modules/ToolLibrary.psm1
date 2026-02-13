@@ -683,6 +683,8 @@ function Invoke-ToolDownload {
     }
     
     try {
+        Update-ToolWorkflowProgress -ProgressBar $ProgressBar -StatusText "Download wird vorbereitet..." -ProgressValue 2 -TextColor ([System.Drawing.Color]::White)
+
         # Generiere einen Basis-Dateinamen
         $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
         $safeName = $Tool.Name -replace '[^a-zA-Z0-9]', '_'
@@ -712,6 +714,7 @@ function Invoke-ToolDownload {
             $webClient.Headers.Add('Accept-Language', 'de-DE,de;q=0.9,en;q=0.8')
             
             Write-Host "Lade Datei herunter..." -ForegroundColor Yellow
+            Update-ToolWorkflowProgress -ProgressBar $ProgressBar -StatusText "Download gestartet..." -ProgressValue 5 -TextColor ([System.Drawing.Color]::White)
             
             # Variablen für Progress-Tracking
             $script:bytesReceived = 0
@@ -751,10 +754,8 @@ function Invoke-ToolDownload {
                         # GUI ProgressBar
                         if ($ProgressBar) {
                             try {
-                                $ProgressBar.Value = $percent
-                                $ProgressBar.CustomText = "Download: $receivedMB MB / $totalMB MB ($percent%)"
-                                $ProgressBar.TextColor = [System.Drawing.Color]::Cyan
-                                $ProgressBar.Refresh()
+                                $downloadProgress = 5 + [int]([Math]::Round($percent * 0.85))
+                                Update-ToolWorkflowProgress -ProgressBar $ProgressBar -StatusText "Download: $receivedMB MB / $totalMB MB ($percent%)" -ProgressValue $downloadProgress -TextColor ([System.Drawing.Color]::Cyan)
                             } catch {
                                 # Ignoriere Fehler
                             }
@@ -776,6 +777,7 @@ function Invoke-ToolDownload {
             Write-Progress -Activity "Download: $($Tool.Name)" -Completed
             $webClient.remove_DownloadProgressChanged($progressHandler)
             $webClient.Dispose()
+            Update-ToolWorkflowProgress -ProgressBar $ProgressBar -StatusText "Download abgeschlossen, verarbeite Datei..." -ProgressValue 92 -TextColor ([System.Drawing.Color]::LightGreen)
             
             Write-Host "`n✓ Download abgeschlossen, verarbeite Datei..." -ForegroundColor Green
             
@@ -802,6 +804,7 @@ function Invoke-ToolDownload {
             
             # Umbenennen der temporären Datei
             Move-Item -Path $tempFile -Destination $finalPath -Force
+            Update-ToolWorkflowProgress -ProgressBar $ProgressBar -StatusText "Prüfe heruntergeladene Datei..." -ProgressValue 96 -TextColor ([System.Drawing.Color]::White)
             
             if (Test-Path $finalPath) {
                 $fileInfo = Get-Item $finalPath
@@ -824,6 +827,8 @@ function Invoke-ToolDownload {
                 }
                 
                 Write-Host "✓ Download erfolgreich: $finalFileName ($fileSizeMB MB)" -ForegroundColor Green
+                Update-ToolWorkflowProgress -ProgressBar $ProgressBar -StatusText "Download erfolgreich abgeschlossen" -ProgressValue 100 -TextColor ([System.Drawing.Color]::LightGreen)
+                Start-Sleep -Milliseconds 500
                 
                 # Resette ProgressBar (Windows Forms - direkter Zugriff)
                 if ($ProgressBar) {
@@ -869,6 +874,7 @@ function Invoke-ToolDownload {
     }
     catch {
         $errorMsg = $_.Exception.Message
+        Update-ToolWorkflowProgress -ProgressBar $ProgressBar -StatusText "Download fehlgeschlagen" -ProgressValue 0 -TextColor ([System.Drawing.Color]::Red)
         
         # Detaillierte Fehleranalyse
         $detailMsg = "Download fehlgeschlagen: $errorMsg`n`nURL: $($Tool.DownloadUrl)"
@@ -896,7 +902,9 @@ function Invoke-ToolDownload {
 function Expand-ZipAndFindInstaller {
     param (
         [Parameter(Mandatory = $true)]
-        [string]$ZipPath
+        [string]$ZipPath,
+        [Parameter(Mandatory = $false)]
+        [object]$ProgressBar = $null
     )
     
     try {
@@ -906,9 +914,11 @@ function Expand-ZipAndFindInstaller {
         
         Write-Host "Entpacke ZIP: $ZipPath..." -ForegroundColor Cyan
         Write-Host "Ziel: $tempExtractPath" -ForegroundColor Gray
+        Update-ToolWorkflowProgress -ProgressBar $ProgressBar -StatusText "Entpacke Archiv..." -ProgressValue 72 -TextColor ([System.Drawing.Color]::Yellow)
         
         # Entpacke ZIP
         Expand-Archive -Path $ZipPath -DestinationPath $tempExtractPath -Force
+        Update-ToolWorkflowProgress -ProgressBar $ProgressBar -StatusText "Suche Installer im entpackten Archiv..." -ProgressValue 82 -TextColor ([System.Drawing.Color]::White)
         
         # Suche nach installierbaren Dateien (EXE, MSI, Setup)
         $installerFiles = Get-ChildItem -Path $tempExtractPath -Recurse -Include *.exe, *.msi | 
@@ -932,6 +942,7 @@ function Expand-ZipAndFindInstaller {
         $installerFile = $installerFiles[0]
         
         Write-Host "✓ Installer gefunden: $($installerFile.Name)" -ForegroundColor Green
+        Update-ToolWorkflowProgress -ProgressBar $ProgressBar -StatusText "Installer gefunden: $($installerFile.Name)" -ProgressValue 88 -TextColor ([System.Drawing.Color]::LightGreen)
         
         return @{
             Success = $true
@@ -955,7 +966,10 @@ function Install-ToolFromLocal {
         [string]$InstallerPath,
         
         [Parameter(Mandatory = $false)]
-        [switch]$Silent
+        [switch]$Silent,
+
+        [Parameter(Mandatory = $false)]
+        [object]$ProgressBar = $null
     )
     
     # Prüfe ob Datei existiert
@@ -973,8 +987,9 @@ function Install-ToolFromLocal {
     # ===== NEUE LOGIK: ZIP-Behandlung =====
     if ($fileExtension -eq '.zip') {
         Write-Host "ZIP-Datei erkannt - starte automatisches Entpacken..." -ForegroundColor Yellow
+        Update-ToolWorkflowProgress -ProgressBar $ProgressBar -StatusText "ZIP erkannt - starte Entpacken..." -ProgressValue 68 -TextColor ([System.Drawing.Color]::Yellow)
         
-        $extractResult = Expand-ZipAndFindInstaller -ZipPath $InstallerPath
+        $extractResult = Expand-ZipAndFindInstaller -ZipPath $InstallerPath -ProgressBar $ProgressBar
         
         if (-not $extractResult.Success) {
             # Aufräumen bei Fehler
@@ -986,10 +1001,12 @@ function Install-ToolFromLocal {
         
         # Rekursiver Aufruf mit extrahierter EXE
         Write-Host "Starte Installation der extrahierten Datei..." -ForegroundColor Cyan
-        $installResult = Install-ToolFromLocal -InstallerPath $extractResult.InstallerPath -Silent:$Silent
+        Update-ToolWorkflowProgress -ProgressBar $ProgressBar -StatusText "Starte Installation aus entpacktem Archiv..." -ProgressValue 90 -TextColor ([System.Drawing.Color]::Cyan)
+        $installResult = Install-ToolFromLocal -InstallerPath $extractResult.InstallerPath -Silent:$Silent -ProgressBar $ProgressBar
         
         # Aufräumen nach Installation
         Write-Host "Räume temporäre Dateien auf..." -ForegroundColor Gray
+        Update-ToolWorkflowProgress -ProgressBar $ProgressBar -StatusText "Räume temporäre Dateien auf..." -ProgressValue 95 -TextColor ([System.Drawing.Color]::White)
         if ($extractResult.ExtractPath -and (Test-Path $extractResult.ExtractPath)) {
             Start-Sleep -Seconds 2  # Kurze Pause damit Installer Dateien freigeben kann
             Remove-Item -Path $extractResult.ExtractPath -Recurse -Force -ErrorAction SilentlyContinue
@@ -1032,6 +1049,7 @@ function Install-ToolFromLocal {
     }
     
     Write-Host "Starte Installer: $($fileInfo.Name)..." -ForegroundColor Cyan
+    Update-ToolWorkflowProgress -ProgressBar $ProgressBar -StatusText "Starte Installer: $($fileInfo.Name)" -ProgressValue 92 -TextColor ([System.Drawing.Color]::Cyan)
     
     try {
         # Verwende Start-Process für bessere Kompatibilität
@@ -1056,19 +1074,30 @@ function Install-ToolFromLocal {
         
         if ($Silent) {
             Write-Host "Warte auf Installations-Abschluss..." -ForegroundColor Yellow
+            Update-ToolWorkflowProgress -ProgressBar $ProgressBar -StatusText "Installation läuft..." -ProgressValue 94 -TextColor ([System.Drawing.Color]::Yellow)
             
             # Warte auf Prozessende (max 5 Minuten)
-            if ($process.WaitForExit(300000)) {
+            $waitStart = Get-Date
+            while (-not $process.HasExited -and ((Get-Date) - $waitStart).TotalMilliseconds -lt 300000) {
+                $elapsedMs = ((Get-Date) - $waitStart).TotalMilliseconds
+                $waitPercent = [int]([Math]::Min(4, [Math]::Floor(($elapsedMs / 300000) * 4)))
+                Update-ToolWorkflowProgress -ProgressBar $ProgressBar -StatusText "Installation läuft..." -ProgressValue (94 + $waitPercent) -TextColor ([System.Drawing.Color]::Yellow)
+                Start-Sleep -Milliseconds 250
+            }
+
+            if ($process.HasExited) {
                 $exitCode = $process.ExitCode
                 
                 if ($exitCode -eq 0) {
                     Write-Host "✓ Installation erfolgreich abgeschlossen" -ForegroundColor Green
+                    Update-ToolWorkflowProgress -ProgressBar $ProgressBar -StatusText "Installation erfolgreich abgeschlossen" -ProgressValue 100 -TextColor ([System.Drawing.Color]::LightGreen)
                     return @{
                         Success = $true
                         Message = "Installation erfolgreich abgeschlossen!"
                     }
                 } else {
                     Write-Host "✗ Installation mit Fehlercode $exitCode beendet" -ForegroundColor Red
+                    Update-ToolWorkflowProgress -ProgressBar $ProgressBar -StatusText "Installation fehlgeschlagen (Code $exitCode)" -ProgressValue 0 -TextColor ([System.Drawing.Color]::Red)
                     return @{
                         Success = $false
                         Message = "Installation fehlgeschlagen (Exit-Code: $exitCode)`n`nMöglicherweise wurden Admin-Rechte verweigert oder die Installation wurde abgebrochen."
@@ -1076,6 +1105,7 @@ function Install-ToolFromLocal {
                 }
             } else {
                 Write-Host "⚠ Installation-Timeout" -ForegroundColor Yellow
+                Update-ToolWorkflowProgress -ProgressBar $ProgressBar -StatusText "Installation-Timeout" -ProgressValue 0 -TextColor ([System.Drawing.Color]::Red)
                 return @{
                     Success = $false
                     Message = "Installation dauert zu lange (>5 Min).`n`nBitte prüfen Sie manuell, ob die Installation erfolgreich war."
@@ -1084,6 +1114,7 @@ function Install-ToolFromLocal {
         } else {
             # Bei manueller Installation nur Start bestätigen
             Write-Host "✓ Installer wurde gestartet" -ForegroundColor Green
+            Update-ToolWorkflowProgress -ProgressBar $ProgressBar -StatusText "Installer wurde gestartet" -ProgressValue 100 -TextColor ([System.Drawing.Color]::LightGreen)
             return @{
                 Success = $true
                 Message = "Installer wurde erfolgreich gestartet.`n`nBitte folgen Sie den Anweisungen des Installers."
@@ -1093,6 +1124,7 @@ function Install-ToolFromLocal {
     catch {
         $errorMsg = $_.Exception.Message
         Write-Host "✗ Fehler beim Starten des Installers: $errorMsg" -ForegroundColor Red
+        Update-ToolWorkflowProgress -ProgressBar $ProgressBar -StatusText "Fehler beim Starten des Installers" -ProgressValue 0 -TextColor ([System.Drawing.Color]::Red)
         
         # Spezifische Fehlermeldungen
         if ($errorMsg -match 'keine gültige Anwendung|not a valid Win32 application') {
@@ -1238,6 +1270,195 @@ function Update-ToolProgress {
     
     # UI aktualisieren
     [System.Windows.Forms.Application]::DoEvents()
+}
+
+function Update-ToolWorkflowProgress {
+    param (
+        [Parameter(Mandatory = $false)]
+        [object]$ProgressBar = $null,
+        [Parameter(Mandatory = $true)]
+        [string]$StatusText,
+        [Parameter(Mandatory = $true)]
+        [int]$ProgressValue,
+        [Parameter(Mandatory = $false)]
+        [System.Drawing.Color]$TextColor = [System.Drawing.Color]::White
+    )
+
+    if (-not $ProgressBar) { return }
+
+    try {
+        $safeValue = [Math]::Min([Math]::Max($ProgressValue, 0), 100)
+        $ProgressBar.Value = $safeValue
+
+        if ($ProgressBar.GetType().Name -eq "TextProgressBar") {
+            $ProgressBar.CustomText = $StatusText
+            $ProgressBar.TextColor = $TextColor
+        }
+
+        $ProgressBar.Refresh()
+        [System.Windows.Forms.Application]::DoEvents()
+    }
+    catch {
+    }
+}
+
+function Invoke-WingetWithLiveOutput {
+    param (
+        [Parameter(Mandatory = $true)]
+        [string[]]$Arguments,
+        [Parameter(Mandatory = $true)]
+        [string]$ToolName,
+        [Parameter(Mandatory = $true)]
+        [string]$OperationLabel,
+        [Parameter(Mandatory = $false)]
+        [object]$ProgressBar = $null,
+        [Parameter(Mandatory = $false)]
+        [int]$StartProgress = 70,
+        [Parameter(Mandatory = $false)]
+        [int]$EndProgress = 95,
+        [Parameter(Mandatory = $false)]
+        [int]$TimeoutSeconds = 300
+    )
+
+    $escapedArgs = $Arguments | ForEach-Object {
+        if ($_ -match '\s') { '"' + ($_ -replace '"', '\"') + '"' } else { $_ }
+    }
+
+    $logDirectory = Join-Path $PSScriptRoot "..\Data\Logs"
+    if (-not (Test-Path $logDirectory)) {
+        New-Item -ItemType Directory -Path $logDirectory -Force | Out-Null
+    }
+
+    $safeToolName = $ToolName -replace '[^a-zA-Z0-9\-_]', '_'
+    $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+    $wingetLogPath = Join-Path $logDirectory "winget_${safeToolName}_${timestamp}.log"
+
+    $hasLogArg = $Arguments -contains '--log'
+    $primaryCommand = if ($Arguments.Count -gt 0) { "$($Arguments[0])".ToLowerInvariant() } else { '' }
+    $supportsWingetLog = @('install', 'upgrade', 'uninstall', 'repair') -contains $primaryCommand
+    $effectiveArgs = @($Arguments)
+    if ($supportsWingetLog -and -not $hasLogArg) {
+        $effectiveArgs += @('--log', $wingetLogPath)
+    }
+
+    $escapedArgs = $effectiveArgs | ForEach-Object {
+        if ($_ -match '\s') { '"' + ($_ -replace '"', '\"') + '"' } else { $_ }
+    }
+    $argumentString = ($escapedArgs -join ' ')
+
+    Update-ToolWorkflowProgress -ProgressBar $ProgressBar -StatusText "Starte Winget-${OperationLabel}: $ToolName..." -ProgressValue $StartProgress -TextColor ([System.Drawing.Color]::Cyan)
+
+    if (Get-Command -Name Write-ToolLog -ErrorAction SilentlyContinue) {
+        Write-ToolLog -ToolName "Winget-Operations" -Message "Starte: winget $argumentString" -Level Information
+        Write-ToolLog -ToolName "Winget-Operations" -Message "Detail-Log: $wingetLogPath" -Level Information
+    }
+    Write-Host "Starte: winget $argumentString" -ForegroundColor Cyan
+
+    try {
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = "winget"
+        $psi.Arguments = $argumentString
+        $psi.UseShellExecute = $false
+        $psi.RedirectStandardOutput = $false
+        $psi.RedirectStandardError = $false
+        $psi.CreateNoWindow = $false
+
+        $process = New-Object System.Diagnostics.Process
+        $process.StartInfo = $psi
+        $null = $process.Start()
+
+        $lineProgress = $StartProgress
+        $timedOut = $false
+        $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+
+        while (-not $process.HasExited) {
+            if ($lineProgress -lt ($EndProgress - 1)) {
+                $lineProgress++
+                Update-ToolWorkflowProgress -ProgressBar $ProgressBar -StatusText "$OperationLabel läuft: $ToolName..." -ProgressValue $lineProgress -TextColor ([System.Drawing.Color]::Yellow)
+            }
+            Start-Sleep -Milliseconds 450
+
+            if ($stopwatch.Elapsed.TotalSeconds -ge $TimeoutSeconds) {
+                $timedOut = $true
+                try { $process.Kill() } catch { }
+                break
+            }
+        }
+
+        try { $process.WaitForExit(2000) | Out-Null } catch { }
+
+        $exitCodeRaw = $null
+        if ($process.HasExited -and -not $timedOut) {
+            try {
+                $exitCodeRaw = $process.ExitCode
+            }
+            catch {
+                $exitCodeRaw = $null
+            }
+        }
+
+        $exitCode = -1
+        if ($null -ne $exitCodeRaw -and -not [string]::IsNullOrWhiteSpace("$exitCodeRaw")) {
+            try {
+                $exitCode = [int]$exitCodeRaw
+            }
+            catch {
+                $exitCode = -1
+            }
+        }
+
+        $derivedSuccess = $false
+        if (-not $timedOut -and $exitCode -eq -1 -and (Test-Path $wingetLogPath)) {
+            try {
+                $logLines = Get-Content -Path $wingetLogPath -Tail 120 -ErrorAction SilentlyContinue
+                $logTail = $logLines -join "`n"
+
+                # Nur starke, abschließende Erfolgssignale akzeptieren
+                $hasStrongSuccess = ($logTail -match '(?im)^\s*(Erfolgreich installiert|Successfully installed)\s*$') -or
+                                    ($logTail -match '(?im)Installation process succeeded\.') -or
+                                    ($logTail -match '(?im)Setup .* completed successfully')
+
+                # Häufige Fehlersignale blockieren den Fallback
+                $hasFailureSignal = $logTail -match '(?im)\b(error|fehler|failed|fehlgeschlagen|aborted|cancelled|rollback|fatal)\b'
+
+                if ($hasStrongSuccess -and -not $hasFailureSignal) {
+                    $derivedSuccess = $true
+                    $exitCode = 0
+                }
+            }
+            catch {
+            }
+        }
+
+        if (Get-Command -Name Write-ToolLog -ErrorAction SilentlyContinue) {
+            $level = if ($exitCode -eq 0 -and -not $timedOut) { 'Success' } elseif ($timedOut) { 'Warning' } else { 'Error' }
+            Write-ToolLog -ToolName "Winget-Operations" -Message "Beendet: $OperationLabel $ToolName | ExitCode=$exitCode | Timeout=$timedOut" -Level $level
+            if ($derivedSuccess) {
+                Write-ToolLog -ToolName "Winget-Operations" -Message "ExitCode war nicht auswertbar, Erfolg wurde aus Logdatei abgeleitet." -Level Warning
+            }
+        }
+
+        return @{
+            Success = (-not $timedOut -and $exitCode -eq 0)
+            ExitCode = $exitCode
+            TimedOut = $timedOut
+            Command = "winget $argumentString"
+            LogPath = $wingetLogPath
+        }
+    }
+    catch {
+        if (Get-Command -Name Write-ToolLog -ErrorAction SilentlyContinue) {
+            Write-ToolLog -ToolName "Winget-Operations" -Message "Ausführung fehlgeschlagen: $($_.Exception.Message)" -Level Error
+        }
+
+        return @{
+            Success = $false
+            ExitCode = -1
+            TimedOut = $false
+            Command = "winget $argumentString"
+            ErrorMessage = $_.Exception.Message
+        }
+    }
 }
 
 # Ressourcen-Dictionary für Tool-Kacheln
@@ -1687,35 +1908,39 @@ function Initialize-ToolEntry {
                             [System.Windows.Forms.MessageBoxIcon]::Information
                         )
                         
-                        $psi = New-Object System.Diagnostics.ProcessStartInfo
-                        $psi.FileName = "winget"
-                        $psi.Arguments = "upgrade --id `"$($toolInfo.Winget)`" --silent --accept-source-agreements --accept-package-agreements"
-                        $psi.Verb = "RunAs"
-                        $psi.UseShellExecute = $true
-                        $psi.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
-                        
-                        $process = [System.Diagnostics.Process]::Start($psi)
-                        if ($process.WaitForExit(300000)) {
-                            if ($process.ExitCode -eq 0) {
+                        $wingetResult = Invoke-WingetWithLiveOutput `
+                            -Arguments @('upgrade', '--id', $toolInfo.Winget, '--silent', '--accept-source-agreements', '--accept-package-agreements', '--disable-interactivity') `
+                            -ToolName $toolInfo.Name `
+                            -OperationLabel 'Update' `
+                            -ProgressBar $global:progressBar `
+                            -StartProgress 70 `
+                            -EndProgress 95 `
+                            -TimeoutSeconds 300
+
+                        if ($wingetResult.Success) {
+                                Update-ToolWorkflowProgress -ProgressBar $global:progressBar -StatusText "Update erfolgreich: $($toolInfo.Name)" -ProgressValue 100 -TextColor ([System.Drawing.Color]::LightGreen)
                                 [System.Windows.Forms.MessageBox]::Show(
                                     "$($toolInfo.Name) wurde erfolgreich aktualisiert!",
                                     "Update erfolgreich",
                                     [System.Windows.Forms.MessageBoxButtons]::OK,
                                     [System.Windows.Forms.MessageBoxIcon]::Information
                                 )
-                            } else {
-                                $errorDesc = Get-WingetErrorDescription -ErrorCode $process.ExitCode
-                                [System.Windows.Forms.MessageBox]::Show(
-                                    "Update fehlgeschlagen!`n`nFehlercode: $($process.ExitCode)`n`n$errorDesc`n`nDebug-Tipp: Führen Sie 'winget upgrade --id $($toolInfo.Winget)' in PowerShell aus.",
-                                    "Update fehlgeschlagen",
-                                    [System.Windows.Forms.MessageBoxButtons]::OK,
-                                    [System.Windows.Forms.MessageBoxIcon]::Warning
-                                )
-                            }
-                        } else {
+                        }
+                        elseif ($wingetResult.TimedOut) {
+                            Update-ToolWorkflowProgress -ProgressBar $global:progressBar -StatusText "Update Timeout: $($toolInfo.Name)" -ProgressValue 0 -TextColor ([System.Drawing.Color]::Red)
                             [System.Windows.Forms.MessageBox]::Show(
-                                "Update-Timeout (>5 Min). Bitte manuell prüfen.",
+                                "Update Timeout (>5 Min). Bitte manuell prüfen.",
                                 "Timeout",
+                                [System.Windows.Forms.MessageBoxButtons]::OK,
+                                [System.Windows.Forms.MessageBoxIcon]::Warning
+                            )
+                        }
+                        else {
+                            Update-ToolWorkflowProgress -ProgressBar $global:progressBar -StatusText "Update fehlgeschlagen: $($toolInfo.Name)" -ProgressValue 0 -TextColor ([System.Drawing.Color]::Red)
+                            $errorDesc = Get-WingetErrorDescription -ErrorCode $wingetResult.ExitCode
+                            [System.Windows.Forms.MessageBox]::Show(
+                                "Update fehlgeschlagen!`n`nFehlercode: $($wingetResult.ExitCode)`n`n$errorDesc`n`nDebug-Tipp: Führen Sie 'winget upgrade --id $($toolInfo.Winget)' in PowerShell aus.",
+                                "Update fehlgeschlagen",
                                 [System.Windows.Forms.MessageBoxButtons]::OK,
                                 [System.Windows.Forms.MessageBoxIcon]::Warning
                             )
@@ -1739,7 +1964,11 @@ function Initialize-ToolEntry {
                             )
                             
                             # Installiere von lokalem Installer
-                            $installResult = Install-ToolFromLocal -InstallerPath $localInstallerPath
+                            $installParams = @{ InstallerPath = $localInstallerPath }
+                            if ($global:progressBar) {
+                                $installParams['ProgressBar'] = $global:progressBar
+                            }
+                            $installResult = Install-ToolFromLocal @installParams
                             
                             if ($installResult.Success) {
                                 [System.Windows.Forms.MessageBox]::Show(
@@ -1778,31 +2007,36 @@ function Initialize-ToolEntry {
                                     [System.Windows.Forms.MessageBoxIcon]::Information
                                 )
                                 
-                                $psi = New-Object System.Diagnostics.ProcessStartInfo
-                                $psi.FileName = "winget"
-                                $psi.Arguments = "install --id `"$($toolInfo.Winget)`" --silent --accept-source-agreements --accept-package-agreements"
-                                $psi.Verb = "RunAs"
-                                $psi.UseShellExecute = $true
-                                $psi.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
-                                
-                                $process = [System.Diagnostics.Process]::Start($psi)
-                                if ($process.WaitForExit(300000)) {
-                                    if ($process.ExitCode -eq 0) {
+                                $wingetResult = Invoke-WingetWithLiveOutput `
+                                    -Arguments @('install', '--id', $toolInfo.Winget, '--silent', '--accept-source-agreements', '--accept-package-agreements', '--disable-interactivity') `
+                                    -ToolName $toolInfo.Name `
+                                    -OperationLabel 'Installation' `
+                                    -ProgressBar $global:progressBar `
+                                    -StartProgress 70 `
+                                    -EndProgress 95 `
+                                    -TimeoutSeconds 300
+
+                                if ($wingetResult.Success) {
+                                        Update-ToolWorkflowProgress -ProgressBar $global:progressBar -StatusText "Installation erfolgreich: $($toolInfo.Name)" -ProgressValue 100 -TextColor ([System.Drawing.Color]::LightGreen)
                                         [System.Windows.Forms.MessageBox]::Show(
                                             "$($toolInfo.Name) wurde erfolgreich installiert!",
                                             "Installation erfolgreich",
                                             [System.Windows.Forms.MessageBoxButtons]::OK,
                                             [System.Windows.Forms.MessageBoxIcon]::Information
                                         )
-                                    } else {
-                                        $errorDesc = Get-WingetErrorDescription -ErrorCode $process.ExitCode
-                                        [System.Windows.Forms.MessageBox]::Show(
-                                            "Installation fehlgeschlagen!`n`nFehlercode: $($process.ExitCode)`n`n$errorDesc",
-                                            "Fehler",
-                                            [System.Windows.Forms.MessageBoxButtons]::OK,
-                                            [System.Windows.Forms.MessageBoxIcon]::Warning
-                                        )
-                                    }
+                                }
+                                elseif ($wingetResult.TimedOut) {
+                                    Update-ToolWorkflowProgress -ProgressBar $global:progressBar -StatusText "Installation Timeout: $($toolInfo.Name)" -ProgressValue 0 -TextColor ([System.Drawing.Color]::Red)
+                                }
+                                else {
+                                    Update-ToolWorkflowProgress -ProgressBar $global:progressBar -StatusText "Installation fehlgeschlagen: $($toolInfo.Name)" -ProgressValue 0 -TextColor ([System.Drawing.Color]::Red)
+                                    $errorDesc = Get-WingetErrorDescription -ErrorCode $wingetResult.ExitCode
+                                    [System.Windows.Forms.MessageBox]::Show(
+                                        "Installation fehlgeschlagen!`n`nFehlercode: $($wingetResult.ExitCode)`n`n$errorDesc",
+                                        "Fehler",
+                                        [System.Windows.Forms.MessageBoxButtons]::OK,
+                                        [System.Windows.Forms.MessageBoxIcon]::Warning
+                                    )
                                 }
                             }
                             elseif ($choice -eq "Download") {
@@ -1975,31 +2209,42 @@ function Initialize-ToolEntry {
                                 [System.Windows.Forms.MessageBoxIcon]::Information
                             )
                             
-                            $psi = New-Object System.Diagnostics.ProcessStartInfo
-                            $psi.FileName = "winget"
-                            $psi.Arguments = "install --id `"$($toolInfo.Winget)`" --force --silent --accept-source-agreements --accept-package-agreements"
-                            $psi.Verb = "RunAs"
-                            $psi.UseShellExecute = $true
-                            $psi.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
-                            
-                            $process = [System.Diagnostics.Process]::Start($psi)
-                            if ($process.WaitForExit(300000)) {
-                                if ($process.ExitCode -eq 0) {
-                                    [System.Windows.Forms.MessageBox]::Show(
-                                        "$($toolInfo.Name) wurde erfolgreich neu installiert!",
-                                        "Neuinstallation erfolgreich",
-                                        [System.Windows.Forms.MessageBoxButtons]::OK,
-                                        [System.Windows.Forms.MessageBoxIcon]::Information
-                                    )
-                                } else {
-                                    $errorDesc = Get-WingetErrorDescription -ErrorCode $process.ExitCode
-                                    [System.Windows.Forms.MessageBox]::Show(
-                                        "Neuinstallation fehlgeschlagen!`n`nFehlercode: $($process.ExitCode)`n`n$errorDesc",
-                                        "Fehler",
-                                        [System.Windows.Forms.MessageBoxButtons]::OK,
-                                        [System.Windows.Forms.MessageBoxIcon]::Warning
-                                    )
-                                }
+                            $wingetResult = Invoke-WingetWithLiveOutput `
+                                -Arguments @('install', '--id', $toolInfo.Winget, '--force', '--silent', '--accept-source-agreements', '--accept-package-agreements', '--disable-interactivity') `
+                                -ToolName $toolInfo.Name `
+                                -OperationLabel 'Neuinstallation' `
+                                -ProgressBar $global:progressBar `
+                                -StartProgress 70 `
+                                -EndProgress 95 `
+                                -TimeoutSeconds 300
+
+                            if ($wingetResult.Success) {
+                                Update-ToolWorkflowProgress -ProgressBar $global:progressBar -StatusText "Neuinstallation erfolgreich: $($toolInfo.Name)" -ProgressValue 100 -TextColor ([System.Drawing.Color]::LightGreen)
+                                [System.Windows.Forms.MessageBox]::Show(
+                                    "$($toolInfo.Name) wurde erfolgreich neu installiert!",
+                                    "Neuinstallation erfolgreich",
+                                    [System.Windows.Forms.MessageBoxButtons]::OK,
+                                    [System.Windows.Forms.MessageBoxIcon]::Information
+                                )
+                            }
+                            elseif ($wingetResult.TimedOut) {
+                                Update-ToolWorkflowProgress -ProgressBar $global:progressBar -StatusText "Neuinstallation Timeout: $($toolInfo.Name)" -ProgressValue 0 -TextColor ([System.Drawing.Color]::Red)
+                                [System.Windows.Forms.MessageBox]::Show(
+                                    "Neuinstallation Timeout (>5 Min). Bitte manuell prüfen.",
+                                    "Timeout",
+                                    [System.Windows.Forms.MessageBoxButtons]::OK,
+                                    [System.Windows.Forms.MessageBoxIcon]::Warning
+                                )
+                            }
+                            else {
+                                Update-ToolWorkflowProgress -ProgressBar $global:progressBar -StatusText "Neuinstallation fehlgeschlagen: $($toolInfo.Name)" -ProgressValue 0 -TextColor ([System.Drawing.Color]::Red)
+                                $errorDesc = Get-WingetErrorDescription -ErrorCode $wingetResult.ExitCode
+                                [System.Windows.Forms.MessageBox]::Show(
+                                    "Neuinstallation fehlgeschlagen!`n`nFehlercode: $($wingetResult.ExitCode)`n`n$errorDesc",
+                                    "Fehler",
+                                    [System.Windows.Forms.MessageBoxButtons]::OK,
+                                    [System.Windows.Forms.MessageBoxIcon]::Warning
+                                )
                             }
                         }
                     }
@@ -2072,17 +2317,47 @@ function Initialize-ToolEntry {
                 )
                 if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
                     try {
-                        Start-Process "winget" -ArgumentList "uninstall", $toolInfo.Winget -Verb RunAs
-                        [System.Windows.Forms.MessageBox]::Show(
-                            "Deinstallation wurde gestartet.",
-                            "Deinstallation - $($toolInfo.Name)",
-                            [System.Windows.Forms.MessageBoxButtons]::OK,
-                            [System.Windows.Forms.MessageBoxIcon]::Information
-                        )
-                        
-                        # Cache aktualisieren, wenn die Funktion verfügbar ist
-                        if (Get-Command -Name Update-ToolInstallationStatus -ErrorAction SilentlyContinue) {
-                            Update-ToolInstallationStatus -Tool $toolInfo -IsInstalled $false
+                        $wingetResult = Invoke-WingetWithLiveOutput `
+                            -Arguments @('uninstall', '--id', $toolInfo.Winget, '--silent', '--disable-interactivity', '--accept-source-agreements') `
+                            -ToolName $toolInfo.Name `
+                            -OperationLabel 'Deinstallation' `
+                            -ProgressBar $global:progressBar `
+                            -StartProgress 65 `
+                            -EndProgress 95 `
+                            -TimeoutSeconds 300
+
+                        if ($wingetResult.Success) {
+                            Update-ToolWorkflowProgress -ProgressBar $global:progressBar -StatusText "Deinstallation erfolgreich: $($toolInfo.Name)" -ProgressValue 100 -TextColor ([System.Drawing.Color]::LightGreen)
+                            [System.Windows.Forms.MessageBox]::Show(
+                                "$($toolInfo.Name) wurde erfolgreich deinstalliert.",
+                                "Deinstallation erfolgreich",
+                                [System.Windows.Forms.MessageBoxButtons]::OK,
+                                [System.Windows.Forms.MessageBoxIcon]::Information
+                            )
+
+                            # Cache aktualisieren, wenn die Funktion verfügbar ist
+                            if (Get-Command -Name Update-ToolInstallationStatus -ErrorAction SilentlyContinue) {
+                                Update-ToolInstallationStatus -Tool $toolInfo -IsInstalled $false
+                            }
+                        }
+                        elseif ($wingetResult.TimedOut) {
+                            Update-ToolWorkflowProgress -ProgressBar $global:progressBar -StatusText "Deinstallation Timeout: $($toolInfo.Name)" -ProgressValue 0 -TextColor ([System.Drawing.Color]::Red)
+                            [System.Windows.Forms.MessageBox]::Show(
+                                "Deinstallation Timeout (>5 Min). Bitte manuell prüfen.",
+                                "Timeout",
+                                [System.Windows.Forms.MessageBoxButtons]::OK,
+                                [System.Windows.Forms.MessageBoxIcon]::Warning
+                            )
+                        }
+                        else {
+                            Update-ToolWorkflowProgress -ProgressBar $global:progressBar -StatusText "Deinstallation fehlgeschlagen: $($toolInfo.Name)" -ProgressValue 0 -TextColor ([System.Drawing.Color]::Red)
+                            $errorDesc = Get-WingetErrorDescription -ErrorCode $wingetResult.ExitCode
+                            [System.Windows.Forms.MessageBox]::Show(
+                                "Deinstallation fehlgeschlagen!`n`nFehlercode: $($wingetResult.ExitCode)`n`n$errorDesc",
+                                "Fehler",
+                                [System.Windows.Forms.MessageBoxButtons]::OK,
+                                [System.Windows.Forms.MessageBoxIcon]::Warning
+                            )
                         }
                     }
                     catch {

@@ -4885,7 +4885,7 @@ if (-not (Get-Command -Name Initialize-ProgressComponents -ErrorAction SilentlyC
 }
 
 # Erstelle die TextProgressBar über das Modul (als global für Zugriff aus Modulen)
-$global:progressBar = New-TextProgressBar -X 190 -Y 755 -Width 650 -Height 30 -InitialText "Bereit" -InitialTextColor ([System.Drawing.Color]::White)
+$global:progressBar = New-TextProgressBar -X 200 -Y 755 -Width 770 -Height 30 -InitialText "Bereit" -InitialTextColor ([System.Drawing.Color]::White)
 $mainform.Controls.Add($global:progressBar)
 Initialize-ProgressComponents -ProgressBar $global:progressBar -StatusLabel $progressStatusLabel
 
@@ -6773,6 +6773,63 @@ $mainform.Add_Shown({
             })
 
         $applySettingsTimer.Start()
+
+        # Verzögerte GUI-Versionsprüfung nach dem Start (nicht-blockierend für die Initialisierung)
+        $startupGuiUpdateTimer = New-Object System.Windows.Forms.Timer
+        $startupGuiUpdateTimer.Interval = 1500
+        $startupGuiUpdateTimer.Add_Tick({
+                $this.Stop()
+
+                try {
+                    $guiUpdateStatus = $null
+
+                    try {
+                        $guiUpdateStatus = Get-GuiReleaseDependencyStatus -CurrentVersion $script:AppVersion
+                    }
+                    catch {
+                        Write-Verbose "GUI-Update-Prüfung beim Start fehlgeschlagen: $_"
+                    }
+
+                    if ($guiUpdateStatus -and $guiUpdateStatus.UpdateAvailable) {
+                        $availableVersionText = if ([string]::IsNullOrWhiteSpace($guiUpdateStatus.AvailableVersion)) {
+                            "unbekannt"
+                        }
+                        else {
+                            "v$($guiUpdateStatus.AvailableVersion)"
+                        }
+
+                        if ($outputBox) {
+                            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
+                            $outputBox.AppendText("[⚠] Neue GUI-Version verfügbar: $availableVersionText`r`n")
+                            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
+                            $outputBox.AppendText("    Öffnen Sie '🔍 Abhängigkeiten', um Update oder Downgrade auszuwählen.`r`n`r`n")
+                        }
+
+                        if ($statusLabel) {
+                            $statusLabel.Text = "Status: Neue GUI-Version verfügbar ($availableVersionText) | " + (Get-Date -Format "dd.MM.yyyy HH:mm")
+                        }
+
+                        $dialogText = "Eine neue GUI-Version ist verfügbar ($availableVersionText).`r`n`r`nJetzt die Abhängigkeiten öffnen?"
+                        $dialogResult = [System.Windows.Forms.MessageBox]::Show(
+                            $dialogText,
+                            "Neue Version verfügbar",
+                            [System.Windows.Forms.MessageBoxButtons]::YesNo,
+                            [System.Windows.Forms.MessageBoxIcon]::Information
+                        )
+
+                        if ($dialogResult -eq [System.Windows.Forms.DialogResult]::Yes -and $btnCheckDependenciesH) {
+                            $btnCheckDependenciesH.PerformClick()
+                        }
+                    }
+                }
+                catch {
+                    Write-Verbose "Fehler bei Startup-Update-Hinweis: $_"
+                }
+                finally {
+                    $this.Dispose()
+                }
+            })
+        $startupGuiUpdateTimer.Start()
 
         # Timer für die finale Positionierung nach dem vollständigen Laden
         $positioningTimer = New-Object System.Windows.Forms.Timer

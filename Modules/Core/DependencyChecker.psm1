@@ -517,28 +517,49 @@ Update später durchführen:
         
         Update-Progress -Value 96 -Text "Prüfe verfügbare Sensoren..."
         # Prüfe ob Sensoren verfügbar sind (Funktionstest)
+        foreach ($hardware in $testComputer.Hardware) {
+            try { $hardware.Update() } catch { }
+        }
+
         $cpuHardware = $testComputer.Hardware | Where-Object { $_.HardwareType -eq 'Cpu' } | Select-Object -First 1
+        $cpuValueSensors = @()
+        $cpuTempSensors = @()
+
         if ($cpuHardware) {
-            $cpuHardware.Update()
-            $tempSensors = $cpuHardware.Sensors | Where-Object { $_.SensorType -eq 'Temperature' -and $null -ne $_.Value }
-            
-            if ($tempSensors.Count -gt 0) {
-                # Hardware-Monitor erfolgreich initialisiert!
-                $result.Available = $true
-                $result.PawnIOActive = $true
-                $psVersion = if ($isPowerShell7) { "PS7" } else { "PS5.1" }
-                $result.Message = "Hardware-Monitoring aktiv ($psVersion, PawnIO, $($tempSensors.Count) Sensoren)"
-                Update-Progress -Value 100 -Text "Hardware-Monitor erfolgreich initialisiert"
-                Write-Verbose $result.Message
-                
-                $testComputer.Close()
-                return $result
+            $cpuValueSensors = @($cpuHardware.Sensors | Where-Object { $null -ne $_.Value })
+            $cpuTempSensors = @($cpuHardware.Sensors | Where-Object { $_.SensorType -eq 'Temperature' -and $null -ne $_.Value })
+        }
+
+        $allValueSensors = @()
+        foreach ($hardware in $testComputer.Hardware) {
+            $allValueSensors += @($hardware.Sensors | Where-Object { $null -ne $_.Value })
+        }
+
+        if ($cpuTempSensors.Count -gt 0 -or $cpuValueSensors.Count -gt 0 -or $allValueSensors.Count -gt 0) {
+            # Hardware-Monitor erfolgreich initialisiert!
+            $result.Available = $true
+            $result.PawnIOActive = $true
+            $psVersion = if ($isPowerShell7) { "PS7" } else { "PS5.1" }
+
+            $sensorCountForMessage = if ($cpuTempSensors.Count -gt 0) {
+                $cpuTempSensors.Count
+            }
+            elseif ($cpuValueSensors.Count -gt 0) {
+                $cpuValueSensors.Count
             }
             else {
-                # Sensoren gefunden aber keine Werte (ungewöhnlich aber möglich)
-                Write-Verbose "⚠ Sensoren gefunden aber keine Werte verfügbar"
+                $allValueSensors.Count
             }
+
+            $result.Message = "Hardware-Monitoring aktiv ($psVersion, PawnIO, $sensorCountForMessage Sensoren)"
+            Update-Progress -Value 100 -Text "Hardware-Monitor erfolgreich initialisiert"
+            Write-Verbose $result.Message
+
+            $testComputer.Close()
+            return $result
         }
+
+        Write-Verbose "⚠ Keine auswertbaren Sensorwerte gefunden"
         
         # Keine Sensoren verfügbar (sollte nicht passieren wenn PawnIO läuft)
         $testComputer.Close()
