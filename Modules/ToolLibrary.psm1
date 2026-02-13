@@ -2126,6 +2126,70 @@ function Show-ToolTileList {
     }
 }
 
+# Cache für verfügbare Updates (winget upgrade)
+$script:availableUpdatesCache = $null
+$script:availableUpdatesCacheTimestamp = $null
+
+function Initialize-AvailableUpdatesCache {
+    param(
+        [switch]$ForceRefresh
+    )
+
+    # Cache 60 Sekunden wiederverwenden (außer ForceRefresh)
+    if (-not $ForceRefresh -and $script:availableUpdatesCache -and $script:availableUpdatesCacheTimestamp) {
+        $cacheAgeSeconds = ((Get-Date) - $script:availableUpdatesCacheTimestamp).TotalSeconds
+        if ($cacheAgeSeconds -lt 60) {
+            return $script:availableUpdatesCache
+        }
+    }
+
+    $cache = @{}
+
+    try {
+        $upgradeOutput = winget upgrade --accept-source-agreements --disable-interactivity 2>$null | Out-String
+        if ([string]::IsNullOrWhiteSpace($upgradeOutput)) {
+            $script:availableUpdatesCache = $cache
+            $script:availableUpdatesCacheTimestamp = Get-Date
+            return $cache
+        }
+
+        $lines = $upgradeOutput -split "`r?`n"
+        $toolIds = @(Get-AllTools | Where-Object { $_.Winget } | ForEach-Object { $_.Winget } | Sort-Object -Unique)
+
+        foreach ($wingetId in $toolIds) {
+            if ([string]::IsNullOrWhiteSpace($wingetId)) { continue }
+
+            $idPattern = [regex]::Escape($wingetId)
+            $matchingLine = $lines | Where-Object { $_ -match "(^|\s)$idPattern(\s|$)" } | Select-Object -First 1
+            if (-not $matchingLine) { continue }
+
+            # Tabellenzeile robust parsen: Name | ID | Installiert | Verfügbar | Quelle
+            $linePattern = "^\s*(?<name>.*?)\s{2,}(?<id>$idPattern)\s{2,}(?<installed>\S+)\s{2,}(?<available>\S+)(?:\s{2,}(?<source>\S+))?\s*$"
+            $installedVersion = $null
+            $availableVersion = $null
+
+            if ($matchingLine -match $linePattern) {
+                $installedVersion = $matches['installed']
+                $availableVersion = $matches['available']
+            }
+
+            $cache[$wingetId.ToLower()] = @{
+                HasUpdate = $true
+                InstalledVersion = $installedVersion
+                AvailableVersion = $availableVersion
+                RawLine = $matchingLine
+            }
+        }
+    }
+    catch {
+        Write-Verbose "Initialize-AvailableUpdatesCache: Fehler beim Laden der Updates: $_"
+    }
+
+    $script:availableUpdatesCache = $cache
+    $script:availableUpdatesCacheTimestamp = Get-Date
+    return $cache
+}
+
 # Funktion zum Abrufen der Versionsinformationen eines Tools
 function Get-ToolVersionInfo {
     param (
@@ -2144,17 +2208,30 @@ function Get-ToolVersionInfo {
     
     $job = $null
     try {
+        $wingetIdLower = $Tool.Winget.ToLower()
+
+        # 1) Zentrale Update-Liste bevorzugen (zuverlässiger/schneller)
+        $updatesCache = Initialize-AvailableUpdatesCache
+        if ($updatesCache -and $updatesCache.ContainsKey($wingetIdLower)) {
+            $cachedUpdate = $updatesCache[$wingetIdLower]
+            return @{
+                InstalledVersion = $cachedUpdate.InstalledVersion
+                AvailableVersion = $cachedUpdate.AvailableVersion
+                HasUpdate = $true
+            }
+        }
+
+        # 2) Kein Update in Cache: installierte Version gezielt prüfen
         # Verwende winget list mit upgrade check
         $job = Start-Job -ScriptBlock {
             param($wingetId)
             
-            # Hole beide Informationen: installierte Version und verfügbares Update
+            # Hole installierte Version (Update kommt primär aus Cache)
             $listOutput = winget list --id $wingetId --exact 2>$null | Out-String
-            $upgradeOutput = winget upgrade --id $wingetId --exact 2>$null | Out-String
             
             return @{
                 List = $listOutput
-                Upgrade = $upgradeOutput
+                Upgrade = $null
             }
         } -ArgumentList $Tool.Winget
         
@@ -2178,27 +2255,6 @@ function Get-ToolVersionInfo {
                         if ($parts.Count -ge 3) {
                             # Version ist typischerweise an Position 2 (nach Name und ID)
                             $installedVersion = $parts[2]
-                        }
-                        break
-                    }
-                }
-            }
-            
-            # Parse verfügbare Version aus winget upgrade
-            if ($result.Upgrade -match [regex]::Escape($Tool.Winget)) {
-                $lines = $result.Upgrade -split "`n"
-                foreach ($line in $lines) {
-                    if ($line -match [regex]::Escape($Tool.Winget)) {
-                        # Format: "Name ID Version Available Source"
-                        $parts = $line -split '\s+' | Where-Object { $_ -ne '' }
-                        if ($parts.Count -ge 4) {
-                            # Installierte Version
-                            if (-not $installedVersion) {
-                                $installedVersion = $parts[2]
-                            }
-                            # Verfügbare Version
-                            $availableVersion = $parts[3]
-                            $hasUpdate = $true
                         }
                         break
                     }
@@ -2314,45 +2370,18 @@ function Test-ToolUpdateAvailable {
     if (-not (Test-ToolInstalled -Tool $Tool)) {
         return $false
     }
-    
-    # Prüfe auf verfügbare Updates mit winget upgrade
-    $job = $null
+
+    # Zentrale Update-Liste verwenden (spracheunabhängig, ohne Einzel-Timeouts)
     try {
-        $job = Start-Job -ScriptBlock {
-            param($wingetId)
-            winget upgrade --id $wingetId --exact 2>$null | Out-String
-        } -ArgumentList $Tool.Winget
-        
-        $completed = Wait-Job -Job $job -Timeout 10
-        
-        if ($completed) {
-            $upgradeOutput = Receive-Job -Job $job
-            
-            # Wenn die Ausgabe "upgrade available" oder ähnliche Muster enthält
-            # und nicht "No applicable update found" zeigt, ist ein Update verfügbar
-            if ($upgradeOutput -match "upgrade|available|update" -and 
-                $upgradeOutput -notmatch "No applicable update found|No installed package found") {
-                
-                # Prüfe ob tatsächlich eine Versionszeile mit dem Tool vorhanden ist
-                if ($upgradeOutput -match [regex]::Escape($Tool.Winget)) {
-                    return $true
-                }
-            }
-        }
-        else {
-            Stop-Job -Job $job -ErrorAction SilentlyContinue
-            Write-Verbose "Timeout beim Prüfen von Updates für $($Tool.Name)"
+        $updatesCache = Initialize-AvailableUpdatesCache
+        if ($updatesCache -and $updatesCache.ContainsKey($Tool.Winget.ToLower())) {
+            return $true
         }
     }
     catch {
         Write-Verbose "Fehler beim Prüfen von Updates für $($Tool.Name): $_"
     }
-    finally {
-        if ($null -ne $job) {
-            Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
-        }
-    }
-    
+
     return $false
 }
 
@@ -2410,6 +2439,9 @@ function Update-ToolsDisplay {
             Write-Warning "Cache-Initialisierung fehlgeschlagen - Installationsstatus kann ungenau sein"
         }
     }
+
+    # Update-Cache einmalig vorab laden (verhindert fehlende Treffer durch Einzel-Timeouts)
+    $null = Initialize-AvailableUpdatesCache -ForceRefresh:$ForceRefresh
     
     # Fortschrittsanzeige erstellen (temporär - wird nur genutzt wenn keine Haupt-ProgressBar angegeben ist)
     $progressBorder = New-Object Windows.Controls.Border

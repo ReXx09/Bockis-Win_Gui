@@ -53,7 +53,7 @@ if ($shouldCheck) {
     Write-Host "`nFühre Test-SystemDependencies aus...`n" -ForegroundColor Cyan
     
     # Führe tatsächlichen Check durch
-    $result = Test-SystemDependencies -ShowDialog
+    $result = Test-SystemDependencies
     
     Write-Host "`n╔═══════════════════════════════════════════════════════════╗" -ForegroundColor Green
     Write-Host "║     CHECK ABGESCHLOSSEN                                   ║" -ForegroundColor Green

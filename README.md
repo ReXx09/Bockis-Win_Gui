@@ -390,7 +390,7 @@ Bei Problemen:
 
 ## 📋 Changelog
 
-### Version 4.1.2 (9. Februar 2026) - Aktuell
+### Version 4.1.4 (13. Februar 2026) - Aktuell
 - ✨ **Automatisches DLL-Update**: Integrierte Update-Funktion in DependencyChecker
 - 🔍 **Versionserkennung**: Automatische Prüfung auf veraltete LibreHardwareMonitorLib.dll
 - � **DLL-Versionsabfragen**: Erweiterte Test-SystemDependencies mit 5 DLL-Checks

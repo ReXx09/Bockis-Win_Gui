@@ -23,7 +23,7 @@ Write-Host "`n📋 Führe Test-SystemDependencies aus...`n" -ForegroundColor Cya
 Write-Host ("=" * 80) -ForegroundColor Gray
 
 # Test-SystemDependencies aufrufen
-$result = Test-SystemDependencies -ShowDialog $false
+$result = Test-SystemDependencies
 
 Write-Host "`n" -ForegroundColor Gray
 Write-Host ("=" * 80) -ForegroundColor Gray

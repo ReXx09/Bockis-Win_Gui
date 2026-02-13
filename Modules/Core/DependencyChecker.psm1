@@ -159,10 +159,16 @@ function Initialize-HardwareMonitoringMode {
     }
     
     # ProgressBar-Update Hilfsfunktion
+    # ProgressBar-Bereich: 20-70% (wird von GUI-Initialisierung aufgerufen)
     function Update-Progress {
         param([int]$Value, [string]$Text)
         if ($ProgressBar) {
-            $ProgressBar.Value = $Value
+            # Skaliere Werte von 0-100 auf 20-70
+            $scaledValue = 20 + [int](($Value / 100.0) * 50)
+            $ProgressBar.Value = $scaledValue
+            if ($ProgressBar.PSObject.Properties['CustomText']) {
+                $ProgressBar.CustomText = $Text
+            }
         }
         if ($StatusLabel -and (Get-Member -InputObject $StatusLabel -Name 'Text' -MemberType Property)) {
             $StatusLabel.Text = $Text
@@ -170,12 +176,12 @@ function Initialize-HardwareMonitoringMode {
         [System.Windows.Forms.Application]::DoEvents()
     }
     
-    Update-Progress -Value 10 -Text "Prüfe Hardware-Monitor-Abhängigkeiten..."
+    Update-Progress -Value 0 -Text "Prüfe Hardware-Monitor-Abhängigkeiten..."
     
     # WICHTIG: ZUERST PawnIO-Treiber prüfen (BEVOR LibreHardwareMonitorLib geladen wird!)
     # LibreHardwareMonitorLib hat einen eigenen Ring-0 Treiber der als Malware erkannt wird
     # PawnIO ist die sichere Alternative und MUSS vorhanden sein
-    Update-Progress -Value 15 -Text "Prüfe PawnIO-Treiber..."
+    Update-Progress -Value 10 -Text "Prüfe PawnIO-Treiber..."
     
     $pawnIOAvailable = $false
     try {
@@ -213,7 +219,7 @@ Nach Installation: System neu starten
     }
     
     # PawnIO verfügbar - fahre mit DLL-Prüfung fort
-    Update-Progress -Value 20 -Text "PawnIO aktiv, prüfe DLL-Dateien..."
+    Update-Progress -Value 25 -Text "PawnIO aktiv, prüfe DLL-Dateien..."
     
     # Schritt 1: Pfad zum Lib-Ordner ermitteln
     $scriptRoot = Split-Path -Parent $PSScriptRoot
@@ -256,12 +262,12 @@ Nach Installation: System neu starten
     
     Write-Verbose "PowerShell $($PSVersionTable.PSVersion.Major): Lade $($requiredDLLs.Count) DLLs"
     
-    Update-Progress -Value 30 -Text "Prüfe $($requiredDLLs.Count) benötigte DLL-Dateien..."
+    Update-Progress -Value 35 -Text "Prüfe $($requiredDLLs.Count) benötigte DLL-Dateien..."
     
     # Schritt 2: Prüfe alle benötigten DLLs
     $missingDLLs = @()
-    $dllCheckProgress = 30
-    $dllCheckStep = 20 / $requiredDLLs.Count
+    $dllCheckProgress = 35
+    $dllCheckStep = 25 / $requiredDLLs.Count
     
     foreach ($dll in $requiredDLLs.Keys) {
         $dllFullPath = Join-Path $libPath $dll
@@ -297,7 +303,7 @@ Bitte stelle sicher, dass alle benötigten DLL-Dateien im Lib-Ordner vorhanden s
         return $result
     }
     
-    Update-Progress -Value 50 -Text "Alle DLLs gefunden, prüfe Versionen..."
+    Update-Progress -Value 60 -Text "Alle DLLs gefunden, prüfe Versionen..."
     
     # Schritt 3: Prüfe LibreHardwareMonitorLib.dll Version (Warnung bei < 0.9.5 wegen Winring0)
     $libHwMonDllPath = Join-Path $libPath "LibreHardwareMonitorLib.dll"
@@ -314,7 +320,7 @@ Bitte stelle sicher, dass alle benötigten DLL-Dateien im Lib-Ordner vorhanden s
                 if ($version -lt $minVersion) {
                     # Version ist älter als 0.9.5 -> Biete automatisches Update an
                     Write-Verbose "⚠ LibreHardwareMonitorLib.dll v$version erkannt (veraltet, nutzt Winring0)"
-                    Update-Progress -Value 52 -Text "Veraltete DLL erkannt, biete Update an..."
+                    Update-Progress -Value 62 -Text "Veraltete DLL erkannt, biete Update an..."
                     
                     # Lade UI-Modul für MessageBox
                     if (-not (Get-Command -Name Add-Type -ErrorAction SilentlyContinue)) {
@@ -350,7 +356,7 @@ Möchten Sie JETZT auf v0.9.5 updaten?
                     
                     if ($dialogResult -eq [System.Windows.Forms.DialogResult]::Yes) {
                         # Benutzer möchte updaten
-                        Update-Progress -Value 55 -Text "Lade v0.9.5 von NuGet..."
+                        Update-Progress -Value 65 -Text "Lade v0.9.5 von NuGet..."
                         
                         try {
                             # Rufe Update-Funktion auf
@@ -361,7 +367,7 @@ Möchten Sie JETZT auf v0.9.5 updaten?
                             
                             if ($updateResult.Success) {
                                 Write-Verbose "✓ Update erfolgreich: $($updateResult.NewVersion)"
-                                Update-Progress -Value 70 -Text "Update erfolgreich, starte neu..."
+                                Update-Progress -Value 85 -Text "Update erfolgreich, starte neu..."
                                 
                                 # Erfolgsmeldung
                                 [System.Windows.Forms.MessageBox]::Show(
@@ -437,7 +443,7 @@ Update später durchführen:
         }
     }
     
-    Update-Progress -Value 55 -Text "Version OK, lade Abhängigkeiten..."
+    Update-Progress -Value 65 -Text "Version OK, lade Abhängigkeiten..."
     
     # Schritt 4: Lade alle DLLs in der richtigen Reihenfolge
     $loadProgress = 55
@@ -475,7 +481,7 @@ Update später durchführen:
     # Setze LibrePath auf die Haupt-DLL
     $result.LibrePath = Join-Path $libPath "LibreHardwareMonitorLib.dll"
     
-    Update-Progress -Value 80 -Text "Teste Hardware-Monitor Initialisierung..."
+    Update-Progress -Value 88 -Text "Teste Hardware-Monitor Initialisierung..."
     
     # Schritt 5: LibreHardwareMonitorLib initialisieren und testen
     try {
@@ -488,7 +494,7 @@ Update später durchführen:
         $testComputer.IsNetworkEnabled = $false
         $testComputer.IsControllerEnabled = $false
         
-        Update-Progress -Value 85 -Text "Öffne Hardware-Zugriff..."
+        Update-Progress -Value 92 -Text "Öffne Hardware-Zugriff..."
         
         try {
             $testComputer.Open()
@@ -509,7 +515,7 @@ Update später durchführen:
             }
         }
         
-        Update-Progress -Value 90 -Text "Prüfe verfügbare Sensoren..."
+        Update-Progress -Value 96 -Text "Prüfe verfügbare Sensoren..."
         # Prüfe ob Sensoren verfügbar sind (Funktionstest)
         $cpuHardware = $testComputer.Hardware | Where-Object { $_.HardwareType -eq 'Cpu' } | Select-Object -First 1
         if ($cpuHardware) {
@@ -838,6 +844,444 @@ function Find-WingetPackageManager {
 
 <#
 .SYNOPSIS
+Prüft ob Microsoft App Installer installiert ist.
+
+.DESCRIPTION
+App Installer (Microsoft.DesktopAppInstaller) ist die Basis für Winget
+und wird für Paketinstallationen benötigt.
+
+.OUTPUTS
+Hashtable mit Informationen:
+- Found: Boolean
+- Version: String
+- PackageFamilyName: String
+- InstallLocation: String
+#>
+function Find-AppInstaller {
+    $result = @{
+        Found = $false
+        Version = $null
+        PackageFamilyName = $null
+        InstallLocation = $null
+    }
+
+    try {
+        $appInstaller = Get-AppxPackage -Name "Microsoft.DesktopAppInstaller" -ErrorAction SilentlyContinue |
+            Sort-Object Version -Descending |
+            Select-Object -First 1
+
+        if ($appInstaller) {
+            $result.Found = $true
+            $result.Version = $appInstaller.Version.ToString()
+            $result.PackageFamilyName = $appInstaller.PackageFamilyName
+            $result.InstallLocation = $appInstaller.InstallLocation
+        }
+    }
+    catch {
+        Write-Verbose "Fehler bei App Installer-Prüfung: $_"
+    }
+
+    return $result
+}
+
+<##
+.SYNOPSIS
+Prüft, ob für eine Winget-ID ein Update verfügbar ist.
+
+.PARAMETER WingetId
+Winget Paket-ID.
+
+.OUTPUTS
+Hashtable mit:
+- UpdateAvailable: Boolean
+- AvailableVersion: String
+#>
+function Get-DependencyUpdateInfo {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$WingetId
+    )
+
+    $info = @{
+        UpdateAvailable = $false
+        AvailableVersion = $null
+    }
+
+    if ([string]::IsNullOrWhiteSpace($WingetId)) {
+        return $info
+    }
+
+    try {
+        $wingetCmd = Get-Command winget -ErrorAction SilentlyContinue
+        if (-not $wingetCmd) {
+            return $info
+        }
+
+        $upgradeOutput = winget upgrade --id $WingetId --exact 2>$null | Out-String
+        if ([string]::IsNullOrWhiteSpace($upgradeOutput)) {
+            return $info
+        }
+
+        if ($upgradeOutput -match 'No\s+applicable\s+upgrade|No\s+installed\s+package|Keine\s+anwendbaren\s+Updates|Kein\s+installiertes\s+Paket') {
+            return $info
+        }
+
+        $line = ($upgradeOutput -split "`r?`n" | Where-Object { $_ -match [regex]::Escape($WingetId) } | Select-Object -First 1)
+        if ($line) {
+            $info.UpdateAvailable = $true
+            if ($line -match [regex]::Escape($WingetId) + '\s+([\w\.-]+)\s+([\w\.-]+)') {
+                $info.AvailableVersion = $matches[2]
+            }
+        }
+    }
+    catch {
+        Write-Verbose "Update-Prüfung für $WingetId fehlgeschlagen: $_"
+    }
+
+    return $info
+}
+
+<##
+.SYNOPSIS
+Ergänzt GUI-Dependency-Einträge um Update-Informationen.
+
+.PARAMETER Dependencies
+Array mit Dependency-Hashtables aus Get-DependencyStatusForGUI.
+
+.OUTPUTS
+Das gleiche Array, erweitert um UpdateAvailable/AvailableVersion.
+#>
+function Update-DependencyListWithUpdates {
+    param(
+        [Parameter(Mandatory = $true)]
+        [array]$Dependencies
+    )
+
+    foreach ($dep in $Dependencies) {
+        if (-not $dep.ContainsKey('UpdateAvailable')) {
+            $dep.UpdateAvailable = $false
+        }
+        if (-not $dep.ContainsKey('AvailableVersion')) {
+            $dep.AvailableVersion = $null
+        }
+
+        if ($dep.Found -and $dep.WingetId) {
+            $updateInfo = Get-DependencyUpdateInfo -WingetId $dep.WingetId
+            $dep.UpdateAvailable = $updateInfo.UpdateAvailable
+            $dep.AvailableVersion = $updateInfo.AvailableVersion
+        }
+    }
+
+    return $Dependencies
+}
+
+<##
+.SYNOPSIS
+Prüft, ob für die GUI eine neuere GitHub-Release-Version verfügbar ist.
+
+.PARAMETER CurrentVersion
+Aktuell installierte GUI-Version.
+
+.PARAMETER RepoOwner
+GitHub-Owner.
+
+.PARAMETER RepoName
+GitHub-Repository.
+
+.PARAMETER GitHubToken
+Optionaler GitHub Token für private Repositories.
+
+.OUTPUTS
+Hashtable mit Feldern für die Dependency-Tabelle.
+#>
+function Get-GuiReleaseDependencyStatus {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$CurrentVersion,
+
+        [Parameter(Mandatory = $false)]
+        [string]$RepoOwner = "ReXx09",
+
+        [Parameter(Mandatory = $false)]
+        [string]$RepoName = "Bockis-Win_Gui-DEV",
+
+        [Parameter(Mandatory = $false)]
+        [string]$GitHubToken = "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"
+    )
+
+    $status = @{
+        Name = "GUI-Update (GitHub)"
+        Description = "Prüfung auf neue GitHub-Release-Version"
+        Found = $true
+        Required = $false
+        Available = $false
+        Version = $CurrentVersion
+        Status = "⚠ Update-Prüfung nicht möglich"
+        StatusColor = "Yellow"
+        WingetId = $null
+        UpdateAvailable = $false
+        AvailableVersion = $null
+    }
+
+    try {
+        $headers = @{
+            "User-Agent" = "Bockis-System-Tool"
+            "Accept" = "application/vnd.github+json"
+        }
+
+        if (-not [string]::IsNullOrWhiteSpace($GitHubToken) -and $GitHubToken -ne "ghp_DEIN_TOKEN_HIER") {
+            $headers["Authorization"] = "token $GitHubToken"
+        }
+
+        $repoCandidates = [System.Collections.Generic.List[string]]::new()
+        $repoCandidates.Add($RepoName)
+        if ($RepoName -match '-') {
+            $repoCandidates.Add(($RepoName -replace '-', '_'))
+        }
+        if ($RepoName -match '_') {
+            $repoCandidates.Add(($RepoName -replace '_', '-'))
+        }
+
+        $latestRelease = $null
+        $lastStatusCode = $null
+
+        foreach ($repoCandidate in ($repoCandidates | Select-Object -Unique)) {
+            try {
+                $apiUrl = "https://api.github.com/repos/$RepoOwner/$repoCandidate/releases/latest"
+                $latestRelease = Invoke-RestMethod -Uri $apiUrl -Headers $headers -ErrorAction Stop
+                if ($latestRelease) { break }
+            }
+            catch {
+                $statusCode = $null
+                if ($_.Exception -and $_.Exception.Response) {
+                    try { $statusCode = [int]$_.Exception.Response.StatusCode.value__ } catch { $statusCode = $null }
+                }
+                $lastStatusCode = $statusCode
+
+                if ($statusCode -eq 404) {
+                    try {
+                        $fallbackUrl = "https://api.github.com/repos/$RepoOwner/$repoCandidate/releases"
+                        $allReleases = Invoke-RestMethod -Uri $fallbackUrl -Headers $headers -ErrorAction Stop
+                        if ($allReleases -and $allReleases.Count -gt 0) {
+                            $latestRelease = $allReleases[0]
+                            break
+                        }
+                    }
+                    catch {
+                        # Nächsten Candidate testen
+                    }
+                }
+                elseif ($statusCode -eq 401 -or $statusCode -eq 403) {
+                    # Später ohne Auth erneut versuchen
+                }
+            }
+        }
+
+        if (-not $latestRelease -and $headers.ContainsKey("Authorization")) {
+            $headersNoAuth = @{
+                "User-Agent" = "Bockis-System-Tool"
+                "Accept" = "application/vnd.github+json"
+            }
+
+            foreach ($repoCandidate in ($repoCandidates | Select-Object -Unique)) {
+                try {
+                    $apiUrl = "https://api.github.com/repos/$RepoOwner/$repoCandidate/releases/latest"
+                    $latestRelease = Invoke-RestMethod -Uri $apiUrl -Headers $headersNoAuth -ErrorAction Stop
+                    if ($latestRelease) { break }
+                }
+                catch {
+                    $statusCode = $null
+                    if ($_.Exception -and $_.Exception.Response) {
+                        try { $statusCode = [int]$_.Exception.Response.StatusCode.value__ } catch { $statusCode = $null }
+                    }
+                    $lastStatusCode = $statusCode
+
+                    if ($statusCode -eq 404) {
+                        try {
+                            $fallbackUrl = "https://api.github.com/repos/$RepoOwner/$repoCandidate/releases"
+                            $allReleases = Invoke-RestMethod -Uri $fallbackUrl -Headers $headersNoAuth -ErrorAction Stop
+                            if ($allReleases -and $allReleases.Count -gt 0) {
+                                $latestRelease = $allReleases[0]
+                                break
+                            }
+                        }
+                        catch {
+                            # Nächsten Candidate testen
+                        }
+                    }
+                }
+            }
+        }
+
+        if (-not $latestRelease) {
+            if ($lastStatusCode -eq 401 -or $lastStatusCode -eq 403) {
+                $status.Status = "⚠ GitHub-Zugriff blockiert"
+                $status.StatusColor = "Red"
+                return $status
+            }
+            $status.Status = "⚠ Kein Release gefunden"
+            return $status
+        }
+
+        $latestVersionRaw = "$($latestRelease.tag_name)"
+        $latestVersion = $latestVersionRaw -replace '^v', ''
+        $currentVersionNormalized = "$CurrentVersion" -replace '^v', ''
+
+        $status.AvailableVersion = $latestVersion
+
+        try {
+            if ([version]$latestVersion -gt [version]$currentVersionNormalized) {
+                $status.UpdateAvailable = $true
+                $status.Status = "⬆ Update verfügbar"
+                $status.StatusColor = "Yellow"
+            }
+            elseif ([version]$currentVersionNormalized -gt [version]$latestVersion) {
+                $status.Status = "✓ Entwicklungsstand"
+                $status.StatusColor = "Green"
+            }
+            else {
+                $status.Status = "✓ Aktuell"
+                $status.StatusColor = "Green"
+            }
+        }
+        catch {
+            if ($latestVersion -ne $currentVersionNormalized) {
+                $status.UpdateAvailable = $true
+                $status.Status = "⬆ Versionsabweichung"
+                $status.StatusColor = "Yellow"
+            }
+            else {
+                $status.Status = "✓ Aktuell"
+                $status.StatusColor = "Green"
+            }
+        }
+    }
+    catch {
+        $status.Status = "⚠ Update-Prüfung fehlgeschlagen"
+        $status.StatusColor = "Yellow"
+    }
+
+    return $status
+}
+
+<##
+.SYNOPSIS
+Führt eine Abhängigkeitsaktion per Winget aus (Installieren/Aktualisieren).
+
+.PARAMETER WingetId
+Winget Paket-ID.
+
+.PARAMETER Action
+Aktion: install oder upgrade.
+
+.OUTPUTS
+Hashtable mit:
+- Success: Boolean
+- ExitCode: Int
+- ErrorMessage: String
+#>
+function Invoke-DependencyAction {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$WingetId,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('install', 'upgrade')]
+        [string]$Action,
+
+        [Parameter(Mandatory = $false)]
+        [scriptblock]$ProgressCallback,
+
+        [Parameter(Mandatory = $false)]
+        [scriptblock]$LogCallback
+    )
+
+    $result = @{
+        Success = $false
+        ExitCode = -1
+        ErrorMessage = $null
+    }
+
+    if ([string]::IsNullOrWhiteSpace($WingetId)) {
+        $result.ErrorMessage = "WingetId fehlt"
+        if ($LogCallback) {
+            & $LogCallback "error" "WingetId fehlt"
+        }
+        return $result
+    }
+
+    try {
+        $actionLabel = if ($Action -eq 'upgrade') { 'Aktualisierung' } else { 'Installation' }
+        Write-Host "`n[DependencyChecker] Starte $actionLabel für $WingetId..." -ForegroundColor Cyan
+        if ($LogCallback) {
+            & $LogCallback "info" "Starte $actionLabel für $WingetId..."
+        }
+        if ($ProgressCallback) {
+            & $ProgressCallback 5 "$actionLabel wird vorbereitet..."
+        }
+
+        $wingetCmd = Get-Command winget -ErrorAction SilentlyContinue
+        if (-not $wingetCmd) {
+            $result.ErrorMessage = "Winget ist nicht verfügbar"
+            Write-Host "[DependencyChecker] ❌ Winget ist nicht verfügbar" -ForegroundColor Red
+            if ($LogCallback) {
+                & $LogCallback "error" "Winget ist nicht verfügbar"
+            }
+            if ($ProgressCallback) {
+                & $ProgressCallback 100 "$actionLabel fehlgeschlagen" ([System.Drawing.Color]::Red)
+            }
+            return $result
+        }
+
+        if ($ProgressCallback) {
+            & $ProgressCallback 20 "$actionLabel läuft..."
+        }
+        Write-Host "[DependencyChecker] Winget-Befehl wird ausgeführt..." -ForegroundColor DarkCyan
+
+        $process = Start-Process -FilePath "winget" -ArgumentList $Action, "--id", $WingetId, "--silent", "--accept-package-agreements", "--accept-source-agreements" -Wait -NoNewWindow -PassThru
+        if ($ProgressCallback) {
+            & $ProgressCallback 90 "$actionLabel wird abgeschlossen..."
+        }
+
+        $result.ExitCode = $process.ExitCode
+        $result.Success = ($process.ExitCode -eq 0)
+
+        if (-not $result.Success) {
+            $result.ErrorMessage = "Exit Code: $($process.ExitCode)"
+            Write-Host "[DependencyChecker] ❌ $actionLabel fehlgeschlagen ($($result.ErrorMessage))" -ForegroundColor Red
+            if ($LogCallback) {
+                & $LogCallback "error" "$actionLabel fehlgeschlagen ($($result.ErrorMessage))"
+            }
+            if ($ProgressCallback) {
+                & $ProgressCallback 100 "$actionLabel fehlgeschlagen" ([System.Drawing.Color]::Red)
+            }
+        }
+        else {
+            Write-Host "[DependencyChecker] ✅ $actionLabel erfolgreich" -ForegroundColor Green
+            if ($LogCallback) {
+                & $LogCallback "success" "$actionLabel erfolgreich"
+            }
+            if ($ProgressCallback) {
+                & $ProgressCallback 100 "$actionLabel erfolgreich" ([System.Drawing.Color]::LimeGreen)
+            }
+        }
+    }
+    catch {
+        $result.ErrorMessage = $_.Exception.Message
+        Write-Host "[DependencyChecker] ❌ Fehler: $($result.ErrorMessage)" -ForegroundColor Red
+        if ($LogCallback) {
+            & $LogCallback "error" "Fehler: $($result.ErrorMessage)"
+        }
+        if ($ProgressCallback) {
+            & $ProgressCallback 100 "Aktion fehlgeschlagen" ([System.Drawing.Color]::Red)
+        }
+    }
+
+    return $result
+}
+
+<#
+.SYNOPSIS
 Prüft ob der PawnIO-Treiber installiert ist.
 
 .DESCRIPTION
@@ -895,237 +1339,6 @@ function Find-PawnIODriver {
 
 #endregion
 
-#region Dependency Dialog
-
-<#
-.SYNOPSIS
-Zeigt einen modernen Dialog zur Abhängigkeitsprüfung.
-
-.PARAMETER MissingDependencies
-Array mit fehlenden Abhängigkeiten (Name, Description, Required)
-
-.OUTPUTS
-Hashtable mit Benutzerentscheidungen für jede Abhängigkeit
-#>
-function Show-DependencyDialog {
-    param(
-        [Parameter(Mandatory = $true)]
-        [array]$MissingDependencies
-    )
-    
-    Add-Type -AssemblyName System.Windows.Forms
-    Add-Type -AssemblyName System.Drawing
-    
-    # Hauptformular erstellen
-    $form = New-Object System.Windows.Forms.Form
-    $form.Text = "📦 Abhängigkeiten prüfen - $($script:AppName)"
-    $form.Size = New-Object System.Drawing.Size(600, 450)
-    $form.StartPosition = "CenterScreen"
-    $form.FormBorderStyle = "FixedDialog"
-    $form.MaximizeBox = $false
-    $form.MinimizeBox = $false
-    $form.Font = New-Object System.Drawing.Font("Segoe UI", 9)
-    $form.BackColor = [System.Drawing.Color]::FromArgb(240, 240, 245)
-    
-    # Header Panel
-    $headerPanel = New-Object System.Windows.Forms.Panel
-    $headerPanel.Dock = "Top"
-    $headerPanel.Height = 80
-    $headerPanel.BackColor = [System.Drawing.Color]::FromArgb(41, 128, 185)
-    $form.Controls.Add($headerPanel)
-    
-    # Header Label
-    $headerLabel = New-Object System.Windows.Forms.Label
-    $headerLabel.Text = "🔍 Abhängigkeiten werden geprüft"
-    $headerLabel.Font = New-Object System.Drawing.Font("Segoe UI", 14, [System.Drawing.FontStyle]::Bold)
-    $headerLabel.ForeColor = [System.Drawing.Color]::White
-    $headerLabel.AutoSize = $false
-    $headerLabel.Size = New-Object System.Drawing.Size(560, 30)
-    $headerLabel.Location = New-Object System.Drawing.Point(20, 15)
-    $headerPanel.Controls.Add($headerLabel)
-    
-    # Subheader Label
-    $subHeaderLabel = New-Object System.Windows.Forms.Label
-    $subHeaderLabel.Text = "Status der empfohlenen Komponenten. Grün = Installiert, Weiß = Verfügbar."
-    $subHeaderLabel.Font = New-Object System.Drawing.Font("Segoe UI", 9)
-    $subHeaderLabel.ForeColor = [System.Drawing.Color]::FromArgb(230, 230, 230)
-    $subHeaderLabel.AutoSize = $false
-    $subHeaderLabel.Size = New-Object System.Drawing.Size(560, 20)
-    $subHeaderLabel.Location = New-Object System.Drawing.Point(20, 45)
-    $headerPanel.Controls.Add($subHeaderLabel)
-    
-    # Content Panel
-    $contentPanel = New-Object System.Windows.Forms.Panel
-    $contentPanel.Location = New-Object System.Drawing.Point(20, 100)
-    $contentPanel.Size = New-Object System.Drawing.Size(560, 250)
-    $contentPanel.AutoScroll = $true
-    $form.Controls.Add($contentPanel)
-    
-    # Checkboxen für jede Abhängigkeit
-    $checkBoxes = @{}
-    $yPos = 10
-    
-    foreach ($dep in $MissingDependencies) {
-        # Bestimme ob bereits installiert
-        $isInstalled = ($dep.Found -eq $true)
-        
-        # Gruppierungs-Panel für jede Abhängigkeit
-        $depPanel = New-Object System.Windows.Forms.Panel
-        $depPanel.Location = New-Object System.Drawing.Point(10, $yPos)
-        $depPanel.Size = New-Object System.Drawing.Size(520, 70)
-        
-        # Hintergrundfarbe: Grün-Ton für installiert, Weiß für fehlend
-        if ($isInstalled) {
-            $depPanel.BackColor = [System.Drawing.Color]::FromArgb(230, 255, 230)  # Hellgrün
-        } else {
-            $depPanel.BackColor = [System.Drawing.Color]::White
-        }
-        $depPanel.BorderStyle = "FixedSingle"
-        
-        # Checkbox
-        $checkBox = New-Object System.Windows.Forms.CheckBox
-        $checkBox.Location = New-Object System.Drawing.Point(10, 10)
-        $checkBox.Size = New-Object System.Drawing.Size(480, 25)
-        
-        # Text mit Status-Indikator
-        if ($isInstalled) {
-            $checkBox.Text = "$($dep.Name) ✓ [Bereits installiert]"
-            $checkBox.Checked = $false  # Nicht zur Installation vorschlagen
-            $checkBox.Enabled = $false  # Ausgegraut
-            $checkBox.Font = New-Object System.Drawing.Font("Segoe UI", 10)
-            $checkBox.ForeColor = [System.Drawing.Color]::DarkGreen
-        } else {
-            $checkBox.Text = "$($dep.Name)"
-            $checkBox.Checked = $dep.Required  # Erforderliche standardmäßig aktiviert
-            $checkBox.Enabled = $true
-            $checkBox.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
-            $checkBox.ForeColor = [System.Drawing.Color]::Black
-        }
-        
-        $depPanel.Controls.Add($checkBox)
-        
-        # Beschreibung
-        $descLabel = New-Object System.Windows.Forms.Label
-        $descLabel.Location = New-Object System.Drawing.Point(30, 35)
-        $descLabel.Size = New-Object System.Drawing.Size(470, 25)
-        
-        if ($isInstalled) {
-            # Zeige Installationsdetails für bereits installierte
-            if ($dep.Version) {
-                $descLabel.Text = "Version $($dep.Version) gefunden"
-            } elseif ($dep.Path) {
-                $descLabel.Text = "Installiert: $($dep.Path)"
-            } else {
-                $descLabel.Text = "Installation wurde erkannt"
-            }
-            $descLabel.ForeColor = [System.Drawing.Color]::DarkGreen
-        } else {
-            $descLabel.Text = $dep.Description
-            
-            # Spezielle Hinweise für nicht-installierbare Komponenten
-            if (-not $dep.Available -and $dep.Name -eq "Winget Package Manager") {
-                $descLabel.Text = "⚠️ Installation via Microsoft Store oder GitHub erforderlich"
-                $descLabel.ForeColor = [System.Drawing.Color]::OrangeRed
-            } else {
-                $descLabel.ForeColor = [System.Drawing.Color]::Gray
-            }
-        }
-        
-        $descLabel.Font = New-Object System.Drawing.Font("Segoe UI", 8)
-        $depPanel.Controls.Add($descLabel)
-        
-        $contentPanel.Controls.Add($depPanel)
-        $checkBoxes[$dep.Name] = $checkBox
-        
-        $yPos += 80
-    }
-    
-    # Prüfe ob es installierbare Komponenten gibt
-    $hasInstallableItems = $false
-    foreach ($dep in $MissingDependencies) {
-        if (-not $dep.Found -and $dep.Available) {
-            $hasInstallableItems = $true
-            break
-        }
-    }
-    
-    # Button Panel
-    $buttonPanel = New-Object System.Windows.Forms.Panel
-    $buttonPanel.Dock = "Bottom"
-    $buttonPanel.Height = 60
-    $buttonPanel.BackColor = [System.Drawing.Color]::FromArgb(245, 245, 250)
-    $form.Controls.Add($buttonPanel)
-    
-    # Installieren Button (nur wenn es installierbare Komponenten gibt)
-    if ($hasInstallableItems) {
-        $installButton = New-Object System.Windows.Forms.Button
-        $installButton.Text = "✓ Ausgewählte installieren"
-        $installButton.Size = New-Object System.Drawing.Size(180, 35)
-        $installButton.Location = New-Object System.Drawing.Point(220, 12)
-        $installButton.BackColor = [System.Drawing.Color]::FromArgb(46, 204, 113)
-        $installButton.ForeColor = [System.Drawing.Color]::White
-        $installButton.FlatStyle = "Flat"
-        $installButton.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
-        $installButton.Cursor = [System.Windows.Forms.Cursors]::Hand
-        $installButton.DialogResult = [System.Windows.Forms.DialogResult]::OK
-        $buttonPanel.Controls.Add($installButton)
-        $form.AcceptButton = $installButton
-    }
-    else {
-        # Wenn alles installiert ist, zeige "OK" Button
-        $okButton = New-Object System.Windows.Forms.Button
-        $okButton.Text = "✓ Alles in Ordnung"
-        $okButton.Size = New-Object System.Drawing.Size(180, 35)
-        $okButton.Location = New-Object System.Drawing.Point(220, 12)
-        $okButton.BackColor = [System.Drawing.Color]::FromArgb(46, 204, 113)
-        $okButton.ForeColor = [System.Drawing.Color]::White
-        $okButton.FlatStyle = "Flat"
-        $okButton.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
-        $okButton.Cursor = [System.Windows.Forms.Cursors]::Hand
-        $okButton.DialogResult = [System.Windows.Forms.DialogResult]::OK
-        $buttonPanel.Controls.Add($okButton)
-        $form.AcceptButton = $okButton
-    }
-    
-    # Schließen/Überspringen Button
-    $closeButton = New-Object System.Windows.Forms.Button
-    if ($hasInstallableItems) {
-        $closeButton.Text = "→ Überspringen"
-    } else {
-        $closeButton.Text = "→ Schließen"
-    }
-    $closeButton.Size = New-Object System.Drawing.Size(130, 35)
-    $closeButton.Location = New-Object System.Drawing.Point(410, 12)
-    $closeButton.BackColor = [System.Drawing.Color]::FromArgb(149, 165, 166)
-    $closeButton.ForeColor = [System.Drawing.Color]::White
-    $closeButton.FlatStyle = "Flat"
-    $closeButton.Font = New-Object System.Drawing.Font("Segoe UI", 9)
-    $closeButton.Cursor = [System.Windows.Forms.Cursors]::Hand
-    $closeButton.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
-    $buttonPanel.Controls.Add($closeButton)
-    
-    $form.CancelButton = $closeButton
-    
-    # Dialog anzeigen
-    $result = $form.ShowDialog()
-    
-    # Ergebnis zurückgeben
-    $choices = @{}
-    foreach ($key in $checkBoxes.Keys) {
-        $choices[$key] = @{
-            Install = ($result -eq [System.Windows.Forms.DialogResult]::OK -and $checkBoxes[$key].Checked)
-            Checked = $checkBoxes[$key].Checked
-        }
-    }
-    
-    return @{
-        DialogResult = $result
-        Choices = $choices
-    }
-}
-
-#endregion
-
 #region Integrated GUI Dependency Check
 
 <#
@@ -1144,6 +1357,20 @@ Hashtable mit:
 - OutputText: String für die Outputbox
 #>
 function Get-DependencyStatusForGUI {
+    param(
+        [Parameter(Mandatory = $false)]
+        [string]$CurrentVersion = "0.0.0",
+
+        [Parameter(Mandatory = $false)]
+        [string]$RepoOwner = "ReXx09",
+
+        [Parameter(Mandatory = $false)]
+        [string]$RepoName = "Bockis-Win_Gui-DEV",
+
+        [Parameter(Mandatory = $false)]
+        [string]$GitHubToken
+    )
+
     $dependencies = @()
     $allSatisfied = $true
     
@@ -1251,6 +1478,35 @@ function Get-DependencyStatusForGUI {
             WingetId = $null
         }
     }
+
+    # App Installer (Basis für Winget)
+    $appInstaller = Find-AppInstaller
+    if ($appInstaller.Found) {
+        $dependencies += @{
+            Name = "App Installer (winget)"
+            Description = "Microsoft App Installer (Basis für Winget-Pakete)"
+            Found = $true
+            Required = $false
+            Available = $false
+            Version = $appInstaller.Version
+            Status = "✓ Installiert"
+            StatusColor = "Green"
+            WingetId = $null
+        }
+    } else {
+        $allSatisfied = $false
+        $dependencies += @{
+            Name = "App Installer (winget)"
+            Description = "Erforderlich für Winget-Paketinstallationen"
+            Found = $false
+            Required = $true
+            Available = $false
+            Version = $null
+            Status = "❌ Fehlt"
+            StatusColor = "Red"
+            WingetId = $null
+        }
+    }
     
     # PawnIO-Treiber
     $pawnIO = Find-PawnIODriver
@@ -1298,10 +1554,10 @@ function Get-DependencyStatusForGUI {
     if ($lhm.Available) {
         $dependencies += @{
             Name = "Hardware-Monitoring"
-            Description = "LibreHardwareMonitorLib + PawnIO"
+            Description = "LibreHardwareMonitorLib + PawnIO (Status-Komponente)"
             Found = $true
             Required = $false
-            Available = $true
+            Available = $false
             Version = $lhm.Message
             Status = "✓ Aktiv"
             StatusColor = "Green"
@@ -1310,7 +1566,7 @@ function Get-DependencyStatusForGUI {
     } else {
         $dependencies += @{
             Name = "Hardware-Monitoring"
-            Description = "Lokale DLL-Bibliothek"
+            Description = "Abhängig von PawnIO und lokaler DLL (nicht separat installierbar)"
             Found = $false
             Required = $false
             Available = $false
@@ -1336,6 +1592,13 @@ function Get-DependencyStatusForGUI {
             WingetId = $null
         }
     }
+
+    # GUI-Update-Status (GitHub Release)
+    $dependencies += Get-GuiReleaseDependencyStatus `
+        -CurrentVersion $CurrentVersion `
+        -RepoOwner $RepoOwner `
+        -RepoName $RepoName `
+        -GitHubToken $GitHubToken
     
     # Prüfe ob installierbare Items vorhanden sind
     $hasInstallableItems = ($dependencies | Where-Object { -not $_.Found -and $_.Available }).Count -gt 0
@@ -1355,9 +1618,6 @@ function Get-DependencyStatusForGUI {
 .SYNOPSIS
 Führt eine vollständige Abhängigkeitsprüfung durch.
 
-.PARAMETER ShowDialog
-Zeigt Dialog bei fehlenden Abhängigkeiten
-
 .PARAMETER AutoInstall
 Installiert fehlende Abhängigkeiten automatisch (ohne Dialog)
 
@@ -1366,7 +1626,6 @@ Hashtable mit Ergebnis der Prüfung
 #>
 function Test-SystemDependencies {
     param(
-        [switch]$ShowDialog,
         [switch]$AutoInstall
     )
     
@@ -1514,6 +1773,34 @@ function Test-SystemDependencies {
             Path = $null
         }
         Write-Host "  ⚠️  Winget Package Manager nicht gefunden (manuelle Installation erforderlich)" -ForegroundColor Yellow
+    }
+
+    # 1a. App Installer prüfen (Basis für Winget)
+    $appInstaller = Find-AppInstaller
+    if ($appInstaller.Found) {
+        $dependencies += @{
+            Name = "App Installer (winget)"
+            Description = "Microsoft App Installer (Basis für Winget-Paketinstallation)"
+            Required = $false
+            Available = $false
+            Found = $true
+            Version = $appInstaller.Version
+            Path = $appInstaller.InstallLocation
+        }
+        Write-Host "  ✓ App Installer $($appInstaller.Version) gefunden" -ForegroundColor Green
+    }
+    else {
+        $allSatisfied = $false
+        $dependencies += @{
+            Name = "App Installer (winget)"
+            Description = "Erforderlich für Winget-Paketinstallation (Microsoft Store: App Installer)"
+            Required = $true
+            Available = $false
+            Found = $false
+            Version = $null
+            Path = $null
+        }
+        Write-Host "  ⚠️  App Installer nicht gefunden (Winget-Paketinstallation eingeschränkt)" -ForegroundColor Yellow
     }
     
     # 2. PawnIO-Treiber prüfen (erforderlich für sicheres Hardware-Monitoring)
@@ -1814,16 +2101,10 @@ function Test-SystemDependencies {
     # Prüfe ob es nicht-installierte Abhängigkeiten gibt
     $missingDependencies = $dependencies | Where-Object { -not $_.Found }
     
-    # Wenn alle erfüllt sind und ShowDialog aktiviert, zeige trotzdem Dialog (Status-Übersicht)
+    # Wenn alle erfüllt sind, erfolgreich beenden
     if ($missingDependencies.Count -eq 0) {
         Write-Host "✓ Alle Abhängigkeiten erfüllt!`n" -ForegroundColor Green
-        
-        # Zeige trotzdem Dialog für Status-Übersicht (falls gewünscht)
-        if ($ShowDialog) {
-            $dialogResult = Show-DependencyDialog -MissingDependencies $dependencies
-            # Kein Action nötig, da alles installiert
-        }
-        
+
         return @{
             AllSatisfied = $true
         }
@@ -1842,51 +2123,6 @@ function Test-SystemDependencies {
         }
     }
     
-    # Dialog anzeigen
-    if ($ShowDialog -and $dependencies.Count -gt 0) {
-        $dialogResult = Show-DependencyDialog -MissingDependencies $dependencies
-        
-        if ($dialogResult.DialogResult -eq [System.Windows.Forms.DialogResult]::OK) {
-            # Installiere ausgewählte Abhängigkeiten
-            Write-Host "`n📦 Installiere ausgewählte Komponenten...`n" -ForegroundColor Cyan
-            
-            foreach ($choice in $dialogResult.Choices.Keys) {
-                if ($dialogResult.Choices[$choice].Install) {
-                    $dep = $dependencies | Where-Object { $_.Name -eq $choice } | Select-Object -First 1
-                    
-                    # PawnIO-Installation
-                    if ($choice -eq "PawnIO Ring-0 Treiber" -and $dep.WingetId) {
-                        Write-Host "  → Installiere PawnIO-Treiber..." -ForegroundColor Yellow
-                        try {
-                            # Prüfe ob Winget verfügbar ist
-                            $wingetCheck = Find-WingetPackageManager
-                            if (-not $wingetCheck.Found) {
-                                Write-Host "    ❌ Winget nicht verfügbar - kann PawnIO nicht installieren" -ForegroundColor Red
-                                continue
-                            }
-                            
-                            # Installiere PawnIO über winget
-                            $installProcess = Start-Process -FilePath "winget" -ArgumentList "install", "--id", $dep.WingetId, "--silent", "--accept-package-agreements", "--accept-source-agreements" -Wait -NoNewWindow -PassThru
-                            
-                            if ($installProcess.ExitCode -eq 0) {
-                                Write-Host "    ✓ PawnIO erfolgreich installiert" -ForegroundColor Green
-                                Write-Host "    ⚠️  Bitte System neu starten, damit der Treiber geladen wird!" -ForegroundColor Yellow
-                            }
-                            else {
-                                Write-Host "    ❌ PawnIO-Installation fehlgeschlagen (Exit Code: $($installProcess.ExitCode))" -ForegroundColor Red
-                            }
-                        }
-                        catch {
-                            Write-Host "    ❌ Fehler bei PawnIO-Installation: $_" -ForegroundColor Red
-                        }
-                    }
-                }
-            }
-            
-            Write-Host "`n✓ Installation abgeschlossen`n" -ForegroundColor Green
-        }
-    }
-    
     return @{
         AllSatisfied = $allSatisfied
     }
@@ -1899,12 +2135,16 @@ Export-ModuleMember -Function `
     Initialize-HardwareMonitoringMode, `
     Find-PowerShellCore, `
     Find-WingetPackageManager, `
+    Find-AppInstaller, `
+    Get-DependencyUpdateInfo, `
+    Update-DependencyListWithUpdates, `
+    Get-GuiReleaseDependencyStatus, `
+    Invoke-DependencyAction, `
     Find-PawnIODriver, `
     Test-DotNetFrameworkVersion, `
     Test-PowerShellVersion, `
     Test-WindowsVersion, `
     Test-AdministratorRights, `
-    Show-DependencyDialog, `
     Get-DependencyStatusForGUI, `
     Test-SystemDependencies
 

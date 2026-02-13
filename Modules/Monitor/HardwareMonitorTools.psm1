@@ -752,7 +752,7 @@ function Initialize-LiveMonitoring {
 
         # Timer erstellen
         $timer = New-Object System.Windows.Forms.Timer
-        $timer.Interval = 5000  # 5 Sekunden für optimale Balance zwischen Aktualität und Performance
+        $timer.Interval = 100  # Initial 100ms für schnellen ersten Tick, wird nach erstem Update auf 5000ms gesetzt
         $script:hardwareTimer = $timer  # Timer global speichern
 
         # Initialen GPU-Namen setzen
@@ -794,12 +794,30 @@ function Initialize-LiveMonitoring {
                         # CPU immer aktualisieren (wichtigster Sensor)
                         Update-CpuInfo -CpuLabel $cpuLabel -Panel $gbCPU
                         
-                        # GPU und RAM abwechselnd aktualisieren für Performance
-                        if ($script:updateCounter % 2 -eq 0 -and $gpuLabel -and $gbGPU) {
-                            Update-GpuInfo -GpuLabel $gpuLabel -Panel $gbGPU
+                        # Beim ersten Mal (updateCounter == 1) ALLE Komponenten aktualisieren
+                        # Danach alternierend für Performance
+                        if ($script:updateCounter -eq 1) {
+                            # Initialisierung: Alle Komponenten sofort laden
+                            if ($gpuLabel -and $gbGPU) {
+                                Update-GpuInfo -GpuLabel $gpuLabel -Panel $gbGPU
+                            }
+                            if ($ramLabel -and $gbRAM) {
+                                Update-RamInfo -RamLabel $ramLabel -Panel $gbRAM
+                            }
+                            
+                            # Nach erstem erfolgreichen Update: Timer-Interval auf 5 Sekunden zurücksetzen
+                            if ($script:hardwareTimer) {
+                                $script:hardwareTimer.Interval = 5000
+                            }
                         }
-                        elseif ($script:updateCounter % 2 -eq 1) {
-                            Update-RamInfo -RamLabel $ramLabel -Panel $gbRAM
+                        else {
+                            # Normalbetrieb: GPU und RAM abwechselnd für Performance
+                            if ($script:updateCounter % 2 -eq 0 -and $gpuLabel -and $gbGPU) {
+                                Update-GpuInfo -GpuLabel $gpuLabel -Panel $gbGPU
+                            }
+                            elseif ($script:updateCounter % 2 -eq 1 -and $ramLabel -and $gbRAM) {
+                                Update-RamInfo -RamLabel $ramLabel -Panel $gbRAM
+                            }
                         }
                         
                         # Zähler zurücksetzen nach 10 Durchläufen
@@ -1070,7 +1088,8 @@ function Initialize-HardwareMonitoring {
                     else {
                         $script:useLibreHardware = $true
                     }
-                    Start-Sleep -Milliseconds 200
+                    # Sleep nur bei visueller Konsolen-Ausgabe (für Progressbar-Animation)
+                    if (-not $SuppressVisualFeedback) { Start-Sleep -Milliseconds 200 }
                 }
                 "CPU-Monitor" {
                     if ($cpuLabel -and $gbCPU) {
@@ -1078,7 +1097,7 @@ function Initialize-HardwareMonitoring {
                         $gbCPU.BackColor = [System.Drawing.Color]::LightGray
                         $cpuLabel.Text = "CPU-Daten werden geladen..."
                     }
-                    Start-Sleep -Milliseconds 200
+                    if (-not $SuppressVisualFeedback) { Start-Sleep -Milliseconds 200 }
                 }
                 "GPU-Monitor" {
                     if ($gpuLabel -and $gbGPU) {
@@ -1086,7 +1105,7 @@ function Initialize-HardwareMonitoring {
                         $gbGPU.BackColor = [System.Drawing.Color]::LightGray
                         $gpuLabel.Text = "GPU-Daten werden geladen..."
                     }
-                    Start-Sleep -Milliseconds 200
+                    if (-not $SuppressVisualFeedback) { Start-Sleep -Milliseconds 200 }
                 }
                 "RAM-Monitor" {
                     if ($ramLabel -and $gbRAM) {
@@ -1094,7 +1113,7 @@ function Initialize-HardwareMonitoring {
                         $gbRAM.BackColor = [System.Drawing.Color]::LightGray
                         $ramLabel.Text = "RAM-Daten werden geladen..."
                     }
-                    Start-Sleep -Milliseconds 200
+                    if (-not $SuppressVisualFeedback) { Start-Sleep -Milliseconds 200 }
                 }
                 "Statistik-System" {
                     # Statistik-Tracking zurücksetzen

@@ -1,8 +1,8 @@
-# Create-GitHubRelease.ps1
+﻿# Create-GitHubRelease.ps1
 # Erstellt einen GitHub Release mit automatischem ZIP-Upload
 
 param(
-    [string]$Version = "4.1.2",
+    [string]$Version = "4.1.4",
     [string]$RepoOwner = "ReXx09",
     [string]$RepoName = "Bockis-Win_Gui-DEV",
     [string]$Token = "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",
@@ -210,3 +210,4 @@ $openBrowser = Read-Host "Release im Browser öffnen? (j/n)"
 if ($openBrowser -eq 'j' -or $openBrowser -eq 'J') {
     Start-Process $release.html_url
 }
+
