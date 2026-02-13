@@ -1,15 +1,14 @@
 ﻿# Win_Gui_Module.ps1 - Hauptskript für die PowerShell-GUI
 # Autor: Bocki
-# Version: 4.1.4
+# Version: 4.1.5
 
 # ===================================================================
 # VERSIONS-INFORMATION
 # ===================================================================
-$script:AppVersion = "4.1.4"
+$script:AppVersion = "4.1.5"
 $script:AppName = "Bockis System-Tool"
 $script:AppPublisher = "Bockis"
 $script:VersionDate = "2026-02-13"
-
 # WPF-Assemblies für moderne UI-Komponenten laden
 Add-Type -AssemblyName PresentationFramework
 Add-Type -AssemblyName PresentationCore
@@ -3758,7 +3757,13 @@ $btnCheckDependenciesH.Add_Click({
                     $actionButton.FlatAppearance.BorderSize = 0
                     $actionButton.Font = New-Object System.Drawing.Font("Segoe UI", 8.5, [System.Drawing.FontStyle]::Bold)
 
-                    if (-not $dep.Found -and $dep.WingetId) {
+                    if ($dep.Name -eq "GUI-Update (GitHub)") {
+                        $actionButton.Text = "Downgrade"
+                        $actionButton.BackColor = [System.Drawing.Color]::FromArgb(124, 77, 255)
+                        $actionButton.ForeColor = [System.Drawing.Color]::White
+                        $actionButton.Tag = @{ Dependency = $dep; Action = "gui-release-select" }
+                    }
+                    elseif (-not $dep.Found -and $dep.WingetId) {
                         $actionButton.Text = "Installieren"
                         $actionButton.BackColor = [System.Drawing.Color]::FromArgb(46, 204, 113)
                         $actionButton.ForeColor = [System.Drawing.Color]::White
@@ -3789,9 +3794,17 @@ $btnCheckDependenciesH.Add_Click({
 
                         $depToHandle = $payload.Dependency
                         $actionType = $payload.Action
-                        $actionLabel = if ($actionType -eq "upgrade") { "Aktualisierung" } else { "Installation" }
+                        $actionLabel = switch ($actionType) {
+                            "upgrade" { "Aktualisierung" }
+                            "gui-release-select" { "Versionswechsel" }
+                            default { "Installation" }
+                        }
                         $this.Enabled = $false
-                        $this.Text = if ($actionType -eq "upgrade") { "Aktualisiere..." } else { "Installiere..." }
+                        $this.Text = switch ($actionType) {
+                            "upgrade" { "Aktualisiere..." }
+                            "gui-release-select" { "Suche Version..." }
+                            default { "Installiere..." }
+                        }
                         [System.Windows.Forms.Application]::DoEvents()
 
                         $uiProgressCallback = {
@@ -3828,15 +3841,24 @@ $btnCheckDependenciesH.Add_Click({
 
                         & $uiProgressCallback -Value 0 -Text "$actionLabel wird gestartet..."
 
+                        $actionResult = $null
                         try {
-                            if ($actionType -eq "upgrade") {
+                            if ($actionType -eq "gui-release-select") {
+                                $actionResult = Invoke-GuiReleaseAction
+                            }
+                            elseif ($actionType -eq "upgrade") {
                                 $actionResult = Invoke-DependencyAction -WingetId $depToHandle.WingetId -Action 'upgrade' -ProgressCallback $uiProgressCallback -LogCallback $uiLogCallback
                             }
                             else {
                                 $actionResult = Invoke-DependencyAction -WingetId $depToHandle.WingetId -Action 'install' -ProgressCallback $uiProgressCallback -LogCallback $uiLogCallback
                             }
 
-                            if ($actionResult.Success) {
+                            if ($actionResult -and $actionResult.Cancelled) {
+                                $this.Text = if ($actionType -eq "gui-release-select") { "Downgrade" } else { "Erneut versuchen" }
+                                $this.BackColor = if ($actionType -eq "gui-release-select") { [System.Drawing.Color]::FromArgb(124, 77, 255) } else { [System.Drawing.Color]::FromArgb(231, 76, 60) }
+                                $this.Enabled = $true
+                            }
+                            elseif ($actionResult -and $actionResult.Success) {
                                 if ($depToHandle.Name -eq "PawnIO Ring-0 Treiber") {
                                     [System.Windows.Forms.MessageBox]::Show("Bitte System neu starten, damit der PawnIO-Treiber geladen wird.", "Neustart erforderlich", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information) | Out-Null
                                 }
@@ -3844,26 +3866,35 @@ $btnCheckDependenciesH.Add_Click({
                                 $this.BackColor = [System.Drawing.Color]::FromArgb(39, 174, 96)
                             }
                             else {
-                                if ($actionResult.ErrorMessage) {
+                                if ($actionResult -and $actionResult.ErrorMessage) {
                                     [System.Windows.Forms.MessageBox]::Show("Vorgang fehlgeschlagen: $($actionResult.ErrorMessage)", "Aktion fehlgeschlagen", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
+                                }
+                                elseif ($actionResult -and $actionResult.Message) {
+                                    [System.Windows.Forms.MessageBox]::Show("Vorgang fehlgeschlagen: $($actionResult.Message)", "Aktion fehlgeschlagen", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
                                 }
                                 else {
                                     [System.Windows.Forms.MessageBox]::Show("Vorgang fehlgeschlagen (Exit Code: $($actionResult.ExitCode))", "Aktion fehlgeschlagen", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
                                 }
-                                $this.Text = "Erneut versuchen"
-                                $this.BackColor = [System.Drawing.Color]::FromArgb(231, 76, 60)
+                                $this.Text = if ($actionType -eq "gui-release-select") { "Downgrade" } else { "Erneut versuchen" }
+                                $this.BackColor = if ($actionType -eq "gui-release-select") { [System.Drawing.Color]::FromArgb(124, 77, 255) } else { [System.Drawing.Color]::FromArgb(231, 76, 60) }
                                 $this.Enabled = $true
                             }
                         }
                         catch {
                             & $uiProgressCallback -Value 100 -Text "$actionLabel fehlgeschlagen" -Color ([System.Drawing.Color]::Red)
                             [System.Windows.Forms.MessageBox]::Show("Fehler: $($_.Exception.Message)", "Aktion fehlgeschlagen", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
-                            $this.Text = "Erneut versuchen"
-                            $this.BackColor = [System.Drawing.Color]::FromArgb(231, 76, 60)
+                            if ($actionType -eq "gui-release-select") {
+                                $this.Text = "Downgrade"
+                                $this.BackColor = [System.Drawing.Color]::FromArgb(124, 77, 255)
+                            }
+                            else {
+                                $this.Text = "Erneut versuchen"
+                                $this.BackColor = [System.Drawing.Color]::FromArgb(231, 76, 60)
+                            }
                             $this.Enabled = $true
                         }
 
-                        if ($actionResult.Success) {
+                        if ($actionResult -and $actionResult.Success) {
                             $resetActionProgressTimer = New-Object System.Windows.Forms.Timer
                             $resetActionProgressTimer.Interval = 2200
                             $resetActionProgressTimer.Add_Tick({
@@ -6088,38 +6119,13 @@ $btnRestart.Add_Click({
 # ENTFERNT: Alter Button wird durch Collapsible Panel ersetzt
 # $mainform.Controls.Add($btnRestart)
 
-# ===================================================================
-# AUTO-UPDATE BUTTON
-# ===================================================================
-# ===================================================================
-# UPDATE-FUNKTION (Wrapper für UpdateManager-Modul)
-# ===================================================================
-function Check-ForUpdates {
-    <#
-    .SYNOPSIS
-        Wrapper-Funktion für das UpdateManager-Modul
-    
-    .DESCRIPTION
-        Ruft Invoke-UpdateCheck aus dem UpdateManager-Modul auf
-        und übergibt alle notwendigen GUI-Komponenten und Parameter
-    #>
-    
+function Invoke-GuiReleaseAction {
     try {
-        # Prüfe ob UpdateManager-Modul geladen ist
-        if (-not (Get-Command -Name Invoke-UpdateCheck -ErrorAction SilentlyContinue)) {
-            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
-            $outputBox.AppendText("[✗] UpdateManager-Modul nicht geladen!`r`n")
-            [System.Windows.Forms.MessageBox]::Show(
-                "Das UpdateManager-Modul konnte nicht geladen werden.`nUpdate-Funktion nicht verfügbar.",
-                "Modul-Fehler",
-                [System.Windows.Forms.MessageBoxButtons]::OK,
-                [System.Windows.Forms.MessageBoxIcon]::Error
-            )
-            return $false
+        if (-not (Get-Command -Name Invoke-ReleaseSelectionUpdate -ErrorAction SilentlyContinue)) {
+            return @{ Success = $false; Cancelled = $false; Message = "Release-Auswahlfunktion nicht verfügbar" }
         }
-        
-        # Rufe Update-Check aus Modul auf
-        return Invoke-UpdateCheck `
+
+        return Invoke-ReleaseSelectionUpdate `
             -CurrentVersion $script:AppVersion `
             -OutputBox $outputBox `
             -ProgressBar $progressBar `
@@ -6127,30 +6133,9 @@ function Check-ForUpdates {
             -ApplicationPath $PSScriptRoot
     }
     catch {
-        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
-        $outputBox.AppendText("[✗] Fehler beim Aufruf der Update-Funktion: $($_.Exception.Message)`r`n")
-        return $false
+        return @{ Success = $false; Cancelled = $false; Message = $_.Exception.Message }
     }
 }
-
-# Update-Button erstellen (rechts neben Progressbar)
-$btnUpdate = New-Object System.Windows.Forms.Button
-$btnUpdate.Text = "↻ Update"
-$btnUpdate.Location = New-Object System.Drawing.Point(850, 755)  # 190 + 650 + 10 = rechts neben Progressbar
-$btnUpdate.Size = New-Object System.Drawing.Size(140, 30)
-$btnUpdate.BackColor = [System.Drawing.Color]::FromArgb(16, 124, 16)  # Grün
-$btnUpdate.ForeColor = [System.Drawing.Color]::White
-$btnUpdate.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
-$btnUpdate.FlatAppearance.BorderSize = 0
-$btnUpdate.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
-
-# Click-Event: Update prüfen
-$btnUpdate.Add_Click({
-    Check-ForUpdates
-})
-
-$mainform.Controls.Add($btnUpdate)
-
 
 # Tooltip-Texte zu den Funktionsbuttons hinzufügen (tooltipObj wurde bereits weiter oben initialisiert)
 $tooltipObj.SetToolTip($btnQuickMRT, "Führt einen schnellen Malware-Scan mit Microsoft Malicious Software Removal Tool durch")
@@ -6172,7 +6157,6 @@ $tooltipObj.SetToolTip($btnResetNetwork, "Setzt Netzwerkadapter und TCP/IP-Stack
 $tooltipObj.SetToolTip($btnDiskCleanup, "Startet den Windows Disk Cleanup-Tool zum Freigeben von Speicherplatz")
 $tooltipObj.SetToolTip($btnTempFiles, "Bereinigt temporäre Dateien, um Speicherplatz freizugeben")
 $tooltipObj.SetToolTip($btnRestart, "Neustart-Optionen: GUI neuladen oder System neustarten")
-$tooltipObj.SetToolTip($btnUpdate, "Prüft auf verfügbare Updates und installiert diese automatisch")
 $tooltipObj.SetToolTip($infoButton, "Zeigt Informationen über die Anwendung an")
 
 # Status-Informationen anzeigen
@@ -7074,4 +7058,6 @@ try {
 # YyKNcb+HLXv5YRdKfIIqqa+B6DBOZyfjNhFHwrTqq8oIU0LFn0Azy7KgyhL50Jq4
 # l+HJ+GdN9Loq4LF/M1igCdJu8Xr+jRRS+rIN+rK7K+zTTamLn0ttCuFe14gUeA==
 # SIG # End signature block
+
+
 

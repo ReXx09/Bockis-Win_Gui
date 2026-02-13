@@ -19,242 +19,8 @@
 #>
 
 # ===================================================================
-# UPDATE-CHECK UND INSTALLATION
+# VERSIONSAUSWAHL UND INSTALLATION
 # ===================================================================
-
-function Invoke-UpdateCheck {
-    <#
-    .SYNOPSIS
-        Prüft auf verfügbare Updates und führt Installation durch
-    
-    .PARAMETER CurrentVersion
-        Die aktuell installierte Version (z.B. "4.1.2")
-    
-    .PARAMETER OutputBox
-        RichTextBox-Control für Statusausgaben
-    
-    .PARAMETER ProgressBar
-        ProgressBar-Control für Fortschrittsanzeige
-    
-    .PARAMETER MainForm
-        Hauptformular (wird nach Update geschlossen)
-    
-    .PARAMETER ApplicationPath
-        Pfad zur Anwendung (für Neustart nach Update)
-    
-    .PARAMETER RepoOwner
-        GitHub Repository Owner (Standard: "ReXx09")
-    
-    .PARAMETER RepoName
-        GitHub Repository Name (Standard: "Bockis-Win_Gui-DEV")
-    
-    .PARAMETER GitHubToken
-        Personal Access Token für private Repos (optional)
-    
-    .EXAMPLE
-        Invoke-UpdateCheck -CurrentVersion $script:AppVersion -OutputBox $outputBox -ProgressBar $progressBar -MainForm $mainform -ApplicationPath $PSScriptRoot
-    #>
-    
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory=$true)]
-        [string]$CurrentVersion,
-        
-        [Parameter(Mandatory=$true)]
-        [System.Windows.Forms.RichTextBox]$OutputBox,
-        
-        [Parameter(Mandatory=$true)]
-        [System.Windows.Forms.ProgressBar]$ProgressBar,
-        
-        [Parameter(Mandatory=$true)]
-        [System.Windows.Forms.Form]$MainForm,
-        
-        [Parameter(Mandatory=$true)]
-        [string]$ApplicationPath,
-        
-        [Parameter(Mandatory=$false)]
-        [string]$RepoOwner = "ReXx09",
-        
-        [Parameter(Mandatory=$false)]
-        [string]$RepoName = "Bockis-Win_Gui-DEV",
-        
-        [Parameter(Mandatory=$false)]
-        [string]$GitHubToken = "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"
-    )
-    
-    try {
-        $apiUrl = "https://api.github.com/repos/$RepoOwner/$RepoName/releases/latest"
-        
-        Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Info'
-        $OutputBox.AppendText("[i] Prüfe auf Updates...`r`n")
-        $OutputBox.AppendText("Repository: $RepoOwner/$RepoName`r`n")
-        
-        # Headers mit Authentication vorbereiten
-        $headers = @{
-            "User-Agent" = "Bockis-System-Tool"
-            "Accept" = "application/vnd.github+json"
-        }
-        
-        # Token hinzufügen (GitHub bevorzugt "token" statt "Bearer")
-        if ($GitHubToken -and $GitHubToken -ne "ghp_DEIN_TOKEN_HIER") {
-            $headers["Authorization"] = "token $GitHubToken"
-        }
-        
-        # GitHub API abfragen mit Error-Handling
-        $latestRelease = $null
-        try {
-            $latestRelease = Invoke-RestMethod -Uri $apiUrl -Headers $headers -ErrorAction Stop
-        }
-        catch {
-            $statusCode = $_.Exception.Response.StatusCode.value__
-            
-            # Bei 404: Versuche alle Releases zu holen (inkl. Pre-Releases)
-            if ($statusCode -eq 404) {
-                Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Warning'
-                $OutputBox.AppendText("[i] Kein publizierter Release gefunden, suche nach Pre-Releases...`r`n")
-                
-                $latestRelease = Get-LatestReleaseWithFallback -RepoOwner $RepoOwner -RepoName $RepoName -Headers $headers -OutputBox $OutputBox
-                
-                if (-not $latestRelease) {
-                    return $false
-                }
-            }
-            elseif ($statusCode -eq 401) {
-                Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Error'
-                $OutputBox.AppendText("[✗] Authentifizierung fehlgeschlagen!`r`n")
-                $OutputBox.AppendText("Token ist ungültig oder abgelaufen.`r`n")
-                return $false
-            }
-            else {
-                Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Error'
-                $OutputBox.AppendText("[✗] API-Fehler: $($_.Exception.Message)`r`n")
-                return $false
-            }
-        }
-        
-        # Prüfen ob ein Release gefunden wurde
-        if (-not $latestRelease) {
-            Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Error'
-            $OutputBox.AppendText("[✗] Konnte keine Releases finden!`r`n")
-            return $false
-        }
-        
-        $latestVersion = $latestRelease.tag_name -replace 'v', ''
-        
-        Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Default'
-        $OutputBox.AppendText("Aktuelle Version: $CurrentVersion`r`n")
-        $OutputBox.AppendText("Neueste Version: $latestVersion`r`n`r`n")
-        
-        # Versionsvergleich
-        if ([version]$latestVersion -gt [version]$CurrentVersion) {
-            return Install-Update -LatestRelease $latestRelease -LatestVersion $latestVersion -CurrentVersion $CurrentVersion `
-                -OutputBox $OutputBox -ProgressBar $ProgressBar -MainForm $MainForm -ApplicationPath $ApplicationPath -GitHubToken $GitHubToken
-        }
-        elseif ([version]$CurrentVersion -gt [version]$latestVersion) {
-            Show-NoUpdateNeeded -CurrentVersion $CurrentVersion -LatestVersion $latestVersion -OutputBox $OutputBox -IsNewer $true
-            return $false
-        }
-        else {
-            Show-NoUpdateNeeded -CurrentVersion $CurrentVersion -LatestVersion $latestVersion -OutputBox $OutputBox -IsNewer $false
-            return $false
-        }
-    }
-    catch {
-        Show-UpdateError -ErrorRecord $_ -OutputBox $OutputBox
-        return $false
-    }
-}
-
-# ===================================================================
-# HILFSFUNKTIONEN
-# ===================================================================
-
-function Get-LatestReleaseWithFallback {
-    [CmdletBinding()]
-    param(
-        [string]$RepoOwner,
-        [string]$RepoName,
-        [hashtable]$Headers,
-        [System.Windows.Forms.RichTextBox]$OutputBox
-    )
-    
-    try {
-        # Hole alle Releases (inkl. Pre-Releases)
-        $allReleasesUrl = "https://api.github.com/repos/$RepoOwner/$RepoName/releases"
-        $allReleases = Invoke-RestMethod -Uri $allReleasesUrl -Headers $Headers -ErrorAction Stop
-        
-        if ($allReleases -and $allReleases.Count -gt 0) {
-            $latestRelease = $allReleases[0]
-            $OutputBox.AppendText("[i] Gefunden: $($latestRelease.tag_name)")
-            if ($latestRelease.prerelease) {
-                $OutputBox.AppendText(" (Pre-Release)")
-            }
-            if ($latestRelease.draft) {
-                $OutputBox.AppendText(" (Draft)")
-            }
-            $OutputBox.AppendText("`r`n`r`n")
-            return $latestRelease
-        }
-        else {
-            # Keine Releases - prüfe Tags
-            return Get-TagsAndShowGuide -RepoOwner $RepoOwner -RepoName $RepoName -Headers $Headers -OutputBox $OutputBox
-        }
-    }
-    catch {
-        Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Error'
-        $OutputBox.AppendText("[✗] Fehler beim Abrufen der Releases: $($_.Exception.Message)`r`n")
-        return $null
-    }
-}
-
-function Get-TagsAndShowGuide {
-    [CmdletBinding()]
-    param(
-        [string]$RepoOwner,
-        [string]$RepoName,
-        [hashtable]$Headers,
-        [System.Windows.Forms.RichTextBox]$OutputBox
-    )
-    
-    Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Warning'
-    $OutputBox.AppendText("[i] Keine Releases gefunden, prüfe Git-Tags...`r`n")
-    
-    try {
-        $tagsUrl = "https://api.github.com/repos/$RepoOwner/$RepoName/tags"
-        $tags = Invoke-RestMethod -Uri $tagsUrl -Headers $Headers -ErrorAction Stop
-        
-        if ($tags -and $tags.Count -gt 0) {
-            Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Error'
-            $OutputBox.AppendText("[!] Git-Tag gefunden: $($tags[0].name)`r`n`r`n")
-            $OutputBox.AppendText("WICHTIG: Ein Git-Tag ist KEIN Release!`r`n")
-            $OutputBox.AppendText("Sie müssen einen Release aus dem Tag erstellen:`r`n`r`n")
-            $OutputBox.AppendText("1. Gehen Sie zu:`r`n")
-            $OutputBox.AppendText("   https://github.com/$RepoOwner/$RepoName/releases/new`r`n`r`n")
-            $OutputBox.AppendText("2. Wählen Sie den Tag: $($tags[0].name)`r`n")
-            $OutputBox.AppendText("3. Laden Sie eine ZIP-Datei hoch`r`n")
-            $OutputBox.AppendText("4. Klicken Sie auf 'Publish release'`r`n")
-            
-            [System.Windows.Forms.MessageBox]::Show(
-                "Git-Tag '$($tags[0].name)' existiert, aber kein Release!`n`nEin Git-Tag alleine reicht nicht für Updates.`nErstellen Sie einen Release aus dem Tag.`n`nDetails siehe Ausgabe-Fenster.",
-                "Kein Release vorhanden",
-                [System.Windows.Forms.MessageBoxButtons]::OK,
-                [System.Windows.Forms.MessageBoxIcon]::Warning
-            )
-        }
-        else {
-            Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Error'
-            $OutputBox.AppendText("[✗] Keine Releases und keine Tags gefunden!`r`n`r`n")
-            $OutputBox.AppendText("Erstellen Sie einen Release unter:`r`n")
-            $OutputBox.AppendText("https://github.com/$RepoOwner/$RepoName/releases/new`r`n")
-        }
-    }
-    catch {
-        Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Error'
-        $OutputBox.AppendText("[✗] Fehler beim Abrufen der Tags: $($_.Exception.Message)`r`n")
-    }
-    
-    return $null
-}
 
 function Install-Update {
     [CmdletBinding()]
@@ -266,7 +32,9 @@ function Install-Update {
         [System.Windows.Forms.ProgressBar]$ProgressBar,
         [System.Windows.Forms.Form]$MainForm,
         [string]$ApplicationPath,
-        [string]$GitHubToken
+        [string]$GitHubToken,
+        [ValidateSet('Update', 'Downgrade', 'Neuinstallation')]
+        [string]$Operation = 'Update'
     )
     
     Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Success'
@@ -288,9 +56,21 @@ function Install-Update {
         $LatestRelease.body
     }
     
+    $operationTitle = switch ($Operation) {
+        'Downgrade' { 'Downgrade auswählen' }
+        'Neuinstallation' { 'Version installieren' }
+        default { 'Update verfügbar' }
+    }
+
+    $operationQuestion = switch ($Operation) {
+        'Downgrade' { "Möchten Sie auf diese ältere Version wechseln?" }
+        'Neuinstallation' { "Möchten Sie diese Version installieren?" }
+        default { "Möchten Sie jetzt updaten?" }
+    }
+
     $result = [System.Windows.Forms.MessageBox]::Show(
-        "Neue Version verfügbar: v$LatestVersion`n`nAktuell installiert: v$CurrentVersion`n`nRelease-Notes:`n$releaseNotesPreview`n`nMöchten Sie jetzt updaten?",
-        "Update verfügbar",
+        "Ausgewählte Version: v$LatestVersion`n`nAktuell installiert: v$CurrentVersion`n`nRelease-Notes:`n$releaseNotesPreview`n`n$operationQuestion",
+        $operationTitle,
         [System.Windows.Forms.MessageBoxButtons]::YesNo,
         [System.Windows.Forms.MessageBoxIcon]::Information
     )
@@ -326,6 +106,248 @@ function Install-Update {
     }
     
     return $false
+}
+
+function Get-ReleaseListWithFallback {
+    [CmdletBinding()]
+    param(
+        [string]$RepoOwner,
+        [string]$RepoName,
+        [string]$GitHubToken,
+        [System.Windows.Forms.RichTextBox]$OutputBox
+    )
+
+    $headers = @{
+        "User-Agent" = "Bockis-System-Tool"
+        "Accept" = "application/vnd.github+json"
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($GitHubToken) -and $GitHubToken -ne "ghp_DEIN_TOKEN_HIER") {
+        $headers["Authorization"] = "token $GitHubToken"
+    }
+
+    $repoCandidates = [System.Collections.Generic.List[string]]::new()
+    $repoCandidates.Add($RepoName)
+    if ($RepoName -match '-') {
+        $repoCandidates.Add(($RepoName -replace '-', '_'))
+    }
+    if ($RepoName -match '_') {
+        $repoCandidates.Add(($RepoName -replace '_', '-'))
+    }
+
+    $lastError = $null
+
+    foreach ($candidate in ($repoCandidates | Select-Object -Unique)) {
+        try {
+            $allReleasesUrl = "https://api.github.com/repos/$RepoOwner/$candidate/releases"
+            $releases = Invoke-RestMethod -Uri $allReleasesUrl -Headers $headers -ErrorAction Stop
+            if ($releases -and $releases.Count -gt 0) {
+                return @($releases)
+            }
+        }
+        catch {
+            $lastError = $_
+        }
+    }
+
+    if ($headers.ContainsKey('Authorization')) {
+        $headersNoAuth = @{
+            "User-Agent" = "Bockis-System-Tool"
+            "Accept" = "application/vnd.github+json"
+        }
+
+        foreach ($candidate in ($repoCandidates | Select-Object -Unique)) {
+            try {
+                $allReleasesUrl = "https://api.github.com/repos/$RepoOwner/$candidate/releases"
+                $releases = Invoke-RestMethod -Uri $allReleasesUrl -Headers $headersNoAuth -ErrorAction Stop
+                if ($releases -and $releases.Count -gt 0) {
+                    return @($releases)
+                }
+            }
+            catch {
+                $lastError = $_
+            }
+        }
+    }
+
+    if ($OutputBox) {
+        Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Error'
+        if ($lastError) {
+            $OutputBox.AppendText("[✗] Keine Releases gefunden: $($lastError.Exception.Message)`r`n")
+        }
+        else {
+            $OutputBox.AppendText("[✗] Keine Releases gefunden.`r`n")
+        }
+    }
+
+    return @()
+}
+
+function Show-ReleaseSelectionDialog {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [array]$Releases,
+        [Parameter(Mandatory = $true)]
+        [string]$CurrentVersion
+    )
+
+    if (-not $Releases -or $Releases.Count -eq 0) {
+        return $null
+    }
+
+    $form = New-Object System.Windows.Forms.Form
+    $form.Text = "Version auswählen"
+    $form.Size = New-Object System.Drawing.Size(700, 420)
+    $form.StartPosition = [System.Windows.Forms.FormStartPosition]::CenterParent
+    $form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedDialog
+    $form.MaximizeBox = $false
+    $form.MinimizeBox = $false
+
+    $label = New-Object System.Windows.Forms.Label
+    $label.Text = "Wählen Sie eine Version (Rollback/Downgrade bei Problemen):" 
+    $label.Location = New-Object System.Drawing.Point(12, 12)
+    $label.Size = New-Object System.Drawing.Size(660, 24)
+    $form.Controls.Add($label)
+
+    $listBox = New-Object System.Windows.Forms.ListBox
+    $listBox.Location = New-Object System.Drawing.Point(12, 40)
+    $listBox.Size = New-Object System.Drawing.Size(660, 280)
+    $listBox.Font = New-Object System.Drawing.Font("Segoe UI", 9)
+
+    foreach ($release in $Releases) {
+        $tag = "$($release.tag_name)"
+        $versionText = $tag -replace '^v', ''
+        $mode = 'Neuinstallation'
+
+        try {
+            if ([version]$versionText -gt [version]$CurrentVersion) {
+                $mode = 'Update'
+            }
+            elseif ([version]$versionText -lt [version]$CurrentVersion) {
+                $mode = 'Downgrade'
+            }
+            else {
+                $mode = 'Aktuell'
+            }
+        }
+        catch {
+            if ($versionText -eq $CurrentVersion) {
+                $mode = 'Aktuell'
+            }
+        }
+
+        $published = if ($release.published_at) { (Get-Date $release.published_at -Format 'yyyy-MM-dd') } else { 'unbekannt' }
+        $listText = "{0,-14} [{1}]  ({2})" -f $tag, $mode, $published
+        $null = $listBox.Items.Add([PSCustomObject]@{
+            Display = $listText
+            Release = $release
+            Mode = $mode
+            Version = $versionText
+        })
+    }
+
+    $listBox.DisplayMember = 'Display'
+    if ($listBox.Items.Count -gt 0) {
+        $defaultIndex = 0
+        for ($i = 0; $i -lt $listBox.Items.Count; $i++) {
+            if ($listBox.Items[$i].Mode -eq 'Downgrade') {
+                $defaultIndex = $i
+                break
+            }
+        }
+        $listBox.SelectedIndex = $defaultIndex
+    }
+    $form.Controls.Add($listBox)
+
+    $btnOk = New-Object System.Windows.Forms.Button
+    $btnOk.Text = "Auswählen"
+    $btnOk.Location = New-Object System.Drawing.Point(486, 335)
+    $btnOk.Size = New-Object System.Drawing.Size(90, 28)
+    $btnOk.DialogResult = [System.Windows.Forms.DialogResult]::OK
+    $form.Controls.Add($btnOk)
+
+    $btnCancel = New-Object System.Windows.Forms.Button
+    $btnCancel.Text = "Abbrechen"
+    $btnCancel.Location = New-Object System.Drawing.Point(582, 335)
+    $btnCancel.Size = New-Object System.Drawing.Size(90, 28)
+    $btnCancel.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
+    $form.Controls.Add($btnCancel)
+
+    $form.AcceptButton = $btnOk
+    $form.CancelButton = $btnCancel
+
+    $dialogResult = $form.ShowDialog()
+    if ($dialogResult -ne [System.Windows.Forms.DialogResult]::OK -or -not $listBox.SelectedItem) {
+        return $null
+    }
+
+    return $listBox.SelectedItem
+}
+
+function Invoke-ReleaseSelectionUpdate {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$CurrentVersion,
+
+        [Parameter(Mandatory=$true)]
+        [System.Windows.Forms.RichTextBox]$OutputBox,
+
+        [Parameter(Mandatory=$true)]
+        [System.Windows.Forms.ProgressBar]$ProgressBar,
+
+        [Parameter(Mandatory=$true)]
+        [System.Windows.Forms.Form]$MainForm,
+
+        [Parameter(Mandatory=$true)]
+        [string]$ApplicationPath,
+
+        [Parameter(Mandatory=$false)]
+        [string]$RepoOwner = "ReXx09",
+
+        [Parameter(Mandatory=$false)]
+        [string]$RepoName = "Bockis-Win_Gui-DEV",
+
+        [Parameter(Mandatory=$false)]
+        [string]$GitHubToken = "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"
+    )
+
+    try {
+        Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Info'
+        $OutputBox.AppendText("[i] Lade verfügbare Releases...`r`n")
+
+        $releases = Get-ReleaseListWithFallback -RepoOwner $RepoOwner -RepoName $RepoName -GitHubToken $GitHubToken -OutputBox $OutputBox
+        if (-not $releases -or $releases.Count -eq 0) {
+            return @{ Success = $false; Cancelled = $false; Message = "Keine Releases gefunden" }
+        }
+
+        $selection = Show-ReleaseSelectionDialog -Releases $releases -CurrentVersion $CurrentVersion
+        if (-not $selection) {
+            Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Info'
+            $OutputBox.AppendText("[i] Versionsauswahl abgebrochen.`r`n")
+            return @{ Success = $false; Cancelled = $true; Message = "Abgebrochen" }
+        }
+
+        $operationMode = switch ($selection.Mode) {
+            'Downgrade' { 'Downgrade' }
+            'Aktuell' { 'Neuinstallation' }
+            default { 'Update' }
+        }
+
+        $installSuccess = Install-Update -LatestRelease $selection.Release -LatestVersion $selection.Version -CurrentVersion $CurrentVersion `
+            -OutputBox $OutputBox -ProgressBar $ProgressBar -MainForm $MainForm -ApplicationPath $ApplicationPath -GitHubToken $GitHubToken -Operation $operationMode
+
+        if ($installSuccess) {
+            return @{ Success = $true; Cancelled = $false; Message = "Versionswechsel gestartet" }
+        }
+
+        return @{ Success = $false; Cancelled = $false; Message = "Installation nicht gestartet" }
+    }
+    catch {
+        Show-UpdateError -ErrorRecord $_ -OutputBox $OutputBox
+        return @{ Success = $false; Cancelled = $false; Message = $_.Exception.Message }
+    }
 }
 
 function Start-AsyncDownload {
@@ -522,40 +544,6 @@ Start-Process powershell.exe -ArgumentList '-ExecutionPolicy Bypass -File "$Appl
     $MainForm.Close()
 }
 
-function Show-NoUpdateNeeded {
-    [CmdletBinding()]
-    param(
-        [string]$CurrentVersion,
-        [string]$LatestVersion,
-        [System.Windows.Forms.RichTextBox]$OutputBox,
-        [bool]$IsNewer
-    )
-    
-    Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Success'
-    
-    if ($IsNewer) {
-        $OutputBox.AppendText("[✓] Ihre Version ist neuer als der letzte Release!`r`n")
-        $OutputBox.AppendText("[i] Installiert: v$CurrentVersion | Release: v$LatestVersion`r`n")
-        
-        [System.Windows.Forms.MessageBox]::Show(
-            "Ihre Version ist neuer als der letzte veröffentlichte Release.`n`nInstalliert: v$CurrentVersion`nLetzter Release: v$LatestVersion`n`nSie verwenden vermutlich eine Entwicklungsversion.",
-            "Keine Updates",
-            [System.Windows.Forms.MessageBoxButtons]::OK,
-            [System.Windows.Forms.MessageBoxIcon]::Information
-        )
-    }
-    else {
-        $OutputBox.AppendText("[✓] Sie verwenden bereits die neueste Version!`r`n")
-        
-        [System.Windows.Forms.MessageBox]::Show(
-            "Sie verwenden bereits die neueste Version: v$CurrentVersion",
-            "Keine Updates",
-            [System.Windows.Forms.MessageBoxButtons]::OK,
-            [System.Windows.Forms.MessageBoxIcon]::Information
-        )
-    }
-}
-
 function Show-UpdateError {
     [CmdletBinding()]
     param(
@@ -602,4 +590,4 @@ function Update-ProgressStatus {
 }
 
 # Export der öffentlichen Funktionen
-Export-ModuleMember -Function Invoke-UpdateCheck
+Export-ModuleMember -Function Invoke-ReleaseSelectionUpdate
