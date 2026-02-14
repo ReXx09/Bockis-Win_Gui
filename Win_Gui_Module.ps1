@@ -4885,7 +4885,7 @@ if (-not (Get-Command -Name Initialize-ProgressComponents -ErrorAction SilentlyC
 }
 
 # Erstelle die TextProgressBar über das Modul (als global für Zugriff aus Modulen)
-$global:progressBar = New-TextProgressBar -X 200 -Y 755 -Width 770 -Height 30 -InitialText "Bereit" -InitialTextColor ([System.Drawing.Color]::White)
+$global:progressBar = New-TextProgressBar -X 190 -Y 755 -Width 750 -Height 30 -InitialText "Bereit" -InitialTextColor ([System.Drawing.Color]::White)
 $mainform.Controls.Add($global:progressBar)
 Initialize-ProgressComponents -ProgressBar $global:progressBar -StatusLabel $progressStatusLabel
 
@@ -7115,7 +7115,6 @@ try {
 # YyKNcb+HLXv5YRdKfIIqqa+B6DBOZyfjNhFHwrTqq8oIU0LFn0Azy7KgyhL50Jq4
 # l+HJ+GdN9Loq4LF/M1igCdJu8Xr+jRRS+rIN+rK7K+zTTamLn0ttCuFe14gUeA==
 # SIG # End signature block
-
 
 
 
