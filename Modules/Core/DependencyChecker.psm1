@@ -863,6 +863,36 @@ function Find-WingetPackageManager {
     return $result
 }
 
+function Get-ToolLibraryEntryByWingetId {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$WingetId
+    )
+
+    if ([string]::IsNullOrWhiteSpace($WingetId)) {
+        return $null
+    }
+
+    try {
+        if (-not (Get-Command -Name Get-AllTools -ErrorAction SilentlyContinue)) {
+            $projectRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+            $toolLibraryPath = Join-Path $projectRoot "Modules\ToolLibrary.psm1"
+            if (Test-Path $toolLibraryPath) {
+                Import-Module $toolLibraryPath -Force -ErrorAction SilentlyContinue
+            }
+        }
+
+        if (Get-Command -Name Get-AllTools -ErrorAction SilentlyContinue) {
+            return @(Get-AllTools | Where-Object { $_.Winget -eq $WingetId } | Select-Object -First 1)[0]
+        }
+    }
+    catch {
+        Write-Verbose "ToolLibrary-Auflösung für '$WingetId' fehlgeschlagen: $_"
+    }
+
+    return $null
+}
+
 <#
 .SYNOPSIS
 Prüft ob Microsoft App Installer installiert ist.
@@ -884,6 +914,16 @@ function Find-AppInstaller {
         Version = $null
         PackageFamilyName = $null
         InstallLocation = $null
+        WingetId = "Microsoft.AppInstaller"
+        DownloadUrl = $null
+    }
+
+    $appInstallerTool = Get-ToolLibraryEntryByWingetId -WingetId "Microsoft.AppInstaller"
+    if ($appInstallerTool) {
+        if ($appInstallerTool.Winget) {
+            $result.WingetId = $appInstallerTool.Winget
+        }
+        $result.DownloadUrl = $appInstallerTool.DownloadUrl
     }
 
     try {
@@ -1323,6 +1363,11 @@ function Find-PawnIODriver {
         Version = $null
         WingetId = "namazso.PawnIO"
     }
+
+    $pawnIOTool = Get-ToolLibraryEntryByWingetId -WingetId "namazso.PawnIO"
+    if ($pawnIOTool -and $pawnIOTool.Winget) {
+        $result.WingetId = $pawnIOTool.Winget
+    }
     
     try {
         # Prüfe ob PawnIO-Dienst existiert
@@ -1334,8 +1379,8 @@ function Find-PawnIODriver {
             
             # Version über winget ermitteln (wenn installiert)
             try {
-                $wingetList = winget list --id namazso.PawnIO --exact 2>$null | Out-String
-                if ($wingetList -match 'namazso\.PawnIO\s+([\d\.]+)') {
+                $wingetList = winget list --id $($result.WingetId) --exact 2>$null | Out-String
+                if ($wingetList -match [regex]::Escape($result.WingetId) + '\s+([\d\.]+)') {
                     $result.Version = $matches[1]
                 }
                 elseif ($result.Found) {
@@ -1512,7 +1557,8 @@ function Get-DependencyStatusForGUI {
             Version = $appInstaller.Version
             Status = "✓ Installiert"
             StatusColor = "Green"
-            WingetId = $null
+            WingetId = if ($winget.Found) { $appInstaller.WingetId } else { $null }
+            SourceUrl = $appInstaller.DownloadUrl
         }
     } else {
         $allSatisfied = $false
@@ -1521,11 +1567,12 @@ function Get-DependencyStatusForGUI {
             Description = "Erforderlich für Winget-Paketinstallationen"
             Found = $false
             Required = $true
-            Available = $false
+            Available = $winget.Found
             Version = $null
             Status = "❌ Fehlt"
             StatusColor = "Red"
-            WingetId = $null
+            WingetId = if ($winget.Found) { $appInstaller.WingetId } else { $null }
+            SourceUrl = $appInstaller.DownloadUrl
         }
     }
     
@@ -1807,6 +1854,8 @@ function Test-SystemDependencies {
             Found = $true
             Version = $appInstaller.Version
             Path = $appInstaller.InstallLocation
+            WingetId = if ($winget.Found) { $appInstaller.WingetId } else { $null }
+            SourceUrl = $appInstaller.DownloadUrl
         }
         Write-Host "  ✓ App Installer $($appInstaller.Version) gefunden" -ForegroundColor Green
     }
@@ -1816,10 +1865,12 @@ function Test-SystemDependencies {
             Name = "App Installer (winget)"
             Description = "Erforderlich für Winget-Paketinstallation (Microsoft Store: App Installer)"
             Required = $true
-            Available = $false
+            Available = $winget.Found
             Found = $false
             Version = $null
             Path = $null
+            WingetId = if ($winget.Found) { $appInstaller.WingetId } else { $null }
+            SourceUrl = $appInstaller.DownloadUrl
         }
         Write-Host "  ⚠️  App Installer nicht gefunden (Winget-Paketinstallation eingeschränkt)" -ForegroundColor Yellow
     }

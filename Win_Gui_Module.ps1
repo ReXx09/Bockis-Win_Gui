@@ -1,14 +1,14 @@
 ﻿# Win_Gui_Module.ps1 - Hauptskript für die PowerShell-GUI
 # Autor: Bocki
-# Version: 4.1.5
+# Version: 4.1.6
 
 # ===================================================================
 # VERSIONS-INFORMATION
 # ===================================================================
-$script:AppVersion = "4.1.5"
+$script:AppVersion = "4.1.6"
 $script:AppName = "Bockis System-Tool"
 $script:AppPublisher = "Bockis"
-$script:VersionDate = "2026-02-13"
+$script:VersionDate = "2026-02-14"
 # WPF-Assemblies für moderne UI-Komponenten laden
 Add-Type -AssemblyName PresentationFramework
 Add-Type -AssemblyName PresentationCore
@@ -7115,6 +7115,7 @@ try {
 # YyKNcb+HLXv5YRdKfIIqqa+B6DBOZyfjNhFHwrTqq8oIU0LFn0Azy7KgyhL50Jq4
 # l+HJ+GdN9Loq4LF/M1igCdJu8Xr+jRRS+rIN+rK7K+zTTamLn0ttCuFe14gUeA==
 # SIG # End signature block
+
 
 
 

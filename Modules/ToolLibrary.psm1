@@ -94,6 +94,33 @@ $script:toolLibrary['system'] = @(
         Category    = 'System-Tools'
         Tags        = @('Package Manager', 'Winget', 'GUI', 'Software Management')
         Winget      = 'MartiCliment.UniGetUI'
+    },
+    @{
+        Name        = 'Raspberry Pi Imager'
+        Description = 'Tool zum Schreiben von Raspberry Pi OS und anderen Images auf SD-Karten'
+        Version     = 'Aktuell'
+        DownloadUrl = 'https://www.raspberrypi.com/software/'
+        Category    = 'System-Tools'
+        Tags        = @('Raspberry Pi', 'Imager', 'SD-Card', 'Flashing')
+        Winget      = 'RaspberryPiFoundation.RaspberryPiImager'
+    },
+    @{
+        Name        = 'Rufus'
+        Description = 'Erstellt bootfähige USB-Sticks aus ISO-Dateien'
+        Version     = 'Aktuell'
+        DownloadUrl = 'https://rufus.ie/'
+        Category    = 'System-Tools'
+        Tags        = @('USB', 'Boot', 'ISO', 'Flashing')
+        Winget      = 'Rufus.Rufus'
+    },
+    @{
+        Name        = 'App Installer'
+        Description = 'Microsoft App Installer mit Winget-Integration'
+        Version     = 'Aktuell'
+        DownloadUrl = 'https://apps.microsoft.com/detail/9NBLGGH4NNS1'
+        Category    = 'System-Tools'
+        Tags        = @('Microsoft', 'Winget', 'Installer', 'System')
+        Winget      = 'Microsoft.AppInstaller'
     }
 )
 
