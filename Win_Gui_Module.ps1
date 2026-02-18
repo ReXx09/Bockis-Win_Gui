@@ -9,10 +9,7 @@ $script:AppVersion = "4.1.6"
 $script:AppName = "Bockis System-Tool"
 $script:AppPublisher = "Bockis"
 $script:VersionDate = "2026-02-14"
-# WPF-Assemblies für moderne UI-Komponenten laden
-Add-Type -AssemblyName PresentationFramework
-Add-Type -AssemblyName PresentationCore
-Add-Type -AssemblyName WindowsFormsIntegration
+# WinForms-Assemblies laden
 Add-Type -AssemblyName System.Drawing
 Add-Type -AssemblyName System.Windows.Forms
 
@@ -155,6 +152,69 @@ function global:Write-ToolLog {
         # In Datenbank speichern
         Save-DiagnosticToDatabase -ToolName $ToolName -Result $result -ExitCode $exitCode -Details $Message
     }
+}
+
+# Hilfsfunktion zum Einfügen von Segoe MDL2 Assets Icons in die OutputBox
+function global:Add-OutputIcon {
+    param(
+        [Parameter(Mandatory = $true)]
+        [System.Windows.Forms.RichTextBox]$OutputBox,
+        [Parameter(Mandatory = $true)]
+        [int]$IconCode
+    )
+    
+    if ($OutputBox) {
+        # Speichere aktuelle Farbe
+        $currentColor = $OutputBox.SelectionColor
+        
+        # Setze Font auf Segoe MDL2 Assets für das Icon
+        $OutputBox.SelectionFont = New-Object System.Drawing.Font("Segoe MDL2 Assets", 12)
+        $OutputBox.AppendText([char]$IconCode)
+        
+        # Setze Font zurück auf Standard
+        $OutputBox.SelectionFont = New-Object System.Drawing.Font("Consolas", 12)
+        $OutputBox.SelectionColor = $currentColor
+    }
+}
+
+# Hilfsfunktion zum Hinzufügen eines Icons zu einem Button
+function global:Add-ButtonIcon {
+    param(
+        [Parameter(Mandatory = $true)]
+        [System.Windows.Forms.Button]$Button,
+        [Parameter(Mandatory = $true)]
+        [int]$IconCode,
+        [int]$IconSize = 12,
+        [int]$LeftMargin = 10
+    )
+    
+    # Icon-Label erstellen
+    $iconLabel = New-Object System.Windows.Forms.Label
+    $iconLabel.Text = [char]$IconCode
+    $iconLabel.Font = New-Object System.Drawing.Font("Segoe MDL2 Assets", $IconSize)
+    $iconLabel.ForeColor = $Button.ForeColor
+    $iconLabel.BackColor = [System.Drawing.Color]::Transparent
+    $iconLabel.AutoSize = $true
+    $iconLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
+    
+    # Label zentrieren (vertikal)
+    $iconLabel.Location = New-Object System.Drawing.Point($LeftMargin, [Math]::Round(($Button.Height - $IconSize - 4) / 2))
+    
+    # Klick-Events durchleiten
+    $iconLabel.Add_Click({ $this.Parent.PerformClick() })
+    $iconLabel.Add_MouseEnter({ $this.Parent.BackColor = $this.Parent.FlatAppearance.MouseOverBackColor })
+    $iconLabel.Add_MouseLeave({ 
+        if ($this.Parent.Tag -ne "expanded") { 
+            $this.Parent.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
+        }
+    })
+    
+    # Label zum Button hinzufügen
+    $Button.Controls.Add($iconLabel)
+    
+    # Button-Text-Padding anpassen, um Platz für Icon zu schaffen
+    $currentPadding = $Button.Padding
+    $Button.Padding = New-Object System.Windows.Forms.Padding(($LeftMargin + $IconSize + 10), $currentPadding.Top, $currentPadding.Right, $currentPadding.Bottom)
 }
 
 # Globale Einstellungen - werden vom Settings-Modul verwaltet
@@ -451,8 +511,6 @@ for ($i = 0; $i -lt $totalModules; $i++) {
         "[$timestamp] StackTrace: $($_.ScriptStackTrace)" | Out-File -FilePath $logFile -Append -Encoding UTF8
         "[$timestamp] ---" | Out-File -FilePath $logFile -Append -Encoding UTF8
     }
-
-    Start-Sleep -Milliseconds 100  # Kurze Verzögerung für visuelle Wirkung
 }
 
 Write-Host "`n"  # Neue Zeile nach der Fortschrittsanzeige
@@ -1504,21 +1562,21 @@ $mainform.Add_LocationChanged({
 # Erstelle ein separates Panel für den Ausgabe-Button 
 $outputButtonPanel = New-Object System.Windows.Forms.Panel
 $outputButtonPanel.Location = New-Object System.Drawing.Point(3, 125)  
-$outputButtonPanel.Size = New-Object System.Drawing.Size(200, 45)  
+$outputButtonPanel.Size = New-Object System.Drawing.Size(225, 45)  
 $outputButtonPanel.BackColor = [System.Drawing.Color]::Transparent
 $mainform.Controls.Add($outputButtonPanel)
 
 # Erstelle eine Button-Leiste für die Hauptnavigation (vertikal) 
 $mainButtonPanel = New-Object System.Windows.Forms.Panel
 $mainButtonPanel.Location = New-Object System.Drawing.Point(3, 175)  
-$mainButtonPanel.Size = New-Object System.Drawing.Size(182, 445)  
+$mainButtonPanel.Size = New-Object System.Drawing.Size(217, 445)  
 $mainButtonPanel.BackColor = [System.Drawing.Color]::Transparent
 $mainform.Controls.Add($mainButtonPanel)
 
 # Erstelle separates Panel für Neustart-Button (unterhalb mainButtonPanel)
 $restartButtonPanel = New-Object System.Windows.Forms.Panel
 $restartButtonPanel.Location = New-Object System.Drawing.Point(3, 630)  # Kurz vor unterem Rand
-$restartButtonPanel.Size = New-Object System.Drawing.Size(182, 190)
+$restartButtonPanel.Size = New-Object System.Drawing.Size(217, 190)
 $restartButtonPanel.BackColor = [System.Drawing.Color]::Transparent
 $mainform.Controls.Add($restartButtonPanel)
 
@@ -1526,7 +1584,7 @@ $mainform.Controls.Add($restartButtonPanel)
 
 # Erstelle ein Panel für die verschiedenen Hauptinhalte 
 $mainContentPanel = New-Object System.Windows.Forms.Panel
-$mainContentPanel.Location = New-Object System.Drawing.Point(205, 125)  
+$mainContentPanel.Location = New-Object System.Drawing.Point(220, 125)  
 $mainContentPanel.Size = New-Object System.Drawing.Size(775, 48)  
 $mainContentPanel.BackColor = [System.Drawing.Color]::Transparent
 $mainform.Controls.Add($mainContentPanel)
@@ -1534,7 +1592,7 @@ $mainform.Controls.Add($mainContentPanel)
 # Suchfeld-Panel für Downloads (im mainContentPanel, oberhalb der Tool-Buttons)
 $searchPanel = New-Object System.Windows.Forms.Panel
 $searchPanel.Location = New-Object System.Drawing.Point(0, 0)
-$searchPanel.Size = New-Object System.Drawing.Size(770, 50)
+$searchPanel.Size = New-Object System.Drawing.Size(735, 50)
 $searchPanel.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
 $searchPanel.Visible = $false  # Standardmäßig ausgeblendet
 $mainContentPanel.Controls.Add($searchPanel)
@@ -1544,7 +1602,7 @@ $script:currentTileSize = "Medium"  # Default: Medium
 
 $viewButtonSize = New-Object System.Drawing.Size(35, 25)
 $viewButtonY = 12
-$viewButtonX = 730
+$viewButtonX = 695
 
 # Kleine Kachel Button
 $btnLargeTiles = New-Object System.Windows.Forms.Button
@@ -1822,13 +1880,14 @@ function New-CollapsiblePanel {
         [string]$Tag,
         [System.Windows.Forms.Panel]$ParentPanel,
         [scriptblock]$OnExpand,
-        [switch]$OpenUpward
+        [switch]$OpenUpward,
+        [int]$IconCode = 0
     )
     
     # Container für den gesamten zusammenklappbaren Bereich
     $container = New-Object System.Windows.Forms.Panel
     $container.Location = New-Object System.Drawing.Point(5, $YPosition)
-    $container.Size = New-Object System.Drawing.Size(175, 35)  # Initial nur Header sichtbar
+    $container.Size = New-Object System.Drawing.Size(210, 35)  # Initial nur Header sichtbar
     $container.BackColor = [System.Drawing.Color]::Transparent
     $container.Tag = $Tag
     
@@ -1840,7 +1899,7 @@ function New-CollapsiblePanel {
     # Header-Button (mit Icon und Text)
     $headerBtn = New-Object System.Windows.Forms.Button
     $headerBtn.Text = $Title  # Nur der Titel
-    $headerBtn.Size = New-Object System.Drawing.Size(175, 35)
+    $headerBtn.Size = New-Object System.Drawing.Size(210, 35)
     
     # Beim Aufwärtsöffnen beginnt der Header am unteren Rand des Containers
     if ($OpenUpward) {
@@ -1858,6 +1917,11 @@ function New-CollapsiblePanel {
     $headerBtn.Padding = New-Object System.Windows.Forms.Padding(5, 0, 25, 0)  # Rechts Platz für Pfeil
     $headerBtn.Tag = "collapsed"
     
+    # Icon hinzufügen, wenn IconCode angegeben
+    if ($IconCode -ne 0) {
+        Add-ButtonIcon -Button $headerBtn -IconCode $IconCode -IconSize 12 -LeftMargin 10
+    }
+    
     # Runde Ecken für Header-Button (8px Radius wie im Screenshot)
     try {
         $regionHandle = [RoundedCorners]::CreateRoundRectRgn(0, 0, $headerBtn.Width, $headerBtn.Height, 8, 8)
@@ -1872,7 +1936,7 @@ function New-CollapsiblePanel {
     $arrowLabel = New-Object System.Windows.Forms.Label
     $arrowLabel.Text = "▼"
     $arrowLabel.Size = New-Object System.Drawing.Size(15, 20)
-    $arrowLabel.Location = New-Object System.Drawing.Point(155, 7.5)  # Rechts im Button
+    $arrowLabel.Location = New-Object System.Drawing.Point(190, 7.5)  # Rechts im Button
     $arrowLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
     $arrowLabel.BackColor = [System.Drawing.Color]::Transparent
     $arrowLabel.ForeColor = [System.Drawing.Color]::White
@@ -1896,7 +1960,7 @@ function New-CollapsiblePanel {
         $contentPanel.Location = New-Object System.Drawing.Point(0, 35)
     }
     
-    $contentPanel.Size = New-Object System.Drawing.Size(175, 0)  # Höhe wird dynamisch angepasst
+    $contentPanel.Size = New-Object System.Drawing.Size(210, 0)  # Höhe wird dynamisch angepasst
     $contentPanel.BackColor = [System.Drawing.Color]::FromArgb(30, 30, 30)  # Noch dunkler für Content
     $contentPanel.Visible = $false
     
@@ -2047,10 +2111,9 @@ function Update-PanelPositions {
     param([System.Windows.Forms.Panel]$ParentPanel)
     
     $currentY = 5
-    $panelIndex = 0
     foreach ($panel in $ParentPanel.Controls | Where-Object { $_ -is [System.Windows.Forms.Panel] } | Sort-Object { $_.Location.Y }) {
         # Überspringe Panels mit OriginalY Property (OpenUpward-Panels verwalten ihre Position selbst)
-        if ($panel.OriginalY -ne $null) {
+        if ($null -ne $panel.OriginalY) {
             continue
         }
         
@@ -2073,20 +2136,21 @@ function New-HorizontalCollapsiblePanel {
         [int]$XPosition,
         [string]$Tag,
         [System.Windows.Forms.Panel]$ParentPanel,
-        [scriptblock]$OnExpand
+        [scriptblock]$OnExpand,
+        [int]$IconCode = 0
     )
     
     # Container für den gesamten zusammenklappbaren Bereich
     $container = New-Object System.Windows.Forms.Panel
     $container.Location = New-Object System.Drawing.Point($XPosition, 5)
-    $container.Size = New-Object System.Drawing.Size(150, 35)  # Höhe 35px für horizontal
+    $container.Size = New-Object System.Drawing.Size(160, 35)  # Höhe 35px für horizontal
     $container.BackColor = [System.Drawing.Color]::Transparent
     $container.Tag = $Tag
     
     # Header-Button
     $headerBtn = New-Object System.Windows.Forms.Button
     $headerBtn.Text = $Title
-    $headerBtn.Size = New-Object System.Drawing.Size(150, 35)
+    $headerBtn.Size = New-Object System.Drawing.Size(160, 35)
     $headerBtn.Location = New-Object System.Drawing.Point(0, 0)
     $headerBtn.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
     $headerBtn.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
@@ -2097,6 +2161,11 @@ function New-HorizontalCollapsiblePanel {
     $headerBtn.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
     $headerBtn.Padding = New-Object System.Windows.Forms.Padding(5, 0, 20, 0)
     $headerBtn.Tag = "collapsed"
+    
+    # Icon hinzufügen, wenn IconCode angegeben
+    if ($IconCode -ne 0) {
+        Add-ButtonIcon -Button $headerBtn -IconCode $IconCode -IconSize 11 -LeftMargin 8
+    }
     
     # Runde Ecken für Header-Button (8px Radius)
     try {
@@ -2112,7 +2181,7 @@ function New-HorizontalCollapsiblePanel {
     $arrowLabel = New-Object System.Windows.Forms.Label
     $arrowLabel.Text = "►"
     $arrowLabel.Size = New-Object System.Drawing.Size(15, 20)
-    $arrowLabel.Location = New-Object System.Drawing.Point(130, 7.5)
+    $arrowLabel.Location = New-Object System.Drawing.Point(140, 7.5)
     $arrowLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
     $arrowLabel.BackColor = [System.Drawing.Color]::Transparent
     $arrowLabel.ForeColor = [System.Drawing.Color]::White
@@ -2126,7 +2195,7 @@ function New-HorizontalCollapsiblePanel {
     
     # Content-Panel (zunächst versteckt, erscheint rechts neben dem Button)
     $contentPanel = New-Object System.Windows.Forms.Panel
-    $contentPanel.Location = New-Object System.Drawing.Point(150, 0)  # Rechts neben Header
+    $contentPanel.Location = New-Object System.Drawing.Point(160, 0)  # Rechts neben Header
     $contentPanel.Size = New-Object System.Drawing.Size(525, 35)  # 3 Buttons horizontal (175×3)
     $contentPanel.BackColor = [System.Drawing.Color]::FromArgb(30, 30, 30)
     $contentPanel.Visible = $false
@@ -2156,7 +2225,7 @@ function New-HorizontalCollapsiblePanel {
             }
             
             # WICHTIG: Alle Panels neu positionieren nach dem Zuklappen
-            $tempX = 0
+            $tempX = 10
             foreach ($ctrl in $ParentPanel.Controls | Sort-Object { $_.Location.X }) {
                 if ($ctrl -is [System.Windows.Forms.Panel] -and $ctrl.Tag -like "*Panel") {
                     $ctrl.Location = New-Object System.Drawing.Point($tempX, 5)
@@ -2209,7 +2278,7 @@ function New-HorizontalCollapsiblePanel {
             $this.Parent.Width = 150
             
             # WICHTIG: Panels neu positionieren
-            $currentX = 0
+            $currentX = 10
             foreach ($ctrl in $ParentPanel.Controls | Sort-Object { $_.Location.X }) {
                 if ($ctrl -is [System.Windows.Forms.Panel] -and $ctrl.Tag -like "*Panel") {
                     $ctrl.Location = New-Object System.Drawing.Point($currentX, 5)
@@ -2293,7 +2362,7 @@ function Hide-MainInfoSupportPanels {
 }
 
 # System & Sicherheit Panel
-$systemPanel = New-CollapsiblePanel -Title "System/Sicherheit" -YPosition 5 -Tag "systemPanel" -ParentPanel $mainButtonPanel -OnExpand {
+$systemPanel = New-CollapsiblePanel -Title "System/Sicherheit" -YPosition 5 -Tag "systemPanel" -ParentPanel $mainButtonPanel -IconCode 0xE83D -OnExpand {
     # Panels zurücksetzen und System als aktiv markieren
     Reset-MainPanelStates -ActivePanel "system"
     
@@ -2310,7 +2379,8 @@ $systemPanel = New-CollapsiblePanel -Title "System/Sicherheit" -YPosition 5 -Tag
     $outputBox.AppendText("Verfügbare Tools:`r`n`r`n")
     
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Accent'
-    $outputBox.AppendText("🛡️ SICHERHEIT:`r`n")
+    Add-OutputIcon -OutputBox $outputBox -IconCode 0xE83D
+    $outputBox.AppendText(" SICHERHEIT:`r`n")
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
     $outputBox.AppendText("  • Windows Defender     - Quick/Full/Custom/Offline Scans`r`n")
     $outputBox.AppendText("  • Defender Restart     - Neustart des Windows Defender-Dienstes`r`n")
@@ -2318,13 +2388,15 @@ $systemPanel = New-CollapsiblePanel -Title "System/Sicherheit" -YPosition 5 -Tag
     $outputBox.AppendText("  • MRT Full Scan        - Vollständige Systemprüfung auf Schadsoftware`r`n`r`n")
     
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Accent'
-    $outputBox.AppendText("🔧 WARTUNG:`r`n")
+    Add-OutputIcon -OutputBox $outputBox -IconCode 0xE90F
+    $outputBox.AppendText(" WARTUNG:`r`n")
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
     $outputBox.AppendText("  • SFC Check            - System File Checker für beschädigte Dateien`r`n")
     $outputBox.AppendText("  • Memory Diagnostic    - Arbeitsspeicher-Test (erfordert Neustart)`r`n`r`n")
     
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Muted'
-    $outputBox.AppendText("💡 Tipp: Wählen Sie eine Kategorie oben aus, um die Tools anzuzeigen.`r`n")
+    Add-OutputIcon -OutputBox $outputBox -IconCode 0xE946
+    $outputBox.AppendText(" Tipp: Wählen Sie eine Kategorie oben aus, um die Tools anzuzeigen.`r`n")
     
     # Stelle sicher, dass OutputView angezeigt wird
     Switch-OutputView -viewName "outputView"
@@ -2339,7 +2411,7 @@ $systemPanel = New-CollapsiblePanel -Title "System/Sicherheit" -YPosition 5 -Tag
 # Content (Untermenü-Buttons) hinzufügen
 $btnSystemSecurity = New-Object System.Windows.Forms.Button
 $btnSystemSecurity.Text = "Sicherheit"
-$btnSystemSecurity.Size = New-Object System.Drawing.Size(175, 35)
+$btnSystemSecurity.Size = New-Object System.Drawing.Size(210, 35)
 $btnSystemSecurity.Location = New-Object System.Drawing.Point(0, 0)
 $btnSystemSecurity.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 $btnSystemSecurity.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)  # Inaktiv beim Start
@@ -2347,7 +2419,8 @@ $btnSystemSecurity.ForeColor = [System.Drawing.Color]::White
 $btnSystemSecurity.FlatAppearance.BorderSize = 0
 $btnSystemSecurity.FlatAppearance.MouseOverBackColor = [System.Drawing.Color]::FromArgb(55, 55, 55)  # Hover-Effekt
 $btnSystemSecurity.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
-#$btnSystemSecurity.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
+$btnSystemSecurity.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
+Add-ButtonIcon -Button $btnSystemSecurity -IconCode 0xE83D -IconSize 12 -LeftMargin 10
 $btnSystemSecurity.Add_Click({
     $script:securityControlsVisible = $true
     $script:maintenanceControlsVisible = $false
@@ -2370,7 +2443,7 @@ $systemPanel.Content.Controls.Add($btnSystemSecurity)
 
 $btnSystemMaintenance = New-Object System.Windows.Forms.Button
 $btnSystemMaintenance.Text = "Wartung"
-$btnSystemMaintenance.Size = New-Object System.Drawing.Size(175, 35)
+$btnSystemMaintenance.Size = New-Object System.Drawing.Size(210, 35)
 $btnSystemMaintenance.Location = New-Object System.Drawing.Point(0, 35)
 $btnSystemMaintenance.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 $btnSystemMaintenance.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)  # Inaktiv beim Start
@@ -2379,6 +2452,7 @@ $btnSystemMaintenance.FlatAppearance.BorderSize = 0
 $btnSystemMaintenance.FlatAppearance.MouseOverBackColor = [System.Drawing.Color]::FromArgb(55, 55, 55)  # Hover-Effekt
 $btnSystemMaintenance.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
 $btnSystemMaintenance.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
+Add-ButtonIcon -Button $btnSystemMaintenance -IconCode 0xE90F -IconSize 12 -LeftMargin 10
 $btnSystemMaintenance.Add_Click({
     $script:securityControlsVisible = $false
     $script:maintenanceControlsVisible = $true
@@ -2403,7 +2477,7 @@ $systemPanel.Content.Height = 70  # 2 Buttons × 35px
 $mainButtonPanel.Controls.Add($systemPanel.Container)
 
 # Diagnose & Reparatur Panel
-$diskPanel = New-CollapsiblePanel -Title "Diagnose/Reparatur" -YPosition 40 -Tag "diskPanel" -ParentPanel $mainButtonPanel -OnExpand {
+$diskPanel = New-CollapsiblePanel -Title "Diagnose/Reparatur" -YPosition 40 -Tag "diskPanel" -ParentPanel $mainButtonPanel -IconCode 0xE90F -OnExpand {
     # Panels zurücksetzen und Disk als aktiv markieren
     Reset-MainPanelStates -ActivePanel "disk"
     
@@ -2418,25 +2492,30 @@ $diskPanel = New-CollapsiblePanel -Title "Diagnose/Reparatur" -YPosition 40 -Tag
     
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Heading'
     $outputBox.AppendText("Verfügbare Tools:`r`n`r`n")
-    
+
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Accent'
-    $outputBox.AppendText("🔍 DISM (SYSTEM-IMAGE):`r`n")
+    Add-OutputIcon -OutputBox $outputBox -IconCode 0xE721
+    $outputBox.AppendText(" DISM (SYSTEM-IMAGE):`r`n")
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
     $outputBox.AppendText("  • DISM Check Health    - Schnelle Integritätsprüfung`r`n")
     $outputBox.AppendText("  • DISM Scan Health     - Detaillierte Analyse`r`n")
     $outputBox.AppendText("  • DISM Restore Health  - Automatische Reparatur`r`n`r`n")
     
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Accent'
-    $outputBox.AppendText("💾 CHKDSK (FESTPLATTEN):`r`n")
+    Add-OutputIcon -OutputBox $outputBox -IconCode 0xE74E
+    $outputBox.AppendText(" CHKDSK (FESTPLATTEN):`r`n")
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
     $outputBox.AppendText("  • CHKDSK (Scan)        - Nur Überprüfung (ohne Reparatur)`r`n")
     $outputBox.AppendText("  • CHKDSK /F            - Reparatur (erfordert Neustart)`r`n")
     $outputBox.AppendText("  • CHKDSK /R            - Erweiterte Reparatur + Bad-Sector-Suche`r`n`r`n")
     
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
-    $outputBox.AppendText("⚠️  HINWEIS: CHKDSK-Reparaturen erfordern oft einen Neustart.`r`n")
+    Add-OutputIcon -OutputBox $outputBox -IconCode 0xE7BA
+    $outputBox.AppendText("  HINWEIS: CHKDSK-Reparaturen erfordern oft einen Neustart.`r`n`r`n")
+    
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Muted'
-    $outputBox.AppendText("💡 Tipp: Wählen Sie eine Kategorie oben aus, um die Tools anzuzeigen.`r`n")
+    Add-OutputIcon -OutputBox $outputBox -IconCode 0xE946
+    $outputBox.AppendText(" Tipp: Wählen Sie eine Kategorie oben aus, um die Tools anzuzeigen.`r`n")
     
     # Stelle sicher, dass OutputView angezeigt wird
     Switch-OutputView -viewName "outputView"
@@ -2450,7 +2529,7 @@ $diskPanel = New-CollapsiblePanel -Title "Diagnose/Reparatur" -YPosition 40 -Tag
 
 $btnDiskDiagnose = New-Object System.Windows.Forms.Button
 $btnDiskDiagnose.Text = "Diagnose"
-$btnDiskDiagnose.Size = New-Object System.Drawing.Size(175, 35)
+$btnDiskDiagnose.Size = New-Object System.Drawing.Size(210, 35)
 $btnDiskDiagnose.Location = New-Object System.Drawing.Point(0, 0)
 $btnDiskDiagnose.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 $btnDiskDiagnose.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
@@ -2459,6 +2538,7 @@ $btnDiskDiagnose.FlatAppearance.BorderSize = 0
 $btnDiskDiagnose.FlatAppearance.MouseOverBackColor = [System.Drawing.Color]::FromArgb(55, 55, 55)
 $btnDiskDiagnose.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
 $btnDiskDiagnose.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
+Add-ButtonIcon -Button $btnDiskDiagnose -IconCode 0xE721 -IconSize 12 -LeftMargin 10
 $btnDiskDiagnose.Add_Click({
     $script:currentDiskView = "diagnoseView"
     $script:diagnoseControlsVisible = $true
@@ -2481,7 +2561,7 @@ $diskPanel.Content.Controls.Add($btnDiskDiagnose)
 
 $btnDiskRepair = New-Object System.Windows.Forms.Button
 $btnDiskRepair.Text = "Reparatur"
-$btnDiskRepair.Size = New-Object System.Drawing.Size(175, 35)
+$btnDiskRepair.Size = New-Object System.Drawing.Size(210, 35)
 $btnDiskRepair.Location = New-Object System.Drawing.Point(0, 35)
 $btnDiskRepair.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 $btnDiskRepair.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
@@ -2490,6 +2570,7 @@ $btnDiskRepair.FlatAppearance.BorderSize = 0
 $btnDiskRepair.FlatAppearance.MouseOverBackColor = [System.Drawing.Color]::FromArgb(55, 55, 55)
 $btnDiskRepair.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
 $btnDiskRepair.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
+Add-ButtonIcon -Button $btnDiskRepair -IconCode 0xE90F -IconSize 12 -LeftMargin 10
 $btnDiskRepair.Add_Click({
     $script:currentDiskView = "repairView"
     $script:diagnoseControlsVisible = $false
@@ -2514,7 +2595,7 @@ $diskPanel.Content.Height = 70  # 2 Buttons × 35px
 $mainButtonPanel.Controls.Add($diskPanel.Container)
 
 # Netzwerk-Tools Panel
-$networkPanel = New-CollapsiblePanel -Title "Netzwerk-Tools" -YPosition 75 -Tag "networkPanel" -ParentPanel $mainButtonPanel -OnExpand {
+$networkPanel = New-CollapsiblePanel -Title "Netzwerk-Tools" -YPosition 75 -Tag "networkPanel" -ParentPanel $mainButtonPanel -IconCode 0xE774 -OnExpand {
     # Panels zurücksetzen und Network als aktiv markieren
     Reset-MainPanelStates -ActivePanel "network"
     
@@ -2529,21 +2610,24 @@ $networkPanel = New-CollapsiblePanel -Title "Netzwerk-Tools" -YPosition 75 -Tag 
     
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Heading'
     $outputBox.AppendText("Verfügbare Tools:`r`n`r`n")
-    
+
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Accent'
-    $outputBox.AppendText("🔍 NETZWERK-DIAGNOSE:`r`n")
+    Add-OutputIcon -OutputBox $outputBox -IconCode 0xE721
+    $outputBox.AppendText(" NETZWERK-DIAGNOSE:`r`n")
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
     $outputBox.AppendText("  • Ping Test            - Konnektivitätstests zu beliebigen Hosts`r`n")
     $outputBox.AppendText("                           (Konfigurierbar: Anzahl, Timeout, Buffer-Größe)`r`n`r`n")
     
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Accent'
-    $outputBox.AppendText("🔧 NETZWERK-REPARATUR:`r`n")
+    Add-OutputIcon -OutputBox $outputBox -IconCode 0xE90F
+    $outputBox.AppendText(" NETZWERK-REPARATUR:`r`n")
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
     $outputBox.AppendText("  • Netzwerk zurücksetzen- Vollständiger Reset des Netzwerkadapters`r`n")
     $outputBox.AppendText("                           (Deaktivieren und wieder aktivieren)`r`n`r`n")
     
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Muted'
-    $outputBox.AppendText("💡 Tipp: Wählen Sie eine Kategorie oben aus, um die Tools anzuzeigen.`r`n")
+    Add-OutputIcon -OutputBox $outputBox -IconCode 0xE946
+    $outputBox.AppendText(" Tipp: Wählen Sie eine Kategorie oben aus, um die Tools anzuzeigen.`r`n")
     
     # Stelle sicher, dass OutputView angezeigt wird
     Switch-OutputView -viewName "outputView"
@@ -2557,7 +2641,7 @@ $networkPanel = New-CollapsiblePanel -Title "Netzwerk-Tools" -YPosition 75 -Tag 
 
 $btnNetworkDiagnose = New-Object System.Windows.Forms.Button
 $btnNetworkDiagnose.Text = "Netzwerk-Diagnose"
-$btnNetworkDiagnose.Size = New-Object System.Drawing.Size(175, 35)
+$btnNetworkDiagnose.Size = New-Object System.Drawing.Size(210, 35)
 $btnNetworkDiagnose.Location = New-Object System.Drawing.Point(0, 0)
 $btnNetworkDiagnose.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 $btnNetworkDiagnose.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
@@ -2566,6 +2650,7 @@ $btnNetworkDiagnose.FlatAppearance.BorderSize = 0
 $btnNetworkDiagnose.FlatAppearance.MouseOverBackColor = [System.Drawing.Color]::FromArgb(55, 55, 55)
 $btnNetworkDiagnose.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
 $btnNetworkDiagnose.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
+Add-ButtonIcon -Button $btnNetworkDiagnose -IconCode 0xE721 -IconSize 12 -LeftMargin 10
 $btnNetworkDiagnose.Add_Click({
     $script:currentNetworkView = "diagnoseView"
     $script:networkDiagnosticsControlsVisible = $true
@@ -2588,7 +2673,7 @@ $networkPanel.Content.Controls.Add($btnNetworkDiagnose)
 
 $btnNetworkRepair = New-Object System.Windows.Forms.Button
 $btnNetworkRepair.Text = "Netzwerk-Reparatur"
-$btnNetworkRepair.Size = New-Object System.Drawing.Size(175, 35)
+$btnNetworkRepair.Size = New-Object System.Drawing.Size(210, 35)
 $btnNetworkRepair.Location = New-Object System.Drawing.Point(0, 35)
 $btnNetworkRepair.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 $btnNetworkRepair.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
@@ -2597,6 +2682,7 @@ $btnNetworkRepair.FlatAppearance.BorderSize = 0
 $btnNetworkRepair.FlatAppearance.MouseOverBackColor = [System.Drawing.Color]::FromArgb(55, 55, 55)
 $btnNetworkRepair.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
 $btnNetworkRepair.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
+Add-ButtonIcon -Button $btnNetworkRepair -IconCode 0xE90F -IconSize 12 -LeftMargin 10
 $btnNetworkRepair.Add_Click({
     $script:currentNetworkView = "repairView"
     $script:networkDiagnosticsControlsVisible = $false
@@ -2621,7 +2707,7 @@ $networkPanel.Content.Height = 70  # 2 Buttons × 35px
 $mainButtonPanel.Controls.Add($networkPanel.Container)
 
 # Bereinigung Panel
-$cleanupPanel = New-CollapsiblePanel -Title "Bereinigung" -YPosition 110 -Tag "cleanupPanel" -ParentPanel $mainButtonPanel -OnExpand {
+$cleanupPanel = New-CollapsiblePanel -Title "Bereinigung" -YPosition 110 -Tag "cleanupPanel" -ParentPanel $mainButtonPanel -IconCode 0xE74C -OnExpand {
     # Panels zurücksetzen und Cleanup als aktiv markieren
     Reset-MainPanelStates -ActivePanel "cleanup"
     
@@ -2638,7 +2724,8 @@ $cleanupPanel = New-CollapsiblePanel -Title "Bereinigung" -YPosition 110 -Tag "c
     $outputBox.AppendText("Verfügbare Tools:`r`n`r`n")
     
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Accent'
-    $outputBox.AppendText("🧹 VERFÜGBARE BEREINIGUNGEN:`r`n")
+    Add-OutputIcon -OutputBox $outputBox -IconCode 0xE74C
+    $outputBox.AppendText(" VERFÜGBARE BEREINIGUNGEN:`r`n")
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
     $outputBox.AppendText("  • Temp-Dateien (Einfach)  - Löscht TEMP-Ordner (%TEMP%, Windows\Temp)`r`n")
     $outputBox.AppendText("  • Temp-Dateien (Erweitert)- Umfassend: TEMP, Prefetch, Browser-Cache`r`n")
@@ -2646,9 +2733,11 @@ $cleanupPanel = New-CollapsiblePanel -Title "Bereinigung" -YPosition 110 -Tag "c
     $outputBox.AppendText("  • Cleanup-Übersicht       - Interaktive Auswahlmaske mit Vorschau`r`n`r`n")
     
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
-    $outputBox.AppendText("💾 Potenzieller Speicherplatz-Gewinn: 2-10 GB (je nach System)`r`n")
+    Add-OutputIcon -OutputBox $outputBox -IconCode 0xE74E
+    $outputBox.AppendText(" Potenzieller Speicherplatz-Gewinn: 2-10 GB (je nach System)`r`n")
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Muted'
-    $outputBox.AppendText("💡 Tipp: Klicken Sie auf einen Button, um die Bereinigung zu starten.`r`n")
+    Add-OutputIcon -OutputBox $outputBox -IconCode 0xE946
+    $outputBox.AppendText(" Tipp: Klicken Sie auf einen Button, um die Bereinigung zu starten.`r`n")
     
     # Stelle sicher, dass OutputView angezeigt wird
     Switch-OutputView -viewName "outputView"
@@ -2662,7 +2751,7 @@ $cleanupPanel = New-CollapsiblePanel -Title "Bereinigung" -YPosition 110 -Tag "c
 
 $btnCleanupSystem = New-Object System.Windows.Forms.Button
 $btnCleanupSystem.Text = "System-Bereinigung"
-$btnCleanupSystem.Size = New-Object System.Drawing.Size(175, 35)
+$btnCleanupSystem.Size = New-Object System.Drawing.Size(210, 35)
 $btnCleanupSystem.Location = New-Object System.Drawing.Point(0, 0)
 $btnCleanupSystem.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 $btnCleanupSystem.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
@@ -2671,6 +2760,7 @@ $btnCleanupSystem.FlatAppearance.BorderSize = 0
 $btnCleanupSystem.FlatAppearance.MouseOverBackColor = [System.Drawing.Color]::FromArgb(55, 55, 55)
 $btnCleanupSystem.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
 $btnCleanupSystem.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
+Add-ButtonIcon -Button $btnCleanupSystem -IconCode 0xE74C -IconSize 12 -LeftMargin 10
 $btnCleanupSystem.Add_Click({
     $script:currentCleanupView = "systemCleanupView"
     $script:cleanupSystemControlsVisible = $true
@@ -2703,7 +2793,7 @@ $script:currentMainView = "systemView"
 # Content-Panels für die verschiedenen Bereiche direkt im mainContentPanel erstellen
 $global:tblSystem = New-Object System.Windows.Forms.Panel
 $global:tblSystem.Location = New-Object System.Drawing.Point(0, 0)
-$global:tblSystem.Size = New-Object System.Drawing.Size(770, 230)  # Breite erhöht für 3 Buttons nebeneinander (3 × 175px = 525px + Rand)
+$global:tblSystem.Size = New-Object System.Drawing.Size(735, 230)  # Breite angepasst für breitere Button-Panels
 $global:tblSystem.BackColor = [System.Drawing.Color]::Transparent
 $global:tblSystem.Visible = $false
 $mainContentPanel.Controls.Add($global:tblSystem)
@@ -2714,21 +2804,21 @@ $script:maintenanceControlsVisible = $false
 
 $tblDisk = New-Object System.Windows.Forms.Panel
 $tblDisk.Location = New-Object System.Drawing.Point(0, 0)
-$tblDisk.Size = New-Object System.Drawing.Size(770, 230)  # Breite erhöht für 3 Buttons nebeneinander (3 × 175px = 525px + Rand)
+$tblDisk.Size = New-Object System.Drawing.Size(735, 230)  # Breite angepasst für breitere Button-Panels
 $tblDisk.BackColor = [System.Drawing.Color]::Transparent
 $tblDisk.Visible = $false
 $mainContentPanel.Controls.Add($tblDisk)
 
 $tblNetwork = New-Object System.Windows.Forms.Panel
 $tblNetwork.Location = New-Object System.Drawing.Point(0, 0)
-$tblNetwork.Size = New-Object System.Drawing.Size(770, 230)  # Breite erhöht für horizontale Button-Anordnung
+$tblNetwork.Size = New-Object System.Drawing.Size(735, 230)  # Breite angepasst für breitere Button-Panels
 $tblNetwork.BackColor = [System.Drawing.Color]::Transparent
 $tblNetwork.Visible = $false
 $mainContentPanel.Controls.Add($tblNetwork)
 
 $tblCleanup = New-Object System.Windows.Forms.Panel
 $tblCleanup.Location = New-Object System.Drawing.Point(0, 0)
-$tblCleanup.Size = New-Object System.Drawing.Size(770, 230)  # Breite erhöht für horizontale Button-Anordnung
+$tblCleanup.Size = New-Object System.Drawing.Size(735, 230)  # Breite angepasst für breitere Button-Panels
 $tblCleanup.BackColor = [System.Drawing.Color]::Transparent
 $tblCleanup.Visible = $false
 $mainContentPanel.Controls.Add($tblCleanup)
@@ -2736,7 +2826,7 @@ $mainContentPanel.Controls.Add($tblCleanup)
 # Panel für Dependency-Check (Installationsbuttons)
 $global:tblDependencies = New-Object System.Windows.Forms.Panel
 $global:tblDependencies.Location = New-Object System.Drawing.Point(0, 0)
-$global:tblDependencies.Size = New-Object System.Drawing.Size(770, 230)
+$global:tblDependencies.Size = New-Object System.Drawing.Size(735, 230)
 $global:tblDependencies.BackColor = [System.Drawing.Color]::Transparent
 $global:tblDependencies.Visible = $false
 $mainContentPanel.Controls.Add($global:tblDependencies)
@@ -2892,12 +2982,13 @@ $script:cleanupTempControlsVisible = $false
 
 # Erstelle ein Panel für die verschiedenen Ausgabebereiche - direkt im mainform
 $outputPanel = New-Object System.Windows.Forms.Panel
-$outputPanel.Location = New-Object System.Drawing.Point(190, 180)  # 50 Pixel nach oben verschoben (230 - 50 = 180)
-$outputPanel.Size = New-Object System.Drawing.Size(800, 560)  # Breite um 10 Pixel erhöht (790 + 10 = 800)
+$outputPanel.Location = New-Object System.Drawing.Point(225, 180)  # Button-Panels breiter gemacht
+$outputPanel.Size = New-Object System.Drawing.Size(765, 560)  # Breite für breitere Button-Panels reduziert
 $outputPanel.BackColor = [System.Drawing.Color]::FromArgb(30, 30, 30)  # Dunkles Grau wie Hauptfenster
 $mainform.Controls.Add($outputPanel)
 
 # PowerShell-Konsolenfenster-Steuerung mit P/Invoke (nach der Logo-Funktion, vor den Modul-Importen)
+if (-not ([System.Management.Automation.PSTypeName]'ConsoleHelper').Type) {
 Add-Type @"
 using System;
 using System.Runtime.InteropServices;
@@ -2946,6 +3037,7 @@ public class ConsoleHelper {
     static extern bool IsWindowVisible(IntPtr hWnd);
 }
 "@ -ReferencedAssemblies "System.Windows.Forms", "System.Drawing" -ErrorAction SilentlyContinue
+}
 
 # Globale Variable für Konsolen-Status
 $script:consoleAutoHidden = $false
@@ -3069,7 +3161,7 @@ function Switch-ConsoleVisibility {
 $btnToggleConsole = New-Object System.Windows.Forms.Button
 $btnToggleConsole.Text = "◄"
 $btnToggleConsole.Size = New-Object System.Drawing.Size(45, 35)
-$btnToggleConsole.Location = New-Object System.Drawing.Point(5, 3)
+$btnToggleConsole.Location = New-Object System.Drawing.Point(20, 3)
 $btnToggleConsole.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 $btnToggleConsole.FlatAppearance.BorderSize = 0
 $btnToggleConsole.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
@@ -3150,7 +3242,7 @@ if ($tooltipObj) {
 $btnCMDQuick = New-Object System.Windows.Forms.Button
 $btnCMDQuick.Text = "⚡    CMD"
 $btnCMDQuick.Size = New-Object System.Drawing.Size(83, 35)
-$btnCMDQuick.Location = New-Object System.Drawing.Point(50, 3)
+$btnCMDQuick.Location = New-Object System.Drawing.Point(66, 3)
 $btnCMDQuick.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 $btnCMDQuick.FlatAppearance.BorderSize = 0
 $btnCMDQuick.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
@@ -3231,7 +3323,7 @@ if ($tooltipObj) {
 $btnOutput = New-Object System.Windows.Forms.Button
 $btnOutput.Text = "►"
 $btnOutput.Size = New-Object System.Drawing.Size(45, 35)
-$btnOutput.Location = New-Object System.Drawing.Point(133, 3)
+$btnOutput.Location = New-Object System.Drawing.Point(150, 3)
 $btnOutput.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 $btnOutput.FlatAppearance.BorderSize = 0
 $btnOutput.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
@@ -3282,7 +3374,7 @@ if ($tooltipObj) {
 
 # Vertikaler Trenner rechts neben dem 3-in-1 Button
 $toggleSeparator = New-Object System.Windows.Forms.Label
-$toggleSeparator.Location = New-Object System.Drawing.Point(190, 8)
+$toggleSeparator.Location = New-Object System.Drawing.Point(215, 8)
 $toggleSeparator.Size = New-Object System.Drawing.Size(2, 28)
 $toggleSeparator.BackColor = [System.Drawing.Color]::FromArgb(120, 120, 120)
 $toggleSeparator.BorderStyle = [System.Windows.Forms.BorderStyle]::None
@@ -3294,7 +3386,7 @@ $outputButtonPanel.Controls.Add($toggleSeparator)
 #------------------------------------------------------------------------------------------------------------
 
 # Erstelle horizontales Collapsible Panel für Informationen (im mainContentPanel)
-$infoHorizontalPanel = New-HorizontalCollapsiblePanel -Title "Informationen" -XPosition 0 -Tag "infoHorizontalPanel" -ParentPanel $mainContentPanel -OnExpand {
+$infoHorizontalPanel = New-HorizontalCollapsiblePanel -Title "Informationen" -XPosition 10 -Tag "infoHorizontalPanel" -ParentPanel $mainContentPanel -IconCode 0xE946 -OnExpand {
     # Wechsle zur Output-View
     if ($outputViewPanel) { $outputViewPanel.Visible = $true }
     if ($statusViewPanel) { $statusViewPanel.Visible = $false }
@@ -3332,7 +3424,8 @@ $infoHorizontalPanel = New-HorizontalCollapsiblePanel -Title "Informationen" -XP
     $outputBox.AppendText("Verfügbare Ansichten:`r`n`r`n")
     
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Accent'
-    $outputBox.AppendText("📊 STATUS-INFO:`r`n")
+    Add-OutputIcon -OutputBox $outputBox -IconCode 0xE9D9
+    $outputBox.AppendText(" STATUS-INFO:`r`n")
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
     $outputBox.AppendText("  • Umfassende Systemstatus-Übersicht mit Live-Updates`r`n")
     $outputBox.AppendText("  • Betriebssystem-Details (Version, Build, Lizenz-Status)`r`n")
@@ -3341,7 +3434,8 @@ $infoHorizontalPanel = New-HorizontalCollapsiblePanel -Title "Informationen" -XP
     $outputBox.AppendText("  • Laufwerks-Status und verfügbarer Speicherplatz`r`n`r`n")
     
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Accent'
-    $outputBox.AppendText("🖥️ HARDWARE-INFO:`r`n")
+    Add-OutputIcon -OutputBox $outputBox -IconCode 0xE7F8
+    $outputBox.AppendText(" HARDWARE-INFO:`r`n")
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
     $outputBox.AppendText("  • CPU: Prozessor-Spezifikationen (Kerne, Takt, Cache, Architektur)`r`n")
     $outputBox.AppendText("  • RAM: Arbeitsspeicher-Module, Kapazität und Auslastung`r`n")
@@ -3351,7 +3445,8 @@ $infoHorizontalPanel = New-HorizontalCollapsiblePanel -Title "Informationen" -XP
     $outputBox.AppendText("  • Netzwerk: Adapter-Details und IP-Konfiguration`r`n`r`n")
     
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Accent'
-    $outputBox.AppendText("🔧 TOOL-INFO:`r`n")
+    Add-OutputIcon -OutputBox $outputBox -IconCode 0xE90F
+    $outputBox.AppendText(" TOOL-INFO:`r`n")
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
     $outputBox.AppendText("  • Detaillierte Beschreibungen aller verfügbaren Tools`r`n")
     $outputBox.AppendText("  • Verwendungszweck und Funktionsweise`r`n")
@@ -3359,17 +3454,18 @@ $infoHorizontalPanel = New-HorizontalCollapsiblePanel -Title "Informationen" -XP
     $outputBox.AppendText("  • Hinweise und Warnungen zu kritischen Tools`r`n`r`n")
     
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Muted'
-    $outputBox.AppendText("💡 Tipp: Wählen Sie eine Info-Kategorie aus dem ausgeklappten Menü.`r`n")
+    Add-OutputIcon -OutputBox $outputBox -IconCode 0xE946
+    $outputBox.AppendText(" Tipp: Wählen Sie eine Info-Kategorie aus dem ausgeklappten Menü.`r`n")
 }
 
 # Setze Content-Panel-Größe für 3 Buttons nebeneinander
-$infoHorizontalPanel.Content.Width = 465  # 3 Buttons × 155px
+$infoHorizontalPanel.Content.Width = 450  # 3 Buttons × 150px
 $infoHorizontalPanel.Content.Height = 35
 
 # Erstelle die Info-Buttons horizontal im Content-Panel
 $btnStatusInfoH = New-Object System.Windows.Forms.Button
 $btnStatusInfoH.Text = "Status-Info"
-$btnStatusInfoH.Size = New-Object System.Drawing.Size(155, 35)
+$btnStatusInfoH.Size = New-Object System.Drawing.Size(150, 35)
 $btnStatusInfoH.Location = New-Object System.Drawing.Point(0, 0)
 $btnStatusInfoH.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 $btnStatusInfoH.FlatAppearance.BorderSize = 0
@@ -3378,6 +3474,7 @@ $btnStatusInfoH.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
 $btnStatusInfoH.ForeColor = [System.Drawing.Color]::White
 $btnStatusInfoH.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
 $btnStatusInfoH.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
+Add-ButtonIcon -Button $btnStatusInfoH -IconCode 0xE9D9 -IconSize 11 -LeftMargin 8
 
 # Runde Ecken für Button (8px Radius)
 try {
@@ -3411,8 +3508,8 @@ $infoHorizontalPanel.Content.Controls.Add($btnStatusInfoH)
 
 $btnHardwareInfoH = New-Object System.Windows.Forms.Button
 $btnHardwareInfoH.Text = "Hardware-Info"
-$btnHardwareInfoH.Size = New-Object System.Drawing.Size(155, 35)
-$btnHardwareInfoH.Location = New-Object System.Drawing.Point(155, 0)
+$btnHardwareInfoH.Size = New-Object System.Drawing.Size(150, 35)
+$btnHardwareInfoH.Location = New-Object System.Drawing.Point(150, 0)
 $btnHardwareInfoH.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 $btnHardwareInfoH.FlatAppearance.BorderSize = 0
 $btnHardwareInfoH.FlatAppearance.MouseOverBackColor = [System.Drawing.Color]::FromArgb(55, 55, 55)
@@ -3420,6 +3517,7 @@ $btnHardwareInfoH.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
 $btnHardwareInfoH.ForeColor = [System.Drawing.Color]::White
 $btnHardwareInfoH.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
 $btnHardwareInfoH.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
+Add-ButtonIcon -Button $btnHardwareInfoH -IconCode 0xE7F8 -IconSize 11 -LeftMargin 8
 
 # Runde Ecken für Button (8px Radius)
 try {
@@ -3447,8 +3545,8 @@ $infoHorizontalPanel.Content.Controls.Add($btnHardwareInfoH)
 
 $btnToolInfoH = New-Object System.Windows.Forms.Button
 $btnToolInfoH.Text = "Tool-Info"
-$btnToolInfoH.Size = New-Object System.Drawing.Size(155, 35)
-$btnToolInfoH.Location = New-Object System.Drawing.Point(310, 0)
+$btnToolInfoH.Size = New-Object System.Drawing.Size(150, 35)
+$btnToolInfoH.Location = New-Object System.Drawing.Point(300, 0)
 $btnToolInfoH.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 $btnToolInfoH.FlatAppearance.BorderSize = 0
 $btnToolInfoH.FlatAppearance.MouseOverBackColor = [System.Drawing.Color]::FromArgb(55, 55, 55)
@@ -3456,6 +3554,7 @@ $btnToolInfoH.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
 $btnToolInfoH.ForeColor = [System.Drawing.Color]::White
 $btnToolInfoH.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
 $btnToolInfoH.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
+Add-ButtonIcon -Button $btnToolInfoH -IconCode 0xE90F -IconSize 11 -LeftMargin 8
 
 # Runde Ecken für Button (8px Radius)
 try {
@@ -3479,7 +3578,7 @@ $infoHorizontalPanel.Content.Controls.Add($btnToolInfoH)
 $mainContentPanel.Controls.Add($infoHorizontalPanel.Container)
 
 # Erstelle horizontales Collapsible Panel für Problembehandlung (rechts neben Informationen)
-$troubleshootHorizontalPanel = New-HorizontalCollapsiblePanel -Title "Support" -XPosition 155 -Tag "troubleshootHorizontalPanel" -ParentPanel $mainContentPanel -OnExpand {
+$troubleshootHorizontalPanel = New-HorizontalCollapsiblePanel -Title "Support" -XPosition 175 -Tag "troubleshootHorizontalPanel" -ParentPanel $mainContentPanel -IconCode 0xE897 -OnExpand {
     if ($outputViewPanel) { $outputViewPanel.Visible = $true }
     if ($statusViewPanel) { $statusViewPanel.Visible = $false }
     if ($hardwareViewPanel) { $hardwareViewPanel.Visible = $false }
@@ -3504,13 +3603,13 @@ $troubleshootHorizontalPanel = New-HorizontalCollapsiblePanel -Title "Support" -
 }
 
 # Setze Content-Panel-Breite für 1 Button
-$troubleshootHorizontalPanel.Content.Width = 175
+$troubleshootHorizontalPanel.Content.Width = 210
 $troubleshootHorizontalPanel.Content.Height = 35
 
 # Button: Abhängigkeiten prüfen
 $btnCheckDependenciesH = New-Object System.Windows.Forms.Button
-$btnCheckDependenciesH.Text = "🔍 Abhängigkeiten"
-$btnCheckDependenciesH.Size = New-Object System.Drawing.Size(175, 35)
+$btnCheckDependenciesH.Text = "Abhängigkeiten"
+$btnCheckDependenciesH.Size = New-Object System.Drawing.Size(150, 35)
 $btnCheckDependenciesH.Location = New-Object System.Drawing.Point(0, 0)
 $btnCheckDependenciesH.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 $btnCheckDependenciesH.FlatAppearance.BorderSize = 0
@@ -3519,6 +3618,7 @@ $btnCheckDependenciesH.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
 $btnCheckDependenciesH.ForeColor = [System.Drawing.Color]::White
 $btnCheckDependenciesH.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
 $btnCheckDependenciesH.Cursor = [System.Windows.Forms.Cursors]::Hand
+Add-ButtonIcon -Button $btnCheckDependenciesH -IconCode 0xE721 -IconSize 12 -LeftMargin 10
 $btnCheckDependenciesH.Add_Click({
     $updateDependencyProgress = {
         param(
@@ -3569,10 +3669,10 @@ $btnCheckDependenciesH.Add_Click({
     & $updateDependencyProgress -Value 5 -Text "Initialisiere Abhängigkeitsprüfung..."
 
     # Verstecke alle Panels außer tblDependencies
-    $global:tblSystem.Visible = $false
-    $tblDisk.Visible = $false
-    $tblNetwork.Visible = $false
-    $tblCleanup.Visible = $false
+    if ($global:tblSystem) { $global:tblSystem.Visible = $false }
+    if ($tblDisk) { $tblDisk.Visible = $false }
+    if ($tblNetwork) { $tblNetwork.Visible = $false }
+    if ($tblCleanup) { $tblCleanup.Visible = $false }
     if ($global:tblDependencies) { $global:tblDependencies.Visible = $false }
 
     # Horizontale Header-Container sichtbar halten
@@ -3589,10 +3689,10 @@ $btnCheckDependenciesH.Add_Click({
     if ($searchPanel) { $searchPanel.Visible = $false }
     
     # Zeige OutputView
-    $outputViewPanel.Visible = $true
-    $statusViewPanel.Visible = $false
-    $hardwareViewPanel.Visible = $false
-    $toolInfoViewPanel.Visible = $false
+    if ($outputViewPanel) { $outputViewPanel.Visible = $true }
+    if ($statusViewPanel) { $statusViewPanel.Visible = $false }
+    if ($hardwareViewPanel) { $hardwareViewPanel.Visible = $false }
+    if ($toolInfoViewPanel) { $toolInfoViewPanel.Visible = $false }
 
     # Dependency-Tabelle im Output-Bereich erstellen (wie Tool-Downloads: eigener Bereich mit Buttons)
     if (-not $script:dependencyTableHost -or $script:dependencyTableHost.IsDisposed) {
@@ -3645,16 +3745,10 @@ $btnCheckDependenciesH.Add_Click({
         # Tabelle vorbereiten
         & $updateDependencyProgress -Value 65 -Text "Erstelle Übersicht..."
         
-        # Zeige installierbare Items
+        # Tabelle mit Status + Aktionen im Output-Bereich erstellen
         & $updateDependencyProgress -Value 80 -Text "Bereite Installationsoptionen vor..."
-        $actionableInstallDeps = $depResult.Dependencies | Where-Object { -not $_.Found -and -not [string]::IsNullOrWhiteSpace($_.WingetId) }
-        $actionableUpdateDeps = $depResult.Dependencies | Where-Object { $_.Found -and $_.UpdateAvailable -and -not [string]::IsNullOrWhiteSpace($_.WingetId) }
-        $manualMissingDeps = $depResult.Dependencies | Where-Object { -not $_.Found -and [string]::IsNullOrWhiteSpace($_.WingetId) }
-        $hasActionableItems = ($actionableInstallDeps.Count + $actionableUpdateDeps.Count) -gt 0
-
-        if ($true) {
-            # Tabelle mit Status + Aktionen im Output-Bereich
-            if ($script:dependencyTableHost) {
+        
+        if ($script:dependencyTableHost) {
                 $script:dependencyTableHost.Controls.Clear()
 
                 $headerPanel = New-Object System.Windows.Forms.Panel
@@ -3763,6 +3857,20 @@ $btnCheckDependenciesH.Add_Click({
                         $actionButton.ForeColor = [System.Drawing.Color]::White
                         $actionButton.Tag = @{ Dependency = $dep; Action = "gui-release-select" }
                     }
+                    elseif ($dep.Name -eq "Winget Package Manager" -and $dep.Found -and $dep.WingetId) {
+                        # Winget selbst: Versionsauswahl möglich
+                        $actionButton.Text = "Downgrade"
+                        $actionButton.BackColor = [System.Drawing.Color]::FromArgb(156, 39, 176)
+                        $actionButton.ForeColor = [System.Drawing.Color]::White
+                        $actionButton.Tag = @{ Dependency = $dep; Action = "winget-version-select" }
+                    }
+                    elseif ($dep.Name -eq "App Installer (winget)" -and $dep.Found) {
+                        # App Installer: Store-Paket, keine Downgrade-Funktion
+                        $actionButton.Text = "Vorhanden"
+                        $actionButton.BackColor = [System.Drawing.Color]::FromArgb(70, 70, 70)
+                        $actionButton.ForeColor = [System.Drawing.Color]::Silver
+                        $actionButton.Enabled = $false
+                    }
                     elseif (-not $dep.Found -and $dep.WingetId) {
                         $actionButton.Text = "Installieren"
                         $actionButton.BackColor = [System.Drawing.Color]::FromArgb(46, 204, 113)
@@ -3797,12 +3905,14 @@ $btnCheckDependenciesH.Add_Click({
                         $actionLabel = switch ($actionType) {
                             "upgrade" { "Aktualisierung" }
                             "gui-release-select" { "Versionswechsel" }
+                            "winget-version-select" { "Versionswechsel" }
                             default { "Installation" }
                         }
                         $this.Enabled = $false
                         $this.Text = switch ($actionType) {
                             "upgrade" { "Aktualisiere..." }
                             "gui-release-select" { "Suche Version..." }
+                            "winget-version-select" { "Suche Version..." }
                             default { "Installiere..." }
                         }
                         [System.Windows.Forms.Application]::DoEvents()
@@ -3846,6 +3956,9 @@ $btnCheckDependenciesH.Add_Click({
                             if ($actionType -eq "gui-release-select") {
                                 $actionResult = Invoke-GuiReleaseAction
                             }
+                            elseif ($actionType -eq "winget-version-select") {
+                                $actionResult = Invoke-WingetVersionAction -WingetId $depToHandle.WingetId -CurrentVersion $depToHandle.Version -ProgressCallback $uiProgressCallback -LogCallback $uiLogCallback
+                            }
                             elseif ($actionType -eq "upgrade") {
                                 $actionResult = Invoke-DependencyAction -WingetId $depToHandle.WingetId -Action 'upgrade' -ProgressCallback $uiProgressCallback -LogCallback $uiLogCallback
                             }
@@ -3854,8 +3967,18 @@ $btnCheckDependenciesH.Add_Click({
                             }
 
                             if ($actionResult -and $actionResult.Cancelled) {
-                                $this.Text = if ($actionType -eq "gui-release-select") { "Downgrade" } else { "Erneut versuchen" }
-                                $this.BackColor = if ($actionType -eq "gui-release-select") { [System.Drawing.Color]::FromArgb(124, 77, 255) } else { [System.Drawing.Color]::FromArgb(231, 76, 60) }
+                                if ($actionType -eq "gui-release-select") {
+                                    $this.Text = "Downgrade"
+                                    $this.BackColor = [System.Drawing.Color]::FromArgb(124, 77, 255)
+                                }
+                                elseif ($actionType -eq "winget-version-select") {
+                                    $this.Text = "Version wählen"
+                                    $this.BackColor = [System.Drawing.Color]::FromArgb(156, 39, 176)
+                                }
+                                else {
+                                    $this.Text = "Erneut versuchen"
+                                    $this.BackColor = [System.Drawing.Color]::FromArgb(231, 76, 60)
+                                }
                                 $this.Enabled = $true
                             }
                             elseif ($actionResult -and $actionResult.Success) {
@@ -3875,8 +3998,18 @@ $btnCheckDependenciesH.Add_Click({
                                 else {
                                     [System.Windows.Forms.MessageBox]::Show("Vorgang fehlgeschlagen (Exit Code: $($actionResult.ExitCode))", "Aktion fehlgeschlagen", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
                                 }
-                                $this.Text = if ($actionType -eq "gui-release-select") { "Downgrade" } else { "Erneut versuchen" }
-                                $this.BackColor = if ($actionType -eq "gui-release-select") { [System.Drawing.Color]::FromArgb(124, 77, 255) } else { [System.Drawing.Color]::FromArgb(231, 76, 60) }
+                                if ($actionType -eq "gui-release-select") {
+                                    $this.Text = "Downgrade"
+                                    $this.BackColor = [System.Drawing.Color]::FromArgb(124, 77, 255)
+                                }
+                                elseif ($actionType -eq "winget-version-select") {
+                                    $this.Text = "Version wählen"
+                                    $this.BackColor = [System.Drawing.Color]::FromArgb(156, 39, 176)
+                                }
+                                else {
+                                    $this.Text = "Erneut versuchen"
+                                    $this.BackColor = [System.Drawing.Color]::FromArgb(231, 76, 60)
+                                }
                                 $this.Enabled = $true
                             }
                         }
@@ -3886,6 +4019,10 @@ $btnCheckDependenciesH.Add_Click({
                             if ($actionType -eq "gui-release-select") {
                                 $this.Text = "Downgrade"
                                 $this.BackColor = [System.Drawing.Color]::FromArgb(124, 77, 255)
+                            }
+                            elseif ($actionType -eq "winget-version-select") {
+                                $this.Text = "Version wählen"
+                                $this.BackColor = [System.Drawing.Color]::FromArgb(156, 39, 176)
                             }
                             else {
                                 $this.Text = "Erneut versuchen"
@@ -3915,7 +4052,6 @@ $btnCheckDependenciesH.Add_Click({
                     $rowY += 34
                 }
             }
-        }
         
         # Hardware-Monitor Neustart (optional)
         & $updateDependencyProgress -Value 90 -Text "Aktualisiere Hardware-Monitor..."
@@ -3928,7 +4064,8 @@ $btnCheckDependenciesH.Add_Click({
             Start-HardwareMonitoring
         }
         catch {
-            # stillschweigend tolerieren
+            # Hardware-Monitor-Neustart optional - Fehler tolerieren
+            Write-Verbose "Hardware-Monitor konnte nicht neu gestartet werden: $($_.Exception.Message)"
         }
 
         & $updateDependencyProgress -Value 100 -Text "Abhängigkeitsprüfung abgeschlossen" -Color ([System.Drawing.Color]::LimeGreen)
@@ -3949,13 +4086,13 @@ $mainContentPanel.Controls.Add($troubleshootHorizontalPanel.Container)
 # Separator zwischen Bereinigung und Tool-Downloads
 $script:cleanupDownloadsSeparator = New-Object System.Windows.Forms.Label
 $script:cleanupDownloadsSeparator.Location = New-Object System.Drawing.Point(5, 150)
-$script:cleanupDownloadsSeparator.Size = New-Object System.Drawing.Size(180, 2)
+$script:cleanupDownloadsSeparator.Size = New-Object System.Drawing.Size(215, 2)
 $script:cleanupDownloadsSeparator.BackColor = [System.Drawing.Color]::FromArgb(120, 120, 120)
 $script:cleanupDownloadsSeparator.BorderStyle = [System.Windows.Forms.BorderStyle]::None
 $mainButtonPanel.Controls.Add($script:cleanupDownloadsSeparator)
 
 # Erstelle Collapsible Panel für Tool-Downloads (YPosition angepasst für Separator mit 5px Abstand)
-$downloadsPanel = New-CollapsiblePanel -Title "Tool-Downloads" -YPosition 157 -Tag "downloadsPanel" -ParentPanel $mainButtonPanel -OnExpand {
+$downloadsPanel = New-CollapsiblePanel -Title "Tool-Downloads" -YPosition 157 -Tag "downloadsPanel" -ParentPanel $mainButtonPanel -IconCode 0xE896 -OnExpand {
     # Alle mainContentPanel-Panels ausblenden
     if ($global:tblSystem) { $global:tblSystem.Visible = $false }
     if ($tblDisk) { $tblDisk.Visible = $false }
@@ -4006,38 +4143,46 @@ $downloadsPanel = New-CollapsiblePanel -Title "Tool-Downloads" -YPosition 157 -T
     $outputBox.AppendText("Verfügbare Tool-Kategorien (29 Tools):`r`n`r`n")
     
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Accent'
-    $outputBox.AppendText("🔧 SYSTEM-TOOLS (8 Tools):`r`n")
+    Add-OutputIcon -OutputBox $outputBox -IconCode 0xE90F
+    $outputBox.AppendText(" SYSTEM-TOOLS (8 Tools):`r`n")
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
     $outputBox.AppendText("  • 7-Zip, CCleaner, CPU-Z, GPU-Z, OCCT`r`n")
     $outputBox.AppendText("  • Intel Driver Assistant, LibreHardwareMonitor, UniGetUI`r`n`r`n")
     
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Accent'
-    $outputBox.AppendText("📱 ANWENDUNGEN (6 Tools):`r`n")
+    Add-OutputIcon -OutputBox $outputBox -IconCode 0xE8A5
+    $outputBox.AppendText(" ANWENDUNGEN (6 Tools):`r`n")
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
     $outputBox.AppendText("  • Browser: Brave, Firefox, Chrome`r`n")
     $outputBox.AppendText("  • Kommunikation: Discord`r`n")
     $outputBox.AppendText("  • Office: LibreOffice, Apache OpenOffice`r`n`r`n")
     
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Accent'
-    $outputBox.AppendText("🎵 AUDIO / TV (9 Tools):`r`n")
+    Add-OutputIcon -OutputBox $outputBox -IconCode 0xE8D6
+    $outputBox.AppendText(" AUDIO / TV (9 Tools):`r`n")
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
     $outputBox.AppendText("  • Media: VLC, Spotify, OBS Studio, Sky Go`r`n")
     $outputBox.AppendText("  • Audio: Audacity, EarTrumpet, SteelSeries GG`r`n")
     $outputBox.AppendText("  • Mixer: MIXLINE, Voicemeeter Potato`r`n`r`n")
     
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Accent'
-    $outputBox.AppendText("💻 CODING / IT (6 Tools):`r`n")
+    Add-OutputIcon -OutputBox $outputBox -IconCode 0xE943
+    $outputBox.AppendText(" CODING / IT (6 Tools):`r`n")
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
     $outputBox.AppendText("  • Editoren: VS Code, Notepad++`r`n")
     $outputBox.AppendText("  • Terminal: PowerShell`r`n")
     $outputBox.AppendText("  • Netzwerk: PuTTY, WinSCP, WireGuard`r`n`r`n")
     
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
-    $outputBox.AppendText("✓ Winget-Integration: Automatische Installations-Status-Erkennung`r`n")
+    Add-OutputIcon -OutputBox $outputBox -IconCode 0xE73E
+    $outputBox.AppendText(" Winget-Integration: Automatische Installations-Status-Erkennung`r`n")
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
-    $outputBox.AppendText("✓ Ein-Klick-Installation: Direkte Installation über Winget`r`n")
+    Add-OutputIcon -OutputBox $outputBox -IconCode 0xE73E
+    $outputBox.AppendText(" Ein-Klick-Installation: Direkte Installation über Winget`r`n`r`n")
+    
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Muted'
-    $outputBox.AppendText("`r`n💡 Tipp: Wählen Sie eine Kategorie oder nutzen Sie die Suchfunktion oben.`r`n")
+    Add-OutputIcon -OutputBox $outputBox -IconCode 0xE946
+    $outputBox.AppendText(" Tipp: Wählen Sie eine Kategorie oder nutzen Sie die Suchfunktion oben.`r`n")
     
     # Hinweis: View-Panel wird durch Sub-Button-Klick angezeigt
     
@@ -4086,7 +4231,7 @@ function Reset-DownloadCategoryButtons {
 # Erstelle die Kategorie-Buttons als Submenu
 $btnAllTools = New-Object System.Windows.Forms.Button
 $btnAllTools.Text = "Alle Tools"
-$btnAllTools.Size = New-Object System.Drawing.Size(175, 35)
+$btnAllTools.Size = New-Object System.Drawing.Size(210, 35)
 $btnAllTools.Location = New-Object System.Drawing.Point(0, 0)
 $btnAllTools.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 $btnAllTools.FlatAppearance.BorderSize = 0
@@ -4094,11 +4239,12 @@ $btnAllTools.FlatAppearance.MouseOverBackColor = [System.Drawing.Color]::FromArg
 $btnAllTools.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)  # Inaktiv beim Start
 $btnAllTools.ForeColor = [System.Drawing.Color]::White
 $btnAllTools.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
+Add-ButtonIcon -Button $btnAllTools -IconCode 0xE71D -IconSize 12 -LeftMargin 10
 
 # Zähler-Label für Alle Tools
 $lblAllToolsCount = New-Object System.Windows.Forms.Label
 $lblAllToolsCount.Size = New-Object System.Drawing.Size(30, 20)
-$lblAllToolsCount.Location = New-Object System.Drawing.Point(140, 8)
+$lblAllToolsCount.Location = New-Object System.Drawing.Point(175, 8)
 $lblAllToolsCount.TextAlign = [System.Drawing.ContentAlignment]::MiddleRight
 $lblAllToolsCount.ForeColor = [System.Drawing.Color]::LightGray
 $lblAllToolsCount.BackColor = [System.Drawing.Color]::Transparent
@@ -4140,7 +4286,7 @@ $downloadsPanel.Content.Controls.Add($btnAllTools)
 
 $btnSystemTools = New-Object System.Windows.Forms.Button
 $btnSystemTools.Text = "System-Tools"
-$btnSystemTools.Size = New-Object System.Drawing.Size(175, 35)
+$btnSystemTools.Size = New-Object System.Drawing.Size(210, 35)
 $btnSystemTools.Location = New-Object System.Drawing.Point(0, 35)
 $btnSystemTools.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 $btnSystemTools.FlatAppearance.BorderSize = 0
@@ -4148,11 +4294,12 @@ $btnSystemTools.FlatAppearance.MouseOverBackColor = [System.Drawing.Color]::From
 $btnSystemTools.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
 $btnSystemTools.ForeColor = [System.Drawing.Color]::White
 $btnSystemTools.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
+Add-ButtonIcon -Button $btnSystemTools -IconCode 0xE90F -IconSize 12 -LeftMargin 10
 
 # Zähler-Label für System-Tools
 $lblSystemToolsCount = New-Object System.Windows.Forms.Label
 $lblSystemToolsCount.Size = New-Object System.Drawing.Size(30, 20)
-$lblSystemToolsCount.Location = New-Object System.Drawing.Point(140, 8)
+$lblSystemToolsCount.Location = New-Object System.Drawing.Point(175, 8)
 $lblSystemToolsCount.TextAlign = [System.Drawing.ContentAlignment]::MiddleRight
 $lblSystemToolsCount.ForeColor = [System.Drawing.Color]::LightGray
 $lblSystemToolsCount.BackColor = [System.Drawing.Color]::Transparent
@@ -4194,7 +4341,7 @@ $downloadsPanel.Content.Controls.Add($btnSystemTools)
 
 $btnApplications = New-Object System.Windows.Forms.Button
 $btnApplications.Text = "Anwendungen"
-$btnApplications.Size = New-Object System.Drawing.Size(175, 35)
+$btnApplications.Size = New-Object System.Drawing.Size(210, 35)
 $btnApplications.Location = New-Object System.Drawing.Point(0, 70)
 $btnApplications.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 $btnApplications.FlatAppearance.BorderSize = 0
@@ -4202,11 +4349,12 @@ $btnApplications.FlatAppearance.MouseOverBackColor = [System.Drawing.Color]::Fro
 $btnApplications.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
 $btnApplications.ForeColor = [System.Drawing.Color]::White
 $btnApplications.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
+Add-ButtonIcon -Button $btnApplications -IconCode 0xE8A5 -IconSize 12 -LeftMargin 10
 
 # Zähler-Label für Anwendungen
 $lblApplicationsCount = New-Object System.Windows.Forms.Label
 $lblApplicationsCount.Size = New-Object System.Drawing.Size(30, 20)
-$lblApplicationsCount.Location = New-Object System.Drawing.Point(140, 8)
+$lblApplicationsCount.Location = New-Object System.Drawing.Point(175, 8)
 $lblApplicationsCount.TextAlign = [System.Drawing.ContentAlignment]::MiddleRight
 $lblApplicationsCount.ForeColor = [System.Drawing.Color]::LightGray
 $lblApplicationsCount.BackColor = [System.Drawing.Color]::Transparent
@@ -4248,7 +4396,7 @@ $downloadsPanel.Content.Controls.Add($btnApplications)
 
 $btnAudioTV = New-Object System.Windows.Forms.Button
 $btnAudioTV.Text = "Audio / TV"
-$btnAudioTV.Size = New-Object System.Drawing.Size(175, 35)
+$btnAudioTV.Size = New-Object System.Drawing.Size(210, 35)
 $btnAudioTV.Location = New-Object System.Drawing.Point(0, 105)
 $btnAudioTV.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 $btnAudioTV.FlatAppearance.BorderSize = 0
@@ -4256,11 +4404,12 @@ $btnAudioTV.FlatAppearance.MouseOverBackColor = [System.Drawing.Color]::FromArgb
 $btnAudioTV.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
 $btnAudioTV.ForeColor = [System.Drawing.Color]::White
 $btnAudioTV.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
+Add-ButtonIcon -Button $btnAudioTV -IconCode 0xE8D6 -IconSize 12 -LeftMargin 10
 
 # Zähler-Label für Audio / TV
 $lblAudioTVCount = New-Object System.Windows.Forms.Label
 $lblAudioTVCount.Size = New-Object System.Drawing.Size(30, 20)
-$lblAudioTVCount.Location = New-Object System.Drawing.Point(140, 8)
+$lblAudioTVCount.Location = New-Object System.Drawing.Point(175, 8)
 $lblAudioTVCount.TextAlign = [System.Drawing.ContentAlignment]::MiddleRight
 $lblAudioTVCount.ForeColor = [System.Drawing.Color]::LightGray
 $lblAudioTVCount.BackColor = [System.Drawing.Color]::Transparent
@@ -4302,7 +4451,7 @@ $downloadsPanel.Content.Controls.Add($btnAudioTV)
 
 $btnCodingTools = New-Object System.Windows.Forms.Button
 $btnCodingTools.Text = "Coding / IT"
-$btnCodingTools.Size = New-Object System.Drawing.Size(175, 35)
+$btnCodingTools.Size = New-Object System.Drawing.Size(210, 35)
 $btnCodingTools.Location = New-Object System.Drawing.Point(0, 140)
 $btnCodingTools.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 $btnCodingTools.FlatAppearance.BorderSize = 0
@@ -4310,11 +4459,12 @@ $btnCodingTools.FlatAppearance.MouseOverBackColor = [System.Drawing.Color]::From
 $btnCodingTools.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
 $btnCodingTools.ForeColor = [System.Drawing.Color]::White
 $btnCodingTools.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
+Add-ButtonIcon -Button $btnCodingTools -IconCode 0xE943 -IconSize 12 -LeftMargin 10
 
 # Zähler-Label für Coding / IT
 $lblCodingToolsCount = New-Object System.Windows.Forms.Label
 $lblCodingToolsCount.Size = New-Object System.Drawing.Size(30, 20)
-$lblCodingToolsCount.Location = New-Object System.Drawing.Point(140, 8)
+$lblCodingToolsCount.Location = New-Object System.Drawing.Point(175, 8)
 $lblCodingToolsCount.TextAlign = [System.Drawing.ContentAlignment]::MiddleRight
 $lblCodingToolsCount.ForeColor = [System.Drawing.Color]::LightGray
 $lblCodingToolsCount.BackColor = [System.Drawing.Color]::Transparent
@@ -4358,7 +4508,7 @@ $downloadsPanel.Content.Controls.Add($btnCodingTools)
 $btnToolDownloads = $downloadsPanel.Header
 
 # Erstelle Collapsible Panel für Problembehandlung
-$troubleshootPanel = New-CollapsiblePanel -Title "Problembehandlung" -YPosition 170 -Tag "troubleshootPanel" -ParentPanel $mainButtonPanel -OnExpand {
+$troubleshootPanel = New-CollapsiblePanel -Title "Problembehandlung" -YPosition 170 -Tag "troubleshootPanel" -ParentPanel $mainButtonPanel -IconCode 0xE946 -OnExpand {
     # Alle View-Panels ausblenden beim Öffnen
     if ($outputViewPanel) { $outputViewPanel.Visible = $false }
     if ($statusViewPanel) { $statusViewPanel.Visible = $false }
@@ -4384,7 +4534,7 @@ Update-PanelPositions -ParentPanel $mainButtonPanel
 #------------------------------------------------------------------------------------------------------------
 
 # Erstelle Collapsible Panel für Neustart im separaten restartButtonPanel (öffnet nach oben)
-$restartPanel = New-CollapsiblePanel -Title "Neustart" -YPosition 125 -Tag "restartPanel" -ParentPanel $restartButtonPanel -OpenUpward -OnExpand {
+$restartPanel = New-CollapsiblePanel -Title "Neustart" -YPosition 125 -Tag "restartPanel" -ParentPanel $restartButtonPanel -IconCode 0xE7E8 -OpenUpward -OnExpand {
     # Alle View-Panels ausblenden beim Öffnen des Dropdown-Menüs
     if ($outputViewPanel) { $outputViewPanel.Visible = $false }
     if ($statusViewPanel) { $statusViewPanel.Visible = $false }
@@ -4407,28 +4557,32 @@ $restartPanel = New-CollapsiblePanel -Title "Neustart" -YPosition 125 -Tag "rest
     $outputBox.AppendText("Verfügbare Optionen:`r`n`r`n")
     
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Accent'
-    $outputBox.AppendText("🔄 GUI NEULADEN:`r`n")
+    Add-OutputIcon -OutputBox $outputBox -IconCode 0xE72C
+    $outputBox.AppendText(" GUI NEULADEN:`r`n")
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
     $outputBox.AppendText("  Lädt die Benutzeroberfläche neu ohne System-Neustart`r`n")
     $outputBox.AppendText("  • Aktuelle Vorgänge werden abgebrochen`r`n")
     $outputBox.AppendText("  • Einstellungen bleiben erhalten`r`n`r`n")
     
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Accent'
-    $outputBox.AppendText("🔴 SYSTEM NEUSTARTEN:`r`n")
+    Add-OutputIcon -OutputBox $outputBox -IconCode 0xE7E8
+    $outputBox.AppendText(" SYSTEM NEUSTARTEN:`r`n")
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
     $outputBox.AppendText("  Startet das gesamte System neu`r`n")
     $outputBox.AppendText("  • Alle Programme werden geschlossen`r`n")
     $outputBox.AppendText("  • 30 Sekunden Countdown mit Abbruch-Option`r`n`r`n")
     
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Accent'
-    $outputBox.AppendText("🛡️ ABGESICHERTER MODUS:`r`n")
+    Add-OutputIcon -OutputBox $outputBox -IconCode 0xE83D
+    $outputBox.AppendText(" ABGESICHERTER MODUS:`r`n")
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
     $outputBox.AppendText("  Startet Windows im abgesicherten Modus`r`n")
     $outputBox.AppendText("  • Erweiterte Startoptionen werden geöffnet`r`n")
     $outputBox.AppendText("  • Wählen Sie dann 'Abgesicherter Modus'`r`n`r`n")
     
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Muted'
-    $outputBox.AppendText("💡 Tipp: Wählen Sie eine Option im Menü links.`r`n")
+    Add-OutputIcon -OutputBox $outputBox -IconCode 0xE946
+    $outputBox.AppendText(" Tipp: Wählen Sie eine Option im Menü links.`r`n")
     
     # Stelle sicher, dass OutputView angezeigt wird
     Switch-OutputView -viewName "outputView"
@@ -4449,7 +4603,7 @@ $restartPanel = New-CollapsiblePanel -Title "Neustart" -YPosition 125 -Tag "rest
 # Erstelle die Neustart-Buttons als Submenu
 $btnGUIReload = New-Object System.Windows.Forms.Button
 $btnGUIReload.Text = "GUI neuladen"
-$btnGUIReload.Size = New-Object System.Drawing.Size(175, 35)
+$btnGUIReload.Size = New-Object System.Drawing.Size(210, 35)
 $btnGUIReload.Location = New-Object System.Drawing.Point(0, 0)
 $btnGUIReload.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 $btnGUIReload.FlatAppearance.BorderSize = 0
@@ -4459,6 +4613,7 @@ $btnGUIReload.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
 $btnGUIReload.ForeColor = [System.Drawing.Color]::White
 $btnGUIReload.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
 $btnGUIReload.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
+Add-ButtonIcon -Button $btnGUIReload -IconCode 0xE72C -IconSize 12 -LeftMargin 10
 $btnGUIReload.Add_Click({
     $confirmReload = [System.Windows.Forms.MessageBox]::Show(
         "Die GUI wird neugeladen.`n`nAlle aktuellen Vorgänge werden abgebrochen.`n`nMöchten Sie fortfahren?",
@@ -4476,7 +4631,7 @@ $restartPanel.Content.Controls.Add($btnGUIReload)
 
 $btnSystemRestart = New-Object System.Windows.Forms.Button
 $btnSystemRestart.Text = "System neustarten"
-$btnSystemRestart.Size = New-Object System.Drawing.Size(175, 35)
+$btnSystemRestart.Size = New-Object System.Drawing.Size(210, 35)
 $btnSystemRestart.Location = New-Object System.Drawing.Point(0, 37)
 $btnSystemRestart.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 $btnSystemRestart.FlatAppearance.BorderSize = 0
@@ -4486,6 +4641,7 @@ $btnSystemRestart.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
 $btnSystemRestart.ForeColor = [System.Drawing.Color]::FromArgb(255, 100, 100)
 $btnSystemRestart.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
 $btnSystemRestart.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
+Add-ButtonIcon -Button $btnSystemRestart -IconCode 0xE7E8 -IconSize 12 -LeftMargin 10
 $btnSystemRestart.Add_Click({
     $result = [System.Windows.Forms.MessageBox]::Show(
         "WARNUNG: Der Computer wird neu gestartet.`n`nBitte speichern Sie alle offenen Dokumente und schließen Sie alle Programme.`n`nMöchten Sie den Neustart jetzt durchführen?",
@@ -4542,7 +4698,7 @@ $restartPanel.Content.Controls.Add($btnSystemRestart)
 # Neustart direkt zu Starteinstellungen (Safe Mode Auswahl)
 $btnSafeModeRestart = New-Object System.Windows.Forms.Button
 $btnSafeModeRestart.Text = "Abgesicherter Modus"
-$btnSafeModeRestart.Size = New-Object System.Drawing.Size(175, 35)
+$btnSafeModeRestart.Size = New-Object System.Drawing.Size(210, 35)
 $btnSafeModeRestart.Location = New-Object System.Drawing.Point(0, 74)
 $btnSafeModeRestart.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 $btnSafeModeRestart.FlatAppearance.BorderSize = 0
@@ -4552,6 +4708,7 @@ $btnSafeModeRestart.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
 $btnSafeModeRestart.ForeColor = [System.Drawing.Color]::FromArgb(255, 165, 0)
 $btnSafeModeRestart.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
 $btnSafeModeRestart.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
+Add-ButtonIcon -Button $btnSafeModeRestart -IconCode 0xE83D -IconSize 12 -LeftMargin 10
 
 $btnSafeModeRestart.Add_Click({
 
@@ -4806,35 +4963,40 @@ $btnOutput.Add_Click({
     $outputBox.AppendText("Verfügbare Bereiche:`r`n`r`n")
 
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Accent'
-    $outputBox.AppendText("🛡️ SYSTEM/SICHERHEIT:`r`n")
+    Add-OutputIcon -OutputBox $outputBox -IconCode 0xE83D
+    $outputBox.AppendText(" SYSTEM/SICHERHEIT:`r`n")
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
     $outputBox.AppendText("  • Windows Defender: Scan & Optimierung`r`n")
     $outputBox.AppendText("  • Firewall: Regeln & Verwaltung`r`n")
     $outputBox.AppendText("  • AppLocker: Anwendungssteuerung`r`n`r`n")
 
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Accent'
-    $outputBox.AppendText("🔧 DIAGNOSE/REPARATUR:`r`n")
+    Add-OutputIcon -OutputBox $outputBox -IconCode 0xE90F
+    $outputBox.AppendText(" DIAGNOSE/REPARATUR:`r`n")
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
     $outputBox.AppendText("  • DISM & SFC: System-Integritätsprüfung`r`n")
     $outputBox.AppendText("  • CHKDSK: Datenträger-Analyse`r`n")
     $outputBox.AppendText("  • Windows Update: Reparatur & Wartung`r`n`r`n")
 
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Accent'
-    $outputBox.AppendText("🌐 NETZWERK-TOOLS:`r`n")
+    Add-OutputIcon -OutputBox $outputBox -IconCode 0xE774
+    $outputBox.AppendText(" NETZWERK-TOOLS:`r`n")
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
     $outputBox.AppendText("  • Netzwerk-Diagnose & Adapter-Reset`r`n")
     $outputBox.AppendText("  • DNS-Cache & IP-Konfiguration`r`n")
     $outputBox.AppendText("  • Verbindungsanalyse & Ping-Tests`r`n`r`n")
 
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Accent'
-    $outputBox.AppendText("🧹 BEREINIGUNG:`r`n")
+    Add-OutputIcon -OutputBox $outputBox -IconCode 0xE74C
+    $outputBox.AppendText(" BEREINIGUNG:`r`n")
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
     $outputBox.AppendText("  • Temp-Dateien & Cache bereinigen`r`n")
     $outputBox.AppendText("  • Windows Update-Cache entfernen`r`n")
     $outputBox.AppendText("  • Browser-Daten löschen`r`n`r`n")
 
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Accent'
-    $outputBox.AppendText("📊 INFORMATIONEN:`r`n")
+    Add-OutputIcon -OutputBox $outputBox -IconCode 0xE9D9
+    $outputBox.AppendText(" INFORMATIONEN:`r`n")
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
     $outputBox.AppendText("  • System-Status & Betriebssystem-Details`r`n")
     $outputBox.AppendText("  • Hardware-Informationen (CPU, RAM, GPU)`r`n")
@@ -4885,7 +5047,7 @@ if (-not (Get-Command -Name Initialize-ProgressComponents -ErrorAction SilentlyC
 }
 
 # Erstelle die TextProgressBar über das Modul (als global für Zugriff aus Modulen)
-$global:progressBar = New-TextProgressBar -X 190 -Y 755 -Width 750 -Height 30 -InitialText "Bereit" -InitialTextColor ([System.Drawing.Color]::White)
+$global:progressBar = New-TextProgressBar -X 225 -Y 755 -Width 735 -Height 30 -InitialText "Bereit" -InitialTextColor ([System.Drawing.Color]::White)
 $mainform.Controls.Add($global:progressBar)
 Initialize-ProgressComponents -ProgressBar $global:progressBar -StatusLabel $progressStatusLabel
 
@@ -5247,7 +5409,7 @@ $btnFullMRT = New-Object System.Windows.Forms.Button
 $btnFullMRT.Name = "btnFullMRT"
 $btnFullMRT.Text = "MRT Full Scan"
 $btnFullMRT.Size = New-Object System.Drawing.Size(155, 35)  # Breite an Unterkategorie-Buttons angepasst
-$btnFullMRT.Location = New-Object System.Drawing.Point(180, 5)  # 5px vom oberen Rand
+$btnFullMRT.Location = New-Object System.Drawing.Point(215, 5)  # 5px vom oberen Rand
 $btnFullMRT.BackColor = $script:btnSubNavColor
 $btnFullMRT.ForeColor = [System.Drawing.Color]::White
 $btnFullMRT.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
@@ -5379,7 +5541,7 @@ $btnWinUpdate = New-Object System.Windows.Forms.Button
 $btnWinUpdate.Name = "btnWinUpdate"
 $btnWinUpdate.Text = "Windows Update"
 $btnWinUpdate.Size = New-Object System.Drawing.Size(155, 35)  # Breite an Unterkategorie-Buttons angepasst
-$btnWinUpdate.Location = New-Object System.Drawing.Point(180, 5)  # Position nach links verschoben (CMD-Admin entfernt)
+$btnWinUpdate.Location = New-Object System.Drawing.Point(215, 5)  # Position nach links verschoben (CMD-Admin entfernt)
 $btnWinUpdate.BackColor = $script:btnSubNavColor
 $btnWinUpdate.ForeColor = [System.Drawing.Color]::White
 $btnWinUpdate.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
@@ -5491,7 +5653,7 @@ $btnScanDISM = New-Object System.Windows.Forms.Button
 $btnScanDISM.Name = "btnScanDISM"
 $btnScanDISM.Text = "DISM Scan"
 $btnScanDISM.Size = New-Object System.Drawing.Size(155, 35)  # Breite an Unterkategorie-Buttons angepasst
-$btnScanDISM.Location = New-Object System.Drawing.Point(180, 5)  # 5px vom oberen Rand
+$btnScanDISM.Location = New-Object System.Drawing.Point(215, 5)  # 5px vom oberen Rand
 $btnScanDISM.BackColor = $script:btnSubNavColor
 $btnScanDISM.ForeColor = [System.Drawing.Color]::White
 $btnScanDISM.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
@@ -5543,7 +5705,7 @@ $btnCHKDSK = New-Object System.Windows.Forms.Button
 $btnCHKDSK.Name = "btnCHKDSK"
 $btnCHKDSK.Text = "CHKDSK"
 $btnCHKDSK.Size = New-Object System.Drawing.Size(155, 35)  # Breite an Unterkategorie-Buttons angepasst
-$btnCHKDSK.Location = New-Object System.Drawing.Point(180, 5)  # 5px vom oberen Rand
+$btnCHKDSK.Location = New-Object System.Drawing.Point(215, 5)  # 5px vom oberen Rand
 $btnCHKDSK.BackColor = $script:btnSubNavColor
 $btnCHKDSK.ForeColor = [System.Drawing.Color]::White
 $btnCHKDSK.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
@@ -5639,7 +5801,7 @@ $btnTempFiles = New-Object System.Windows.Forms.Button
 $btnTempFiles.Name = "btnTempFiles"
 $btnTempFiles.Text = "Custom-Cleanup"
 $btnTempFiles.Size = New-Object System.Drawing.Size(155, 35)  # Breite an Unterkategorie-Buttons angepasst
-$btnTempFiles.Location = New-Object System.Drawing.Point(180, 5)  # 5px vom oberen Rand
+$btnTempFiles.Location = New-Object System.Drawing.Point(215, 5)  # 5px vom oberen Rand
 $btnTempFiles.BackColor = $script:btnSubNavColor
 $btnTempFiles.ForeColor = [System.Drawing.Color]::White
 $btnTempFiles.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
@@ -6137,6 +6299,55 @@ function Invoke-GuiReleaseAction {
     }
 }
 
+function Invoke-WingetVersionAction {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$WingetId,
+        
+        [Parameter(Mandatory = $true)]
+        [string]$CurrentVersion,
+        
+        [Parameter(Mandatory = $false)]
+        [scriptblock]$ProgressCallback,
+        
+        [Parameter(Mandatory = $false)]
+        [scriptblock]$LogCallback
+    )
+    
+    try {
+        if (-not (Get-Command -Name Show-WingetVersionSelectionDialog -ErrorAction SilentlyContinue)) {
+            return @{ Success = $false; Cancelled = $false; Message = "Winget-Versionsauswahl nicht verfügbar" }
+        }
+
+        if ($ProgressCallback) {
+            & $ProgressCallback 10 "Lade verfügbare Versionen..."
+        }
+
+        # Versionsauswahldialog anzeigen
+        $selectedVersion = Show-WingetVersionSelectionDialog -WingetId $WingetId -CurrentVersion $CurrentVersion
+        
+        if (-not $selectedVersion) {
+            return @{ Success = $false; Cancelled = $true; Message = "Abgebrochen" }
+        }
+
+        if ($ProgressCallback) {
+            & $ProgressCallback 20 "Version $($selectedVersion.tag_name) wird installiert..."
+        }
+
+        # Installation durchführen
+        $installResult = Invoke-WingetVersionInstall `
+            -WingetId $WingetId `
+            -Version $selectedVersion.tag_name `
+            -ProgressCallback $ProgressCallback `
+            -LogCallback $LogCallback
+
+        return $installResult
+    }
+    catch {
+        return @{ Success = $false; Cancelled = $false; Message = $_.Exception.Message }
+    }
+}
+
 # Tooltip-Texte zu den Funktionsbuttons hinzufügen (tooltipObj wurde bereits weiter oben initialisiert)
 $tooltipObj.SetToolTip($btnQuickMRT, "Führt einen schnellen Malware-Scan mit Microsoft Malicious Software Removal Tool durch")
 $tooltipObj.SetToolTip($btnFullMRT, "Führt einen vollständigen Systemscan mit Microsoft Malicious Software Removal Tool durch")
@@ -6447,154 +6658,161 @@ $mainform.Add_Shown({
         }
 
         # ═══════════════════════════════════════════════════════════
-        # HARDWARE-MONITORING INITIALISIERUNG
+        # HARDWARE-MONITORING INITIALISIERUNG (ASYNCHRON)
         # ═══════════════════════════════════════════════════════════
         
-        Update-InitProgress -Value 20 -Text "Prüfe Hardware-Monitor..."
+        Update-InitProgress -Value 20 -Text "Starte Hardware-Monitor..."
         
-        $initResult = @{
-            HardwareReady = $false
-            LHMAvailable = $false
-        }
+        # Hardware-Monitor wird ASYNCHRON im Hintergrund initialisiert
+        # Dies verhindert GUI-Freeze während der Hardware-Initialisierung (kann 5-15 Sekunden dauern)
+        Update-InitProgress -Value 70 -Text "Hardware-Monitor wird im Hintergrund geladen..."
         
-        # Prüfe Hardware-Monitoring-Verfügbarkeit (lokale DLL + PawnIO-Treiber) mit ProgressBar
-        # Diese Funktion aktualisiert die ProgressBar von 20-70%
-        try {
-            # Übergebe die ProgressBar direkt (sie existiert bereits im lokalen Scope)
-            $hwMonitorStatus = Initialize-HardwareMonitoringMode -ProgressBar $progressBar -StatusLabel $null
+        # Timer erstellen der die Hardware-Initialisierung NACH Form.Shown startet
+        $hwInitTimer = New-Object System.Windows.Forms.Timer
+        $hwInitTimer.Interval = 500  # 500ms nach Shown-Event
+        $hwInitTimer.Add_Tick({
+            $this.Stop()
+            $this.Dispose()
             
-            if ($hwMonitorStatus.Available) {
-                # Hardware-Monitoring verfügbar - initialisiere Timer
-                # WICHTIG: Dies setzt Labels auf "werden geladen..." zurück!
-                $hardwareResult = Initialize-HardwareMonitoring `
-                    -cpuLabel $cpuLabel `
-                    -gpuLabel $gpuLabel `
-                    -ramLabel $ramLabel `
-                    -gbCPU $gbCPU `
-                    -gbGPU $gbGPU `
-                    -gbRAM $gbRAM `
-                    -SuppressVisualFeedback `
-                    -GlobalTooltip $tooltipObj
+            # Starte Hardware-Initialisierung (läuft im UI-Thread, aber nach Form ist sichtbar)
+            $progressBar.CustomText = "Initialisiere Hardware-Monitor..."
+            $progressBar.Value = 20
+            [System.Windows.Forms.Application]::DoEvents()
+            
+            try {
+                # Prüfe Hardware-Monitoring-Verfügbarkeit (lokale DLL + PawnIO-Treiber)
+                $hwMonitorStatus = Initialize-HardwareMonitoringMode -ProgressBar $progressBar -StatusLabel $null
                 
-                if ($hardwareResult) {
-                    # WICHTIG: Nach Initialize-HardwareMonitoring sind alle Labels auf "werden geladen..."
-                    # Jetzt müssen wir auf die ECHTEN Werte warten!
+                if ($hwMonitorStatus.Available) {
+                    # Hardware-Monitoring verfügbar - initialisiere Timer
+                    $hardwareResult = Initialize-HardwareMonitoring `
+                        -cpuLabel $cpuLabel `
+                        -gpuLabel $gpuLabel `
+                        -ramLabel $ramLabel `
+                        -gbCPU $gbCPU `
+                        -gbGPU $gbGPU `
+                        -gbRAM $gbRAM `
+                        -SuppressVisualFeedback `
+                        -GlobalTooltip $tooltipObj
                     
-                    # Schwellenwerte aus Einstellungen laden
-                    $currentSettings = Get-SystemToolSettings
-                    if ($currentSettings) {
-                        try {
-                            $params = @{}
-                            if ($currentSettings.CpuThreshold) { $params['CpuThreshold'] = [int]$currentSettings.CpuThreshold }
-                            if ($currentSettings.RamThreshold) { $params['RamThreshold'] = [int]$currentSettings.RamThreshold }
-                            if ($currentSettings.GpuThreshold) { $params['GpuThreshold'] = [int]$currentSettings.GpuThreshold }
-                            if ($params.Count -gt 0) {
-                                Set-HardwareThresholds @params
+                    if ($hardwareResult) {
+                        # Schwellenwerte aus Einstellungen laden
+                        $currentSettings = Get-SystemToolSettings
+                        if ($currentSettings) {
+                            try {
+                                $params = @{}
+                                if ($currentSettings.CpuThreshold) { $params['CpuThreshold'] = [int]$currentSettings.CpuThreshold }
+                                if ($currentSettings.RamThreshold) { $params['RamThreshold'] = [int]$currentSettings.RamThreshold }
+                                if ($currentSettings.GpuThreshold) { $params['GpuThreshold'] = [int]$currentSettings.GpuThreshold }
+                                if ($params.Count -gt 0) {
+                                    Set-HardwareThresholds @params
+                                }
+                            }
+                            catch {
+                                Write-Verbose "Hardware-Schwellenwerte konnten nicht gesetzt werden: $_"
                             }
                         }
-                        catch {
-                            Write-Verbose "Hardware-Schwellenwerte konnten nicht gesetzt werden: $_"
-                        }
-                    }
-                    
-                    $script:HardwareMonitoringReady = $true
-                    $initResult.HardwareReady = $true
-                    $initResult.LHMAvailable = $true
-                    
-                    # WICHTIG: Warte auf erste echte Hardware-Werte
-                    # Der Timer existiert jetzt in $script:hardwareTimer und läuft bereits (100ms Interval für ersten Tick)
-                    Update-InitProgress -Value 72 -Text "Warte auf erste Hardware-Werte..."
-                    
-                    try {
-                        # Gib dem System kurz Zeit für die Timer-Initialisierung
-                        Start-Sleep -Milliseconds 50
-                        [System.Windows.Forms.Application]::DoEvents()
                         
-                        # Prüfe ob Timer existiert
-                        if ($null -ne $script:hardwareTimer) {
-                            Write-Verbose "Timer gefunden, warte auf erste Daten..."
+                        $script:HardwareMonitoringReady = $true
+                        
+                        # Kurz warten auf erste Daten (maximal 2 Sekunden)
+                        $startWait = Get-Date
+                        $dataReady = $false
+                        $maxWaitSeconds = 2
+                        
+                        while (-not $dataReady -and ((Get-Date) - $startWait).TotalSeconds -lt $maxWaitSeconds) {
+                            [System.Windows.Forms.Application]::DoEvents()
+                            Start-Sleep -Milliseconds 100
                             
-                            $maxWaitSeconds = 3  # Maximal 3 Sekunden warten (Timer hat 100ms Interval für ersten Tick)
-                            $startWait = Get-Date
-                            $dataReady = $false
-                            $checkInterval = 100  # Alle 100ms prüfen (synchron mit Timer-Interval)
+                            $cpuReady = $cpuLabel -and $cpuLabel.Text -and $cpuLabel.Text -notmatch "werden geladen" -and $cpuLabel.Text.Length -gt 15 -and $cpuLabel.Text -match "\d"
+                            $gpuReady = $gpuLabel -and $gpuLabel.Text -and $gpuLabel.Text -notmatch "werden geladen" -and $gpuLabel.Text.Length -gt 15
+                            $ramReady = $ramLabel -and $ramLabel.Text -and $ramLabel.Text -notmatch "werden geladen" -and $ramLabel.Text.Length -gt 15 -and $ramLabel.Text -match "\d"
                             
-                            while (-not $dataReady -and ((Get-Date) - $startWait).TotalSeconds -lt $maxWaitSeconds) {
-                                $elapsedMs = [math]::Round(((Get-Date) - $startWait).TotalMilliseconds)
-                                $progressValue = 72 + [math]::Min(7, [int]($elapsedMs / 400))  # 72 bis 79 über 3 Sekunden
-                                
-                                Update-InitProgress -Value $progressValue -Text "Warte auf Hardware-Daten... ($elapsedMs ms)"
-                                
-                                # UI Events verarbeiten - wichtig für Timer!
-                                [System.Windows.Forms.Application]::DoEvents()
-                                
-                                # Prüfe Label-Inhalte
-                                $cpuReady = $cpuLabel -and $cpuLabel.Text -and 
-                                           $cpuLabel.Text -notmatch "werden geladen" -and 
-                                           $cpuLabel.Text.Length -gt 15 -and
-                                           $cpuLabel.Text -match "\d"  # Muss Ziffern enthalten
-                                
-                                $gpuReady = $gpuLabel -and $gpuLabel.Text -and 
-                                           $gpuLabel.Text -notmatch "werden geladen" -and 
-                                           $gpuLabel.Text.Length -gt 15
-                                
-                                $ramReady = $ramLabel -and $ramLabel.Text -and 
-                                           $ramLabel.Text -notmatch "werden geladen" -and 
-                                           $ramLabel.Text.Length -gt 15 -and
-                                           $ramLabel.Text -match "\d"  # Muss Ziffern enthalten
-                                
-                                # Mindestens CPU und eines der anderen muss bereit sein
-                                if ($cpuReady -and ($gpuReady -or $ramReady)) {
-                                    $dataReady = $true
-                                    $elapsedSec = [math]::Round($elapsedMs / 1000, 2)
-                                    Write-Verbose "✓ Hardware-Daten nach $elapsedSec Sekunden geladen!"
-                                    Write-Verbose "  CPU: $($cpuLabel.Text)"
-                                    if ($gpuReady) { Write-Verbose "  GPU: $($gpuLabel.Text)" }
-                                    if ($ramReady) { Write-Verbose "  RAM: $($ramLabel.Text)" }
-                                }
-                                else {
-                                    # Kurze Pause vor nächstem Check
-                                    Start-Sleep -Milliseconds $checkInterval
-                                }
+                            if ($cpuReady -and ($gpuReady -or $ramReady)) {
+                                $dataReady = $true
                             }
-                            
-                            if (-not $dataReady) {
-                                $elapsedSec = [math]::Round(((Get-Date) - $startWait).TotalSeconds, 2)
-                                Write-Verbose "⚠ Timeout nach $elapsedSec Sekunden - Daten noch nicht vollständig:"
-                                Write-Verbose "  CPU ($($cpuLabel.Text.Length) Zeichen): '$($cpuLabel.Text)'"
-                                Write-Verbose "  GPU ($($gpuLabel.Text.Length) Zeichen): '$($gpuLabel.Text)'"
-                                Write-Verbose "  RAM ($($ramLabel.Text.Length) Zeichen): '$($ramLabel.Text)'"
-                                # Trotzdem weitermachen - Timer läuft ja
-                            }
-                            
-                            Update-InitProgress -Value 79 -Text "Hardware-Monitor aktiv"
                         }
-                        else {
-                            Write-Verbose "⚠ Hardware-Timer nicht gefunden - überspringe Warten"
-                        }
+                        
+                        # Aktualisiere OutputBox mit Erfolg
+                        $outputBox.SelectionStart = $outputBox.TextLength
+                        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
+                        Add-OutputIcon -OutputBox $outputBox -IconCode 0xE73E
+                        $outputBox.AppendText(" Hardware-Monitoring aktiv`r`n")
+                        $outputBox.ScrollToCaret()
                     }
-                    catch {
-                        Write-Verbose "⚠ Fehler beim Warten auf Hardware-Daten: $_"
+                    else {
+                        $script:HardwareMonitoringReady = $false
+                        $outputBox.SelectionStart = $outputBox.TextLength
+                        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
+                        $outputBox.AppendText("[!] Hardware-Monitoring konnte nicht initialisiert werden`r`n")
+                        $outputBox.ScrollToCaret()
                     }
                 }
                 else {
+                    # Hardware-Monitoring nicht verfügbar
                     $script:HardwareMonitoringReady = $false
+                    $script:HardwareMonitoringMessage = $hwMonitorStatus.Message
+                    
+                    # Hardware-Panels deaktivieren
+                    if ($gbCPU) { 
+                        $gbCPU.Enabled = $false
+                        $gbCPU.BackColor = [System.Drawing.Color]::FromArgb(100, 100, 100)
+                    }
+                    if ($gbGPU) { 
+                        $gbGPU.Enabled = $false
+                        $gbGPU.BackColor = [System.Drawing.Color]::FromArgb(100, 100, 100)
+                    }
+                    if ($gbRAM) { 
+                        $gbRAM.Enabled = $false
+                        $gbRAM.BackColor = [System.Drawing.Color]::FromArgb(100, 100, 100)
+                    }
+                    
+                    # Labels auf "Deaktiviert" setzen
+                    $hwm_message = if ($script:HardwareMonitoringMessage) { $script:HardwareMonitoringMessage } else { "Hardware-Monitoring nicht verfügbar" }
+                    if ($cpuLabel) { 
+                        $cpuLabel.Text = "Hardware-Monitoring deaktiviert"
+                        $cpuLabel.ForeColor = [System.Drawing.Color]::Gray
+                        if ($tooltipObj) { $tooltipObj.SetToolTip($cpuLabel, $hwm_message) }
+                    }
+                    if ($gpuLabel) { 
+                        $gpuLabel.Text = "Hardware-Monitoring deaktiviert"
+                        $gpuLabel.ForeColor = [System.Drawing.Color]::Gray
+                        if ($tooltipObj) { $tooltipObj.SetToolTip($gpuLabel, $hwm_message) }
+                    }
+                    if ($ramLabel) { 
+                        $ramLabel.Text = "Hardware-Monitoring deaktiviert"
+                        $ramLabel.ForeColor = [System.Drawing.Color]::Gray
+                        if ($tooltipObj) { $tooltipObj.SetToolTip($ramLabel, $hwm_message) }
+                    }
+                    
+                    # Aktualisiere OutputBox mit Info
+                    $outputBox.SelectionStart = $outputBox.TextLength
+                    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
+                    $outputBox.AppendText("[i] Hardware-Monitoring deaktiviert`r`n")
+                    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
+                    $outputBox.AppendText("    $($script:HardwareMonitoringMessage)`r`n")
+                    $outputBox.ScrollToCaret()
                 }
+                
+                $progressBar.Value = 0
+                $progressBar.CustomText = "Bereit"
+                $progressBar.TextColor = [System.Drawing.Color]::White
             }
-            else {
-                # Hardware-Monitoring nicht verfügbar - speichere Grund für spätere Anzeige
-                Write-Verbose "Hardware-Monitoring deaktiviert: $($hwMonitorStatus.Message)"
+            catch {
+                Write-Verbose "Hardware-Monitoring-Fehler: $_"
                 $script:HardwareMonitoringReady = $false
-                $script:HardwareMonitoringMessage = $hwMonitorStatus.Message
+                $progressBar.Value = 0
+                $progressBar.CustomText = "Bereit"
+                $progressBar.TextColor = [System.Drawing.Color]::White
+                
+                $outputBox.SelectionStart = $outputBox.TextLength
+                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
+                $outputBox.AppendText("[!] Hardware-Monitoring-Fehler: $_`r`n")
+                $outputBox.ScrollToCaret()
             }
-        }
-        catch {
-            Write-Verbose "Hardware-Monitoring-Fehler: $_"
-            $script:HardwareMonitoringReady = $false
-            $script:HardwareMonitoringMessage = "Fehler beim Initialisieren: $_"
-        }
+        })
         
-        # Hardware-Monitor-Initialisierung abgeschlossen (80%)
+        # Hardware-Monitor-Initialisierung abgeschlossen (markiert als "wird geladen")
         Update-InitProgress -Value 80 -Text "Lade System-Informationen..."
         
         # 4. System-Informationen vorbereiten (85%)
@@ -6639,76 +6857,35 @@ $mainform.Add_Shown({
         $outputBox.AppendText("`t╚═══════════════════════════════════════════════════════════════╝`r`n`r`n")
 
         Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
-        $outputBox.AppendText("[✓] System-Tool wurde erfolgreich gestartet`r`n`r`n")
+        Add-OutputIcon -OutputBox $outputBox -IconCode 0xE73E
+        $outputBox.AppendText(" System-Tool wurde erfolgreich gestartet`r`n`r`n")
         
-        # Init-Ergebnisse anzeigen
-        if ($initResult -and $initResult.HardwareReady) {
-            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
-            $outputBox.AppendText("[✓] Hardware-Monitoring aktiv`r`n")
-        } elseif ($initResult -and $initResult.LHMAvailable) {
-            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
-            $outputBox.AppendText("[⚠] Hardware-Monitoring teilweise verfügbar`r`n")
-        } else {
-            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
-            $outputBox.AppendText("[i] Hardware-Monitoring deaktiviert`r`n")
-            # Zeige Grund für Deaktivierung
-            if ($script:HardwareMonitoringMessage) {
-                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
-                $outputBox.AppendText("    $($script:HardwareMonitoringMessage)`r`n")
-            }
-            
-            # Hardware-Panels deaktivieren wenn HWM nicht verfügbar
-            if ($gbCPU) { 
-                $gbCPU.Enabled = $false
-                $gbCPU.BackColor = [System.Drawing.Color]::FromArgb(100, 100, 100)
-            }
-            if ($gbGPU) { 
-                $gbGPU.Enabled = $false
-                $gbGPU.BackColor = [System.Drawing.Color]::FromArgb(100, 100, 100)
-            }
-            if ($gbRAM) { 
-                $gbRAM.Enabled = $false
-                $gbRAM.BackColor = [System.Drawing.Color]::FromArgb(100, 100, 100)
-            }
-            
-            # Labels auf "Deaktiviert" setzen mit Tooltip-Info
-            $hwm_message = if ($script:HardwareMonitoringMessage) { $script:HardwareMonitoringMessage } else { "Hardware-Monitoring nicht verfügbar" }
-            if ($cpuLabel) { 
-                $cpuLabel.Text = "Hardware-Monitoring deaktiviert"
-                $cpuLabel.ForeColor = [System.Drawing.Color]::Gray
-                if ($tooltipObj) { $tooltipObj.SetToolTip($cpuLabel, $hwm_message) }
-            }
-            if ($gpuLabel) { 
-                $gpuLabel.Text = "Hardware-Monitoring deaktiviert"
-                $gpuLabel.ForeColor = [System.Drawing.Color]::Gray
-                if ($tooltipObj) { $tooltipObj.SetToolTip($gpuLabel, $hwm_message) }
-            }
-            if ($ramLabel) { 
-                $ramLabel.Text = "Hardware-Monitoring deaktiviert"
-                $ramLabel.ForeColor = [System.Drawing.Color]::Gray
-                if ($tooltipObj) { $tooltipObj.SetToolTip($ramLabel, $hwm_message) }
-            }
-        }
+        # Hardware-Monitor Status wird im Hintergrund geladen
+        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
+        Add-OutputIcon -OutputBox $outputBox -IconCode 0xE895
+        $outputBox.AppendText(" Hardware-Monitor wird initialisiert...`r`n`r`n")
         
         $outputBox.AppendText("`r`n")
         Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
-        $outputBox.AppendText("📋 Alle verfügbaren Tools und Funktionen finden Sie im linken Menü.`r`n")
+        Add-OutputIcon -OutputBox $outputBox -IconCode 0xE8A5
+        $outputBox.AppendText(" Alle verfügbaren Tools und Funktionen finden Sie im linken Menü.`r`n")
         $outputBox.AppendText("   Klappen Sie einen Bereich auf, um zu starten!`r`n`r`n")
         
         Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Accent'
-        $outputBox.AppendText("💡 Tipp: `r`n")
+        Add-OutputIcon -OutputBox $outputBox -IconCode 0xE946
+        $outputBox.AppendText(" Tipp: `r`n")
         Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
         $outputBox.AppendText("   • Verwenden Sie den '►' Button, um die Konsole ein-/auszublenden`r`n")
         $outputBox.AppendText("   • Hardware-Monitoring läuft im Hintergrund (siehe Statusleiste)`r`n")
         
         # ═══════════════════════════════════════════════════════════
-        # Hardware-Monitoring initialisieren (wurde bereits in PowerShell-Konsole geprüft)
+        # Konsole verstecken und Hardware-Monitor-Init starten
         # ═══════════════════════════════════════════════════════════
         
-        # Hardware-Monitoring wurde bereits beim Modul-Import geprüft
-        # Hier nur noch Konsole verstecken
-        Start-Sleep -Milliseconds 300
         Hide-ConsoleAutomatically
+        
+        # Starte Hardware-Monitor-Initialisierung im Hintergrund
+        $hwInitTimer.Start()
         
         # ===================================================================
 
@@ -6722,9 +6899,11 @@ $mainform.Add_Shown({
         }
         else {
             Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
-            $outputBox.AppendText("[✓] Das Tool läuft mit Administratorrechten.`r`n")
+            Add-OutputIcon -OutputBox $outputBox -IconCode 0xE73E
+            $outputBox.AppendText(" Das Tool läuft mit Administratorrechten.`r`n")
             Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
-            $outputBox.AppendText("[✓] Alle Funktionen stehen zur Verfügung.`r`n`r`n")
+            Add-OutputIcon -OutputBox $outputBox -IconCode 0xE73E
+            $outputBox.AppendText(" Alle Funktionen stehen zur Verfügung.`r`n`r`n")
         }
         try {
             # Sicherstellen, dass das Hauptfenster aktiviert und fokussiert ist
@@ -6800,9 +6979,11 @@ $mainform.Add_Shown({
 
                         if ($outputBox) {
                             Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
-                            $outputBox.AppendText("[⚠] Neue GUI-Version verfügbar: $availableVersionText`r`n")
+                            Add-OutputIcon -OutputBox $outputBox -IconCode 0xE7BA
+                            $outputBox.AppendText(" Neue GUI-Version verfügbar: $availableVersionText`r`n")
                             Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
-                            $outputBox.AppendText("    Öffnen Sie '🔍 Abhängigkeiten', um Update oder Downgrade auszuwählen.`r`n`r`n")
+                            Add-OutputIcon -OutputBox $outputBox -IconCode 0xE721
+                            $outputBox.AppendText(" Öffnen Sie 'Abhängigkeiten', um Update oder Downgrade auszuwählen.`r`n`r`n")
                         }
 
                         if ($statusLabel) {
@@ -6934,8 +7115,6 @@ Switch-SystemControls
 Switch-NetworkControls
 
 # Initialisiere Bereinigungs-Controls
-# WICHTIG: Konsole NICHT mehr sofort ausblenden!
-# Wird jetzt erst nach vollständiger GUI-Initialisierung im Add_Shown Event versteckt
 
 # Update Toggle-Button Status (initial auf "Versteckt"-Symbol)
 if ($btnToggleConsole) {
@@ -7115,6 +7294,7 @@ try {
 # YyKNcb+HLXv5YRdKfIIqqa+B6DBOZyfjNhFHwrTqq8oIU0LFn0Azy7KgyhL50Jq4
 # l+HJ+GdN9Loq4LF/M1igCdJu8Xr+jRRS+rIN+rK7K+zTTamLn0ttCuFe14gUeA==
 # SIG # End signature block
+
 
 
 
