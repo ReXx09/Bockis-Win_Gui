@@ -79,12 +79,13 @@ $script:toolLibrary['system'] = @(
     },
     @{
         Name        = 'PawnIO'
-        Description = 'Ring0-Treiber für Hardware-Monitoring (benötigt für LibreHardwareMonitor)'
+        Description = '⚠ Systemtreiber – Pflichtkomponente für Hardware-Monitoring. Nicht deinstallieren!'
         Version     = '2.0.1'
         DownloadUrl = 'https://github.com/namazso/PawnIO.Setup/releases/download/2.0.1/PawnIO_setup.exe'
         Category    = 'System-Tools'
         Tags        = @('Driver', 'Ring0', 'Hardware', 'Monitoring', 'PawnIO')
         Winget      = 'namazso.PawnIO'
+        Protected   = $true  # Pflichtabhängigkeit – Deinstallation über UI gesperrt
     },
     @{
         Name        = 'UniGetUI'
@@ -1493,10 +1494,10 @@ $script:toolResourceDictionary = @{
     ToolTileMargins             = New-Object Windows.Thickness(5)
     ToolTileFontSize            = 14
     ToolTileBorderThickness     = New-Object Windows.Thickness(1)
-    ToolTileWidth               = 360
-    ToolTileWidthLarge          = 240
-    ToolTileWidthMedium         = 360
-    ToolTileWidthList           = 730
+    ToolTileWidth               = 350
+    ToolTileWidthLarge          = 230
+    ToolTileWidthMedium         = 350
+    ToolTileWidthList           = 720
     ToolInstallUnselectedColor  = [Windows.Media.Brushes]::White
     ToolInstallHighlightedColor = [Windows.Media.Brushes]::LightGray
     MainForegroundColor         = [Windows.Media.Brushes]::Black
@@ -2336,6 +2337,18 @@ function Initialize-ToolEntry {
         $uninstallButton.ToolTip = "Mit Winget deinstallieren"
         $uninstallButton.Add_Click({
                 $toolInfo = $this.Parent.Parent.Parent.Tag
+
+                # Geschützte Pflichtkomponenten dürfen nicht über die UI deinstalliert werden
+                if ($toolInfo.Protected -eq $true) {
+                    [System.Windows.Forms.MessageBox]::Show(
+                        "'$($toolInfo.Name)' ist eine Pflichtkomponente des Systems und kann nicht über die Tool-Bibliothek deinstalliert werden.`n`nDieses Paket wird für das Hardware-Monitoring benötigt. Eine Deinstallation würde die GUI-Kernfunktionen beschädigen.",
+                        "Deinstallation gesperrt",
+                        [System.Windows.Forms.MessageBoxButtons]::OK,
+                        [System.Windows.Forms.MessageBoxIcon]::Warning
+                    ) | Out-Null
+                    return
+                }
+
                 $result = [System.Windows.Forms.MessageBox]::Show(
                     "Möchten Sie $($toolInfo.Name) wirklich deinstallieren?",
                     "Deinstallation bestätigen",

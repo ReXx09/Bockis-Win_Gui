@@ -12,3 +12,10 @@ Disk Cleanup durchgeführt: 03.02.2026 18:44:12
 Entfernte Dateien: 334, Freigegebener Speicher: 21,77 MB
 Übersprungene Dateien: 0
 
+Entfernte Dateien: 0, Freigegebener Speicher: 0 Bytes
+
+
+Disk Cleanup durchgeführt: 25.02.2026 16:00:54
+Entfernte Dateien: 519, Freigegebener Speicher: 12,33 MB
+Übersprungene Dateien: 0
+

@@ -1,14 +1,14 @@
 ﻿# Win_Gui_Module.ps1 - Hauptskript für die PowerShell-GUI
 # Autor: Bocki
-# Version: 4.1.6
+# Version: 4.1.8
 
 # ===================================================================
 # VERSIONS-INFORMATION
 # ===================================================================
-$script:AppVersion = "4.1.6"
+$script:AppVersion = "4.1.8"
 $script:AppName = "Bockis System-Tool"
 $script:AppPublisher = "Bockis"
-$script:VersionDate = "2026-02-14"
+$script:VersionDate = "2026-03-03"
 # WinForms-Assemblies laden
 Add-Type -AssemblyName System.Drawing
 Add-Type -AssemblyName System.Windows.Forms
@@ -263,7 +263,6 @@ function Initialize-SystemDatabase {
         $script:dbConnection = Initialize-Database
         
         if ($script:dbConnection) {
-            # Die Meldung wird jetzt in der GUI-Initialisierung angezeigt
             # Write-Host "Datenbankverbindung erfolgreich initialisiert" -ForegroundColor Green
             return $true
         }
@@ -279,7 +278,6 @@ function Initialize-SystemDatabase {
 }
 
 # Laden der Einstellungen aus der Konfigurationsdatei, falls vorhanden
-# HINWEIS: Diese Funktion wird nach dem Laden der Module aufgerufen
 function Import-Settings {
     $settingsFilePath = "$PSScriptRoot\config.json"
 
@@ -2143,14 +2141,14 @@ function New-HorizontalCollapsiblePanel {
     # Container für den gesamten zusammenklappbaren Bereich
     $container = New-Object System.Windows.Forms.Panel
     $container.Location = New-Object System.Drawing.Point($XPosition, 5)
-    $container.Size = New-Object System.Drawing.Size(160, 35)  # Höhe 35px für horizontal
+    $container.Size = New-Object System.Drawing.Size(155, 35)  # Höhe 35px für horizontal
     $container.BackColor = [System.Drawing.Color]::Transparent
     $container.Tag = $Tag
     
     # Header-Button
     $headerBtn = New-Object System.Windows.Forms.Button
     $headerBtn.Text = $Title
-    $headerBtn.Size = New-Object System.Drawing.Size(160, 35)
+    $headerBtn.Size = New-Object System.Drawing.Size(155, 35)
     $headerBtn.Location = New-Object System.Drawing.Point(0, 0)
     $headerBtn.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
     $headerBtn.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
@@ -2181,7 +2179,7 @@ function New-HorizontalCollapsiblePanel {
     $arrowLabel = New-Object System.Windows.Forms.Label
     $arrowLabel.Text = "►"
     $arrowLabel.Size = New-Object System.Drawing.Size(15, 20)
-    $arrowLabel.Location = New-Object System.Drawing.Point(140, 7.5)
+    $arrowLabel.Location = New-Object System.Drawing.Point(135, 7.5)
     $arrowLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
     $arrowLabel.BackColor = [System.Drawing.Color]::Transparent
     $arrowLabel.ForeColor = [System.Drawing.Color]::White
@@ -2195,7 +2193,7 @@ function New-HorizontalCollapsiblePanel {
     
     # Content-Panel (zunächst versteckt, erscheint rechts neben dem Button)
     $contentPanel = New-Object System.Windows.Forms.Panel
-    $contentPanel.Location = New-Object System.Drawing.Point(160, 0)  # Rechts neben Header
+    $contentPanel.Location = New-Object System.Drawing.Point(155, 0)  # Rechts neben Header
     $contentPanel.Size = New-Object System.Drawing.Size(525, 35)  # 3 Buttons horizontal (175×3)
     $contentPanel.BackColor = [System.Drawing.Color]::FromArgb(30, 30, 30)
     $contentPanel.Visible = $false
@@ -2219,7 +2217,7 @@ function New-HorizontalCollapsiblePanel {
                         $otherHeader.Tag = "collapsed"
                         $otherHeader.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
                         $otherContent.Visible = $false
-                        $ctrl.Width = 150
+                        $ctrl.Width = 155
                     }
                 }
             }
@@ -2243,7 +2241,7 @@ function New-HorizontalCollapsiblePanel {
             $contentPnl.Visible = $true
             
             # Container-Breite anpassen (Höhe bleibt 35px)
-            $this.Parent.Width = 150 + $contentPnl.Width
+            $this.Parent.Width = 155 + $contentPnl.Width
             
             # WICHTIG: Alle Panels rechts davon nach rechts verschieben
             $currentPanel = $this.Parent
@@ -2274,8 +2272,8 @@ function New-HorizontalCollapsiblePanel {
             
             $contentPnl = $this.Parent.Controls[1]
             $contentPnl.Visible = $false
-            # Container-Höhe bleibt bei 105px (für vertikale Buttons)
-            $this.Parent.Width = 150
+            # Container-Breite auf Header-Button-Breite zurücksetzen
+            $this.Parent.Width = 155
             
             # WICHTIG: Panels neu positionieren
             $currentX = 10
@@ -3459,13 +3457,13 @@ $infoHorizontalPanel = New-HorizontalCollapsiblePanel -Title "Informationen" -XP
 }
 
 # Setze Content-Panel-Größe für 3 Buttons nebeneinander
-$infoHorizontalPanel.Content.Width = 450  # 3 Buttons × 150px
+$infoHorizontalPanel.Content.Width = 435  # 3 Buttons × 145px
 $infoHorizontalPanel.Content.Height = 35
 
 # Erstelle die Info-Buttons horizontal im Content-Panel
 $btnStatusInfoH = New-Object System.Windows.Forms.Button
 $btnStatusInfoH.Text = "Status-Info"
-$btnStatusInfoH.Size = New-Object System.Drawing.Size(150, 35)
+$btnStatusInfoH.Size = New-Object System.Drawing.Size(145, 35)
 $btnStatusInfoH.Location = New-Object System.Drawing.Point(0, 0)
 $btnStatusInfoH.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 $btnStatusInfoH.FlatAppearance.BorderSize = 0
@@ -3508,8 +3506,8 @@ $infoHorizontalPanel.Content.Controls.Add($btnStatusInfoH)
 
 $btnHardwareInfoH = New-Object System.Windows.Forms.Button
 $btnHardwareInfoH.Text = "Hardware-Info"
-$btnHardwareInfoH.Size = New-Object System.Drawing.Size(150, 35)
-$btnHardwareInfoH.Location = New-Object System.Drawing.Point(150, 0)
+$btnHardwareInfoH.Size = New-Object System.Drawing.Size(145, 35)
+$btnHardwareInfoH.Location = New-Object System.Drawing.Point(145, 0)
 $btnHardwareInfoH.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 $btnHardwareInfoH.FlatAppearance.BorderSize = 0
 $btnHardwareInfoH.FlatAppearance.MouseOverBackColor = [System.Drawing.Color]::FromArgb(55, 55, 55)
@@ -3545,8 +3543,8 @@ $infoHorizontalPanel.Content.Controls.Add($btnHardwareInfoH)
 
 $btnToolInfoH = New-Object System.Windows.Forms.Button
 $btnToolInfoH.Text = "Tool-Info"
-$btnToolInfoH.Size = New-Object System.Drawing.Size(150, 35)
-$btnToolInfoH.Location = New-Object System.Drawing.Point(300, 0)
+$btnToolInfoH.Size = New-Object System.Drawing.Size(145, 35)
+$btnToolInfoH.Location = New-Object System.Drawing.Point(290, 0)
 $btnToolInfoH.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 $btnToolInfoH.FlatAppearance.BorderSize = 0
 $btnToolInfoH.FlatAppearance.MouseOverBackColor = [System.Drawing.Color]::FromArgb(55, 55, 55)
@@ -3578,7 +3576,7 @@ $infoHorizontalPanel.Content.Controls.Add($btnToolInfoH)
 $mainContentPanel.Controls.Add($infoHorizontalPanel.Container)
 
 # Erstelle horizontales Collapsible Panel für Problembehandlung (rechts neben Informationen)
-$troubleshootHorizontalPanel = New-HorizontalCollapsiblePanel -Title "Support" -XPosition 175 -Tag "troubleshootHorizontalPanel" -ParentPanel $mainContentPanel -IconCode 0xE897 -OnExpand {
+$troubleshootHorizontalPanel = New-HorizontalCollapsiblePanel -Title "Support" -XPosition 170 -Tag "troubleshootHorizontalPanel" -ParentPanel $mainContentPanel -IconCode 0xE897 -OnExpand {
     if ($outputViewPanel) { $outputViewPanel.Visible = $true }
     if ($statusViewPanel) { $statusViewPanel.Visible = $false }
     if ($hardwareViewPanel) { $hardwareViewPanel.Visible = $false }
@@ -3603,13 +3601,13 @@ $troubleshootHorizontalPanel = New-HorizontalCollapsiblePanel -Title "Support" -
 }
 
 # Setze Content-Panel-Breite für 1 Button
-$troubleshootHorizontalPanel.Content.Width = 210
+$troubleshootHorizontalPanel.Content.Width = 205
 $troubleshootHorizontalPanel.Content.Height = 35
 
-# Button: Abhängigkeiten prüfen
+# Button: Status prüfen
 $btnCheckDependenciesH = New-Object System.Windows.Forms.Button
-$btnCheckDependenciesH.Text = "Abhängigkeiten"
-$btnCheckDependenciesH.Size = New-Object System.Drawing.Size(150, 35)
+$btnCheckDependenciesH.Text = "Status prüfen"
+$btnCheckDependenciesH.Size = New-Object System.Drawing.Size(145, 35)
 $btnCheckDependenciesH.Location = New-Object System.Drawing.Point(0, 0)
 $btnCheckDependenciesH.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 $btnCheckDependenciesH.FlatAppearance.BorderSize = 0
@@ -3619,6 +3617,17 @@ $btnCheckDependenciesH.ForeColor = [System.Drawing.Color]::White
 $btnCheckDependenciesH.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
 $btnCheckDependenciesH.Cursor = [System.Windows.Forms.Cursors]::Hand
 Add-ButtonIcon -Button $btnCheckDependenciesH -IconCode 0xE721 -IconSize 12 -LeftMargin 10
+
+# Runde Ecken für Button (8px Radius)
+try {
+    $regionHandle = [RoundedCorners]::CreateRoundRectRgn(0, 0, $btnCheckDependenciesH.Width, $btnCheckDependenciesH.Height, 8, 8)
+    if ($regionHandle -ne [IntPtr]::Zero) {
+        $btnCheckDependenciesH.Region = [System.Drawing.Region]::FromHrgn($regionHandle)
+    }
+} catch {
+    # Falls runde Ecken nicht funktionieren, einfach ohne weitermachen
+}
+
 $btnCheckDependenciesH.Add_Click({
     $updateDependencyProgress = {
         param(
@@ -3753,7 +3762,7 @@ $btnCheckDependenciesH.Add_Click({
 
                 $headerPanel = New-Object System.Windows.Forms.Panel
                 $headerPanel.Location = New-Object System.Drawing.Point(0, 0)
-                $headerPanel.Size = New-Object System.Drawing.Size(780, 28)
+                $headerPanel.Size = New-Object System.Drawing.Size(745, 28)
                 $headerPanel.BackColor = [System.Drawing.Color]::FromArgb(45, 45, 45)
 
                 $headerName = New-Object System.Windows.Forms.Label
@@ -3783,7 +3792,7 @@ $btnCheckDependenciesH.Add_Click({
                 $headerAction = New-Object System.Windows.Forms.Label
                 $headerAction.Text = "Aktion"
                 $headerAction.Location = New-Object System.Drawing.Point(570, 6)
-                $headerAction.Size = New-Object System.Drawing.Size(180, 18)
+                $headerAction.Size = New-Object System.Drawing.Size(158, 18)
                 $headerAction.ForeColor = [System.Drawing.Color]::White
                 $headerAction.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
                 $headerPanel.Controls.Add($headerAction)
@@ -3794,7 +3803,7 @@ $btnCheckDependenciesH.Add_Click({
                 foreach ($dep in $depResult.Dependencies) {
                     $rowPanel = New-Object System.Windows.Forms.Panel
                     $rowPanel.Location = New-Object System.Drawing.Point(0, $rowY)
-                    $rowPanel.Size = New-Object System.Drawing.Size(780, 32)
+                    $rowPanel.Size = New-Object System.Drawing.Size(745, 32)
 
                     $isError = ($dep.StatusColor -eq "Red")
                     $isWarning = ($dep.StatusColor -eq "Yellow")
@@ -3846,7 +3855,7 @@ $btnCheckDependenciesH.Add_Click({
 
                     $actionButton = New-Object System.Windows.Forms.Button
                     $actionButton.Location = New-Object System.Drawing.Point(570, 4)
-                    $actionButton.Size = New-Object System.Drawing.Size(180, 24)
+                    $actionButton.Size = New-Object System.Drawing.Size(158, 24)
                     $actionButton.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
                     $actionButton.FlatAppearance.BorderSize = 0
                     $actionButton.Font = New-Object System.Drawing.Font("Segoe UI", 8.5, [System.Drawing.FontStyle]::Bold)
@@ -3866,6 +3875,24 @@ $btnCheckDependenciesH.Add_Click({
                     }
                     elseif ($dep.Name -eq "App Installer (winget)" -and $dep.Found) {
                         # App Installer: Store-Paket, keine Downgrade-Funktion
+                        $actionButton.Text = "Vorhanden"
+                        $actionButton.BackColor = [System.Drawing.Color]::FromArgb(70, 70, 70)
+                        $actionButton.ForeColor = [System.Drawing.Color]::Silver
+                        $actionButton.Enabled = $false
+                    }
+                    elseif ($dep.Name -eq "LibreHardwareMonitor DLL" -and $dep.UpdateAvailable) {
+                        $actionButton.Text = "Aktualisieren"
+                        $actionButton.BackColor = [System.Drawing.Color]::FromArgb(52, 152, 219)
+                        $actionButton.ForeColor = [System.Drawing.Color]::White
+                        $actionButton.Tag = @{ Dependency = $dep; Action = "lhm-update" }
+                    }
+                    elseif ($dep.Name -eq "LibreHardwareMonitor DLL" -and -not $dep.Found) {
+                        $actionButton.Text = "Herunterladen"
+                        $actionButton.BackColor = [System.Drawing.Color]::FromArgb(46, 204, 113)
+                        $actionButton.ForeColor = [System.Drawing.Color]::White
+                        $actionButton.Tag = @{ Dependency = $dep; Action = "lhm-update" }
+                    }
+                    elseif ($dep.Name -eq "LibreHardwareMonitor DLL") {
                         $actionButton.Text = "Vorhanden"
                         $actionButton.BackColor = [System.Drawing.Color]::FromArgb(70, 70, 70)
                         $actionButton.ForeColor = [System.Drawing.Color]::Silver
@@ -3906,6 +3933,7 @@ $btnCheckDependenciesH.Add_Click({
                             "upgrade" { "Aktualisierung" }
                             "gui-release-select" { "Versionswechsel" }
                             "winget-version-select" { "Versionswechsel" }
+                            "lhm-update" { "DLL-Update" }
                             default { "Installation" }
                         }
                         $this.Enabled = $false
@@ -3913,6 +3941,7 @@ $btnCheckDependenciesH.Add_Click({
                             "upgrade" { "Aktualisiere..." }
                             "gui-release-select" { "Suche Version..." }
                             "winget-version-select" { "Suche Version..." }
+                            "lhm-update" { "Lade DLL..." }
                             default { "Installiere..." }
                         }
                         [System.Windows.Forms.Application]::DoEvents()
@@ -3962,6 +3991,26 @@ $btnCheckDependenciesH.Add_Click({
                             elseif ($actionType -eq "upgrade") {
                                 $actionResult = Invoke-DependencyAction -WingetId $depToHandle.WingetId -Action 'upgrade' -ProgressCallback $uiProgressCallback -LogCallback $uiLogCallback
                             }
+                            elseif ($actionType -eq "lhm-update") {
+                                $lhmLibPath = $depToHandle.LhmLibPath
+                                if (-not $lhmLibPath) { $lhmLibPath = Join-Path $PSScriptRoot "Lib" }
+                                $lhmTargetVer = if ($depToHandle.LhmTargetVersion) { $depToHandle.LhmTargetVersion } else { "0.9.6" }
+                                & $uiProgressCallback -Value 10 -Text "Starte DLL-Update auf v$lhmTargetVer..."
+                                $lhmRaw = Update-LibreHardwareMonitorDll -LibPath $lhmLibPath -TargetVersion $lhmTargetVer -ProgressCallback $uiProgressCallback
+                                $actionResult = @{
+                                    Success      = $lhmRaw.Success
+                                    ErrorMessage = $lhmRaw.ErrorMessage
+                                    Message      = if ($lhmRaw.Success) { "DLL auf v$($lhmRaw.NewVersion) vorbereitet. Bitte System neu starten." } else { $lhmRaw.ErrorMessage }
+                                }
+                                if ($lhmRaw.Success) {
+                                    [System.Windows.Forms.MessageBox]::Show(
+                                        "LibreHardwareMonitorLib.dll v$($lhmRaw.NewVersion) wurde heruntergeladen.`n`nDer Austausch der gesperrten DLL erfolgt automatisch beim nächsten Windows-Start (via RunOnce).`n`nBitte Windows neu starten, um das Update abzuschließen.",
+                                        "Neustart erforderlich",
+                                        [System.Windows.Forms.MessageBoxButtons]::OK,
+                                        [System.Windows.Forms.MessageBoxIcon]::Information
+                                    ) | Out-Null
+                                }
+                            }
                             else {
                                 $actionResult = Invoke-DependencyAction -WingetId $depToHandle.WingetId -Action 'install' -ProgressCallback $uiProgressCallback -LogCallback $uiLogCallback
                             }
@@ -3974,6 +4023,10 @@ $btnCheckDependenciesH.Add_Click({
                                 elseif ($actionType -eq "winget-version-select") {
                                     $this.Text = "Version wählen"
                                     $this.BackColor = [System.Drawing.Color]::FromArgb(156, 39, 176)
+                                }
+                                elseif ($actionType -eq "lhm-update") {
+                                    $this.Text = "Aktualisieren"
+                                    $this.BackColor = [System.Drawing.Color]::FromArgb(52, 152, 219)
                                 }
                                 else {
                                     $this.Text = "Erneut versuchen"
@@ -4006,6 +4059,10 @@ $btnCheckDependenciesH.Add_Click({
                                     $this.Text = "Version wählen"
                                     $this.BackColor = [System.Drawing.Color]::FromArgb(156, 39, 176)
                                 }
+                                elseif ($actionType -eq "lhm-update") {
+                                    $this.Text = "Erneut versuchen"
+                                    $this.BackColor = [System.Drawing.Color]::FromArgb(231, 76, 60)
+                                }
                                 else {
                                     $this.Text = "Erneut versuchen"
                                     $this.BackColor = [System.Drawing.Color]::FromArgb(231, 76, 60)
@@ -4023,6 +4080,10 @@ $btnCheckDependenciesH.Add_Click({
                             elseif ($actionType -eq "winget-version-select") {
                                 $this.Text = "Version wählen"
                                 $this.BackColor = [System.Drawing.Color]::FromArgb(156, 39, 176)
+                            }
+                            elseif ($actionType -eq "lhm-update") {
+                                $this.Text = "Erneut versuchen"
+                                $this.BackColor = [System.Drawing.Color]::FromArgb(231, 76, 60)
                             }
                             else {
                                 $this.Text = "Erneut versuchen"
@@ -5409,7 +5470,7 @@ $btnFullMRT = New-Object System.Windows.Forms.Button
 $btnFullMRT.Name = "btnFullMRT"
 $btnFullMRT.Text = "MRT Full Scan"
 $btnFullMRT.Size = New-Object System.Drawing.Size(155, 35)  # Breite an Unterkategorie-Buttons angepasst
-$btnFullMRT.Location = New-Object System.Drawing.Point(215, 5)  # 5px vom oberen Rand
+$btnFullMRT.Location = New-Object System.Drawing.Point(180, 5)  # 5px vom oberen Rand
 $btnFullMRT.BackColor = $script:btnSubNavColor
 $btnFullMRT.ForeColor = [System.Drawing.Color]::White
 $btnFullMRT.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
@@ -5541,7 +5602,7 @@ $btnWinUpdate = New-Object System.Windows.Forms.Button
 $btnWinUpdate.Name = "btnWinUpdate"
 $btnWinUpdate.Text = "Windows Update"
 $btnWinUpdate.Size = New-Object System.Drawing.Size(155, 35)  # Breite an Unterkategorie-Buttons angepasst
-$btnWinUpdate.Location = New-Object System.Drawing.Point(215, 5)  # Position nach links verschoben (CMD-Admin entfernt)
+$btnWinUpdate.Location = New-Object System.Drawing.Point(180, 5)  # Position nach links verschoben (CMD-Admin entfernt)
 $btnWinUpdate.BackColor = $script:btnSubNavColor
 $btnWinUpdate.ForeColor = [System.Drawing.Color]::White
 $btnWinUpdate.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
@@ -5653,7 +5714,7 @@ $btnScanDISM = New-Object System.Windows.Forms.Button
 $btnScanDISM.Name = "btnScanDISM"
 $btnScanDISM.Text = "DISM Scan"
 $btnScanDISM.Size = New-Object System.Drawing.Size(155, 35)  # Breite an Unterkategorie-Buttons angepasst
-$btnScanDISM.Location = New-Object System.Drawing.Point(215, 5)  # 5px vom oberen Rand
+$btnScanDISM.Location = New-Object System.Drawing.Point(180, 5)  # 5px vom oberen Rand
 $btnScanDISM.BackColor = $script:btnSubNavColor
 $btnScanDISM.ForeColor = [System.Drawing.Color]::White
 $btnScanDISM.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
@@ -5705,7 +5766,7 @@ $btnCHKDSK = New-Object System.Windows.Forms.Button
 $btnCHKDSK.Name = "btnCHKDSK"
 $btnCHKDSK.Text = "CHKDSK"
 $btnCHKDSK.Size = New-Object System.Drawing.Size(155, 35)  # Breite an Unterkategorie-Buttons angepasst
-$btnCHKDSK.Location = New-Object System.Drawing.Point(215, 5)  # 5px vom oberen Rand
+$btnCHKDSK.Location = New-Object System.Drawing.Point(180, 5)  # 5px vom oberen Rand
 $btnCHKDSK.BackColor = $script:btnSubNavColor
 $btnCHKDSK.ForeColor = [System.Drawing.Color]::White
 $btnCHKDSK.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
@@ -5801,7 +5862,7 @@ $btnTempFiles = New-Object System.Windows.Forms.Button
 $btnTempFiles.Name = "btnTempFiles"
 $btnTempFiles.Text = "Custom-Cleanup"
 $btnTempFiles.Size = New-Object System.Drawing.Size(155, 35)  # Breite an Unterkategorie-Buttons angepasst
-$btnTempFiles.Location = New-Object System.Drawing.Point(215, 5)  # 5px vom oberen Rand
+$btnTempFiles.Location = New-Object System.Drawing.Point(180, 5)  # 5px vom oberen Rand
 $btnTempFiles.BackColor = $script:btnSubNavColor
 $btnTempFiles.ForeColor = [System.Drawing.Color]::White
 $btnTempFiles.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
@@ -6983,14 +7044,14 @@ $mainform.Add_Shown({
                             $outputBox.AppendText(" Neue GUI-Version verfügbar: $availableVersionText`r`n")
                             Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
                             Add-OutputIcon -OutputBox $outputBox -IconCode 0xE721
-                            $outputBox.AppendText(" Öffnen Sie 'Abhängigkeiten', um Update oder Downgrade auszuwählen.`r`n`r`n")
+                            $outputBox.AppendText(" Öffnen Sie 'Status prüfen', um Update oder Downgrade auszuwählen.`r`n`r`n")
                         }
 
                         if ($statusLabel) {
                             $statusLabel.Text = "Status: Neue GUI-Version verfügbar ($availableVersionText) | " + (Get-Date -Format "dd.MM.yyyy HH:mm")
                         }
 
-                        $dialogText = "Eine neue GUI-Version ist verfügbar ($availableVersionText).`r`n`r`nJetzt die Abhängigkeiten öffnen?"
+                        $dialogText = "Eine neue GUI-Version ist verfügbar ($availableVersionText).`r`n`r`nJetzt 'Status prüfen' öffnen?"
                         $dialogResult = [System.Windows.Forms.MessageBox]::Show(
                             $dialogText,
                             "Neue Version verfügbar",

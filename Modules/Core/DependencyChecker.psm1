@@ -11,12 +11,14 @@ Import-Module "$PSScriptRoot\LogManager.psm1" -Force -ErrorAction SilentlyContin
 function Update-LibreHardwareMonitorDll {
     <#
     .SYNOPSIS
-        Aktualisiert LibreHardwareMonitorLib.dll auf v0.9.5
+        Aktualisiert LibreHardwareMonitorLib.dll auf v0.9.6
     .DESCRIPTION
-        Lädt v0.9.5 von NuGet herunter, erstellt Backup und ersetzt die alte DLL.
+        Lädt v0.9.6 von NuGet herunter, erstellt Backup und ersetzt die alte DLL.
         v0.9.5+ nutzt PawnIO statt Winring0 (keine Defender-Alarme mehr).
     .PARAMETER LibPath
         Pfad zum Lib-Ordner
+    .PARAMETER TargetVersion
+        Zielversion (Standard: 0.9.6)
     .PARAMETER ProgressCallback
         Callback-Funktion für Fortschrittsanzeige (Scriptblock mit $Progress, $Text)
     .OUTPUTS
@@ -25,6 +27,9 @@ function Update-LibreHardwareMonitorDll {
     param(
         [Parameter(Mandatory=$true)]
         [string]$LibPath,
+        
+        [Parameter(Mandatory=$false)]
+        [string]$TargetVersion = "0.9.6",
         
         [Parameter(Mandatory=$false)]
         [scriptblock]$ProgressCallback
@@ -41,20 +46,21 @@ function Update-LibreHardwareMonitorDll {
         $targetDll = Join-Path $LibPath "LibreHardwareMonitorLib.dll"
         $backupDll = Join-Path $LibPath "LibreHardwareMonitorLib.dll.old"
         $tempPath = [System.IO.Path]::GetTempPath()
-        $extractFolder = Join-Path $tempPath "LibreHardwareMonitorLib-0.9.5"
+        $extractFolder = Join-Path $tempPath "LibreHardwareMonitorLib-$TargetVersion"
         $sourceDll = Join-Path $extractFolder "runtimes\win-x64\lib\net472\LibreHardwareMonitorLib.dll"
         
-        # Prüfe ob v0.9.5 bereits im Temp liegt
+        # Prüfe ob Zielversion bereits im Temp liegt
         if (Test-Path $sourceDll) {
-            if ($ProgressCallback) { & $ProgressCallback 60 "v0.9.5 in Cache gefunden..." }
-            Write-Verbose "✓ v0.9.5 bereits im Cache"
+            if ($ProgressCallback) { & $ProgressCallback 60 "v$TargetVersion in Cache gefunden..." }
+            Write-Verbose "✓ v$TargetVersion bereits im Cache"
         }
         else {
             # Download von NuGet
-            if ($ProgressCallback) { & $ProgressCallback 55 "Lade v0.9.5 von NuGet..." }
+            if ($ProgressCallback) { & $ProgressCallback 55 "Lade v$TargetVersion von NuGet..." }
             
-            $nugetUrl = "https://www.nuget.org/api/v2/package/LibreHardwareMonitorLib/0.9.5"
-            $zipPath = Join-Path $tempPath "LibreHardwareMonitorLib-0.9.5.nupkg"
+            $nugetUrl = "https://www.nuget.org/api/v2/package/LibreHardwareMonitorLib/$TargetVersion"
+            # .nupkg als .zip speichern – Expand-Archive akzeptiert nur .zip-Extension
+            $zipPath = Join-Path $tempPath "LibreHardwareMonitorLib-$TargetVersion.zip"
             
             # Download
             $webClient = New-Object System.Net.WebClient
@@ -64,7 +70,7 @@ function Update-LibreHardwareMonitorDll {
             
             if ($ProgressCallback) { & $ProgressCallback 58 "Entpacke Paket..." }
             
-            # Entpacken
+            # Entpacken (.nupkg ist intern ein ZIP)
             if (Test-Path $extractFolder) {
                 Remove-Item $extractFolder -Recurse -Force
             }
@@ -73,44 +79,57 @@ function Update-LibreHardwareMonitorDll {
             # Cleanup
             Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
             
-            Write-Verbose "✓ v0.9.5 von NuGet geladen"
+            Write-Verbose "✓ v$TargetVersion von NuGet geladen"
         }
         
         # Prüfe ob Source-DLL existiert
         if (-not (Test-Path $sourceDll)) {
-            throw "v0.9.5 DLL nicht gefunden nach Download: $sourceDll"
+            throw "v$TargetVersion DLL nicht gefunden nach Download: $sourceDll"
         }
         
-        # Version der Source prüfen
+        # Version der Source prüfen (mind. Major.Minor muss übereinstimmen)
         $sourceVersion = (Get-Item $sourceDll).VersionInfo.ProductVersion
-        if (-not $sourceVersion.StartsWith("0.9.5")) {
-            throw "Heruntergeladene DLL ist nicht v0.9.5: $sourceVersion"
+        $targetMajorMinor = ($TargetVersion -split '\.')[0..1] -join '.'
+        if (-not $sourceVersion.StartsWith($targetMajorMinor)) {
+            throw "Heruntergeladene DLL hat unerwartete Version: $sourceVersion (erwartet: $TargetVersion)"
         }
         
-        if ($ProgressCallback) { & $ProgressCallback 62 "Erstelle Backup..." }
+        if ($ProgressCallback) { & $ProgressCallback 62 "Speichere neue DLL..." }
         
-        # Backup erstellen
-        if (Test-Path $targetDll) {
-            Copy-Item $targetDll $backupDll -Force
-            Write-Verbose "✓ Backup erstellt"
-        }
+        # DLL ist von der laufenden Anwendung gesperrt – direkt überschreiben nicht möglich.
+        # Strategie: neue DLL als .new ablegen + Batch via RunOnce für nächsten Start registrieren.
+        $newDllStaging = Join-Path $LibPath "LibreHardwareMonitorLib.dll.new"
+        Copy-Item $sourceDll $newDllStaging -Force
+        Write-Verbose "✓ Neue DLL als .new abgelegt: $newDllStaging"
         
-        if ($ProgressCallback) { & $ProgressCallback 65 "Ersetze DLL..." }
+        if ($ProgressCallback) { & $ProgressCallback 75 "Registriere Update für nächsten Start..." }
         
-        # DLL ersetzen
-        Copy-Item $sourceDll $targetDll -Force
+        # Batch-Skript erstellen das beim nächsten Start den Tausch durchführt
+        $updateScript = Join-Path $LibPath "_update_lhm_dll.cmd"
+        $batchContent = @'
+@echo off
+:: LibreHardwareMonitorLib DLL-Update (automatisch generiert von Bockis System-Tool)
+timeout /t 3 /nobreak > nul
+if exist "%~dp0LibreHardwareMonitorLib.dll" (
+    move /y "%~dp0LibreHardwareMonitorLib.dll" "%~dp0LibreHardwareMonitorLib.dll.old" > nul
+)
+move /y "%~dp0LibreHardwareMonitorLib.dll.new" "%~dp0LibreHardwareMonitorLib.dll" > nul
+del "%~f0"
+'@
+        [System.IO.File]::WriteAllText($updateScript, $batchContent, [System.Text.Encoding]::ASCII)
+        Write-Verbose "✓ Update-Batch erstellt: $updateScript"
         
-        # Neue Version prüfen
-        $newVersion = (Get-Item $targetDll).VersionInfo.ProductVersion
+        # RunOnce-Eintrag registrieren – Batch läuft automatisch beim nächsten Windows-Start
+        $regPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\RunOnce"
+        Set-ItemProperty -Path $regPath -Name "BockisLHMDllUpdate" -Value "cmd /c `"$updateScript`"" -ErrorAction SilentlyContinue
+        Write-Verbose "✓ RunOnce-Eintrag registriert"
         
-        if ($newVersion.StartsWith("0.9.5")) {
-            $result.Success = $true
-            $result.NewVersion = $newVersion.Split('+')[0]
-            Write-Verbose "✓ Update erfolgreich: $($result.NewVersion)"
-        }
-        else {
-            throw "DLL wurde nicht korrekt aktualisiert: $newVersion"
-        }
+        if ($ProgressCallback) { & $ProgressCallback 95 "Update vorbereitet – Neustart erforderlich" }
+        
+        $result.Success      = $true
+        $result.NewVersion   = $TargetVersion
+        $result.PendingRestart = $true
+        Write-Verbose "✓ DLL-Update vorbereitet: v$TargetVersion wird nach Neustart aktiv"
     }
     catch {
         $result.Success = $false
@@ -978,19 +997,20 @@ function Get-DependencyUpdateInfo {
             return $info
         }
 
-        $upgradeOutput = winget upgrade --id $WingetId --exact 2>$null | Out-String
+        # WICHTIG: winget upgrade OHNE Paket-ID aufrufen!
+        # "winget upgrade --id <paket>" würde das Upgrade AUSFÜHREN (nicht nur prüfen).
+        # Stattdessen: alle verfügbaren Upgrades auflisten und nach WingetId suchen.
+        $upgradeOutput = winget upgrade 2>$null | Out-String
         if ([string]::IsNullOrWhiteSpace($upgradeOutput)) {
-            return $info
-        }
-
-        if ($upgradeOutput -match 'No\s+applicable\s+upgrade|No\s+installed\s+package|Keine\s+anwendbaren\s+Updates|Kein\s+installiertes\s+Paket') {
             return $info
         }
 
         $line = ($upgradeOutput -split "`r?`n" | Where-Object { $_ -match [regex]::Escape($WingetId) } | Select-Object -First 1)
         if ($line) {
             $info.UpdateAvailable = $true
-            if ($line -match [regex]::Escape($WingetId) + '\s+([\w\.-]+)\s+([\w\.-]+)') {
+            # Spaltenformat: Name  Id  Installed  Available  Source
+            # Suche nach WingetId gefolgt von zwei Versionsnummern
+            if ($line -match [regex]::Escape($WingetId) + '\s+([\w\.\-]+)\s+([\w\.\-]+)') {
                 $info.AvailableVersion = $matches[2]
             }
         }
@@ -1644,7 +1664,82 @@ function Get-DependencyStatusForGUI {
             WingetId = $null
         }
     }
-    
+
+    # LibreHardwareMonitorLib DLL Version prüfen
+    $lhmTargetVersion = "0.9.6"
+    $lhmScriptRoot = Split-Path -Parent $PSScriptRoot
+    $lhmScriptRoot = Split-Path -Parent $lhmScriptRoot  # zwei Ebenen hoch (Modules/Core -> Root)
+    $lhmLibPath = Join-Path $lhmScriptRoot "Lib"
+    $lhmDllPath = Join-Path $lhmLibPath "LibreHardwareMonitorLib.dll"
+
+    if (Test-Path $lhmDllPath) {
+        try {
+            $lhmVersionInfo = (Get-Item $lhmDllPath).VersionInfo
+            $lhmVersionClean = ($lhmVersionInfo.ProductVersion -split '\+')[0]
+            $lhmUpdateAvailable = $false
+            $lhmStatus = "✓ Aktuell"
+            $lhmStatusColor = "Green"
+
+            if ($lhmVersionClean -match '^(\d+\.\d+\.\d+)') {
+                $currentLhmVer = [version]$matches[1]
+                if ($currentLhmVer -lt [version]$lhmTargetVersion) {
+                    $lhmUpdateAvailable = $true
+                    $lhmStatus = "⬆ Update verfügbar"
+                    $lhmStatusColor = "Yellow"
+                }
+            }
+
+            $dependencies += @{
+                Name           = "LibreHardwareMonitor DLL"
+                Description    = "Hardware-Monitoring Bibliothek (v$lhmTargetVersion verfügbar auf NuGet)"
+                Found          = $true
+                Required       = $false
+                Available      = $lhmUpdateAvailable
+                Version        = $lhmVersionClean
+                Status         = $lhmStatus
+                StatusColor    = $lhmStatusColor
+                WingetId       = $null
+                UpdateAvailable = $lhmUpdateAvailable
+                AvailableVersion = if ($lhmUpdateAvailable) { $lhmTargetVersion } else { $null }
+                LhmLibPath     = $lhmLibPath
+                LhmTargetVersion = $lhmTargetVersion
+            }
+        }
+        catch {
+            $dependencies += @{
+                Name           = "LibreHardwareMonitor DLL"
+                Description    = "Hardware-Monitoring Bibliothek (Versionsprüfung fehlgeschlagen)"
+                Found          = $true
+                Required       = $false
+                Available      = $false
+                Version        = "Unbekannt"
+                Status         = "⚠ Prüfung fehlgeschlagen"
+                StatusColor    = "Yellow"
+                WingetId       = $null
+                UpdateAvailable = $false
+                AvailableVersion = $null
+                LhmLibPath     = $lhmLibPath
+                LhmTargetVersion = $lhmTargetVersion
+            }
+        }
+    } else {
+        $dependencies += @{
+            Name           = "LibreHardwareMonitor DLL"
+            Description    = "Hardware-Monitoring Bibliothek (nicht gefunden im Lib-Ordner)"
+            Found          = $false
+            Required       = $false
+            Available      = $true
+            Version        = $null
+            Status         = "❌ Nicht gefunden"
+            StatusColor    = "Red"
+            WingetId       = $null
+            UpdateAvailable = $false
+            AvailableVersion = $lhmTargetVersion
+            LhmLibPath     = $lhmLibPath
+            LhmTargetVersion = $lhmTargetVersion
+        }
+    }
+
     # PowerShell Core (optional)
     $pwsh = Find-PowerShellCore
     if ($pwsh.Found) {
@@ -2204,6 +2299,7 @@ function Test-SystemDependencies {
 
 # Exportiere Funktionen
 Export-ModuleMember -Function `
+    Update-LibreHardwareMonitorDll, `
     Initialize-HardwareMonitoringMode, `
     Find-PowerShellCore, `
     Find-WingetPackageManager, `
