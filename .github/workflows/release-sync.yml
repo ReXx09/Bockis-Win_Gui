@@ -1,0 +1,63 @@
+name: Sync Release Repo
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: DEV-Repo auschecken
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Release-Repo auschecken
+        uses: actions/checkout@v4
+        with:
+          repository: ReXx09/Bockis-Win_Gui
+          token: ${{ secrets.RELEASE_TOKEN }}
+          path: release-repo
+
+      - name: Relevante Dateien kopieren
+        run: |
+          # Zielordner leeren (außer .git)
+          find release-repo -mindepth 1 -not -path 'release-repo/.git*' -delete
+
+          # Relevante Ordner kopieren
+          cp -r Modules release-repo/
+          cp -r Lib release-repo/
+          cp -r Data release-repo/
+
+          # Relevante Einzeldateien kopieren
+          cp Win_Gui_Module.ps1 release-repo/
+          cp installer.iss release-repo/
+          cp config.json release-repo/
+          cp settings.json release-repo/
+          cp LICENSE.txt release-repo/
+          cp README.md release-repo/
+
+      - name: Änderungen pushen
+        run: |
+          cd release-repo
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add .
+          git diff --staged --quiet || git commit -m "Release ${{ github.ref_name }} synchronisiert"
+          git push
+
+      - name: Release erstellen
+        uses: softprops/action-gh-release@v2
+        with:
+          repository: ReXx09/Bockis-Win_Gui
+          token: ${{ secrets.RELEASE_TOKEN }}
+          tag_name: ${{ github.ref_name }}
+          name: "${{ github.ref_name }} - Bockis System-Tool"
+          body: |
+            Automatisch synchronisiert aus dem DEV-Repo.
+
+            Vollstaendige Release Notes: https://github.com/ReXx09/Bockis-Win_Gui_DEV/releases/tag/${{ github.ref_name }}
+          draft: false
+          prerelease: false
