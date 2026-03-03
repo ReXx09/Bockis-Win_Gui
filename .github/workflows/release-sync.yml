@@ -34,10 +34,16 @@ jobs:
           # Relevante Einzeldateien kopieren
           cp Win_Gui_Module.ps1 release-repo/
           cp installer.iss release-repo/
-          cp config.json release-repo/
           cp settings.json release-repo/
           cp LICENSE.txt release-repo/
           cp README.md release-repo/
+          cp THIRD-PARTY-LICENSES.md release-repo/
+          cp "Bockis System-Tool starten.bat" release-repo/
+
+          # Icons / Bilder (falls vorhanden)
+          for f in *.ico *.bmp *.jpg *.png; do
+            [ -f "$f" ] && cp "$f" release-repo/ || true
+          done
 
       - name: Änderungen pushen
         run: |
