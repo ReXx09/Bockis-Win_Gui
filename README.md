@@ -1,51 +1,14 @@
-# Bocki's Windows Tool-Kit v4.1
+﻿# Bocki's Windows Tool-Kit v4.2
 
-Ein professionelles PowerShell-basiertes Systemwartungs-Tool mit moderner grafischer Benutzeroberfläche, WPF-Integration, automatischem Update-System und umfassenden Diagnose-Funktionen für Windows-Systeme.
+Ein professionelles PowerShell-basiertes Systemwartungs-Tool mit moderner grafischer Benutzeroberfläche, WPF-Integration und umfassenden Diagnose-Funktionen für Windows-Systeme.
 
 [![PowerShell](https://img.shields.io/badge/PowerShell-5.1+-blue.svg)](https://github.com/PowerShell/PowerShell)
 [![Windows](https://img.shields.io/badge/Windows-10%2F11-blue.svg)](https://www.microsoft.com/windows)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE.txt)
-[![Version](https://img.shields.io/badge/Version-4.1-brightgreen.svg)](https://github.com/ReXx09/Bockis-Win_Gui/releases)
 
 ## 🔑 Hauptfunktionen
 
 Das Bockis System-Tool bietet eine umfassende Sammlung von Windows-Systemtools in einer benutzerfreundlichen grafischen Oberfläche:
-
-### 🔄 Auto-Update-System (NEU in v4.1)
-- **Automatische Update-Prüfung**: Verbindung zu GitHub Releases
-- **Ein-Klick-Installation**: Download und Installation neuer Versionen
-- **Integrierter Update-Button**: Direkt in der GUI verfügbar
-- **Versionskontrolle**: Automatischer Versionsvergleich
-- **Keine manuellen Downloads mehr**: Ab v4.1 vollautomatisch
-
-### 📦 Tool-Download-Manager (NEU in v4.1)
-Ein vollständiges Tool-Management-System mit **50+ vorgefertigten professionellen Tools**:
-
-**Kernfunktionen:**
-- **Winget-Integration**: Sichere Installation über Windows Package Manager (winget)
-- **Ein-Klick-Installation**: Tools mit einem Button-Klick installieren
-- **Automatische Status-Erkennung**: Zeigt sofort an, welche Tools bereits installiert sind
-- **Intelligentes Cache-System**: Reduziert Ladezeiten (5-15 Min Cache-Dauer)
-- **Such- und Filterfunktion**: Schnelles Finden nach Name, Kategorie oder Tags
-- **Live-Installations-Status**: Echtzeit-Feedback während der Installation
-- **Moderne WPF-Kachel-Darstellung**: Scrollbarer Bereich mit Kacheln pro Tool
-
-**Verfügbare Kategorien:**
-- **System-Tools** (14 Tools): 7-Zip, CPU-Z, GPU-Z, HWiNFO, LibreHardwareMonitor, OCCT, CoreTemp, CrystalDiskInfo, CrystalDiskMark, Autoruns, Process Explorer, UniGetUI, WizTree, TreeSize
-- **Browser** (7 Tools): Brave, Firefox, Chrome, Vivaldi, Waterfox, Opera, Edge
-- **Kommunikation** (8 Tools): Discord, Skype, WhatsApp, Zoom, Teams, Telegram, Slack, Signal
-- **Gaming** (9 Tools): Steam, Epic Games, Battle.net, EA App, GOG Galaxy, Ubisoft Connect, Xbox App, Playnite, Parsec
-- **Multimedia** (11 Tools): VLC, Spotify, Audacity, OBS Studio, GIMP, Blender, Handbrake, Kodi, MPC-HC, Shotcut, Inkscape
-- **Office** (4 Tools): LibreOffice, Apache OpenOffice, Notion, PDFCreator
-- **Entwicklung** (10 Tools): VS Code, Git, Python, Node.js, Docker, WSL, GitHub Desktop, Notepad++, Postman, FileZilla
-- **Cloud Storage** (3 Tools): Nextcloud Desktop, Dropbox, Google Drive
-
-**Technische Features:**
-- **WPF ScrollViewer**: Smooth Scrolling und moderne Darstellung
-- **WrapPanel Layout**: Automatische Kachel-Anordnung
-- **Tool-Cache-Modul**: Reduziert redundante Winget-Aufrufe
-- **Installation-Status-Icons**: Visuelles Feedback (✓ Installiert / ⬇ Installieren)
-- **Kategorie-Filter**: Navigation über aufklappbare Menü-Panels
 
 ### 🛡️ System & Sicherheit
 - **MRT Quick Scan**: Schnelle Malware-Erkennung mit Microsoft Malicious Software Removal Tool
@@ -88,7 +51,22 @@ Ein vollständiges Tool-Management-System mit **50+ vorgefertigten professionell
 - **Hardware-History-Datenbank**: Automatische Protokollierung aller Sensor-Werte
 - **Debug-Modi**: Erweiterte Diagnose-Informationen für CPU/GPU/RAM
 
-
+### 🔽 Tool-Downloads & Winget-Integration
+- **50+ vordefinierte Tools**: Kategorisiert nach System/Browser/Gaming/Dev/Multimedia
+- **Winget-Integration**: Automatische Installations-Status-Erkennung
+- **Intelligentes Cache-System**: Reduziert Winget-Aufrufe (5-15 Min Cache)
+- **Such-Funktion**: Filter nach Tool-Name, Kategorie oder Tags
+- **Tool-Kategorien**:
+  - System-Tools (7-Zip, CPU-Z, GPU-Z, OCCT, LibreHardwareMonitor, UniGetUI)
+  - Browser (Brave, Firefox, Chrome, Vivaldi, Waterfox)
+  - Kommunikation (Discord, Skype, WhatsApp, Zoom, Teams, Telegram)
+  - Gaming (Steam, Epic Games, Battle.net, EA App, GOG Galaxy)
+  - Multimedia (VLC, Audacity, OBS Studio, GIMP, Blender, Handbrake)
+  - Office (LibreOffice, Apache OpenOffice)
+  - Entwicklung (VS Code, Git, Python, Node.js, Docker)
+  - Cloud Storage (Nextcloud Desktop, Dropbox, Google Drive)
+- **WPF-ScrollViewer**: Moderne Kachel-Darstellung mit Smooth Scrolling
+- **Installation per Klick**: Direkte Installation via Winget
 
 ### 🗄️ Erweiterte Funktionen
 - **SQLite-Datenbank-Integration**: Automatische Protokollierung aller Tool-Ausführungen
@@ -120,69 +98,80 @@ Ein vollständiges Tool-Management-System mit **50+ vorgefertigten professionell
 
 ## 📥 Installation
 
-### Methode 1: Windows Installer (Empfohlen) 🎯
-Der einfachste und sicherste Weg für die meisten Nutzer:
+### Methode 1: Installer (Empfohlen)
+1. Laden Sie `BockisSystemTool-Setup.exe` herunter
+2. Führen Sie den Installer mit Administratorrechten aus
+3. Starten Sie das Tool über das Startmenü oder Desktop-Verknüpfung
 
-1. **Download:** `BockisSystemTool-Setup-v4.1.exe` vom Release
-2. **Ausführen:** Installer mit Administratorrechten starten
-3. **Automatische Konfiguration:**
-   - Erstellt Windows Defender-Ausnahmen
-   - Registriert das Tool im System
-   - Erstellt Start-Menü und Desktop-Verknüpfungen
-   - Richtet Auto-Update ein
-4. **Fertig:** Tool über Startmenü oder Desktop starten
-
-**Vorteile:**
-- ✅ Automatische Defender-Ausnahmen
-- ✅ Saubere Deinstallation möglich
-- ✅ Systemweite Installation
-- ✅ Windows-Registrierung
-
-### Methode 2: Portable/ZIP 📦
-Für erfahrene Nutzer oder portable Installation:
-
-1. **Download:** `Bockis-Win-Gui-v4.1.zip` vom Release
-2. **Entpacken:** ZIP-Datei in ein Verzeichnis Ihrer Wahl
-3. **Ausnahme hinzufügen:** (Wichtig!) Windows Defender-Ausnahme manuell erstellen
-4. **Starten:** `Win_Gui_Module.ps1` mit Administratorrechten:
+### Methode 2: Portable/ZIP
+1. Laden Sie das Tool als ZIP herunter
+2. Entpacken Sie die ZIP-Datei in ein Verzeichnis Ihrer Wahl
+3. Starten Sie `Win_Gui_Module.ps1` mit Administratorrechten:
 
 ```powershell
 powershell.exe -ExecutionPolicy Bypass -File "Win_Gui_Module.ps1"
 ```
 
-**Vorteile:**
-- ✅ Keine Installation nötig
-- ✅ Portable (USB-Stick, Cloud)
-- ✅ Mehrere Versionen parallel
-- ✅ Volle Kontrolle
+### ⚠️ Windows Defender Warnung (ältere Versionen)
 
-**Hinweis:** Bei der Portable-Version müssen Sie Windows Defender-Ausnahmen manuell erstellen. Siehe [DEFENDER-AUSNAHMEN.md](DEFENDER-AUSNAHMEN.md) für Details.
+**Problem (nur LibreHWM < v0.9.4):** Ältere Versionen nutzen WinRing0-Treiber, der von Defender als "VulnerableDriver" markiert wird.
 
-### ⚠️ Windows Defender Warnung
+**Lösung:** LibreHardwareMonitor **v0.9.4+** nutzt den modernen **PawnIO-Treiber**, der **keine Defender-Warnungen** mehr verursacht.
 
-**Problem:** Windows Defender kann LibreHardwareMonitor als "VulnerableDriver:WinNT/Winring0" melden.
+**Update empfohlen:**
+```powershell
+winget upgrade LibreHardwareMonitor.LibreHardwareMonitor
+```
 
-**Grund:** Dies ist ein **Fehlalarm (False Positive)**. Der Hardware-Monitoring-Treiber wird fälschlicherweise als Bedrohung erkannt, da er Low-Level-Hardware-Zugriff benötigt (für CPU/GPU-Temperaturen).
+**Falls du Version < 0.9.4 verwendest:** Der alte WinRing0-Treiber ist ein Fehlalarm (False Positive) und wird für Low-Level-Hardware-Zugriff benötigt.
 
-**Lösung:** 
-- **Installer:** Fügt automatisch Defender-Ausnahmen hinzu ✅
-- **Portable/ZIP:** Das Tool versucht beim ersten Start automatisch Ausnahmen hinzuzufügen
-- **Manuell:** Falls erforderlich, siehe [DEFENDER-AUSNAHMEN.md](DEFENDER-AUSNAHMEN.md)
+#### 🚀 Automatische Lösung (empfohlen)
 
-**Wichtig:** Ihr System bleibt vollständig geschützt - nur die Tool-Dateien werden als vertrauenswürdig markiert. Der Windows Defender bleibt aktiv!
+**Doppelklick auf:** `Defender-Ausnahme hinzufügen.bat` im Installationsordner
 
-**Hintergrund:** LibreHardwareMonitor ist ein vertrauenswürdiges Open-Source-Projekt ([GitHub](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor)), das von tausenden Projekten weltweit genutzt wird.
+oder
+
+**PowerShell als Administrator:**
+```powershell
+.\Tools\Add-DefenderExclusion-Admin.ps1
+```
+
+Das Skript fügt automatisch die Defender-Ausnahme hinzu und erklärt alle Schritte.
+
+#### 🛠️ Manuelle Lösung
+
+Falls die automatische Lösung nicht funktioniert:
+1. **Windows-Sicherheit** öffnen (Windows-Taste + "Windows-Sicherheit")
+2. **Viren- & Bedrohungsschutz** → **Einstellungen verwalten**
+3. **Ausschlüsse** → **Ausschlüsse hinzufügen oder entfernen**
+4. **Ordner hinzufügen** → Installationsordner auswählen (z.B. `C:\Program Files\Bockis-Win_Gui`)
+5. **Tool neu starten**
+
+Falls LibreHardwareMonitor bereits blockiert wurde:
+- **Windows-Sicherheit** → **Schutzverlauf**
+- Suchen Sie nach "**WinRing0**", "**PawnIO**" oder "**LibreHardwareMonitor**"
+- Klicken Sie auf **"Wiederherstellen"** oder **"Zulassen"**
+
+**Hinweis:** Ab Version 0.9.4 verwendet LibreHWM den moderneren **PawnIO-Treiber**, der weniger Defender-Probleme verursacht.
+
+#### ℹ️ Wichtige Hinweise
+
+- ✅ **Sicherheit:** Ihr System bleibt vollständig geschützt - Windows Defender bleibt aktiv!
+- ✅ **Open-Source:** LibreHardwareMonitor ist ein vertrauenswürdiges Open-Source-Projekt ([GitHub](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor))
+- ✅ **Weit verbreitet:** Wird von tausenden Projekten weltweit genutzt (MSI Afterburner, HWiNFO64, etc.)
+- ℹ️ **Fallback:** Ohne Defender-Ausnahme läuft das Tool mit WMI-Monitoring (eingeschränkte Funktionen)
 
 ## 📂 Verzeichnisstruktur
 
 ```
 Bockis-Win_Gui-v4.0/
 ├── Win_Gui_Module.ps1           # Hauptskript (4485 Zeilen)
+├── Defender-Ausnahme hinzufügen.bat  # 🆕 Automatische Defender-Fix
+```
 ├── config.json                  # Benutzer-Einstellungen
 ├── README.md                    # Diese Datei
 ├── LICENSE.txt
 ├── THIRD-PARTY-LICENSES.md
-├── Sign-AllScripts.ps1          # Code-Signierung
 ├── installer.iss                # Inno Setup Installer
 │
 ├── Modules/                     # PowerShell-Module (~15.000 LOC)
@@ -213,8 +202,7 @@ Bockis-Win_Gui-v4.0/
 │
 ├── Lib/                         # Native Bibliotheken
 │   ├── System.Data.SQLite.dll  # SQLite für .NET
-│   ├── LibreHardwareMonitorLib.dll  # Hardware-Monitoring
-│   ├── LibreHardwareMonitorLib.sys  # Kernel-Treiber
+│   ├── LibreHardwareMonitorLib.dll  # Hardware-Monitoring (nutzt PawnIO ab v0.9.4)
 │   ├── SQLite.cs               # SQLite-Wrapper
 │   └── SQLiteAsync.cs          # Async SQLite-Operationen
 │
@@ -264,24 +252,6 @@ Bockis-Win_Gui-v4.0/
 - **RAM**: Zeigt Speichernutzung und verfügbaren Speicher
 - **GPU**: Zeigt Grafikkarten-Auslastung und Temperatur
 - **Tooltips**: Bewegen Sie die Maus über die Hardware-Boxen für Details
-
-### Tool-Download-Manager (Verwendung)
-1. **Navigation öffnen**: Klicken Sie auf "▼ Tools" im linken Navigations-Menü
-2. **Kategorie wählen**: Wählen Sie eine Kategorie (Alle/System/Browser/Gaming/Dev/Office/Multimedia/Cloud)
-3. **Tool suchen**: Nutzen Sie die Such-Funktion oder scrollen Sie durch die Kacheln
-4. **Status prüfen**: 
-   - ✅ **Grün** = Tool ist bereits installiert
-   - ⬇️ **Blau** = Tool kann installiert werden
-5. **Installation**: Klicken Sie auf "Installieren" - Winget lädt und installiert das Tool automatisch
-6. **Fortschritt**: Die Ausgabe zeigt den Installations-Fortschritt in Echtzeit
-7. **Fertig**: Nach erfolgreicher Installation wird der Status auf "Installiert" aktualisiert
-
-**Vorteile:**
-- ✅ Keine manuelle Suche nach Download-Links
-- ✅ Automatische Updates über Winget
-- ✅ Sichere Quellen (offizieller Microsoft Package Manager)
-- ✅ Über 50 vorgefertigte Tools sofort verfügbar
-- ✅ Kein Browser-Download nötig
 
 ### Erweiterte Funktionen
 - **Scan-Historie**: Tooltips auf Status-Indikatoren zeigen Zeitstempel des letzten Scans
@@ -420,7 +390,28 @@ Bei Problemen:
 
 ## 📋 Changelog
 
-### Version 4.0 (28. November 2025) - Aktuell
+### Version 4.1.7 (18. Februar 2026) - Aktuell
+- ✨ **Automatisches DLL-Update**: Integrierte Update-Funktion in DependencyChecker
+- 🔍 **Versionserkennung**: Automatische Prüfung auf veraltete LibreHardwareMonitorLib.dll
+- � **DLL-Versionsabfragen**: Erweiterte Test-SystemDependencies mit 5 DLL-Checks
+  - LibreHardwareMonitorLib.dll >= 0.9.5 (PawnIO-Kompatibilität) - ERFORDERLICH
+  - BlackSharp.Core.dll - ERFORDERLICH
+  - HidSharp.dll - OPTIONAL (nur für spezielle HID-Geräte)
+  - RAMSPDToolkit-NDD.dll, DiskInfoToolkit.dll - OPTIONAL
+- 👍 **Benutzerfreundlich**: Interaktiver Dialog mit Erklärung (Winring0 vs PawnIO)
+- 📦 **NuGet-Integration**: Direkter Download von v0.9.5 bei Bedarf
+- 💾 **Smart-Caching**: Nutzt Temp-Cache für schnellere Updates
+- 🛡️ **Sicher**: Automatisches Backup vor DLL-Ersetzung
+- 📝 **Dokumentation**: README-DLL-VERSION-CHECKS.md für DLL-Versionsabfragen
+
+### Version 4.1.1 (20. Januar 2026)
+- 🔧 **LibreHardwareMonitor Auto-Installation**: WinGet-Integration im Installer
+- 🛡️ **PawnIO-Treiber**: Moderne Ring-0-Treiber-Unterstützung (v0.9.4+)
+- 🔄 **Fallback-System**: Performance Counter-basierte Sensoren ohne LibreHWM
+- 📦 **Installer-Verbesserungen**: Automatische Abhängigkeitsprüfung
+- 🔐 **Code-Signierung**: Self-Signed Zertifikat mit 5 Jahren Gültigkeit
+
+### Version 4.0 (28. November 2025)
 - 🚀 **WPF-Integration**: Moderne UI-Komponenten (ScrollViewer, WrapPanel) für Tool-Downloads
 - 🔽 **Tool-Download-System**: 50+ vordefinierte Tools mit Winget-Integration
 - 🎯 **Intelligenter Cache**: ToolCache-System reduziert Winget-Aufrufe (5-15 Min)
@@ -473,6 +464,12 @@ Dieses Tool ist unter der MIT-Lizenz veröffentlicht. Siehe [LICENSE.txt](LICENS
 ### Drittanbieter-Lizenzen
 Dieses Projekt verwendet verschiedene Drittanbieter-Bibliotheken. Details siehe [THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md).
 
+**Wichtiger Hinweis:** Einige optionale Funktionen benötigen proprietäre Software:
+- Corsair iCUE SDK (für Corsair-Hardware)
+- HidSharp (für HID-Geräte)
+
+Diese müssen separat installiert werden und sind nicht im Repository enthalten.
+
 ## 🔧 Technische Details
 
 ### Architektur
@@ -492,84 +489,20 @@ Dieses Projekt verwendet verschiedene Drittanbieter-Bibliotheken. Details siehe 
 
 ### Bekannte Einschränkungen
 - Einige Tools erfordern Neustart (Memory Diagnostic, CHKDSK)
-- Hardware-Monitoring benötigt Kernel-Treiber (LibreHardwareMonitorLib.sys)
+- Hardware-Monitoring benötigt Kernel-Treiber (PawnIO ab v0.9.4, WinRing0 bei älteren Versionen)
 - Winget muss installiert sein für Tool-Download-Feature
-- Windows Defender kann das Tool als "Trojan:Win32/Vigorf.A" melden (Fehlalarm)
-
-## � Changelog
-
-### Version 4.1 (18. Dezember 2025) - AKTUELL
-**🎉 Hauptfeatures:**
-- 🔄 **Auto-Update-System**: Automatische Update-Prüfung und Installation über GitHub Releases
-- 📦 **Tool-Download-Manager**: 50+ Tools direkt aus der GUI installierbar via Winget
-- 🏗️ **Modulare Architektur**: Vollständig refaktorierte Codebasis mit separaten Modulen
-- 🎨 **UI-Verbesserungen**: Optimierte Button-Layouts und Positionierung
-- ⚡ **Performance-Optimierungen**: Tool-Cache-System für schnellere Ladezeiten
-
-**Neue Funktionen:**
-- Integrierter "Update"-Button in der Hauptoberfläche
-- GitHub API-Integration für Release-Management
-- Automatischer Download und Installation von Updates
-- Kategorisierte Tool-Bibliothek (System, Apps, Audio/TV, Coding)
-- Such- und Filterfunktion für Tool-Downloads
-- Verbesserte Progressbar mit detailliertem Status
-- Tool-Installation-Tracking und Status-Anzeige
-
-**Verbesserungen:**
-- Button-Positionierung optimiert (Update-Button rechts neben Progressbar)
-- Modulstruktur erweitert (ToolLibrary, ToolCache)
-- Bessere Fehlerbehandlung bei Updates
-- Optimierte Speicherverwaltung
-- Verbesserte Code-Organisation
-
-**Bugfixes:**
-- Fensterpositionierung korrigiert
-- Modul-Ladezeiten optimiert
-- GUI-Rendering verbessert
-
-**⚠️ Wichtig für Upgrade von v4.0:**
-Dies ist das letzte manuelle Update! Nach Installation von v4.1 erfolgen alle zukünftigen Updates automatisch.
-
-### Version 4.0 (November 2025)
-**Hauptfeatures:**
-- Vollständige UI-Überarbeitung mit moderner WPF-Integration
-- LibreHardwareMonitor-Integration für detailliertes Hardware-Monitoring
-- SQLite-Datenbank für Tool-Ausführungs-Logs
-- Tool-Download-System Basis-Implementation
-- Modulare Code-Architektur
-
-**Neue Funktionen:**
-- Echtzeit-Hardware-Überwachung (CPU, RAM, GPU)
-- Status-Indikatoren für alle System-Tools
-- Scan-Historie mit Zeitstempeln
-- Erweiterte DISM-Tool-Suite
-- Custom-Cleanup-Optionen
-- Automatische Settings-Persistenz
-
-### Version 3.1
-- Tab-basierte Navigation
-- Basis Hardware-Monitoring
-- Erste Modul-Implementierungen
-- SQLite-Integration
-
-### Version 3.0
-- Grafische Benutzeroberfläche
-- Grundlegende System-Tools
-- Windows Forms-basiert
+- Windows Defender kann ältere LibreHWM-Versionen (< 0.9.4) als "VulnerableDriver" melden (Update auf v0.9.4+ empfohlen)
 
 ## 🔍 FAQ
 
 **Q: Warum meldet Windows Defender das Tool als Malware?**  
 A: Dies ist ein Fehlalarm (False Positive). Das Tool verwendet Windows-APIs zur Fenstersteuerung, die manchmal von Malware missbraucht werden. Der Code ist vollständig transparent und Open Source.
 
-**Q: Wie funktioniert das Auto-Update?**  
-A: Das Tool prüft über die GitHub API auf neue Releases, lädt das ZIP-Asset herunter, entpackt es automatisch und startet die Anwendung neu. Keine manuelle Interaktion nötig!
-
 **Q: Benötige ich Administratorrechte?**  
 A: Ja, die meisten System-Diagnose- und Reparatur-Tools erfordern erhöhte Rechte. Das Tool fordert diese automatisch beim Start an.
 
 **Q: Werden meine Daten gesammelt?**  
-A: Nein. Alle Daten werden lokal in SQLite-Datenbank gespeichert. Es erfolgt keine Datenübertragung ins Internet (außer für Windows Update, GitHub-Updates und Tool-Downloads).
+A: Nein. Alle Daten werden lokal in SQLite-Datenbank gespeichert. Es erfolgt keine Datenübertragung ins Internet (außer für Windows Update und Tool-Downloads).
 
 **Q: Kann ich eigene Tools hinzufügen?**  
 A: Ja, über `ToolLibrary.psm1` können Sie die `$script:toolLibrary`-Hashtable erweitern.
@@ -580,16 +513,12 @@ A: Logs werden in `%LOCALAPPDATA%\BockisSystemTool\Logs\` gespeichert.
 **Q: Funktioniert das Tool mit Nextcloud/OneDrive?**  
 A: Ja, das Tool hat spezielle Fehlerbehandlung für Cloud-Sync-Provider implementiert.
 
-**Q: Warum sind manche Tools nicht verfügbar?**  
-A: Einige Tools im Download-Manager benötigen Winget. Stellen Sie sicher, dass Windows Package Manager installiert ist.
-
 ## 🙏 Danksagungen
 
 - **LibreHardwareMonitor** - Exzellente Hardware-Monitoring-Bibliothek
 - **SQLite-NET** - Robuste Datenbank-Integration
 - **PowerShell-Community** - Unzählige hilfreiche Ressourcen
 - **Microsoft** - Winget Package Manager
-- **GitHub** - Release-Management und Hosting
 - **Alle Beta-Tester** - Wertvolles Feedback und Bug-Reports
 
 ## 🤝 Mitwirken
@@ -604,4 +533,8 @@ Beiträge sind willkommen! Bitte:
 ---
 
 **Entwickelt mit ❤️ von Bocki**  
-*Version 4.1 - Dezember 2025*
+*Version 4.0 - November 2025*
+
+
+
+

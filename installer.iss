@@ -1,5 +1,5 @@
-; ===================================================================
-; INSTALLATIONS-SKRIPT FÜR BOCKIS SYSTEM-TOOL V4.0
+﻿; ===================================================================
+; INSTALLATIONS-SKRIPT FÃœR BOCKIS SYSTEM-TOOL V4.1.8
 ; ===================================================================
 ;
 ; BESCHREIBUNG:
@@ -30,14 +30,13 @@
 ; INSTALLATIONS-FEATURES:
 ; -----------------------
 ; • Automatische Prüfung von PowerShell und .NET Framework
-; • Optionale Windows Defender Ausnahmen für Tool-Dateien (Defender bleibt aktiv!)
 ; • Code-Signierung für Setup.exe (optional, falls Zertifikat vorhanden)
 ; • Desktop- und Startmenü-Verknüpfungen
 ; • Vollständige Deinstallations-Routine mit Cleanup
 ; • LZMA2 Maximum-Kompression für kleinere Setup-Datei
 ;
 ; AUTOR: Bockis
-; VERSION: 4.0
+; VERSION: 4.1.8
 ; ERSTELLT MIT: Inno Setup 6.x
 ; DATUM: 2025
 ; LIZENZ: Siehe LICENSE.txt
@@ -47,7 +46,7 @@
 ; ANWENDUNGS-DEFINITIONEN
 ; -------------------------------------------------------------------
 #define MyAppName "Bockis System-Tool"
-#define MyAppVersion "4.1"
+#define MyAppVersion "4.1.8"
 #define MyAppPublisher "Bockis"
 #define MyAppURL "https://github.com/bockis"
 #define MyAppExeName "Win_Gui_Module.ps1"
@@ -61,7 +60,7 @@
 ; Anwendungsinformationen
 ; -------------------------------------------------------------------
 ; Eindeutige GUID für diese Anwendung (bleibt bei Updates gleich)
-AppId={{B0CK1-SY5T-T00L-4000-123456789ABC}
+AppId={{B0CK1-SY5T-T00L-4000-123456789ABC}}
 
 ; Anwendungsname und Versionsangaben
 AppName={#MyAppName}
@@ -110,11 +109,23 @@ SetupIconFile=IMG_0382.ico
 UninstallDisplayIcon={app}\IMG_0382.ico
 
 ; Wizard-Bilder für Installations-Assistent
-WizardImageFile=Logo.bmp
+; HINWEIS: Für optimale Darstellung ohne Verzerrung:
+; - WizardImageFile: 164x314 px (moderner Wizard-Stil)
+; - WizardSmallImageFile: 55x55 px (kleines Icon oben rechts)
+; AKTUELL: Logo.bmp wird für beide verwendet - kann zu Verzerrung führen
+; EMPFEHLUNG: Erstellen Sie zwei separate Dateien:
+;   - Logo_Sidebar.bmp (164x314 px) für WizardImageFile
+;   - Logo_Small.bmp (55x55 px) für WizardSmallImageFile
+; ALTERNATIVE: Nur kleines Logo verwenden für cleanen Look:
+;WizardImageFile=
 WizardSmallImageFile=Logo.bmp
 
 ; Moderner Wizard-Stil (Windows 11 Design)
 WizardStyle=modern
+
+; Moderne Farbgebung (Dunkles Theme passend zur GUI)
+WizardResizable=yes
+WizardSizePercent=120
 
 ; Installations-Seiten aktivieren (informative Installation)
 DisableWelcomePage=no
@@ -237,7 +248,7 @@ Source: "Logo.bmp"; DestDir: "{app}"; Flags: ignoreversion
 ; Konfiguration
 ; -------------------------------------------------------------------
 ; Konfigurationsdatei (nicht überschreiben bei Update)
-Source: "config.json"; DestDir: "{app}"; Flags: onlyifdoesntexist uninsneveruninstall
+Source: "config.json"; DestDir: "{app}"; Flags: onlyifdoesntexist
 
 ; -------------------------------------------------------------------
 ; Dokumentation und Lizenzen
@@ -251,8 +262,27 @@ Source: "LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
 ; Lizenzen von Drittanbieter-Komponenten
 Source: "THIRD-PARTY-LICENSES.md"; DestDir: "{app}"; Flags: ignoreversion
 
-; Signatur-Anleitung für Entwickler
-Source: "SIGNIERUNG-ANLEITUNG.md"; DestDir: "{app}"; Flags: ignoreversion
+; -------------------------------------------------------------------
+; Daten-Ordner (zentrale Speicherung aller Anwendungsdaten)
+; -------------------------------------------------------------------
+; HINWEIS: Ordner werden leer erstellt - Daten werden zur Laufzeit generiert
+; Database-Ordner für SQLite-Datenbank
+; Logs-Ordner für alle Log-Dateien
+; ToolDownloads-Ordner für heruntergeladene Tools
+; Temp-Ordner für temporäre Dateien
+
+
+[Dirs]
+; ===================================================================
+; VERZEICHNISSE ERSTELLEN
+; ===================================================================
+; Zentrale Datenordner im Installationsverzeichnis
+Name: "{app}\Data"; Permissions: users-modify
+Name: "{app}\Data\Database"; Permissions: users-modify
+Name: "{app}\Data\Logs"; Permissions: users-modify
+Name: "{app}\Data\ToolDownloads"; Permissions: users-modify
+Name: "{app}\Data\Temp"; Permissions: users-modify
+
 
 [Icons]
 ; ===================================================================
@@ -287,20 +317,17 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "powershell.exe"; Parameters: "-Wi
 ; -------------------------------------------------------------------
 Name: "desktopicon"; Description: "Desktop-Verknüpfung erstellen"; GroupDescription: "Verknüpfungen:"
 
-; -------------------------------------------------------------------
-; Windows Defender Ausnahme (optional, empfohlen)
-; -------------------------------------------------------------------
-; WICHTIG: Der Defender wird NICHT deaktiviert!
-; Es werden nur spezifische Ausnahmen für die Tool-Dateien hinzugefügt,
-; um Fehlalarme bei PowerShell-Skripten zu vermeiden.
-Name: "defenderexclusion"; Description: "Windows Defender Ausnahmen für Tool-Dateien hinzufügen (EMPFOHLEN für Hardware-Monitoring)"; GroupDescription: "Sicherheitseinstellungen:"; Flags: checked
-
 [Registry]
 ; ===================================================================
 ; REGISTRY-EINTRÄGE (für Dateizuordnungen etc.)
 ; ===================================================================
-; HINWEIS: Aktuell keine Registry-Einträge erforderlich
-; Zukünftige Verwendung für Kontextmenü-Integration möglich
+
+; -------------------------------------------------------------------
+; Versionsinformationen speichern (für Update-Erkennung)
+; -------------------------------------------------------------------
+Root: HKCU; Subkey: "Software\Bockis\SystemTool"; ValueType: string; ValueName: "Version"; ValueData: "{#MyAppVersion}"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Bockis\SystemTool"; ValueType: string; ValueName: "InstallPath"; ValueData: "{app}"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Bockis\SystemTool"; ValueType: string; ValueName: "LastRun"; ValueData: "{code:GetCurrentDateTime}"; Flags: uninsdeletekey
 
 [Code]
 
@@ -619,90 +646,7 @@ begin
   end;
 end;
 
-// Fügt spezifische Dateien zu Defender-Ausnahmen hinzu (verhindert Fehlalarme bei PowerShell-Skripten und Hardware-Monitoring-Treiber)
-procedure AddDefenderExclusion;
-var
-  ResultCode: Integer;
-  AppPath: String;
-  ExclusionsAdded: Integer;
-  ErrorMsg: String;
-begin
-  // Nur ausführen wenn Benutzer die Task gewählt hat
-  if WizardIsTaskSelected('defenderexclusion') then
-  begin
-    AppPath := ExpandConstant('{app}');
-    ExclusionsAdded := 0;
-    ErrorMsg := '';
-    
-    // Füge spezifische PowerShell-Skripte und Prozesse als Ausnahmen hinzu
-    // Hauptskript-Datei als Ausnahme
-    if Exec('powershell.exe', 
-         '-ExecutionPolicy Bypass -Command "try { Add-MpPreference -ExclusionPath ''' + AppPath + '\Win_Gui_Module.ps1'' -ErrorAction Stop; exit 0 } catch { exit 1 }"',
-         '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0) then
-      ExclusionsAdded := ExclusionsAdded + 1;
-    
-    // Module-Verzeichnis als Ausnahme (enthält nur PowerShell-Module)
-    if Exec('powershell.exe', 
-         '-ExecutionPolicy Bypass -Command "try { Add-MpPreference -ExclusionPath ''' + AppPath + '\Modules'' -ErrorAction Stop; exit 0 } catch { exit 1 }"',
-         '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0) then
-      ExclusionsAdded := ExclusionsAdded + 1;
-    
-    // Lib-Verzeichnis als Ausnahme (enthält C#-Bibliotheken für SQLite und Hardware-Monitoring)
-    // WICHTIG: Dieser Pfad enthält LibreHardwareMonitorLib.dll - wird von Defender als kritisch eingestuft
-    if Exec('powershell.exe', 
-         '-ExecutionPolicy Bypass -Command "try { Add-MpPreference -ExclusionPath ''' + AppPath + '\Lib'' -ErrorAction Stop; exit 0 } catch { exit 1 }"',
-         '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0) then
-      ExclusionsAdded := ExclusionsAdded + 1;
-    
-    // SPEZIFISCH: LibreHardwareMonitorLib.dll (Hardware-Monitoring)
-    // Diese DLL nutzt den WinRing0-Treiber, der von Defender als "VulnerableDriver" erkannt wird
-    if Exec('powershell.exe', 
-         '-ExecutionPolicy Bypass -Command "try { Add-MpPreference -ExclusionPath ''' + AppPath + '\Lib\LibreHardwareMonitorLib.dll'' -ErrorAction Stop; exit 0 } catch { exit 1 }"',
-         '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0) then
-      ExclusionsAdded := ExclusionsAdded + 1;
-    
-    // SPEZIFISCH: PowerShell-Prozess für diesen Ordner
-    // Verhindert, dass der PowerShell-Prozess selbst beim Ausführen des Tools blockiert wird
-    if Exec('powershell.exe', 
-         '-ExecutionPolicy Bypass -Command "try { Add-MpPreference -ExclusionProcess ''powershell.exe'' -ErrorAction Stop; exit 0 } catch { exit 1 }"',
-         '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0) then
-      ExclusionsAdded := ExclusionsAdded + 1;
-    
-    // Feedback an Benutzer
-    if ExclusionsAdded > 0 then
-    begin
-      MsgBox('Windows Defender Ausnahmen wurden erfolgreich hinzugefügt!' + #13#10 + #13#10 + 
-             'Hinzugefügte Ausnahmen: ' + IntToStr(ExclusionsAdded) + ' von 5' + #13#10 + #13#10 +
-             'WICHTIG:' + #13#10 +
-             '• Der Windows Defender bleibt AKTIV und schützt Ihr System' + #13#10 +
-             '• Nur die Tool-Dateien wurden als vertrauenswürdig markiert' + #13#10 +
-             '• Dies verhindert Fehlalarme beim Hardware-Monitoring' + #13#10 + #13#10 +
-             'Hintergrund:' + #13#10 +
-             'Das Tool nutzt LibreHardwareMonitor für CPU/GPU-Temperaturen.' + #13#10 +
-             'Dies erfordert Low-Level-Hardware-Zugriff, den Defender' + #13#10 +
-             'manchmal fälschlicherweise als Bedrohung erkennt.',
-             mbInformation, MB_OK);
-    end
-    else
-    begin
-      MsgBox('WARNUNG: Defender-Ausnahmen konnten nicht hinzugefügt werden!' + #13#10 + #13#10 +
-             'Mögliche Gründe:' + #13#10 +
-             '• Keine Administrator-Rechte für diesen Installer' + #13#10 +
-             '• Windows Defender ist deaktiviert' + #13#10 +
-             '• Unternehmensrichtlinien verhindern Ausnahmen' + #13#10 + #13#10 +
-             'FOLGEN:' + #13#10 +
-             '• Windows Defender könnte das Tool blockieren' + #13#10 +
-             '• Hardware-Monitoring (Temperaturen) funktioniert evtl. nicht' + #13#10 + #13#10 +
-             'LÖSUNG:' + #13#10 +
-             'Fügen Sie manuell eine Ausnahme hinzu:' + #13#10 +
-             '1. Windows-Sicherheit öffnen' + #13#10 +
-             '2. Viren- & Bedrohungsschutz → Einstellungen' + #13#10 +
-             '3. Ausschlüsse verwalten → Ordner hinzufügen' + #13#10 +
-             '4. Ordner auswählen: ' + AppPath + '\Lib',
-             mbError, MB_OK);
-    end;
-  end;
-end;
+
 
 // Wird vor dem Installations-Wizard aufgerufen - prüft Systemvoraussetzungen
 function InitializeSetup(): Boolean;
@@ -851,11 +795,13 @@ end;
 // Wird bei jedem Schritt der Installation aufgerufen
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
-  // Nach erfolgreicher Installation: Defender-Ausnahme hinzufügen
-  if CurStep = ssPostInstall then
-  begin
-    AddDefenderExclusion;
-  end;
+  // Keine Post-Installation Tasks
+end;
+
+// Gibt das aktuelle Datum und die Uhrzeit zurück (für Registry)
+function GetCurrentDateTime(Param: String): String;
+begin
+  Result := GetDateTimeString('yyyy-mm-dd hh:nn:ss', '-', ':');
 end;
 
 [CustomMessages]
@@ -866,12 +812,23 @@ german.AppName=Bockis System-Tool
 german.SetupWindowTitle=Installation - Bockis System-Tool
 german.UninstallAppTitle=Deinstallation - Bockis System-Tool
 german.LaunchProgram={#MyAppName} jetzt starten
-german.WelcomeLabel2=Willkommen beim Installations-Assistenten für Bockis System-Tool!%n%nDieses Tool hilft Ihnen bei der Wartung, Diagnose und Optimierung Ihres Windows-Systems.%n%nFunktionen:%n• System-Reparatur (SFC, DISM, CHKDSK)%n• Hardware-Monitoring (CPU, GPU, RAM)%n• Netzwerk-Tools und Diagnose%n• System-Bereinigung%n• 29 integrierte Wartungstools%n%nEs wird empfohlen, alle anderen Anwendungen zu schließen, bevor Sie fortfahren.
+
+; Moderne, übersichtliche Willkommensnachricht
+german.WelcomeLabel2=Willkommen zur Installation von%n%n{#MyAppName} v{#MyAppVersion}%n%n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%n%nProfessionelles Windows System-Wartungstool%nmit moderner GUI und umfangreichen Funktionen:%n%n  ✓  System-Reparatur & Diagnose%n  ✓  Echtzeit Hardware-Monitoring%n  ✓  Netzwerk-Tools & Optimierung%n  ✓  Intelligente Bereinigung%n  ✓  29+ integrierte Wartungstools%n%n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%n%nBitte schließen Sie alle laufenden Anwendungen%nund klicken Sie auf "Weiter" zum Fortfahren.
 
 [Run]
 ; ===================================================================
 ; NACH-INSTALLATIONS-AKTIONEN
 ; ===================================================================
+
+; -------------------------------------------------------------------
+; PawnIO Ring-0 Treiber über WinGet installieren (kritisch für Hardware-Monitoring)
+; -------------------------------------------------------------------
+; WICHTIG: PawnIO ist der sichere Kernel-Treiber für Hardware-Zugriff!
+; LibreHardwareMonitorLib.dll ist bereits im Lib-Ordner enthalten und
+; benötigt PawnIO für sicheren Ring-0 Zugriff.
+; OHNE PawnIO funktioniert Hardware-Monitoring NICHT!
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""& {{ try {{ $null = Get-Command winget -ErrorAction Stop; Write-Host 'Installiere PawnIO-Treiber...'; winget install --id namazso.PawnIO --exact --silent --accept-source-agreements --accept-package-agreements | Out-Null; if ($LASTEXITCODE -eq 0 -or $LASTEXITCODE -eq -1978335189) {{ Write-Host 'PawnIO-Treiber installiert! Neustart erforderlich!' -ForegroundColor Green }} else {{ Write-Warning 'Installation fehlgeschlagen (Code: $LASTEXITCODE)' }} }} catch {{ Write-Warning 'WinGet nicht verfuegbar - Hardware-Monitoring wird NICHT funktionieren' }} }}"""; Description: "PawnIO Ring-0 Treiber installieren (ERFORDERLICH für Hardware-Monitoring)"; StatusMsg: "Installiere PawnIO-Treiber via WinGet..."; Flags: runhidden
 
 ; -------------------------------------------------------------------
 ; Anwendung nach Installation starten (optional)
@@ -887,16 +844,22 @@ Filename: "{app}\README.md"; Description: "README-Datei anzeigen"; Flags: postin
 ; ===================================================================
 ; BEIM DEINSTALLIEREN ZU LÖSCHENDE DATEIEN
 ; ===================================================================
+; WICHTIG: Alle Daten werden jetzt zentral im Data-Ordner gespeichert!
+; Der Deinstaller muss nur noch das Installations-Verzeichnis löschen.
 
 ; -------------------------------------------------------------------
-; Temporäre Dateien und Logs löschen
+; Zentrale Daten-Ordner löschen
 ; -------------------------------------------------------------------
-Type: filesandordirs; Name: "{app}\Logs"
+Type: filesandordirs; Name: "{app}\Data"
+
+; -------------------------------------------------------------------
+; Temporäre Dateien und alte Logs löschen
+; -------------------------------------------------------------------
 Type: files; Name: "{app}\*.tmp"
 Type: files; Name: "{app}\*.log"
 
 ; -------------------------------------------------------------------
-; Archiv-Ordner löschen (alte Backups)
+; Archiv-Ordner löschen (alte Backups, falls vorhanden)
 ; -------------------------------------------------------------------
 Type: filesandordirs; Name: "{app}\_Archive"
 
@@ -906,18 +869,11 @@ Type: filesandordirs; Name: "{app}\_Archive"
 ; ===================================================================
 
 ; -------------------------------------------------------------------
-; Windows Defender Ausnahmen entfernen (spezifische Pfade)
+; Registry-Einträge löschen (zusätzliche Sicherheit)
 ; -------------------------------------------------------------------
-Filename: "powershell.exe"; Parameters: "-Command ""Remove-MpPreference -ExclusionPath '{app}\Win_Gui_Module.ps1' -ErrorAction SilentlyContinue"""; Flags: runhidden
-Filename: "powershell.exe"; Parameters: "-Command ""Remove-MpPreference -ExclusionPath '{app}\Modules' -ErrorAction SilentlyContinue"""; Flags: runhidden
-Filename: "powershell.exe"; Parameters: "-Command ""Remove-MpPreference -ExclusionPath '{app}\Lib' -ErrorAction SilentlyContinue"""; Flags: runhidden
+Filename: "reg.exe"; Parameters: "delete ""HKCU\Software\Bockis\SystemTool"" /f"; Flags: runhidden; RunOnceId: "CleanupRegistry"
 
-; -------------------------------------------------------------------
-; Temporäre Datenbank-Dateien im AppData-Ordner bereinigen
-; -------------------------------------------------------------------
-Filename: "powershell.exe"; Parameters: "-Command ""Remove-Item -Path '{localappdata}\BockisSystemTool' -Recurse -Force -ErrorAction SilentlyContinue"""; Flags: runhidden
 
-; -------------------------------------------------------------------
-; Cache-Dateien bereinigen
-; -------------------------------------------------------------------
-Filename: "powershell.exe"; Parameters: "-Command ""Remove-Item -Path '$env:TEMP\BockisSystemTool*' -Recurse -Force -ErrorAction SilentlyContinue"""; Flags: runhidden
+
+
+

@@ -210,7 +210,7 @@ function Initialize-SystemToolSettings {
         EnableNotifications = $true
         LogLevel            = "Standard"
         AutoSaveLogs        = $false
-        LogPath             = Join-Path $env:LOCALAPPDATA "BockisSystemTool\Logs"
+        LogPath             = Join-Path ($PSScriptRoot | Split-Path | Split-Path) "Data\Logs"
         ConfirmActions      = $true
         AdvancedCleanup     = $false
         CheckUpdates        = $true
@@ -249,14 +249,15 @@ function Import-SystemToolSettings {
             
             # Prüfe und migriere alte Log-Pfade
             $needsSave = $false
-            $newLogPath = Join-Path $env:LOCALAPPDATA "BockisSystemTool\Logs"
+            $guiRoot = $PSScriptRoot | Split-Path | Split-Path
+            $newLogPath = Join-Path $guiRoot "Data\Logs"
             
-            # Wenn LogPath existiert und NICHT der neue lokale Pfad ist, migriere ihn
+            # Wenn LogPath existiert und NICHT der neue Data-Pfad ist, migriere ihn
             if ($settingsHashtable.ContainsKey("LogPath")) {
                 $currentLogPath = $settingsHashtable["LogPath"]
-                # Prüfe ob es ein alter Pfad ist (enthält nicht LOCALAPPDATA oder BockisSystemTool)
-                if ($currentLogPath -notmatch "LOCALAPPDATA|BockisSystemTool") {
-                    Write-Host "Migration: Alter Log-Pfad erkannt, aktualisiere auf neuen lokalen Pfad..." -ForegroundColor Yellow
+                # Prüfe ob es ein alter Pfad ist (LOCALAPPDATA oder nicht im Data-Ordner)
+                if ($currentLogPath -match "LOCALAPPDATA" -or $currentLogPath -notmatch "Data\\Logs") {
+                    Write-Host "Migration: Alter Log-Pfad erkannt, aktualisiere auf neuen Data-Pfad..." -ForegroundColor Yellow
                     $settingsHashtable["LogPath"] = $newLogPath
                     $needsSave = $true
                 }
@@ -279,15 +280,18 @@ function Import-SystemToolSettings {
             if ($needsSave) {
                 try {
                     Export-SystemToolSettings -ConfigPath $ConfigPath -Silent
-                    Write-Host "Log-Pfad wurde automatisch auf lokalen AppData-Ordner migriert." -ForegroundColor Green
                 }
                 catch {
                     Write-Verbose "Konnte config.json nicht automatisch speichern: $_"
                 }
             }
             
-            Write-Host "Einstellungen wurden aus $ConfigPath geladen." -ForegroundColor Green
-            return $true
+            # Rückgabe-Objekt mit allen relevanten Informationen
+            return [PSCustomObject]@{
+                Success = $true
+                Migrated = $needsSave
+                ConfigPath = $ConfigPath
+            }
         }
         catch {
             Write-Host "Fehler beim Laden der Einstellungen: $_" -ForegroundColor Red
@@ -1151,7 +1155,7 @@ function Show-SettingsDialog {
             if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
                 try {
                     # Log-Verzeichnis aus dem lokalen AppData-Ordner
-                    $logsPath = Join-Path $env:LOCALAPPDATA "BockisSystemTool\Logs"
+                    $logsPath = Join-Path ($PSScriptRoot | Split-Path | Split-Path) "Data\Logs"
                     $resolvedLogsPath = Resolve-Path $logsPath -ErrorAction SilentlyContinue
                     
                     if ($resolvedLogsPath) {
@@ -1238,8 +1242,9 @@ function Show-SettingsDialog {
     $btnOpenLogFolder.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
     $btnOpenLogFolder.Add_Click({
             try {
-                # Log-Verzeichnis aus dem lokalen AppData-Ordner
-                $logsPath = Join-Path $env:LOCALAPPDATA "BockisSystemTool\Logs"
+                # Log-Verzeichnis aus dem Data-Ordner der GUI
+                $guiRoot = $PSScriptRoot | Split-Path | Split-Path
+                $logsPath = Join-Path $guiRoot "Data\Logs"
                 $resolvedLogsPath = Resolve-Path $logsPath -ErrorAction SilentlyContinue
                 
                 if ($resolvedLogsPath) {
@@ -1271,6 +1276,46 @@ function Show-SettingsDialog {
             }
         })
     $tabLogs.Controls.Add($btnOpenLogFolder)
+    
+    # Datenbank-Übersicht Button
+    $btnDatabaseOverview = New-Object System.Windows.Forms.Button
+    $btnDatabaseOverview.Text = "🗄️ Datenbank-Übersicht"
+    $btnDatabaseOverview.Location = New-Object System.Drawing.Point(305, 155)
+    $btnDatabaseOverview.Size = New-Object System.Drawing.Size(160, 30)
+    $btnDatabaseOverview.BackColor = [System.Drawing.Color]::DodgerBlue
+    $btnDatabaseOverview.ForeColor = [System.Drawing.Color]::White
+    $btnDatabaseOverview.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+    $btnDatabaseOverview.Add_Click({
+            try {
+                # Importiere DatabaseManager-Modul falls noch nicht geladen
+                $dbModulePath = Join-Path $PSScriptRoot "..\..\DatabaseManager.psm1"
+                if (Test-Path $dbModulePath) {
+                    Import-Module $dbModulePath -Force -ErrorAction SilentlyContinue
+                }
+                
+                # Rufe Show-DatabaseOverview auf
+                if (Get-Command -Name Show-DatabaseOverview -ErrorAction SilentlyContinue) {
+                    Show-DatabaseOverview
+                }
+                else {
+                    [System.Windows.Forms.MessageBox]::Show(
+                        "Datenbank-Übersicht-Funktion nicht verfügbar.`n`nStellen Sie sicher, dass DatabaseManager.psm1 korrekt geladen ist.",
+                        "Fehler",
+                        [System.Windows.Forms.MessageBoxButtons]::OK,
+                        [System.Windows.Forms.MessageBoxIcon]::Error
+                    )
+                }
+            }
+            catch {
+                [System.Windows.Forms.MessageBox]::Show(
+                    "Fehler beim Öffnen der Datenbank-Übersicht:`n`n$_",
+                    "Fehler",
+                    [System.Windows.Forms.MessageBoxButtons]::OK,
+                    [System.Windows.Forms.MessageBoxIcon]::Error
+                )
+            }
+        })
+    $tabLogs.Controls.Add($btnDatabaseOverview)
     
     # Tab 4: Verhalten
     $tabBehavior = New-Object System.Windows.Forms.TabPage
@@ -1344,12 +1389,266 @@ function Show-SettingsDialog {
     $lblRestartDefenderDesc.ForeColor = $textColor
     $tabSystem_Settings.Controls.Add($lblRestartDefenderDesc)
     
+    # ===================================================================
+    # TAB 6: PFADE
+    # ===================================================================
+    $tabPaths = New-Object System.Windows.Forms.TabPage
+    $tabPaths.Text = "📂 Pfade"
+    $tabPaths.BackColor = [System.Drawing.Color]::FromArgb(30, 30, 30)
+    $tabPaths.ForeColor = [System.Drawing.Color]::FromArgb(220, 220, 220)
+    $tabPaths.AutoScroll = $true
+    
+    # Beschreibung
+    $lblPathsDesc = New-Object System.Windows.Forms.Label
+    $lblPathsDesc.Text = "Übersicht aller wichtigen Verzeichnisse des Tools"
+    $lblPathsDesc.Location = New-Object System.Drawing.Point(15, 10)
+    $lblPathsDesc.Size = New-Object System.Drawing.Size(550, 20)
+    $lblPathsDesc.ForeColor = [System.Drawing.Color]::FromArgb(150, 150, 150)
+    $lblPathsDesc.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Italic)
+    $tabPaths.Controls.Add($lblPathsDesc)
+    
+    # Pfade definieren (alle im Data-Ordner der GUI)
+    $guiRoot = $PSScriptRoot | Split-Path | Split-Path  # Zwei Ebenen hoch zum Installationsordner
+    $logsPath = Join-Path $guiRoot "Data\Logs"
+    $databasePath = Join-Path $guiRoot "Data\Database"
+    $installPath = $guiRoot
+    $downloadPath = Join-Path $guiRoot "Data\ToolDownloads"
+    $toolsInstallPath = $env:ProgramFiles
+    
+    # Y-Position für Elemente
+    $currentY = 40
+    
+    # 1. Logs-Ordner
+    $lblLogs = New-Object System.Windows.Forms.Label
+    $lblLogs.Text = "Logs-Verzeichnis"
+    $lblLogs.Location = New-Object System.Drawing.Point(15, $currentY)
+    $lblLogs.Size = New-Object System.Drawing.Size(550, 20)
+    $lblLogs.ForeColor = [System.Drawing.Color]::FromArgb(100, 149, 237)
+    $lblLogs.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
+    $tabPaths.Controls.Add($lblLogs)
+    $currentY += 25
+    
+    $txtLogsPath = New-Object System.Windows.Forms.TextBox
+    $txtLogsPath.Text = $logsPath
+    $txtLogsPath.Location = New-Object System.Drawing.Point(15, $currentY)
+    $txtLogsPath.Size = New-Object System.Drawing.Size(420, 25)
+    $txtLogsPath.ReadOnly = $true
+    $txtLogsPath.BackColor = [System.Drawing.Color]::FromArgb(45, 45, 48)
+    $txtLogsPath.ForeColor = [System.Drawing.Color]::FromArgb(220, 220, 220)
+    $txtLogsPath.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
+    $tabPaths.Controls.Add($txtLogsPath)
+    
+    $btnOpenLogs = New-Object System.Windows.Forms.Button
+    $btnOpenLogs.Text = "📂 Öffnen"
+    $btnOpenLogs.Location = New-Object System.Drawing.Point(445, $currentY)
+    $btnOpenLogs.Size = New-Object System.Drawing.Size(110, 25)
+    $btnOpenLogs.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+    $btnOpenLogs.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(0, 122, 204)
+    $btnOpenLogs.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
+    $btnOpenLogs.ForeColor = [System.Drawing.Color]::FromArgb(220, 220, 220)
+    $btnOpenLogs.Tag = $logsPath
+    $btnOpenLogs.Add_Click({
+        if (Test-Path $this.Tag) { Start-Process "explorer.exe" -ArgumentList $this.Tag }
+        else { [System.Windows.Forms.MessageBox]::Show("Verzeichnis nicht gefunden: $($this.Tag)", "Fehler", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning) }
+    })
+    $tabPaths.Controls.Add($btnOpenLogs)
+    $currentY += 30
+    
+    $lblLogsDesc = New-Object System.Windows.Forms.Label
+    $lblLogsDesc.Text = "Enthält alle Log-Dateien der Anwendung (System-Scans, Diagnosen, Fehlerprotokolle)"
+    $lblLogsDesc.Location = New-Object System.Drawing.Point(15, $currentY)
+    $lblLogsDesc.Size = New-Object System.Drawing.Size(550, 30)
+    $lblLogsDesc.ForeColor = [System.Drawing.Color]::FromArgb(150, 150, 150)
+    $lblLogsDesc.Font = New-Object System.Drawing.Font("Segoe UI", 8)
+    $tabPaths.Controls.Add($lblLogsDesc)
+    $currentY += 50
+    
+    # 2. Datenbank-Ordner
+    $lblDatabase = New-Object System.Windows.Forms.Label
+    $lblDatabase.Text = "Datenbank-Verzeichnis"
+    $lblDatabase.Location = New-Object System.Drawing.Point(15, $currentY)
+    $lblDatabase.Size = New-Object System.Drawing.Size(550, 20)
+    $lblDatabase.ForeColor = [System.Drawing.Color]::FromArgb(100, 149, 237)
+    $lblDatabase.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
+    $tabPaths.Controls.Add($lblDatabase)
+    $currentY += 25
+    
+    $txtDatabasePath = New-Object System.Windows.Forms.TextBox
+    $txtDatabasePath.Text = $databasePath
+    $txtDatabasePath.Location = New-Object System.Drawing.Point(15, $currentY)
+    $txtDatabasePath.Size = New-Object System.Drawing.Size(420, 25)
+    $txtDatabasePath.ReadOnly = $true
+    $txtDatabasePath.BackColor = [System.Drawing.Color]::FromArgb(45, 45, 48)
+    $txtDatabasePath.ForeColor = [System.Drawing.Color]::FromArgb(220, 220, 220)
+    $txtDatabasePath.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
+    $tabPaths.Controls.Add($txtDatabasePath)
+    
+    $btnOpenDatabase = New-Object System.Windows.Forms.Button
+    $btnOpenDatabase.Text = "📂 Öffnen"
+    $btnOpenDatabase.Location = New-Object System.Drawing.Point(445, $currentY)
+    $btnOpenDatabase.Size = New-Object System.Drawing.Size(110, 25)
+    $btnOpenDatabase.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+    $btnOpenDatabase.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(0, 122, 204)
+    $btnOpenDatabase.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
+    $btnOpenDatabase.ForeColor = [System.Drawing.Color]::FromArgb(220, 220, 220)
+    $btnOpenDatabase.Tag = $databasePath
+    $btnOpenDatabase.Add_Click({
+        if (Test-Path $this.Tag) { Start-Process "explorer.exe" -ArgumentList $this.Tag }
+        else { [System.Windows.Forms.MessageBox]::Show("Verzeichnis nicht gefunden: $($this.Tag)", "Fehler", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning) }
+    })
+    $tabPaths.Controls.Add($btnOpenDatabase)
+    $currentY += 30
+    
+    $lblDatabaseDesc = New-Object System.Windows.Forms.Label
+    $lblDatabaseDesc.Text = "Speicherort der SQLite-Datenbank mit System-Snapshots und Hardware-Historie"
+    $lblDatabaseDesc.Location = New-Object System.Drawing.Point(15, $currentY)
+    $lblDatabaseDesc.Size = New-Object System.Drawing.Size(550, 30)
+    $lblDatabaseDesc.ForeColor = [System.Drawing.Color]::FromArgb(150, 150, 150)
+    $lblDatabaseDesc.Font = New-Object System.Drawing.Font("Segoe UI", 8)
+    $tabPaths.Controls.Add($lblDatabaseDesc)
+    $currentY += 50
+    
+    # 3. Installations-Ordner
+    $lblInstall = New-Object System.Windows.Forms.Label
+    $lblInstall.Text = "Installations-Verzeichnis"
+    $lblInstall.Location = New-Object System.Drawing.Point(15, $currentY)
+    $lblInstall.Size = New-Object System.Drawing.Size(550, 20)
+    $lblInstall.ForeColor = [System.Drawing.Color]::FromArgb(100, 149, 237)
+    $lblInstall.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
+    $tabPaths.Controls.Add($lblInstall)
+    $currentY += 25
+    
+    $txtInstallPath = New-Object System.Windows.Forms.TextBox
+    $txtInstallPath.Text = $installPath
+    $txtInstallPath.Location = New-Object System.Drawing.Point(15, $currentY)
+    $txtInstallPath.Size = New-Object System.Drawing.Size(420, 25)
+    $txtInstallPath.ReadOnly = $true
+    $txtInstallPath.BackColor = [System.Drawing.Color]::FromArgb(45, 45, 48)
+    $txtInstallPath.ForeColor = [System.Drawing.Color]::FromArgb(220, 220, 220)
+    $txtInstallPath.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
+    $tabPaths.Controls.Add($txtInstallPath)
+    
+    $btnOpenInstall = New-Object System.Windows.Forms.Button
+    $btnOpenInstall.Text = "📂 Öffnen"
+    $btnOpenInstall.Location = New-Object System.Drawing.Point(445, $currentY)
+    $btnOpenInstall.Size = New-Object System.Drawing.Size(110, 25)
+    $btnOpenInstall.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+    $btnOpenInstall.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(0, 122, 204)
+    $btnOpenInstall.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
+    $btnOpenInstall.ForeColor = [System.Drawing.Color]::FromArgb(220, 220, 220)
+    $btnOpenInstall.Tag = $installPath
+    $btnOpenInstall.Add_Click({
+        if (Test-Path $this.Tag) { Start-Process "explorer.exe" -ArgumentList $this.Tag }
+        else { [System.Windows.Forms.MessageBox]::Show("Verzeichnis nicht gefunden: $($this.Tag)", "Fehler", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning) }
+    })
+    $tabPaths.Controls.Add($btnOpenInstall)
+    $currentY += 30
+    
+    $lblInstallDesc = New-Object System.Windows.Forms.Label
+    $lblInstallDesc.Text = "Hauptverzeichnis der GUI-Anwendung mit allen Modulen und Bibliotheken"
+    $lblInstallDesc.Location = New-Object System.Drawing.Point(15, $currentY)
+    $lblInstallDesc.Size = New-Object System.Drawing.Size(550, 30)
+    $lblInstallDesc.ForeColor = [System.Drawing.Color]::FromArgb(150, 150, 150)
+    $lblInstallDesc.Font = New-Object System.Drawing.Font("Segoe UI", 8)
+    $tabPaths.Controls.Add($lblInstallDesc)
+    $currentY += 50
+    
+    # 4. Download-Ordner
+    $lblDownload = New-Object System.Windows.Forms.Label
+    $lblDownload.Text = "Tool-Downloads"
+    $lblDownload.Location = New-Object System.Drawing.Point(15, $currentY)
+    $lblDownload.Size = New-Object System.Drawing.Size(550, 20)
+    $lblDownload.ForeColor = [System.Drawing.Color]::FromArgb(100, 149, 237)
+    $lblDownload.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
+    $tabPaths.Controls.Add($lblDownload)
+    $currentY += 25
+    
+    $txtDownloadPath = New-Object System.Windows.Forms.TextBox
+    $txtDownloadPath.Text = $downloadPath
+    $txtDownloadPath.Location = New-Object System.Drawing.Point(15, $currentY)
+    $txtDownloadPath.Size = New-Object System.Drawing.Size(420, 25)
+    $txtDownloadPath.ReadOnly = $true
+    $txtDownloadPath.BackColor = [System.Drawing.Color]::FromArgb(45, 45, 48)
+    $txtDownloadPath.ForeColor = [System.Drawing.Color]::FromArgb(220, 220, 220)
+    $txtDownloadPath.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
+    $tabPaths.Controls.Add($txtDownloadPath)
+    
+    $btnOpenDownload = New-Object System.Windows.Forms.Button
+    $btnOpenDownload.Text = "📂 Öffnen"
+    $btnOpenDownload.Location = New-Object System.Drawing.Point(445, $currentY)
+    $btnOpenDownload.Size = New-Object System.Drawing.Size(110, 25)
+    $btnOpenDownload.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+    $btnOpenDownload.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(0, 122, 204)
+    $btnOpenDownload.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
+    $btnOpenDownload.ForeColor = [System.Drawing.Color]::FromArgb(220, 220, 220)
+    $btnOpenDownload.Tag = $downloadPath
+    $btnOpenDownload.Add_Click({
+        if (Test-Path $this.Tag) { Start-Process "explorer.exe" -ArgumentList $this.Tag }
+        else { [System.Windows.Forms.MessageBox]::Show("Verzeichnis nicht gefunden: $($this.Tag)", "Fehler", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning) }
+    })
+    $tabPaths.Controls.Add($btnOpenDownload)
+    $currentY += 30
+    
+    $lblDownloadDesc = New-Object System.Windows.Forms.Label
+    $lblDownloadDesc.Text = "Temporärer Speicherort für heruntergeladene Tools (wird automatisch bereinigt)"
+    $lblDownloadDesc.Location = New-Object System.Drawing.Point(15, $currentY)
+    $lblDownloadDesc.Size = New-Object System.Drawing.Size(550, 30)
+    $lblDownloadDesc.ForeColor = [System.Drawing.Color]::FromArgb(150, 150, 150)
+    $lblDownloadDesc.Font = New-Object System.Drawing.Font("Segoe UI", 8)
+    $tabPaths.Controls.Add($lblDownloadDesc)
+    $currentY += 50
+    
+    # 5. Tool-Installations-Ordner
+    $lblToolsInstall = New-Object System.Windows.Forms.Label
+    $lblToolsInstall.Text = "Tool-Installationen"
+    $lblToolsInstall.Location = New-Object System.Drawing.Point(15, $currentY)
+    $lblToolsInstall.Size = New-Object System.Drawing.Size(550, 20)
+    $lblToolsInstall.ForeColor = [System.Drawing.Color]::FromArgb(100, 149, 237)
+    $lblToolsInstall.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
+    $tabPaths.Controls.Add($lblToolsInstall)
+    $currentY += 25
+    
+    $txtToolsInstallPath = New-Object System.Windows.Forms.TextBox
+    $txtToolsInstallPath.Text = $toolsInstallPath
+    $txtToolsInstallPath.Location = New-Object System.Drawing.Point(15, $currentY)
+    $txtToolsInstallPath.Size = New-Object System.Drawing.Size(420, 25)
+    $txtToolsInstallPath.ReadOnly = $true
+    $txtToolsInstallPath.BackColor = [System.Drawing.Color]::FromArgb(45, 45, 48)
+    $txtToolsInstallPath.ForeColor = [System.Drawing.Color]::FromArgb(220, 220, 220)
+    $txtToolsInstallPath.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
+    $tabPaths.Controls.Add($txtToolsInstallPath)
+    
+    $btnOpenToolsInstall = New-Object System.Windows.Forms.Button
+    $btnOpenToolsInstall.Text = "📂 Öffnen"
+    $btnOpenToolsInstall.Location = New-Object System.Drawing.Point(445, $currentY)
+    $btnOpenToolsInstall.Size = New-Object System.Drawing.Size(110, 25)
+    $btnOpenToolsInstall.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+    $btnOpenToolsInstall.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(0, 122, 204)
+    $btnOpenToolsInstall.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
+    $btnOpenToolsInstall.ForeColor = [System.Drawing.Color]::FromArgb(220, 220, 220)
+    $btnOpenToolsInstall.Tag = $toolsInstallPath
+    $btnOpenToolsInstall.Add_Click({
+        if (Test-Path $this.Tag) { Start-Process "explorer.exe" -ArgumentList $this.Tag }
+        else { [System.Windows.Forms.MessageBox]::Show("Verzeichnis nicht gefunden: $($this.Tag)", "Fehler", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning) }
+    })
+    $tabPaths.Controls.Add($btnOpenToolsInstall)
+    $currentY += 30
+    
+    $lblToolsInstallDesc = New-Object System.Windows.Forms.Label
+    $lblToolsInstallDesc.Text = "Standard-Installationsort für heruntergeladene System-Tools"
+    $lblToolsInstallDesc.Location = New-Object System.Drawing.Point(15, $currentY)
+    $lblToolsInstallDesc.Size = New-Object System.Drawing.Size(550, 30)
+    $lblToolsInstallDesc.ForeColor = [System.Drawing.Color]::FromArgb(150, 150, 150)
+    $lblToolsInstallDesc.Font = New-Object System.Drawing.Font("Segoe UI", 8)
+    $tabPaths.Controls.Add($lblToolsInstallDesc)
+    
     # Tabs zum TabControl hinzufügen
     $settingsTabControl.TabPages.Add($tabDisplay)
     $settingsTabControl.TabPages.Add($tabMonitoring)
     $settingsTabControl.TabPages.Add($tabLogs)
     $settingsTabControl.TabPages.Add($tabBehavior)
     $settingsTabControl.TabPages.Add($tabSystem_Settings)
+    $settingsTabControl.TabPages.Add($tabPaths)
     
     # TabControl zum Formular hinzufügen
     $settingsForm.Controls.Add($settingsTabControl)
@@ -1462,12 +1761,15 @@ function Show-SettingsDialog {
                 
                 # TextStyle mit neuen Farben neu initialisieren
                 Initialize-TextStyle -Settings $script:settings -OutputBox $OutputBox
+                
+                # OutputBox komplett leeren, da bereits formatierter Text die alten Farben behält
+                $OutputBox.Clear()
             }
             catch {
                 Write-Host "Fehler beim Speichern der Einstellungen: $_" -ForegroundColor Red
             }
             
-            # Ausgabe in der OutputBox
+            # Ausgabe in der OutputBox (nach Clear, damit neue Farben sofort sichtbar sind)
             Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Success'
             $OutputBox.AppendText("`r`nEinstellungen wurden aktualisiert und angewendet:`r`n")
             Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Default'
@@ -1581,3 +1883,157 @@ Export-ModuleMember -Function Get-ScanHistory
 Export-ModuleMember -Function Get-ScanStatus
 
 
+
+# SIG # Begin signature block
+# MIIcSgYJKoZIhvcNAQcCoIIcOzCCHDcCAQExDzANBglghkgBZQMEAgEFADB5Bgor
+# BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCAPiEflxHFYRmqf
+# nwHKnTgTuCToSF4sMgVXvibatrpK36CCFnowggM8MIICJKADAgECAhBJfyGrXBJT
+# oUbCYkBRRxacMA0GCSqGSIb3DQEBCwUAMDYxCzAJBgNVBAYTAkRFMQ4wDAYDVQQK
+# DAVCb2NraTEXMBUGA1UEAwwOQm9ja2kgU29mdHdhcmUwHhcNMjYwMTIwMTc0NjIy
+# WhcNMzEwMTIwMTc1NjIyWjA2MQswCQYDVQQGEwJERTEOMAwGA1UECgwFQm9ja2kx
+# FzAVBgNVBAMMDkJvY2tpIFNvZnR3YXJlMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A
+# MIIBCgKCAQEAoQtPttwj/HfLCMp+5pqQOYHtAsyMU7eKVIdtkrEaISn8wKZQqEQL
+# E4iGdIVsDmaoIns790Lt3Uw/2xnXy2y3/X2dXBypkjoF5346p79Fb9hNAs103lzk
+# NPgxkSkkGpmXERWTeik64eUq3u0TjTivFgFMIwOJUorSkIwzUh/iLQZeCihuRIZL
+# eubl7OdiPl4yPb2SlLdhSErXSkhHPSsu6U6j/MJvvBNRkF3uF7B+lLPvW9I/hfAF
+# R1UEyAoX+l91AKtjac32OzZH2/Wj2ezoa4PliyzLox7Pjn642pvd/cU+LKWwl4Fm
+# iu8c03rafk3Ykpp05QJcCWiy2aExG20xTQIDAQABo0YwRDAOBgNVHQ8BAf8EBAMC
+# B4AwEwYDVR0lBAwwCgYIKwYBBQUHAwMwHQYDVR0OBBYEFPiUIYSngqXUa7A3vbjR
+# 0PXonIvMMA0GCSqGSIb3DQEBCwUAA4IBAQBMzmWw9+P7IV7xla88buo++WjtigRK
+# 5YaY7K1yyn1bml6Hd2uWaF1ptfUuUnDPDyQr9eFrrHkK4qwhx5k2X4spjzLjhPf+
+# MPWLjN5ZudKwgQhTjSrcUAsi0Qi5LopPAKNjP3yDclEtJJh3/L0gmhkfu4AIbUin
+# IRCHy8WcPWO1jgp4FzkoVkxeuwe2X8WIsjUSooi3qlYqxBK8amlTRUCSmtMpcif5
+# 1Ew1KoiOV2cC/tzcHs1clkmJQvZ6Urwc1PbIbHKDYy0l4N5/4epycum4Ijq3fkBf
+# BN3AfKchZw6j+iCInCimjmdgwb6vYPCru6/4fdBt5BCRy0SjBmi5MMpFMIIFjTCC
+# BHWgAwIBAgIQDpsYjvnQLefv21DiCEAYWjANBgkqhkiG9w0BAQwFADBlMQswCQYD
+# VQQGEwJVUzEVMBMGA1UEChMMRGlnaUNlcnQgSW5jMRkwFwYDVQQLExB3d3cuZGln
+# aWNlcnQuY29tMSQwIgYDVQQDExtEaWdpQ2VydCBBc3N1cmVkIElEIFJvb3QgQ0Ew
+# HhcNMjIwODAxMDAwMDAwWhcNMzExMTA5MjM1OTU5WjBiMQswCQYDVQQGEwJVUzEV
+# MBMGA1UEChMMRGlnaUNlcnQgSW5jMRkwFwYDVQQLExB3d3cuZGlnaWNlcnQuY29t
+# MSEwHwYDVQQDExhEaWdpQ2VydCBUcnVzdGVkIFJvb3QgRzQwggIiMA0GCSqGSIb3
+# DQEBAQUAA4ICDwAwggIKAoICAQC/5pBzaN675F1KPDAiMGkz7MKnJS7JIT3yithZ
+# wuEppz1Yq3aaza57G4QNxDAf8xukOBbrVsaXbR2rsnnyyhHS5F/WBTxSD1Ifxp4V
+# pX6+n6lXFllVcq9ok3DCsrp1mWpzMpTREEQQLt+C8weE5nQ7bXHiLQwb7iDVySAd
+# YyktzuxeTsiT+CFhmzTrBcZe7FsavOvJz82sNEBfsXpm7nfISKhmV1efVFiODCu3
+# T6cw2Vbuyntd463JT17lNecxy9qTXtyOj4DatpGYQJB5w3jHtrHEtWoYOAMQjdjU
+# N6QuBX2I9YI+EJFwq1WCQTLX2wRzKm6RAXwhTNS8rhsDdV14Ztk6MUSaM0C/CNda
+# SaTC5qmgZ92kJ7yhTzm1EVgX9yRcRo9k98FpiHaYdj1ZXUJ2h4mXaXpI8OCiEhtm
+# mnTK3kse5w5jrubU75KSOp493ADkRSWJtppEGSt+wJS00mFt6zPZxd9LBADMfRyV
+# w4/3IbKyEbe7f/LVjHAsQWCqsWMYRJUadmJ+9oCw++hkpjPRiQfhvbfmQ6QYuKZ3
+# AeEPlAwhHbJUKSWJbOUOUlFHdL4mrLZBdd56rF+NP8m800ERElvlEFDrMcXKchYi
+# Cd98THU/Y+whX8QgUWtvsauGi0/C1kVfnSD8oR7FwI+isX4KJpn15GkvmB0t9dmp
+# sh3lGwIDAQABo4IBOjCCATYwDwYDVR0TAQH/BAUwAwEB/zAdBgNVHQ4EFgQU7Nfj
+# gtJxXWRM3y5nP+e6mK4cD08wHwYDVR0jBBgwFoAUReuir/SSy4IxLVGLp6chnfNt
+# yA8wDgYDVR0PAQH/BAQDAgGGMHkGCCsGAQUFBwEBBG0wazAkBggrBgEFBQcwAYYY
+# aHR0cDovL29jc3AuZGlnaWNlcnQuY29tMEMGCCsGAQUFBzAChjdodHRwOi8vY2Fj
+# ZXJ0cy5kaWdpY2VydC5jb20vRGlnaUNlcnRBc3N1cmVkSURSb290Q0EuY3J0MEUG
+# A1UdHwQ+MDwwOqA4oDaGNGh0dHA6Ly9jcmwzLmRpZ2ljZXJ0LmNvbS9EaWdpQ2Vy
+# dEFzc3VyZWRJRFJvb3RDQS5jcmwwEQYDVR0gBAowCDAGBgRVHSAAMA0GCSqGSIb3
+# DQEBDAUAA4IBAQBwoL9DXFXnOF+go3QbPbYW1/e/Vwe9mqyhhyzshV6pGrsi+Ica
+# aVQi7aSId229GhT0E0p6Ly23OO/0/4C5+KH38nLeJLxSA8hO0Cre+i1Wz/n096ww
+# epqLsl7Uz9FDRJtDIeuWcqFItJnLnU+nBgMTdydE1Od/6Fmo8L8vC6bp8jQ87PcD
+# x4eo0kxAGTVGamlUsLihVo7spNU96LHc/RzY9HdaXFSMb++hUD38dglohJ9vytsg
+# jTVgHAIDyyCwrFigDkBjxZgiwbJZ9VVrzyerbHbObyMt9H5xaiNrIv8SuFQtJ37Y
+# OtnwtoeW/VvRXKwYw02fc7cBqZ9Xql4o4rmUMIIGtDCCBJygAwIBAgIQDcesVwX/
+# IZkuQEMiDDpJhjANBgkqhkiG9w0BAQsFADBiMQswCQYDVQQGEwJVUzEVMBMGA1UE
+# ChMMRGlnaUNlcnQgSW5jMRkwFwYDVQQLExB3d3cuZGlnaWNlcnQuY29tMSEwHwYD
+# VQQDExhEaWdpQ2VydCBUcnVzdGVkIFJvb3QgRzQwHhcNMjUwNTA3MDAwMDAwWhcN
+# MzgwMTE0MjM1OTU5WjBpMQswCQYDVQQGEwJVUzEXMBUGA1UEChMORGlnaUNlcnQs
+# IEluYy4xQTA/BgNVBAMTOERpZ2lDZXJ0IFRydXN0ZWQgRzQgVGltZVN0YW1waW5n
+# IFJTQTQwOTYgU0hBMjU2IDIwMjUgQ0ExMIICIjANBgkqhkiG9w0BAQEFAAOCAg8A
+# MIICCgKCAgEAtHgx0wqYQXK+PEbAHKx126NGaHS0URedTa2NDZS1mZaDLFTtQ2oR
+# jzUXMmxCqvkbsDpz4aH+qbxeLho8I6jY3xL1IusLopuW2qftJYJaDNs1+JH7Z+Qd
+# SKWM06qchUP+AbdJgMQB3h2DZ0Mal5kYp77jYMVQXSZH++0trj6Ao+xh/AS7sQRu
+# QL37QXbDhAktVJMQbzIBHYJBYgzWIjk8eDrYhXDEpKk7RdoX0M980EpLtlrNyHw0
+# Xm+nt5pnYJU3Gmq6bNMI1I7Gb5IBZK4ivbVCiZv7PNBYqHEpNVWC2ZQ8BbfnFRQV
+# ESYOszFI2Wv82wnJRfN20VRS3hpLgIR4hjzL0hpoYGk81coWJ+KdPvMvaB0WkE/2
+# qHxJ0ucS638ZxqU14lDnki7CcoKCz6eum5A19WZQHkqUJfdkDjHkccpL6uoG8pbF
+# 0LJAQQZxst7VvwDDjAmSFTUms+wV/FbWBqi7fTJnjq3hj0XbQcd8hjj/q8d6ylgx
+# CZSKi17yVp2NL+cnT6Toy+rN+nM8M7LnLqCrO2JP3oW//1sfuZDKiDEb1AQ8es9X
+# r/u6bDTnYCTKIsDq1BtmXUqEG1NqzJKS4kOmxkYp2WyODi7vQTCBZtVFJfVZ3j7O
+# gWmnhFr4yUozZtqgPrHRVHhGNKlYzyjlroPxul+bgIspzOwbtmsgY1MCAwEAAaOC
+# AV0wggFZMBIGA1UdEwEB/wQIMAYBAf8CAQAwHQYDVR0OBBYEFO9vU0rp5AZ8esri
+# kFb2L9RJ7MtOMB8GA1UdIwQYMBaAFOzX44LScV1kTN8uZz/nupiuHA9PMA4GA1Ud
+# DwEB/wQEAwIBhjATBgNVHSUEDDAKBggrBgEFBQcDCDB3BggrBgEFBQcBAQRrMGkw
+# JAYIKwYBBQUHMAGGGGh0dHA6Ly9vY3NwLmRpZ2ljZXJ0LmNvbTBBBggrBgEFBQcw
+# AoY1aHR0cDovL2NhY2VydHMuZGlnaWNlcnQuY29tL0RpZ2lDZXJ0VHJ1c3RlZFJv
+# b3RHNC5jcnQwQwYDVR0fBDwwOjA4oDagNIYyaHR0cDovL2NybDMuZGlnaWNlcnQu
+# Y29tL0RpZ2lDZXJ0VHJ1c3RlZFJvb3RHNC5jcmwwIAYDVR0gBBkwFzAIBgZngQwB
+# BAIwCwYJYIZIAYb9bAcBMA0GCSqGSIb3DQEBCwUAA4ICAQAXzvsWgBz+Bz0RdnEw
+# vb4LyLU0pn/N0IfFiBowf0/Dm1wGc/Do7oVMY2mhXZXjDNJQa8j00DNqhCT3t+s8
+# G0iP5kvN2n7Jd2E4/iEIUBO41P5F448rSYJ59Ib61eoalhnd6ywFLerycvZTAz40
+# y8S4F3/a+Z1jEMK/DMm/axFSgoR8n6c3nuZB9BfBwAQYK9FHaoq2e26MHvVY9gCD
+# A/JYsq7pGdogP8HRtrYfctSLANEBfHU16r3J05qX3kId+ZOczgj5kjatVB+NdADV
+# ZKON/gnZruMvNYY2o1f4MXRJDMdTSlOLh0HCn2cQLwQCqjFbqrXuvTPSegOOzr4E
+# Wj7PtspIHBldNE2K9i697cvaiIo2p61Ed2p8xMJb82Yosn0z4y25xUbI7GIN/TpV
+# fHIqQ6Ku/qjTY6hc3hsXMrS+U0yy+GWqAXam4ToWd2UQ1KYT70kZjE4YtL8Pbzg0
+# c1ugMZyZZd/BdHLiRu7hAWE6bTEm4XYRkA6Tl4KSFLFk43esaUeqGkH/wyW4N7Oi
+# gizwJWeukcyIPbAvjSabnf7+Pu0VrFgoiovRDiyx3zEdmcif/sYQsfch28bZeUz2
+# rtY/9TCA6TD8dC3JE3rYkrhLULy7Dc90G6e8BlqmyIjlgp2+VqsS9/wQD7yFylIz
+# 0scmbKvFoW2jNrbM1pD2T7m3XDCCBu0wggTVoAMCAQICEAqA7xhLjfEFgtHEdqeV
+# dGgwDQYJKoZIhvcNAQELBQAwaTELMAkGA1UEBhMCVVMxFzAVBgNVBAoTDkRpZ2lD
+# ZXJ0LCBJbmMuMUEwPwYDVQQDEzhEaWdpQ2VydCBUcnVzdGVkIEc0IFRpbWVTdGFt
+# cGluZyBSU0E0MDk2IFNIQTI1NiAyMDI1IENBMTAeFw0yNTA2MDQwMDAwMDBaFw0z
+# NjA5MDMyMzU5NTlaMGMxCzAJBgNVBAYTAlVTMRcwFQYDVQQKEw5EaWdpQ2VydCwg
+# SW5jLjE7MDkGA1UEAxMyRGlnaUNlcnQgU0hBMjU2IFJTQTQwOTYgVGltZXN0YW1w
+# IFJlc3BvbmRlciAyMDI1IDEwggIiMA0GCSqGSIb3DQEBAQUAA4ICDwAwggIKAoIC
+# AQDQRqwtEsae0OquYFazK1e6b1H/hnAKAd/KN8wZQjBjMqiZ3xTWcfsLwOvRxUwX
+# cGx8AUjni6bz52fGTfr6PHRNv6T7zsf1Y/E3IU8kgNkeECqVQ+3bzWYesFtkepEr
+# vUSbf+EIYLkrLKd6qJnuzK8Vcn0DvbDMemQFoxQ2Dsw4vEjoT1FpS54dNApZfKY6
+# 1HAldytxNM89PZXUP/5wWWURK+IfxiOg8W9lKMqzdIo7VA1R0V3Zp3DjjANwqAf4
+# lEkTlCDQ0/fKJLKLkzGBTpx6EYevvOi7XOc4zyh1uSqgr6UnbksIcFJqLbkIXIPb
+# cNmA98Oskkkrvt6lPAw/p4oDSRZreiwB7x9ykrjS6GS3NR39iTTFS+ENTqW8m6TH
+# uOmHHjQNC3zbJ6nJ6SXiLSvw4Smz8U07hqF+8CTXaETkVWz0dVVZw7knh1WZXOLH
+# gDvundrAtuvz0D3T+dYaNcwafsVCGZKUhQPL1naFKBy1p6llN3QgshRta6Eq4B40
+# h5avMcpi54wm0i2ePZD5pPIssoszQyF4//3DoK2O65Uck5Wggn8O2klETsJ7u8xE
+# ehGifgJYi+6I03UuT1j7FnrqVrOzaQoVJOeeStPeldYRNMmSF3voIgMFtNGh86w3
+# ISHNm0IaadCKCkUe2LnwJKa8TIlwCUNVwppwn4D3/Pt5pwIDAQABo4IBlTCCAZEw
+# DAYDVR0TAQH/BAIwADAdBgNVHQ4EFgQU5Dv88jHt/f3X85FxYxlQQ89hjOgwHwYD
+# VR0jBBgwFoAU729TSunkBnx6yuKQVvYv1Ensy04wDgYDVR0PAQH/BAQDAgeAMBYG
+# A1UdJQEB/wQMMAoGCCsGAQUFBwMIMIGVBggrBgEFBQcBAQSBiDCBhTAkBggrBgEF
+# BQcwAYYYaHR0cDovL29jc3AuZGlnaWNlcnQuY29tMF0GCCsGAQUFBzAChlFodHRw
+# Oi8vY2FjZXJ0cy5kaWdpY2VydC5jb20vRGlnaUNlcnRUcnVzdGVkRzRUaW1lU3Rh
+# bXBpbmdSU0E0MDk2U0hBMjU2MjAyNUNBMS5jcnQwXwYDVR0fBFgwVjBUoFKgUIZO
+# aHR0cDovL2NybDMuZGlnaWNlcnQuY29tL0RpZ2lDZXJ0VHJ1c3RlZEc0VGltZVN0
+# YW1waW5nUlNBNDA5NlNIQTI1NjIwMjVDQTEuY3JsMCAGA1UdIAQZMBcwCAYGZ4EM
+# AQQCMAsGCWCGSAGG/WwHATANBgkqhkiG9w0BAQsFAAOCAgEAZSqt8RwnBLmuYEHs
+# 0QhEnmNAciH45PYiT9s1i6UKtW+FERp8FgXRGQ/YAavXzWjZhY+hIfP2JkQ38U+w
+# tJPBVBajYfrbIYG+Dui4I4PCvHpQuPqFgqp1PzC/ZRX4pvP/ciZmUnthfAEP1HSh
+# TrY+2DE5qjzvZs7JIIgt0GCFD9ktx0LxxtRQ7vllKluHWiKk6FxRPyUPxAAYH2Vy
+# 1lNM4kzekd8oEARzFAWgeW3az2xejEWLNN4eKGxDJ8WDl/FQUSntbjZ80FU3i54t
+# px5F/0Kr15zW/mJAxZMVBrTE2oi0fcI8VMbtoRAmaaslNXdCG1+lqvP4FbrQ6IwS
+# BXkZagHLhFU9HCrG/syTRLLhAezu/3Lr00GrJzPQFnCEH1Y58678IgmfORBPC1JK
+# kYaEt2OdDh4GmO0/5cHelAK2/gTlQJINqDr6JfwyYHXSd+V08X1JUPvB4ILfJdmL
+# +66Gp3CSBXG6IwXMZUXBhtCyIaehr0XkBoDIGMUG1dUtwq1qmcwbdUfcSYCn+Own
+# cVUXf53VJUNOaMWMts0VlRYxe5nK+At+DI96HAlXHAL5SlfYxJ7La54i71McVWRP
+# 66bW+yERNpbJCjyCYG2j+bdpxo/1Cy4uPcU3AWVPGrbn5PhDBf3Froguzzhk++am
+# i+r3Qrx5bIbY3TVzgiFI7Gq3zWcxggUmMIIFIgIBATBKMDYxCzAJBgNVBAYTAkRF
+# MQ4wDAYDVQQKDAVCb2NraTEXMBUGA1UEAwwOQm9ja2kgU29mdHdhcmUCEEl/Iatc
+# ElOhRsJiQFFHFpwwDQYJYIZIAWUDBAIBBQCggYQwGAYKKwYBBAGCNwIBDDEKMAig
+# AoAAoQKAADAZBgkqhkiG9w0BCQMxDAYKKwYBBAGCNwIBBDAcBgorBgEEAYI3AgEL
+# MQ4wDAYKKwYBBAGCNwIBFTAvBgkqhkiG9w0BCQQxIgQg2AozOzYXSG5gjtk/rs8E
+# O7Y0hEMAABJSP6wdmRrd2CEwDQYJKoZIhvcNAQEBBQAEggEAZzP7MILo+/ZQAgXJ
+# AEoguVWVLkSTJTTaIST3vDmJHV8txuJvoTVZ0/zLl/IEo2Tg6DQeYvdIZoDqiRJ4
+# LJQXl86j/66RK/7NQBs/3W5xK23HsYQGB2NFSJc7Qy+s0HoMm7e55U+vu3mOuECq
+# y0B0bPM/QcBp3G7fp4nVKnCb4S+vE2rP5az1K4QrnMjI+G+cN45bMv2Q8Do9y238
+# sjlbuPSYYlCdxr9j3Uj04mEY53AB5OJPDkD2nJ/VuQthM8CgV5n4sV8SObskW+3d
+# B+CZPpxlTZCKKHjzyfOVy62oSlTNb18L2kqbSX1HnulRS54/jTrtkRkFsWARR0QY
+# ZA2A5qGCAyYwggMiBgkqhkiG9w0BCQYxggMTMIIDDwIBATB9MGkxCzAJBgNVBAYT
+# AlVTMRcwFQYDVQQKEw5EaWdpQ2VydCwgSW5jLjFBMD8GA1UEAxM4RGlnaUNlcnQg
+# VHJ1c3RlZCBHNCBUaW1lU3RhbXBpbmcgUlNBNDA5NiBTSEEyNTYgMjAyNSBDQTEC
+# EAqA7xhLjfEFgtHEdqeVdGgwDQYJYIZIAWUDBAIBBQCgaTAYBgkqhkiG9w0BCQMx
+# CwYJKoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAxMjAxODAyNTNaMC8GCSqG
+# SIb3DQEJBDEiBCBj9Jwx/vnvhF0fQwrvjXamh4J0/t2Rv+TDvk1HSW2N4DANBgkq
+# hkiG9w0BAQEFAASCAgDD1oiwHHmpVS2fAvEa1o9nt/UkTZYpgOosRV+AkyQBI/Wq
+# ucuTf0Q6hYY5dle5c9+j4QVomWlLUImQkrzJe9yZ6AFWVLVPejhiGGO0qLcmLPFa
+# Z6bZl6Gtf4+JcW9ISPY4i7ok12SmVpsYjuRHzcZLNhwDopf9eLYCh1vD3562SHav
+# bamH3USsG/eBij1tfvwFmlc9qorcb8t7zj2EphS3TNorGGVbLr73WyVE3odDsiI/
+# Z6Ytoptdf2nzEpP7x8kU1T19cjm8G2hpxGeMVrlIydslA2+qV49fAlxZqjZ8tc/A
+# 3A5wf6TbCYnObMXAToXlEks+v4vDWsiqucVI3TobeiseDfhX6s2cMifeyBUR2Pof
+# NdXDdCLZ501UbcfOK9wclgX03ihMLI9E61lgDYsPig9y1P0QypU7eREz26tdfHn4
+# 72qIPRCINOhTsHsDfj1w8tZRXgghKFTZxlYhmmMGtBN36NAc6urmle9fMNoJC4D8
+# DQwHYNDTGtdXwcjbVSJ6eUymLbeolTMUDVWl0G9aFGzspzNPR5A0JoH+rWYlqm2V
+# xWVDhsK9BPPm3rNIgXMxKmBVWQmA0sp/6OLCAvb0b6rkLrv18fENXq2ZmwXlNVCr
+# QPznvHh3zQaJBhPSDNGWKsQgFgsrkWgqn1Fvy4hhyKJZFHw4gk3ftgtn0KRSyQ==
+# SIG # End signature block

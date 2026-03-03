@@ -24,10 +24,8 @@ $script:lastRamTempTime = $null  # Neuer Zeitstempel für RAM-Temperatur-Cache
 $script:isUpdating = $false
 $script:tooltipControl = $null
 $script:gpuName = $null
-$script:hwInfoRegistryAvailable = $false  # Neue Variable für HWiNFO64 Registry-Integration
-$script:hwInfoWmiClass = "HWiNFO_SENSORS_VSB"  # Standard WMI-Klasse für HWiNFO64
-$script:hwInfoCacheExpiry = [DateTime]::MinValue  # Cache für HWiNFO Verfügbarkeit
-$script:hwInfoCacheTimeout = [TimeSpan]::FromMinutes(5)  # HWiNFO Cache-Gültigkeit
+$script:lastHardwareMonitorError = $null  # Speichert detaillierte Fehlermeldung vom DependencyChecker
+$script:hardwareMonitorInitAttempted = $false  # Flag ob bereits versucht wurde zu initialisieren
 
 # Neue Cache-Variablen für verbesserte Performance
 $script:ramCache = $null
@@ -144,8 +142,26 @@ function Open-DebugWindow {
 
 function Close-DebugWindow {
     try {
+        # Erst temporäre Datei löschen (damit Get-Content im Fenster beendet wird)
+        if ($script:DebugWindowPath) {
+            try {
+                if (Test-Path $script:DebugWindowPath) {
+                    Remove-Item $script:DebugWindowPath -Force -ErrorAction SilentlyContinue
+                }
+            }
+            catch {
+                Write-Verbose "Konnte temporäre Debug-Datei nicht löschen: $_"
+            }
+            finally {
+                $script:DebugWindowPath = $null
+            }
+        }
+        
+        # Kleine Pause, damit Get-Content den Fehler bemerkt
+        Start-Sleep -Milliseconds 200
+        
+        # Dann Prozess beenden
         if ($script:DebugWindowProcess) {
-            # Prüfen ob der Prozess noch existiert
             try {
                 if (-not $script:DebugWindowProcess.HasExited) {
                     $script:DebugWindowProcess.Kill()
@@ -165,19 +181,7 @@ function Close-DebugWindow {
     catch {
         Write-Verbose "Fehler beim Schließen des Debug-Fensters: $_"
         $script:DebugWindowProcess = $null
-    }
-    
-    # Temporäre Datei löschen
-    if ($script:DebugWindowPath -and (Test-Path $script:DebugWindowPath)) {
-        try {
-            Remove-Item $script:DebugWindowPath -Force -ErrorAction Stop
-        }
-        catch {
-            Write-Verbose "Konnte temporäre Debug-Datei nicht löschen: $_"
-        }
-        finally {
-            $script:DebugWindowPath = $null
-        }
+        $script:DebugWindowPath = $null
     }
 }
 
@@ -673,11 +677,28 @@ function Initialize-LiveMonitoring {
         # Überprüfen und Initialisieren von LibreHardwareMonitor
         if ($null -eq $script:computerObj -or -not $script:useLibreHardware) {
             $script:computerObj = Initialize-LibreHardwareMonitor
+            
             if ($null -eq $script:computerObj) {
-                Write-Warning "LibreHardwareMonitor konnte nicht initialisiert werden!"
+                Write-Host "`n⚠️ HARDWARE-MONITORING DEAKTIVIERT" -ForegroundColor Yellow
+                
+                # Zeige detaillierte Fehlermeldung vom DependencyChecker
+                if ($script:lastHardwareMonitorError) {
+                    Write-Host $script:lastHardwareMonitorError -ForegroundColor Gray
+                }
+                else {
+                    # Fallback für den Fall, dass keine detaillierte Meldung verfügbar ist
+                    Write-Host "Hardware-Monitor konnte nicht initialisiert werden." -ForegroundColor Gray
+                    Write-Host "Bitte prüfe:" -ForegroundColor Cyan
+                    Write-Host "  - DLL-Dateien im Lib-Ordner vorhanden?" -ForegroundColor Gray
+                    Write-Host "  - PawnIO-Treiber installiert und aktiv?" -ForegroundColor Gray
+                    Write-Host "  - Administrator-Rechte vorhanden?" -ForegroundColor Gray
+                }
+                
                 return $null
             }
-            $script:useLibreHardware = $true        }        # Tooltip für Hardware-Statistiken verwenden (globales ToolTip bevorzugen)
+            
+            $script:useLibreHardware = $true
+        }        # Tooltip für Hardware-Statistiken verwenden (globales ToolTip bevorzugen)
         if ($GlobalTooltip) {
             $script:tooltipControl = $GlobalTooltip
         }
@@ -731,7 +752,7 @@ function Initialize-LiveMonitoring {
 
         # Timer erstellen
         $timer = New-Object System.Windows.Forms.Timer
-        $timer.Interval = 2000  # Auf 2 Sekunden erhöht für bessere Performance
+        $timer.Interval = 100  # Initial 100ms für schnellen ersten Tick, wird nach erstem Update auf 5000ms gesetzt
         $script:hardwareTimer = $timer  # Timer global speichern
 
         # Initialen GPU-Namen setzen
@@ -766,20 +787,37 @@ function Initialize-LiveMonitoring {
 
                 try {
                     if ($null -ne $script:computerObj) {
-                        # Hardware nur alle 2 Zyklen aktualisieren
-                        if ($script:updateCounter % 2 -eq 0) {
-                            $script:computerObj.Hardware | ForEach-Object { $_.Update() }
-                        }
+                        # LibreHardwareMonitor-Modus
+                        # Hardware-Update IMMER durchführen (wichtig für Sensor-Daten!)
+                        $script:computerObj.Hardware | ForEach-Object { $_.Update() }
                         
-                        # CPU immer aktualisieren (wenig Aufwand)
+                        # CPU immer aktualisieren (wichtigster Sensor)
                         Update-CpuInfo -CpuLabel $cpuLabel -Panel $gbCPU
                         
-                        # GPU und RAM abwechselnd aktualisieren
-                        if ($script:updateCounter % 2 -eq 0 -and $gpuLabel -and $gbGPU) {
-                            Update-GpuInfo -GpuLabel $gpuLabel -Panel $gbGPU
+                        # Beim ersten Mal (updateCounter == 1) ALLE Komponenten aktualisieren
+                        # Danach alternierend für Performance
+                        if ($script:updateCounter -eq 1) {
+                            # Initialisierung: Alle Komponenten sofort laden
+                            if ($gpuLabel -and $gbGPU) {
+                                Update-GpuInfo -GpuLabel $gpuLabel -Panel $gbGPU
+                            }
+                            if ($ramLabel -and $gbRAM) {
+                                Update-RamInfo -RamLabel $ramLabel -Panel $gbRAM
+                            }
+                            
+                            # Nach erstem erfolgreichen Update: Timer-Interval auf 5 Sekunden zurücksetzen
+                            if ($script:hardwareTimer) {
+                                $script:hardwareTimer.Interval = 5000
+                            }
                         }
-                        elseif ($script:updateCounter % 2 -eq 1) {
-                            Update-RamInfo -RamLabel $ramLabel -Panel $gbRAM
+                        else {
+                            # Normalbetrieb: GPU und RAM abwechselnd für Performance
+                            if ($script:updateCounter % 2 -eq 0 -and $gpuLabel -and $gbGPU) {
+                                Update-GpuInfo -GpuLabel $gpuLabel -Panel $gbGPU
+                            }
+                            elseif ($script:updateCounter % 2 -eq 1 -and $ramLabel -and $gbRAM) {
+                                Update-RamInfo -RamLabel $ramLabel -Panel $gbRAM
+                            }
                         }
                         
                         # Zähler zurücksetzen nach 10 Durchläufen
@@ -809,59 +847,83 @@ function Initialize-LibreHardwareMonitor {
     if ($null -ne $script:computerObj -and $script:useLibreHardware) {
         return $script:computerObj
     }
-
-    # Verschiedene mögliche Pfade zur DLL prüfen
-    $possiblePaths = @(
-        (Join-Path -Path $PSScriptRoot -ChildPath "..\Lib\LibreHardwareMonitorLib.dll"),
-        (Join-Path -Path $PSScriptRoot -ChildPath "..\..\Lib\LibreHardwareMonitorLib.dll"),
-        (Join-Path -Path (Split-Path -Parent $PSScriptRoot) -ChildPath "Lib\LibreHardwareMonitorLib.dll"),
-        (Join-Path -Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) -ChildPath "Lib\LibreHardwareMonitorLib.dll")
-    )
     
-    $libPath = $null
-    foreach ($path in $possiblePaths) {
-        if (Test-Path $path) {
-            $libPath = $path
-            break
-        }
+    # Wenn bereits ein fehlgeschlagener Initialisierungsversuch stattgefunden hat, nicht erneut versuchen
+    if ($script:hardwareMonitorInitAttempted -and $null -eq $script:computerObj) {
+        Write-Verbose "Hardware-Monitor-Initialisierung wurde bereits versucht und ist fehlgeschlagen"
+        return $null
     }
+    
+    # Markiere dass ein Initialisierungsversuch stattfindet
+    $script:hardwareMonitorInitAttempted = $true
+
+    # Importiere DependencyChecker für zentrale Entscheidung
+    if (-not (Get-Command -Name 'Initialize-HardwareMonitoringMode' -ErrorAction SilentlyContinue)) {
+        Import-Module "$PSScriptRoot\..\Core\DependencyChecker.psm1" -Force -ErrorAction SilentlyContinue
+    }
+    
+    Write-Verbose "Prüfe Hardware-Monitor-Verfügbarkeit..."
+    
+    # ZENTRALE ENTSCHEIDUNG durch DependencyChecker (mit ProgressBar falls verfügbar)
+    # StatusLabel nicht übergeben da es ein ToolStripStatusLabel sein könnte (Typ-Inkompatibel)
+    $hwStatus = Initialize-HardwareMonitoringMode -ProgressBar $progressBar -StatusLabel $null
+    
+    if (-not $hwStatus.Available) {
+        # Hardware-Monitor NICHT verfügbar - speichere detaillierte Meldung für spätere Verwendung
+        $script:lastHardwareMonitorError = $hwStatus.Message
+        
+        # Zeige detaillierte Fehlermeldung wenn DLLs fehlen (nur beim ersten Versuch!)
+        if ($hwStatus.MissingDLLs.Count -gt 0 -and -not $SuppressVisualFeedback) {
+            # Zeige fehlende DLLs an
+            $missingList = ($hwStatus.MissingDLLs | ForEach-Object { "  - $($_.FileName)`n    ($($_.Description))" }) -join "`n"
+            [System.Windows.Forms.MessageBox]::Show(
+                "Hardware-Monitor kann nicht gestartet werden.`n`n" +
+                "Fehlende Dateien im Lib-Ordner:`n$missingList`n`n" +
+                "Bitte alle benötigten DLL-Dateien im Lib-Ordner bereitstellen.",
+                "Hardware-Monitor nicht verfügbar",
+                [System.Windows.Forms.MessageBoxButtons]::OK,
+                [System.Windows.Forms.MessageBoxIcon]::Warning
+            )
+        }
+        
+        Write-Verbose "Hardware-Monitor nicht verfügbar: $($hwStatus.Message)"
+        
+        $script:computerObj = $null
+        $script:useLibreHardware = $false
+        
+        return $null
+    }
+    
+    # Hardware-Monitor verfügbar - Computer-Objekt erstellen
+    Write-Verbose "✓ $($hwStatus.Message)"
     
     try {
-        if ($libPath -and (Test-Path $libPath)) {
-            # Versuche die DLL zu laden, ignoriere Fehler wenn sie bereits geladen ist
-            try {
-                Add-Type -Path $libPath -ErrorAction SilentlyContinue
-            }
-            catch {
-                if (-not $_.Exception.Message.Contains("bereits geladen")) {
-                    Write-Warning "Fehler beim Laden der DLL: $_"
-                    return $null
-                }
-            }
-
-            $script:computerObj = New-Object LibreHardwareMonitor.Hardware.Computer
-            
-            # Hardware-Funktionen aktivieren
-            $script:computerObj.IsCpuEnabled = $true
-            $script:computerObj.IsGpuEnabled = $true
-            $script:computerObj.IsMotherboardEnabled = $true
-            $script:computerObj.IsMemoryEnabled = $true
-            $script:computerObj.IsStorageEnabled = $false
-            $script:computerObj.IsNetworkEnabled = $false
-            $script:computerObj.IsControllerEnabled = $false
-            
-            $script:computerObj.Open()
-            $script:useLibreHardware = $true
-            
-            return $script:computerObj
-        }
-        else {
-            Write-Warning "LibreHardwareMonitorLib.dll nicht gefunden in: $libPath"
-            return $null
-        }
+        # DLL ist bereits geladen durch Initialize-HardwareMonitoringMode
+        $script:computerObj = New-Object LibreHardwareMonitor.Hardware.Computer
+        
+        # Hardware-Funktionen aktivieren
+        $script:computerObj.IsCpuEnabled = $true
+        $script:computerObj.IsGpuEnabled = $true
+        $script:computerObj.IsMotherboardEnabled = $true
+        $script:computerObj.IsMemoryEnabled = $true
+        $script:computerObj.IsStorageEnabled = $false
+        $script:computerObj.IsNetworkEnabled = $false
+        $script:computerObj.IsControllerEnabled = $false
+        
+        # Computer öffnen
+        $script:computerObj.Open()
+        $script:useLibreHardware = $true
+        
+        Write-Verbose "Hardware-Monitor erfolgreich initialisiert"
+        return $script:computerObj
     }
     catch {
-        Write-Warning "Fehler beim Initialisieren von LibreHardwareMonitor: $_"
+        Write-Warning "Fehler beim Initialisieren: $_"
+        
+        # Bei Fehler: Deaktivieren
+        $script:computerObj = $null
+        $script:useLibreHardware = $false
+        
         return $null
     }
 }
@@ -1015,16 +1077,19 @@ function Initialize-HardwareMonitoring {
                 Write-Host "$componentInfo$displayComponent" -NoNewline -ForegroundColor $accentColor
             }
             
-            # Bei CPU, GPU und RAM tatsächlich die entsprechenden Initialisierungsschritte durchführen
+            # Komponente initialisieren basierend auf dem Namen
             switch ($component.Name) {
                 "LibreHardwareMonitor-Bibliothek" {
                     $script:computerObj = Initialize-LibreHardwareMonitor
                     if ($null -eq $script:computerObj) {
-                        Write-Warning "LibreHardwareMonitor konnte nicht initialisiert werden!"
-                        return $false
+                        Write-Host "`n[ℹ] Hardware-Monitoring deaktiviert - LibreHardwareMonitor + PawnIO nicht verfügbar" -ForegroundColor Yellow
+                        # Kein Fehler - einfach ohne Hardware-Monitor weitermachen
                     }
-                    $script:useLibreHardware = $true
-                    Start-Sleep -Milliseconds 200
+                    else {
+                        $script:useLibreHardware = $true
+                    }
+                    # Sleep nur bei visueller Konsolen-Ausgabe (für Progressbar-Animation)
+                    if (-not $SuppressVisualFeedback) { Start-Sleep -Milliseconds 200 }
                 }
                 "CPU-Monitor" {
                     if ($cpuLabel -and $gbCPU) {
@@ -1032,7 +1097,7 @@ function Initialize-HardwareMonitoring {
                         $gbCPU.BackColor = [System.Drawing.Color]::LightGray
                         $cpuLabel.Text = "CPU-Daten werden geladen..."
                     }
-                    Start-Sleep -Milliseconds 200
+                    if (-not $SuppressVisualFeedback) { Start-Sleep -Milliseconds 200 }
                 }
                 "GPU-Monitor" {
                     if ($gpuLabel -and $gbGPU) {
@@ -1040,7 +1105,7 @@ function Initialize-HardwareMonitoring {
                         $gbGPU.BackColor = [System.Drawing.Color]::LightGray
                         $gpuLabel.Text = "GPU-Daten werden geladen..."
                     }
-                    Start-Sleep -Milliseconds 200
+                    if (-not $SuppressVisualFeedback) { Start-Sleep -Milliseconds 200 }
                 }
                 "RAM-Monitor" {
                     if ($ramLabel -and $gbRAM) {
@@ -1048,7 +1113,7 @@ function Initialize-HardwareMonitoring {
                         $gbRAM.BackColor = [System.Drawing.Color]::LightGray
                         $ramLabel.Text = "RAM-Daten werden geladen..."
                     }
-                    Start-Sleep -Milliseconds 200
+                    if (-not $SuppressVisualFeedback) { Start-Sleep -Milliseconds 200 }
                 }
                 "Statistik-System" {
                     # Statistik-Tracking zurücksetzen
@@ -1056,7 +1121,8 @@ function Initialize-HardwareMonitoring {
                     $script:gpuStats.LastReset = (Get-Date)
                     $script:ramStats.LastReset = (Get-Date)
                     Start-Sleep -Milliseconds 200
-                }                "Timer-Setup" {
+                }
+                "Timer-Setup" {
                     # Eigentliche Initialisierung des Monitorings durchführen
                     $script:hardwareTimer = Initialize-LiveMonitoring `
                         -cpuLabel $cpuLabel `
@@ -1128,9 +1194,38 @@ function Initialize-HardwareMonitoring {
         
         $timerStatus = Get-HardwareTimerStatus
         if (-not $timerStatus.Exists) {
+            # Wenn kein Hardware-Monitor verfügbar → Panels deaktivieren
+            if (-not $script:useLibreHardware) {
+                if (-not $SuppressVisualFeedback) {
+                    Write-Host "`r`t[ℹ] Hardware-Monitoring nicht verfügbar - Panels werden deaktiviert" -ForegroundColor Yellow
+                }
+                
+                # Deaktiviere Hardware-Panels
+                if ($gbCPU) { 
+                    $gbCPU.Enabled = $false
+                    $gbCPU.BackColor = [System.Drawing.Color]::FromArgb(100, 100, 100)
+                }
+                if ($gbGPU) { 
+                    $gbGPU.Enabled = $false
+                    $gbGPU.BackColor = [System.Drawing.Color]::FromArgb(100, 100, 100)
+                }
+                if ($gbRAM) { 
+                    $gbRAM.Enabled = $false
+                    $gbRAM.BackColor = [System.Drawing.Color]::FromArgb(100, 100, 100)
+                }
+                
+                # Setze Labels auf "Deaktiviert"
+                if ($cpuLabel) { $cpuLabel.Text = "Hardware-Monitoring deaktiviert" }
+                if ($gpuLabel) { $gpuLabel.Text = "Hardware-Monitoring deaktiviert" }
+                if ($ramLabel) { $ramLabel.Text = "Hardware-Monitoring deaktiviert" }
+                
+                return $true
+            }
+            
             Write-Warning "`r`t[i]Hardware-Timer konnte nicht initialisiert werden!" -ForegroundColor Red
             return $false
-        }        elseif (-not $timerStatus.Running) {
+        }
+        elseif (-not $timerStatus.Running) {
             $null = Start-HardwareMonitoring
         }
     }
@@ -1150,7 +1245,9 @@ function Update-CpuInfo {
     
     try {
         if (-not $script:useLibreHardware -or $null -eq $script:computerObj) {
-            Write-DebugOutput -Component 'CPU' -Message "LibreHardwareMonitor nicht initialisiert" -Force
+            if ($script:DebugModeCPU) {
+                Write-DebugOutput -Component 'CPU' -Message "LibreHardwareMonitor nicht initialisiert - verwende Fallback" -Force
+            }
             return
         }
         
@@ -1228,7 +1325,9 @@ function Update-GpuInfo {
     
     try {
         if (-not $script:useLibreHardware -or $null -eq $script:computerObj) {
-            Write-DebugOutput -Component 'GPU' -Message "LibreHardwareMonitor nicht initialisiert" -Force
+            if ($script:DebugModeGPU) {
+                Write-DebugOutput -Component 'GPU' -Message "LibreHardwareMonitor nicht initialisiert - verwende Fallback" -Force
+            }
             return
         }
         
@@ -1457,7 +1556,9 @@ function Update-RamInfo {
     
     try {
         if (-not $script:useLibreHardware -or $null -eq $script:computerObj) {
-            Write-DebugOutput -Component 'RAM' -Message "LibreHardwareMonitor nicht initialisiert" -Force
+            if ($script:DebugModeRAM) {
+                Write-DebugOutput -Component 'RAM' -Message "LibreHardwareMonitor nicht initialisiert - verwende Fallback" -Force
+            }
             return
         }
         
@@ -1615,261 +1716,8 @@ function Update-RamInfo {
         Write-DebugOutput -Component 'RAM' -Message "Fehler: $_" -Force
     }
 }
-    
-function Test-HWiNFO64Available {
-    try {
-        # Cache-System: Wenn wir kürzlich geprüft haben und HWiNFO64 verfügbar war, verwende den Cache
-        $now = Get-Date
-        if (($now - $script:hwInfoCacheExpiry) -lt $script:hwInfoCacheTimeout -and $script:hwInfoRegistryAvailable) {
-            return $true
-        }
 
-        # Prüfe ob HWiNFO64 als Prozess läuft
-        $hwInfoProcess = Get-Process -Name "HWiNFO64" -ErrorAction SilentlyContinue
-        if ($hwInfoProcess) {
-            $script:hwInfoRegistryAvailable = $true
-            $script:hwInfoCacheExpiry = $now
-            return $true
-        }
-        
-        # Prüfe Registry-Pfade für HWiNFO Shared Memory
-        $registryPaths = @(
-            "HKLM:\SOFTWARE\HWiNFO64\VSB",
-            "HKLM:\SOFTWARE\HWiNFO64\Sensors",
-            "HKLM:\SYSTEM\CurrentControlSet\Services\HWiNFO64",
-            "HKLM:\SOFTWARE\HWiNFO32\VSB"  # Für 32-Bit Version
-        )
-        
-        foreach ($path in $registryPaths) {
-            if (Test-Path $path) {
-                $script:hwInfoRegistryAvailable = $true
-                $script:hwInfoCacheExpiry = $now
-                return $true
-            }
-        }
-        
-        # WMI-Namespace und Klassen prüfen
-        $wmiClasses = @("HWiNFO_SENSORS_VSB", "HWiNFO_MEMORY", "HWiNFO64_SENSORS_VSB")
-        foreach ($className in $wmiClasses) {
-            try {
-                $hwInfoSensors = Get-WmiObject -Namespace "root\WMI" -Class $className -ErrorAction Stop -List
-                if ($hwInfoSensors) {
-                    # WMI-Klasse gefunden, speichere für späteren Gebrauch
-                    $script:hwInfoWmiClass = $className
-                    $script:hwInfoRegistryAvailable = $true
-                    $script:hwInfoCacheExpiry = $now
-                    return $true
-                }
-            }
-            catch {
-                # Diese WMI-Klasse existiert nicht, probiere die nächste
-                continue
-            }
-        }
-        
-        $script:hwInfoRegistryAvailable = $false
-        return $false
-    }
-    catch {
-        Write-DebugOutput -Component 'RAM' -Message "Fehler bei HWiNFO64-Test: $_" -Force
-        $script:hwInfoRegistryAvailable = $false
-        return $false
-    }
-}
-
-function Get-RamTemperatureFromRegistry {
-    <#
-    .SYNOPSIS
-        Liest RAM-Temperaturdaten aus der Windows-Registry.
-    
-    .DESCRIPTION
-        Diese Funktion durchsucht mehrere bekannte Registry-Pfade nach RAM-Temperaturwerten.
-        Sie ist besonders nützlich für Systeme, die HWiNFO64 oder andere Hardware-Monitoring-Tools verwenden,
-        die Temperatursensoren in der Registry speichern.
-    
-    .OUTPUTS
-        System.Double - Die höchste gefundene RAM-Temperatur oder $null, wenn keine gefunden wurde.
-    #>
-    
-    try {
-        # Bekannte Registry-Pfade für RAM-Temperaturen - erweiterte Liste
-        $regPaths = @(
-            # HWiNFO64 Registry-Pfade
-            "HKLM:\SOFTWARE\HWiNFO64\VSB",
-            "HKLM:\SOFTWARE\HWiNFO64\Sensors",
-            # Alternative Pfade für OEM-Implementierungen
-            "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Sensors",
-            "HKLM:\SYSTEM\CurrentControlSet\Services\kbdbind\Parameters\Performance",
-            # MSI Afterburner und verwandte Apps
-            "HKLM:\SOFTWARE\MSI\Afterburner",
-            "HKLM:\SOFTWARE\FinalWire\AIDA64",
-            # ASUS Motherboard-Sensoren
-            "HKLM:\SOFTWARE\ASUS\AsusSensorInterface"
-        )
-        
-        $temperatures = @()
-        $sensorDetails = @()
-        
-        # Registry-Pfade durchsuchen
-        foreach ($regPath in $regPaths) {
-            if (Test-Path $regPath) {
-                if ($script:DebugModeRAM) {
-                    Write-DebugOutput -Component 'RAM' -Message "Prüfe Registry-Pfad: $regPath" -Force
-                }
-                
-                # Registrywerte laden
-                $regValue = Get-ItemProperty -Path $regPath -ErrorAction SilentlyContinue
-                if (-not $regValue) { continue }
-                
-                # Suche nach RAM-Temperatureinträgen mit verbesserten Mustern
-                $ramTempProps = $regValue.PSObject.Properties | Where-Object { 
-                    # Erweiterte Regex-Muster für RAM-Temperatursensoren
-                    ($_.Name -match "DIMM|Memory|RAM|SPD|DDR[45]|Speicher|MEM\." -or 
-                    $_.Name -match "Speicher.*Temp" -or 
-                    $_.Name -match "BANK.*Temp" -or
-                    $_.Name -match "Channel\s*[A-D]" -or
-                    $_.Name -match "Slot\s*\d+" -or
-                    $_.Name -match "Module\s*\d+") -and 
-                    
-                    # Typprüfung - nur numerische Werte verwenden
-                    ($_.Value -is [int] -or $_.Value -is [double] -or $_.Value -is [float] -or 
-                     ($_.Value -is [string] -and [double]::TryParse($_.Value, [ref]$null))) -and 
-                    
-                    # Plausibilitätsprüfung für Temperaturwerte
-                    (($_.Value -is [string] -and [double]::Parse($_.Value) -gt 10 -and [double]::Parse($_.Value) -lt 100) -or
-                     ($_.Value -isnot [string] -and $_.Value -gt 10 -and $_.Value -lt 100))
-                }
-                
-                # Verarbeite gefundene Eigenschaften
-                if ($ramTempProps -and $ramTempProps.Count -gt 0) {
-                    if ($script:DebugModeRAM) {
-                        Write-DebugOutput -Component 'RAM' -Message "Gefunden: $($ramTempProps.Count) direkte RAM-Temperatureinträge" -Force
-                    }
-                    
-                    foreach ($prop in $ramTempProps) {
-                        $tempValue = if ($prop.Value -is [string]) { [double]::Parse($prop.Value) } else { [double]$prop.Value }
-                        $temperatures += $tempValue
-                        
-                        # Details für Debug speichern
-                        $sensorDetails += [PSCustomObject]@{
-                            Source = "Registry"
-                            Path   = $regPath
-                            Name   = $prop.Name
-                            Value  = $tempValue
-                        }
-                        
-                        if ($script:DebugModeRAM) {
-                            Write-DebugOutput -Component 'RAM' -Message "  Registry-Eintrag: $($prop.Name) = $tempValue°C" -Force
-                        }
-                    }
-                }
-                
-                # Spezifische HWiNFO64 Registry-Struktur (komplexere Struktur mit Sektionen)
-                $sensorSections = $regValue.PSObject.Properties | Where-Object { 
-                    $_.Name -match "^Section" -and 
-                    ($_.Value -match "Memory|RAM|DIMM|SPD|DDR[45]|Speicher" -or
-                    $_.Value -match "Channel\s*[A-D]")
-                }
-                
-                if ($sensorSections) {
-                    if ($script:DebugModeRAM) {
-                        Write-DebugOutput -Component 'RAM' -Message "Gefunden: $($sensorSections.Count) HWiNFO64 Sektionen mit RAM-Bezug" -Force
-                    }
-                    
-                    foreach ($section in $sensorSections) {
-                        # Extrahiere Sektionsnummer aus dem Eigenschaftsnamen (z.B. "Section0" -> "0")
-                        $sectionNumber = $section.Name -replace "Section", ""
-                        
-                        if ($script:DebugModeRAM) {
-                            Write-DebugOutput -Component 'RAM' -Message "  Prüfe HWiNFO64 Sektion: $($section.Value) (Nr. $sectionNumber)" -Force
-                        }
-                        
-                        # Suche nach Temperatursensoren in dieser Sektion
-                        # Pattern verbessert für bessere Erkennung von RAM-bezogenen Sensoren
-                        $tempLabels = $regValue.PSObject.Properties | Where-Object { 
-                            $_.Name -match "^Label${sectionNumber}_\d+$" -and 
-                            ($_.Value -match "Temperature|Temp|°C" -or 
-                            $_.Value -match "DIMM|Memory|RAM|SPD|DDR[45]|Speicher" -or
-                            $_.Value -match "Channel\s*[A-D]|Slot\s*\d+|Module\s*\d+")
-                        }
-                        
-                        if ($script:DebugModeRAM -and $tempLabels) {
-                            Write-DebugOutput -Component 'RAM' -Message "    Gefundene Labels: $($tempLabels.Count)" -Force
-                        }
-                        
-                        foreach ($label in $tempLabels) {
-                            # Extrahiere Label-ID (z.B. "Label0_12" -> "12")
-                            $labelNumber = $label.Name -replace "Label${sectionNumber}_", ""
-                            $valueProperty = "Value${sectionNumber}_$labelNumber"
-                            
-                            # Wert auslesen, wenn vorhanden
-                            if ($regValue.PSObject.Properties.Name -contains $valueProperty) {
-                                $tempValue = $regValue.$valueProperty
-                                
-                                # Typprüfung und Plausibilität
-                                if (($tempValue -is [int] -or $tempValue -is [double] -or 
-                                     ($tempValue -is [string] -and [double]::TryParse($tempValue, [ref]$null))) -and
-                                    (($tempValue -is [string] -and [double]::Parse($tempValue) -gt 10 -and [double]::Parse($tempValue) -lt 100) -or
-                                     ($tempValue -isnot [string] -and $tempValue -gt 10 -and $tempValue -lt 100))) {
-                                    
-                                    $finalValue = if ($tempValue -is [string]) { [double]::Parse($tempValue) } else { [double]$tempValue }
-                                    $temperatures += $finalValue
-                                    
-                                    # Für Debug: Details speichern
-                                    $sensorDetails += [PSCustomObject]@{
-                                        Source = "HWiNFO64 Section"
-                                        Path   = $regPath
-                                        Name   = "$($label.Value)"
-                                        Value  = $finalValue
-                                    }
-                                    
-                                    if ($script:DebugModeRAM) {
-                                        Write-DebugOutput -Component 'RAM' -Message "    RAM-Temperatur in $($label.Value): $finalValue°C" -Force
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        
-        # Zusammenfassung und Ergebnis
-        if ($temperatures.Count -gt 0) {
-            # Runde auf eine Nachkommastelle
-            $maxTemp = [math]::Round(($temperatures | Measure-Object -Maximum).Maximum, 1)
-            $minTemp = [math]::Round(($temperatures | Measure-Object -Minimum).Minimum, 1)
-            $avgTemp = [math]::Round(($temperatures | Measure-Object -Average).Average, 1)
-            
-            if ($script:DebugModeRAM) {
-                Write-DebugOutput -Component 'RAM' -Message "Registry: Gefunden $($temperatures.Count) RAM-Temperaturwerte (Min: $minTemp°C, Avg: $avgTemp°C, Max: $maxTemp°C)" -Force
-            }
-            
-            # Ergänze Statistiken für die Detailansicht
-            $script:ramStats.Registry = @{
-                FoundSensors = $true
-                Source       = "Registry"
-                Values       = $temperatures
-                Min          = $minTemp
-                Max          = $maxTemp
-                Avg          = $avgTemp
-                Current      = $maxTemp  # Der höchste Wert ist meist relevant
-            }
-            
-            return $maxTemp
-        }
-        
-        if ($script:DebugModeRAM) {
-            Write-DebugOutput -Component 'RAM' -Message "Registry: Keine RAM-Temperaturwerte gefunden" -Force
-        }
-        
-        return $null
-    }
-    catch {
-        Write-DebugOutput -Component 'RAM' -Message "Fehler bei Registry RAM-Temperatur: $_" -Force
-        return $null
-    }
-}
+# Get-RamTemperatureFromRegistry wurde entfernt - HWiNFO Registry-Integration nicht mehr unterstützt
 
 function Get-RamTemperature {
     <#
@@ -1878,10 +1726,8 @@ function Get-RamTemperature {
     
     .DESCRIPTION
         Diese Funktion versucht, die RAM-Temperatur über mehrere verschiedene Quellen zu ermitteln:
-        1. HWiNFO64 über WMI
-        2. Registry-Werte
-        3. LibreHardwareMonitor-Sensoren (Memory und Mainboard)
-        4. SMBus-Direktzugriff
+        1. LibreHardwareMonitor-Sensoren (Memory und Mainboard)
+        2. SMBus-Direktzugriff
         
         Die Funktion implementiert ein intelligentes Caching und liefert detaillierte Debuginformationen.
     
@@ -1926,118 +1772,10 @@ function Get-RamTemperature {
             Write-DebugOutput -Component 'RAM' -Message "Starte RAM-Temperaturermittlung..." -Force
         }
         
-        #region METHODE 1: HWiNFO64 über WMI (höchste Priorität)
-        if (Test-HWiNFO64Available) {
-            if ($script:DebugModeRAM) {
-                Write-DebugOutput -Component 'RAM' -Message "Methode 1: HWiNFO64 erkannt, versuche WMI-Zugriff" -Force
-            }
-            
-            try {
-                # WMI-Zugriff auf HWiNFO-Sensoren
-                $hwInfoNamespace = "root\WMI"
-                $hwInfoClass = $script:hwInfoWmiClass
-                $hwInfoSensors = Get-WmiObject -Namespace $hwInfoNamespace -Class $hwInfoClass -ErrorAction SilentlyContinue
-                
-                if ($hwInfoSensors) {
-                    # Verbesserte RAM-Sensor-Pattern mit erweitertem Regex
-                    $ramSensors = $hwInfoSensors | Where-Object {
-                        # Sensorname-Muster (erweitert für mehr Erkennungsraten)
-                        (($_.SensorName -match "RAM|DIMM|Memory|Speicher|SPD|MEM\.") -or
-                         ($_.SensorName -match "DDR[45]") -or # DDR4/DDR5 Referenz
-                         ($_.SensorName -match "DIMM\s*#?\d+") -or # DIMM + Zahl
-                         ($_.SensorName -match "BANK\s*#?\d+") -or # Bank + Zahl
-                         ($_.SensorName -match "Slot\s*#?\d+") -or # Slot + Zahl
-                         ($_.SensorName -match "Channel\s*[A-D]")) -and # Channel A-D
-                        # UND ein Temperatursensor
-                        ($_.SensorType -eq "Temperature" -or $_.SensorType -match "Temp")
-                    }
-                    
-                    # Debug-Ausgabe aller gefundenen HWiNFO-Sensoren
-                    if ($script:DebugModeRAM) {
-                        if ($ramSensors -and $ramSensors.Count -gt 0) {
-                            Write-DebugOutput -Component 'RAM' -Message "HWiNFO64: $($ramSensors.Count) RAM-Temperatursensoren gefunden" -Force
-                            foreach ($s in $ramSensors) {
-                                Write-DebugOutput -Component 'RAM' -Message "  HWiNFO Sensor: $($s.SensorName) = $($s.Value)°C" -Force
-                            }
-                        }
-                        else {
-                            Write-DebugOutput -Component 'RAM' -Message "HWiNFO64: Keine RAM-Temperatursensoren gefunden" -Force
-                        }
-                    }
-                    
-                    # Verarbeite gefundene RAM-Sensoren
-                    if ($ramSensors -and $ramSensors.Count -gt 0) {
-                        $temperatures = @()
-                        
-                        foreach ($sensor in $ramSensors) {
-                            # Werte-Plausibilitätsprüfung für RAM-Temperaturen
-                            if ($sensor.Value -gt 10 -and $sensor.Value -lt 100) {
-                                $temperatures += $sensor.Value
-                            }
-                        }
-                        
-                        if ($temperatures.Count -gt 0) {
-                            # Temperaturwerte berechnen (gerundet auf 1 Nachkommastelle)
-                            $ramTempData.FoundSensors = $true
-                            $ramTempData.Source = "HWiNFO64"
-                            $ramTempData.Values = $temperatures
-                            $ramTempData.Min = [math]::Round(($temperatures | Measure-Object -Minimum).Minimum, 1)
-                            $ramTempData.Max = [math]::Round(($temperatures | Measure-Object -Maximum).Maximum, 1)
-                            $ramTempData.Avg = [math]::Round(($temperatures | Measure-Object -Average).Average, 1)
-                            $ramTempData.Current = $ramTempData.Max  # Der höchste Wert ist relevant
-                            
-                            # RAM-Statistiken aktualisieren und cachen
-                            $script:ramStats.HWiNFO = $ramTempData
-                            $script:lastRamTemp = $ramTempData.Current
-                            $script:lastRamTempTime = $now
-                            
-                            if ($script:DebugModeRAM) {
-                                Write-DebugOutput -Component 'RAM' -Message "HWiNFO64: RAM-Temperatur = $($ramTempData.Current)°C (Min: $($ramTempData.Min)°C, Avg: $($ramTempData.Avg)°C, Max: $($ramTempData.Max)°C)" -Force
-                            }
-                            
-                            return $script:lastRamTemp
-                        }
-                    }
-                }
-            }
-            catch {
-                Write-DebugOutput -Component 'RAM' -Message "Fehler bei HWiNFO64-Abfrage: $_" -Force
-            }
-        }
-        #endregion
-        
-        #region METHODE 2: Registry-Temperaturwerte (zweite Priorität)
-        if ($script:DebugModeRAM) {
-            Write-DebugOutput -Component 'RAM' -Message "Methode 2: Versuche Registry-Temperaturwerte zu lesen" -Force
-        }
-        
-        $regTemp = Get-RamTemperatureFromRegistry
-        if ($regTemp) {
-            if ($script:DebugModeRAM) {
-                Write-DebugOutput -Component 'RAM' -Message "Registry: RAM-Temperatur = $regTemp°C" -Force
-            }
-            
-            # Cache aktualisieren
-            $script:lastRamTemp = $regTemp
-            $script:lastRamTempTime = $now
-            $script:ramStats.Registry = @{
-                FoundSensors = $true
-                Source       = "Registry"
-                Values       = @($regTemp)
-                Min          = $regTemp
-                Max          = $regTemp
-                Avg          = $regTemp
-                Current      = $regTemp
-            }
-            
-            return $regTemp
-        }
-        #endregion
-        
-        #region METHODE 3: LibreHardwareMonitor direkt (dritte Priorität)
+        #region METHODE 1: LibreHardwareMonitor direkt (höchste Priorität)
         # Aktualisiere alle Hardware-Komponenten für aktuelle Daten
         if ($script:DebugModeRAM) {
-            Write-DebugOutput -Component 'RAM' -Message "Methode 3: LibreHardwareMonitor - Aktualisiere Hardware-Komponenten" -Force
+            Write-DebugOutput -Component 'RAM' -Message "Methode 1: LibreHardwareMonitor - Aktualisiere Hardware-Komponenten" -Force
         }
         
         # Aktuelle Daten sicherstellen
@@ -2071,7 +1809,7 @@ function Get-RamTemperature {
             }
         }
         
-        # METHODE 3.1: Suche in Memory-Hardware (erste Suboption)
+        # METHODE 1.1: Suche in Memory-Hardware (erste Suboption)
         $memoryHardware = $script:computerObj.Hardware | Where-Object { $_.HardwareType -eq "Memory" }
         
         if ($memoryHardware) {
@@ -2142,7 +1880,7 @@ function Get-RamTemperature {
             }
         }
         
-        # METHODE 3.2: Suche nach RAM-Temperatursensoren auf dem Mainboard (zweite Suboption)
+        # METHODE 1.2: Suche nach RAM-Temperatursensoren auf dem Mainboard (zweite Suboption)
         if ($script:DebugModeRAM) {
             Write-DebugOutput -Component 'RAM' -Message "Suche nach RAM-Temperatursensoren auf dem Mainboard" -Force
         }
@@ -2205,9 +1943,9 @@ function Get-RamTemperature {
         }
         #endregion
         
-        #region METHODE 4: SMBus-Direktzugriff (vierte Priorität)
+        #region METHODE 2: SMBus-Direktzugriff (zweite Priorität)
         if ($script:DebugModeRAM) {
-            Write-DebugOutput -Component 'RAM' -Message "Methode 4: Versuche SMBus-Direktzugriff" -Force
+            Write-DebugOutput -Component 'RAM' -Message "Methode 2: Versuche SMBus-Direktzugriff" -Force
         }
         
         $smbusTemp = Get-RamTemperatureViaSMBus
@@ -2280,16 +2018,83 @@ function Set-HardwareThresholds {
     }
 }
 
+#region Post-Installation Helper
+
+<#
+.SYNOPSIS
+Aktiviert den LibreHardwareMonitor Ring0-Treiber nach WinGet-Installation
+
+.DESCRIPTION
+Diese Funktion wird automatisch nach einer erfolgreichen WinGet-Installation 
+von LibreHardwareMonitor aufgerufen. Sie:
+1. Sucht die installierte .exe-Datei
+2. Startet sie kurz im Hintergrund (minimiert)
+3. Beendet sie nach 3 Sekunden
+4. Registriert damit den WinRing0-Kernel-Treiber
+
+.EXAMPLE
+Invoke-LibreHardwareMonitorDriverActivation
+#>
+function Invoke-LibreHardwareMonitorDriverActivation {
+    Write-Host "`n🔧 Aktiviere LibreHardwareMonitor Treiber..." -ForegroundColor Cyan
+    
+    try {
+        # Suche .exe in WinGet-Packages
+        $exePaths = Get-ChildItem -Path "${env:LOCALAPPDATA}\Microsoft\WinGet\Packages" -Filter "LibreHardwareMonitor*" -Directory -ErrorAction SilentlyContinue | 
+            ForEach-Object { 
+                $exePath = Join-Path $_.FullName "LibreHardwareMonitor.exe"
+                if (Test-Path $exePath) {
+                    $exePath
+                }
+            }
+        
+        if ($exePaths.Count -eq 0) {
+            Write-Warning "LibreHardwareMonitor.exe nicht gefunden in WinGet-Packages"
+            return $false
+        }
+        
+        $exePath = $exePaths[0]
+        Write-Host "  📍 Gefunden: $exePath" -ForegroundColor Gray
+        
+        # Starte .exe minimiert
+        Write-Host "  ▶️ Starte Anwendung (minimiert)..." -ForegroundColor Cyan
+        $proc = Start-Process -FilePath $exePath -WindowStyle Minimized -PassThru -ErrorAction Stop
+        
+        # Warte 3 Sekunden für Treiber-Registrierung
+        Write-Host "  ⏳ Warte auf Treiber-Registrierung (3 Sek)..." -ForegroundColor Cyan
+        Start-Sleep -Seconds 3
+        
+        # Beende Prozess
+        if (-not $proc.HasExited) {
+            $proc | Stop-Process -Force -ErrorAction SilentlyContinue
+            Write-Host "  ✓ Prozess beendet" -ForegroundColor Green
+        }
+        
+        Write-Host "  ✅ Treiber-Aktivierung abgeschlossen!" -ForegroundColor Green
+        Write-Host "  ℹ️  Bitte starten Sie Bockis System-Tool neu, damit der Hardware-Monitor funktioniert." -ForegroundColor Yellow
+        
+        return $true
+    }
+    catch {
+        Write-Warning "Fehler bei Treiber-Aktivierung: $_"
+        Write-Host "  💡 Bitte starten Sie LibreHardwareMonitor.exe manuell einmal." -ForegroundColor Yellow
+        return $false
+    }
+}
+
+#endregion
+
 #region Export
 
 # Export functions
 Export-ModuleMember -Function Initialize-LibreHardwareMonitor, Initialize-LiveMonitoring, `
     Initialize-HardwareMonitoring, Start-HardwareMonitoring, Stop-HardwareMonitoring, Clear-HardwareMonitoring, `
     Update-CpuInfo, Update-GpuInfo, Update-RamInfo, Get-RamTemperature, Get-WarningColor, `
+    Update-CpuInfoFallback, Update-GpuInfoFallback, Update-RamInfoFallback, `
     Set-HardwareMonitorDebugMode, Set-HardwareDebugMode, Get-HardwareDebugState, Get-HardwareTimerStatus, Write-HardwareInfo, Write-SensorInfo, `
     Get-GPUUsage, Update-HardwareStats, Get-HardwareStatsTooltip, Reset-GpuName, Show-RamSPDTempDetails, `
     Initialize-SMBusAccess, Get-RamTemperatureViaSMBus, Show-HardwareStatsTable, Set-HardwareThresholds, `
-    Open-DebugWindow, Close-DebugWindow
+    Open-DebugWindow, Close-DebugWindow, Invoke-LibreHardwareMonitorDriverActivation
 
 #endregion
 
@@ -3313,3 +3118,157 @@ function Get-RamTemperatureViaSMBus {
     }
 }
 
+
+# SIG # Begin signature block
+# MIIcSgYJKoZIhvcNAQcCoIIcOzCCHDcCAQExDzANBglghkgBZQMEAgEFADB5Bgor
+# BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCDnrwdlV5V5KIei
+# 04/hSLR7ky0G06EQD9Cc3O6j5cjlLaCCFnowggM8MIICJKADAgECAhBJfyGrXBJT
+# oUbCYkBRRxacMA0GCSqGSIb3DQEBCwUAMDYxCzAJBgNVBAYTAkRFMQ4wDAYDVQQK
+# DAVCb2NraTEXMBUGA1UEAwwOQm9ja2kgU29mdHdhcmUwHhcNMjYwMTIwMTc0NjIy
+# WhcNMzEwMTIwMTc1NjIyWjA2MQswCQYDVQQGEwJERTEOMAwGA1UECgwFQm9ja2kx
+# FzAVBgNVBAMMDkJvY2tpIFNvZnR3YXJlMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A
+# MIIBCgKCAQEAoQtPttwj/HfLCMp+5pqQOYHtAsyMU7eKVIdtkrEaISn8wKZQqEQL
+# E4iGdIVsDmaoIns790Lt3Uw/2xnXy2y3/X2dXBypkjoF5346p79Fb9hNAs103lzk
+# NPgxkSkkGpmXERWTeik64eUq3u0TjTivFgFMIwOJUorSkIwzUh/iLQZeCihuRIZL
+# eubl7OdiPl4yPb2SlLdhSErXSkhHPSsu6U6j/MJvvBNRkF3uF7B+lLPvW9I/hfAF
+# R1UEyAoX+l91AKtjac32OzZH2/Wj2ezoa4PliyzLox7Pjn642pvd/cU+LKWwl4Fm
+# iu8c03rafk3Ykpp05QJcCWiy2aExG20xTQIDAQABo0YwRDAOBgNVHQ8BAf8EBAMC
+# B4AwEwYDVR0lBAwwCgYIKwYBBQUHAwMwHQYDVR0OBBYEFPiUIYSngqXUa7A3vbjR
+# 0PXonIvMMA0GCSqGSIb3DQEBCwUAA4IBAQBMzmWw9+P7IV7xla88buo++WjtigRK
+# 5YaY7K1yyn1bml6Hd2uWaF1ptfUuUnDPDyQr9eFrrHkK4qwhx5k2X4spjzLjhPf+
+# MPWLjN5ZudKwgQhTjSrcUAsi0Qi5LopPAKNjP3yDclEtJJh3/L0gmhkfu4AIbUin
+# IRCHy8WcPWO1jgp4FzkoVkxeuwe2X8WIsjUSooi3qlYqxBK8amlTRUCSmtMpcif5
+# 1Ew1KoiOV2cC/tzcHs1clkmJQvZ6Urwc1PbIbHKDYy0l4N5/4epycum4Ijq3fkBf
+# BN3AfKchZw6j+iCInCimjmdgwb6vYPCru6/4fdBt5BCRy0SjBmi5MMpFMIIFjTCC
+# BHWgAwIBAgIQDpsYjvnQLefv21DiCEAYWjANBgkqhkiG9w0BAQwFADBlMQswCQYD
+# VQQGEwJVUzEVMBMGA1UEChMMRGlnaUNlcnQgSW5jMRkwFwYDVQQLExB3d3cuZGln
+# aWNlcnQuY29tMSQwIgYDVQQDExtEaWdpQ2VydCBBc3N1cmVkIElEIFJvb3QgQ0Ew
+# HhcNMjIwODAxMDAwMDAwWhcNMzExMTA5MjM1OTU5WjBiMQswCQYDVQQGEwJVUzEV
+# MBMGA1UEChMMRGlnaUNlcnQgSW5jMRkwFwYDVQQLExB3d3cuZGlnaWNlcnQuY29t
+# MSEwHwYDVQQDExhEaWdpQ2VydCBUcnVzdGVkIFJvb3QgRzQwggIiMA0GCSqGSIb3
+# DQEBAQUAA4ICDwAwggIKAoICAQC/5pBzaN675F1KPDAiMGkz7MKnJS7JIT3yithZ
+# wuEppz1Yq3aaza57G4QNxDAf8xukOBbrVsaXbR2rsnnyyhHS5F/WBTxSD1Ifxp4V
+# pX6+n6lXFllVcq9ok3DCsrp1mWpzMpTREEQQLt+C8weE5nQ7bXHiLQwb7iDVySAd
+# YyktzuxeTsiT+CFhmzTrBcZe7FsavOvJz82sNEBfsXpm7nfISKhmV1efVFiODCu3
+# T6cw2Vbuyntd463JT17lNecxy9qTXtyOj4DatpGYQJB5w3jHtrHEtWoYOAMQjdjU
+# N6QuBX2I9YI+EJFwq1WCQTLX2wRzKm6RAXwhTNS8rhsDdV14Ztk6MUSaM0C/CNda
+# SaTC5qmgZ92kJ7yhTzm1EVgX9yRcRo9k98FpiHaYdj1ZXUJ2h4mXaXpI8OCiEhtm
+# mnTK3kse5w5jrubU75KSOp493ADkRSWJtppEGSt+wJS00mFt6zPZxd9LBADMfRyV
+# w4/3IbKyEbe7f/LVjHAsQWCqsWMYRJUadmJ+9oCw++hkpjPRiQfhvbfmQ6QYuKZ3
+# AeEPlAwhHbJUKSWJbOUOUlFHdL4mrLZBdd56rF+NP8m800ERElvlEFDrMcXKchYi
+# Cd98THU/Y+whX8QgUWtvsauGi0/C1kVfnSD8oR7FwI+isX4KJpn15GkvmB0t9dmp
+# sh3lGwIDAQABo4IBOjCCATYwDwYDVR0TAQH/BAUwAwEB/zAdBgNVHQ4EFgQU7Nfj
+# gtJxXWRM3y5nP+e6mK4cD08wHwYDVR0jBBgwFoAUReuir/SSy4IxLVGLp6chnfNt
+# yA8wDgYDVR0PAQH/BAQDAgGGMHkGCCsGAQUFBwEBBG0wazAkBggrBgEFBQcwAYYY
+# aHR0cDovL29jc3AuZGlnaWNlcnQuY29tMEMGCCsGAQUFBzAChjdodHRwOi8vY2Fj
+# ZXJ0cy5kaWdpY2VydC5jb20vRGlnaUNlcnRBc3N1cmVkSURSb290Q0EuY3J0MEUG
+# A1UdHwQ+MDwwOqA4oDaGNGh0dHA6Ly9jcmwzLmRpZ2ljZXJ0LmNvbS9EaWdpQ2Vy
+# dEFzc3VyZWRJRFJvb3RDQS5jcmwwEQYDVR0gBAowCDAGBgRVHSAAMA0GCSqGSIb3
+# DQEBDAUAA4IBAQBwoL9DXFXnOF+go3QbPbYW1/e/Vwe9mqyhhyzshV6pGrsi+Ica
+# aVQi7aSId229GhT0E0p6Ly23OO/0/4C5+KH38nLeJLxSA8hO0Cre+i1Wz/n096ww
+# epqLsl7Uz9FDRJtDIeuWcqFItJnLnU+nBgMTdydE1Od/6Fmo8L8vC6bp8jQ87PcD
+# x4eo0kxAGTVGamlUsLihVo7spNU96LHc/RzY9HdaXFSMb++hUD38dglohJ9vytsg
+# jTVgHAIDyyCwrFigDkBjxZgiwbJZ9VVrzyerbHbObyMt9H5xaiNrIv8SuFQtJ37Y
+# OtnwtoeW/VvRXKwYw02fc7cBqZ9Xql4o4rmUMIIGtDCCBJygAwIBAgIQDcesVwX/
+# IZkuQEMiDDpJhjANBgkqhkiG9w0BAQsFADBiMQswCQYDVQQGEwJVUzEVMBMGA1UE
+# ChMMRGlnaUNlcnQgSW5jMRkwFwYDVQQLExB3d3cuZGlnaWNlcnQuY29tMSEwHwYD
+# VQQDExhEaWdpQ2VydCBUcnVzdGVkIFJvb3QgRzQwHhcNMjUwNTA3MDAwMDAwWhcN
+# MzgwMTE0MjM1OTU5WjBpMQswCQYDVQQGEwJVUzEXMBUGA1UEChMORGlnaUNlcnQs
+# IEluYy4xQTA/BgNVBAMTOERpZ2lDZXJ0IFRydXN0ZWQgRzQgVGltZVN0YW1waW5n
+# IFJTQTQwOTYgU0hBMjU2IDIwMjUgQ0ExMIICIjANBgkqhkiG9w0BAQEFAAOCAg8A
+# MIICCgKCAgEAtHgx0wqYQXK+PEbAHKx126NGaHS0URedTa2NDZS1mZaDLFTtQ2oR
+# jzUXMmxCqvkbsDpz4aH+qbxeLho8I6jY3xL1IusLopuW2qftJYJaDNs1+JH7Z+Qd
+# SKWM06qchUP+AbdJgMQB3h2DZ0Mal5kYp77jYMVQXSZH++0trj6Ao+xh/AS7sQRu
+# QL37QXbDhAktVJMQbzIBHYJBYgzWIjk8eDrYhXDEpKk7RdoX0M980EpLtlrNyHw0
+# Xm+nt5pnYJU3Gmq6bNMI1I7Gb5IBZK4ivbVCiZv7PNBYqHEpNVWC2ZQ8BbfnFRQV
+# ESYOszFI2Wv82wnJRfN20VRS3hpLgIR4hjzL0hpoYGk81coWJ+KdPvMvaB0WkE/2
+# qHxJ0ucS638ZxqU14lDnki7CcoKCz6eum5A19WZQHkqUJfdkDjHkccpL6uoG8pbF
+# 0LJAQQZxst7VvwDDjAmSFTUms+wV/FbWBqi7fTJnjq3hj0XbQcd8hjj/q8d6ylgx
+# CZSKi17yVp2NL+cnT6Toy+rN+nM8M7LnLqCrO2JP3oW//1sfuZDKiDEb1AQ8es9X
+# r/u6bDTnYCTKIsDq1BtmXUqEG1NqzJKS4kOmxkYp2WyODi7vQTCBZtVFJfVZ3j7O
+# gWmnhFr4yUozZtqgPrHRVHhGNKlYzyjlroPxul+bgIspzOwbtmsgY1MCAwEAAaOC
+# AV0wggFZMBIGA1UdEwEB/wQIMAYBAf8CAQAwHQYDVR0OBBYEFO9vU0rp5AZ8esri
+# kFb2L9RJ7MtOMB8GA1UdIwQYMBaAFOzX44LScV1kTN8uZz/nupiuHA9PMA4GA1Ud
+# DwEB/wQEAwIBhjATBgNVHSUEDDAKBggrBgEFBQcDCDB3BggrBgEFBQcBAQRrMGkw
+# JAYIKwYBBQUHMAGGGGh0dHA6Ly9vY3NwLmRpZ2ljZXJ0LmNvbTBBBggrBgEFBQcw
+# AoY1aHR0cDovL2NhY2VydHMuZGlnaWNlcnQuY29tL0RpZ2lDZXJ0VHJ1c3RlZFJv
+# b3RHNC5jcnQwQwYDVR0fBDwwOjA4oDagNIYyaHR0cDovL2NybDMuZGlnaWNlcnQu
+# Y29tL0RpZ2lDZXJ0VHJ1c3RlZFJvb3RHNC5jcmwwIAYDVR0gBBkwFzAIBgZngQwB
+# BAIwCwYJYIZIAYb9bAcBMA0GCSqGSIb3DQEBCwUAA4ICAQAXzvsWgBz+Bz0RdnEw
+# vb4LyLU0pn/N0IfFiBowf0/Dm1wGc/Do7oVMY2mhXZXjDNJQa8j00DNqhCT3t+s8
+# G0iP5kvN2n7Jd2E4/iEIUBO41P5F448rSYJ59Ib61eoalhnd6ywFLerycvZTAz40
+# y8S4F3/a+Z1jEMK/DMm/axFSgoR8n6c3nuZB9BfBwAQYK9FHaoq2e26MHvVY9gCD
+# A/JYsq7pGdogP8HRtrYfctSLANEBfHU16r3J05qX3kId+ZOczgj5kjatVB+NdADV
+# ZKON/gnZruMvNYY2o1f4MXRJDMdTSlOLh0HCn2cQLwQCqjFbqrXuvTPSegOOzr4E
+# Wj7PtspIHBldNE2K9i697cvaiIo2p61Ed2p8xMJb82Yosn0z4y25xUbI7GIN/TpV
+# fHIqQ6Ku/qjTY6hc3hsXMrS+U0yy+GWqAXam4ToWd2UQ1KYT70kZjE4YtL8Pbzg0
+# c1ugMZyZZd/BdHLiRu7hAWE6bTEm4XYRkA6Tl4KSFLFk43esaUeqGkH/wyW4N7Oi
+# gizwJWeukcyIPbAvjSabnf7+Pu0VrFgoiovRDiyx3zEdmcif/sYQsfch28bZeUz2
+# rtY/9TCA6TD8dC3JE3rYkrhLULy7Dc90G6e8BlqmyIjlgp2+VqsS9/wQD7yFylIz
+# 0scmbKvFoW2jNrbM1pD2T7m3XDCCBu0wggTVoAMCAQICEAqA7xhLjfEFgtHEdqeV
+# dGgwDQYJKoZIhvcNAQELBQAwaTELMAkGA1UEBhMCVVMxFzAVBgNVBAoTDkRpZ2lD
+# ZXJ0LCBJbmMuMUEwPwYDVQQDEzhEaWdpQ2VydCBUcnVzdGVkIEc0IFRpbWVTdGFt
+# cGluZyBSU0E0MDk2IFNIQTI1NiAyMDI1IENBMTAeFw0yNTA2MDQwMDAwMDBaFw0z
+# NjA5MDMyMzU5NTlaMGMxCzAJBgNVBAYTAlVTMRcwFQYDVQQKEw5EaWdpQ2VydCwg
+# SW5jLjE7MDkGA1UEAxMyRGlnaUNlcnQgU0hBMjU2IFJTQTQwOTYgVGltZXN0YW1w
+# IFJlc3BvbmRlciAyMDI1IDEwggIiMA0GCSqGSIb3DQEBAQUAA4ICDwAwggIKAoIC
+# AQDQRqwtEsae0OquYFazK1e6b1H/hnAKAd/KN8wZQjBjMqiZ3xTWcfsLwOvRxUwX
+# cGx8AUjni6bz52fGTfr6PHRNv6T7zsf1Y/E3IU8kgNkeECqVQ+3bzWYesFtkepEr
+# vUSbf+EIYLkrLKd6qJnuzK8Vcn0DvbDMemQFoxQ2Dsw4vEjoT1FpS54dNApZfKY6
+# 1HAldytxNM89PZXUP/5wWWURK+IfxiOg8W9lKMqzdIo7VA1R0V3Zp3DjjANwqAf4
+# lEkTlCDQ0/fKJLKLkzGBTpx6EYevvOi7XOc4zyh1uSqgr6UnbksIcFJqLbkIXIPb
+# cNmA98Oskkkrvt6lPAw/p4oDSRZreiwB7x9ykrjS6GS3NR39iTTFS+ENTqW8m6TH
+# uOmHHjQNC3zbJ6nJ6SXiLSvw4Smz8U07hqF+8CTXaETkVWz0dVVZw7knh1WZXOLH
+# gDvundrAtuvz0D3T+dYaNcwafsVCGZKUhQPL1naFKBy1p6llN3QgshRta6Eq4B40
+# h5avMcpi54wm0i2ePZD5pPIssoszQyF4//3DoK2O65Uck5Wggn8O2klETsJ7u8xE
+# ehGifgJYi+6I03UuT1j7FnrqVrOzaQoVJOeeStPeldYRNMmSF3voIgMFtNGh86w3
+# ISHNm0IaadCKCkUe2LnwJKa8TIlwCUNVwppwn4D3/Pt5pwIDAQABo4IBlTCCAZEw
+# DAYDVR0TAQH/BAIwADAdBgNVHQ4EFgQU5Dv88jHt/f3X85FxYxlQQ89hjOgwHwYD
+# VR0jBBgwFoAU729TSunkBnx6yuKQVvYv1Ensy04wDgYDVR0PAQH/BAQDAgeAMBYG
+# A1UdJQEB/wQMMAoGCCsGAQUFBwMIMIGVBggrBgEFBQcBAQSBiDCBhTAkBggrBgEF
+# BQcwAYYYaHR0cDovL29jc3AuZGlnaWNlcnQuY29tMF0GCCsGAQUFBzAChlFodHRw
+# Oi8vY2FjZXJ0cy5kaWdpY2VydC5jb20vRGlnaUNlcnRUcnVzdGVkRzRUaW1lU3Rh
+# bXBpbmdSU0E0MDk2U0hBMjU2MjAyNUNBMS5jcnQwXwYDVR0fBFgwVjBUoFKgUIZO
+# aHR0cDovL2NybDMuZGlnaWNlcnQuY29tL0RpZ2lDZXJ0VHJ1c3RlZEc0VGltZVN0
+# YW1waW5nUlNBNDA5NlNIQTI1NjIwMjVDQTEuY3JsMCAGA1UdIAQZMBcwCAYGZ4EM
+# AQQCMAsGCWCGSAGG/WwHATANBgkqhkiG9w0BAQsFAAOCAgEAZSqt8RwnBLmuYEHs
+# 0QhEnmNAciH45PYiT9s1i6UKtW+FERp8FgXRGQ/YAavXzWjZhY+hIfP2JkQ38U+w
+# tJPBVBajYfrbIYG+Dui4I4PCvHpQuPqFgqp1PzC/ZRX4pvP/ciZmUnthfAEP1HSh
+# TrY+2DE5qjzvZs7JIIgt0GCFD9ktx0LxxtRQ7vllKluHWiKk6FxRPyUPxAAYH2Vy
+# 1lNM4kzekd8oEARzFAWgeW3az2xejEWLNN4eKGxDJ8WDl/FQUSntbjZ80FU3i54t
+# px5F/0Kr15zW/mJAxZMVBrTE2oi0fcI8VMbtoRAmaaslNXdCG1+lqvP4FbrQ6IwS
+# BXkZagHLhFU9HCrG/syTRLLhAezu/3Lr00GrJzPQFnCEH1Y58678IgmfORBPC1JK
+# kYaEt2OdDh4GmO0/5cHelAK2/gTlQJINqDr6JfwyYHXSd+V08X1JUPvB4ILfJdmL
+# +66Gp3CSBXG6IwXMZUXBhtCyIaehr0XkBoDIGMUG1dUtwq1qmcwbdUfcSYCn+Own
+# cVUXf53VJUNOaMWMts0VlRYxe5nK+At+DI96HAlXHAL5SlfYxJ7La54i71McVWRP
+# 66bW+yERNpbJCjyCYG2j+bdpxo/1Cy4uPcU3AWVPGrbn5PhDBf3Froguzzhk++am
+# i+r3Qrx5bIbY3TVzgiFI7Gq3zWcxggUmMIIFIgIBATBKMDYxCzAJBgNVBAYTAkRF
+# MQ4wDAYDVQQKDAVCb2NraTEXMBUGA1UEAwwOQm9ja2kgU29mdHdhcmUCEEl/Iatc
+# ElOhRsJiQFFHFpwwDQYJYIZIAWUDBAIBBQCggYQwGAYKKwYBBAGCNwIBDDEKMAig
+# AoAAoQKAADAZBgkqhkiG9w0BCQMxDAYKKwYBBAGCNwIBBDAcBgorBgEEAYI3AgEL
+# MQ4wDAYKKwYBBAGCNwIBFTAvBgkqhkiG9w0BCQQxIgQg9pJCKRlKG11lwWej99Jr
+# xOe7sSexMHcReKY5PYU659QwDQYJKoZIhvcNAQEBBQAEggEAUqvWCu14yzUPtj+y
+# vNi/oWAtdrryLLMczFKsdn7pOHFu479VfY3XxWExvkS4xnR/8b65kLguYmS/UEwR
+# HG/PLbETRhoDQjYaAEHvuRVBAcF+ZEgAEFXn+mI+unxLuW4ZughUUWj26k2bM+I/
+# cBFwqznY53yMZ7sYKE8BkWOX0d3dlPzgvQY/oTsOMwbbYzIB4g67b09/DFl7KERa
+# qR5/Vkz3x12pnMfSwnMK9C6JlUMZmbl8mxcFLUK/YmFENYL4Jgk1n32IznWznZtn
+# iGbQBl/dX0IZlyKv9XRHD7IdR7yHVVXA5pr1znJmtDDmEERLP1xighef2uGgK4sy
+# QMED2aGCAyYwggMiBgkqhkiG9w0BCQYxggMTMIIDDwIBATB9MGkxCzAJBgNVBAYT
+# AlVTMRcwFQYDVQQKEw5EaWdpQ2VydCwgSW5jLjFBMD8GA1UEAxM4RGlnaUNlcnQg
+# VHJ1c3RlZCBHNCBUaW1lU3RhbXBpbmcgUlNBNDA5NiBTSEEyNTYgMjAyNSBDQTEC
+# EAqA7xhLjfEFgtHEdqeVdGgwDQYJYIZIAWUDBAIBBQCgaTAYBgkqhkiG9w0BCQMx
+# CwYJKoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNjAxMjAxODAyNTRaMC8GCSqG
+# SIb3DQEJBDEiBCAev/wSxz4by9OWqstgrC3GnM21ZUSLgiP+Q1heM1m8aTANBgkq
+# hkiG9w0BAQEFAASCAgBKlQSqu/o416yAw3junelXTItWbiIA5Rch1/aBWh/mlsTC
+# gu0vyO2MHBNSYcI6Z00kKmeDI9pZ7WzG2v9HghSqhb8ks0eWrxxteV0+2Aph8Lbf
+# l3TPzfgwhCY49z7Mgpp67LoGdUtSWXyr3Lj3Rh5vvMZVBbr0P7tZ01EDAGKIkuLQ
+# U9rJ7xnnySL4yxTSXK7qx+1topZpr8GzcRuKQTStbx47lK1OxhawRFf/feFKsUaI
+# BBuyFvcuvEP2unxedV/OHvba8xVSxDdG/kyEB+lo+p7XCZjHXRQ8eT+Hl1Wk+492
+# 7rpFDKAzSH00i2V+mitQEpdqheIH9YbgK4OKrUtLh6Qa6THOwB3OqDr8Hr8yU+Vu
+# LU0HCV31EXuWL2E/aNSS6GoilkzeP1PNo8Tj67HmziWRbNd4RU9ccnuBc+mm01NM
+# TC7fbHgJStxF4Fp+vn0OYqZNtbxR66HTU1HslkFfpkqwVQbj/jqH9aVc1xr1liQw
+# 3whe49vIyu306XPp5Lg5RFKOCy5rDRrL3eNBkJfnFiN0k+kZnSn/D5Ap5b7NNL8u
+# 5o54e9KyBX+RbGuFWoy78p4luEPMsTXu0AlYG2uxgL6ZM7E6AQYq4pNLcAYXYMk9
+# aLwtVTjJJg4OXOKiEd8wSKM/fWyzxLSbHifmVwzBnWACR78R0tn54UXS4vZQPg==
+# SIG # End signature block
