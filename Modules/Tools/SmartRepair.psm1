@@ -198,9 +198,38 @@ function Invoke-SmartRepair {
 
         if ($sfcIssueFound) {
             Write-SR "  ⚠  CBS-Log enthält Hinweise auf beschädigte Systemdateien." "Warning"
-            Write-SR "     Empfehlung: SFC /scannow über System & Sicherheit > Wartung ausführen." "Warning"
-            Add-CheckResult -Name "System-Integrität" -Status "Yellow" -Detail "SFC-Lauf empfohlen (CBS-Log)"
-            $results.NeedsSFCscan = $true
+            Write-SR "     → Auto-Reparatur: SFC /scannow wird gestartet (kann mehrere Minuten dauern)..." "Warning"
+            try {
+                $sfcProc = Start-Process -FilePath "sfc.exe" -ArgumentList "/scannow" -NoNewWindow -PassThru -ErrorAction Stop
+                while (-not $sfcProc.HasExited) {
+                    Start-Sleep -Milliseconds 1000
+                    [System.Windows.Forms.Application]::DoEvents()
+                }
+                # Ergebnis direkt aus CBS-Log auslesen
+                $repairLines = Get-Content $cbsLog -Tail 150 -ErrorAction SilentlyContinue
+                $repaired    = $repairLines | Where-Object { $_ -match "successfully repaired|erfolgreich repariert" }
+                $failed      = $repairLines | Where-Object { $_ -match "could not repair|konnte nicht repariert werden" }
+
+                if ($repaired -and -not $failed) {
+                    Write-SR "  ✓  SFC hat beschädigte Systemdateien erfolgreich repariert." "Success"
+                    Add-CheckResult -Name "System-Integrität" -Status "Green" -Detail "SFC: Reparatur erfolgreich"
+                    $results.NeedsSFCscan = $false
+                } elseif ($failed) {
+                    Write-SR "  ✗  SFC konnte nicht alle Dateien reparieren." "Error"
+                    Write-SR "     → DISM RestoreHealth wird im nächsten Schritt automatisch ausgeführt." "Warning"
+                    Add-CheckResult -Name "System-Integrität" -Status "Red" -Detail "SFC: Reparatur unvollständig – DISM folgt"
+                    $results.NeedsSFCscan  = $false
+                    $results.NeedsDISMscan = $true
+                } else {
+                    Write-SR "  ✓  SFC abgeschlossen – keine Probleme verblieben." "Success"
+                    Add-CheckResult -Name "System-Integrität" -Status "Green" -Detail "SFC: Abgeschlossen, keine Probleme"
+                    $results.NeedsSFCscan = $false
+                }
+            } catch {
+                Write-SR "  ⚠  SFC konnte nicht gestartet werden: $($_.Exception.Message)" "Warning"
+                Add-CheckResult -Name "System-Integrität" -Status "Yellow" -Detail "SFC manuell empfohlen"
+                $results.NeedsSFCscan = $true
+            }
         } else {
             Write-SR "  ✓  Keine beschädigten Systemdateien im CBS-Log gefunden." "Success"
             Add-CheckResult -Name "System-Integrität" -Status "Green"  -Detail "CBS-Log unauffällig"
@@ -675,15 +704,44 @@ function Invoke-SmartRepair {
                 Add-CheckResult -Name "DISM CheckHealth" -Status "Green" -Detail "Component-Store OK"
             }
             3010 {
-                Write-SR "  ⚠  DISM: Neustart erforderlich (Exit 3010)." "Warning"
+                Write-SR "  ⚠  DISM: Neustart für ausstehende Komponenten erforderlich (Exit 3010)." "Warning"
                 Add-CheckResult -Name "DISM CheckHealth" -Status "Yellow" -Detail "Neustart erforderlich"
-                $results.NeedsDISMscan = $true
             }
             default {
                 Write-SR "  ⚠  DISM hat einen Fehler-Flag erkannt (Exit $($dismProc.ExitCode))." "Warning"
-                Write-SR "     Empfehlung: DISM /ScanHealth über Diagnose & Reparatur ausführen." "Warning"
-                Add-CheckResult -Name "DISM CheckHealth" -Status "Yellow" -Detail "Flag erkannt (Exit $($dismProc.ExitCode)) – ScanHealth empfohlen"
-                $results.NeedsDISMscan = $true
+                Write-SR "     → Auto-Reparatur: DISM /RestoreHealth wird gestartet (kann 10–30 Min. dauern)..." "Warning"
+                [System.Windows.Forms.Application]::DoEvents()
+                try {
+                    $dismRepair = Start-Process -FilePath "dism.exe" `
+                        -ArgumentList "/Online /Cleanup-Image /RestoreHealth" `
+                        -NoNewWindow -PassThru -ErrorAction Stop
+                    while (-not $dismRepair.HasExited) {
+                        Start-Sleep -Milliseconds 2000
+                        [System.Windows.Forms.Application]::DoEvents()
+                    }
+                    switch ($dismRepair.ExitCode) {
+                        0 {
+                            Write-SR "  ✓  DISM RestoreHealth erfolgreich – Component Store repariert." "Success"
+                            Add-CheckResult -Name "DISM CheckHealth" -Status "Green" -Detail "DISM RestoreHealth: Erfolgreich"
+                            $results.NeedsDISMscan = $false
+                        }
+                        3010 {
+                            Write-SR "  ✓  DISM RestoreHealth abgeschlossen – Neustart empfohlen." "Success"
+                            Add-CheckResult -Name "DISM CheckHealth" -Status "Yellow" -Detail "DISM: Repariert – Neustart empfohlen"
+                            $results.NeedsDISMscan = $false
+                        }
+                        default {
+                            Write-SR "  ✗  DISM RestoreHealth fehlgeschlagen (Exit $($dismRepair.ExitCode))." "Error"
+                            Write-SR "     Mögliche Ursachen: Keine Internetverbindung, Windows Update-Fehler." "Warning"
+                            Add-CheckResult -Name "DISM CheckHealth" -Status "Red" -Detail "DISM RestoreHealth fehlgeschlagen (Exit $($dismRepair.ExitCode))"
+                            $results.NeedsDISMscan = $true
+                        }
+                    }
+                } catch {
+                    Write-SR "  ⚠  DISM RestoreHealth konnte nicht gestartet werden: $($_.Exception.Message)" "Warning"
+                    Add-CheckResult -Name "DISM CheckHealth" -Status "Yellow" -Detail "DISM RestoreHealth manuell empfohlen"
+                    $results.NeedsDISMscan = $true
+                }
             }
         }
     } catch {
@@ -693,42 +751,72 @@ function Invoke-SmartRepair {
     Write-SR ""
 
     # =========================================================================
-    #  CHECK 17 – CHKDSK Dirty-Bit (Zeigt ob Windows CHKDSK beim Start plant)
+    #  CHECK 17 – CHKDSK Online-Scan + Spot-Fix (kein Neustart für Scan)
     # =========================================================================
-    if ($ProgressCallback) { & $ProgressCallback -Step 17 -Total 22 -Name "CHKDSK Dirty-Bit wird geprüft…" }
-    Write-SR "[ 17 / 22 ]  CHKDSK Dirty-Bit (C:)" "Header"
+    if ($ProgressCallback) { & $ProgressCallback -Step 17 -Total 22 -Name "CHKDSK Online-Scan läuft…" }
+    Write-SR "[ 17 / 22 ]  CHKDSK Online-Scan (C:)" "Header"
+    Write-SR "     Online-Scan läuft (kein Neustart erforderlich)..." "Info"
+    [System.Windows.Forms.Application]::DoEvents()
 
     try {
-        # Exit-Code auswerten statt Text-Parsing (Exit 0 = sauber, Exit 1 = dirty) – sprachunabhaengig
-        $fsutilOut = & fsutil dirty query C: 2>&1
-        $fsutilExit = $LASTEXITCODE
+        # Phase 1: Online-Scan – erkennt Fehler ohne Neustart
+        $chkTmp  = [System.IO.Path]::GetTempFileName()
+        $chkProc = Start-Process -FilePath "chkdsk.exe" -ArgumentList "C: /scan" `
+            -NoNewWindow -PassThru -RedirectStandardOutput $chkTmp -ErrorAction Stop
+        while (-not $chkProc.HasExited) {
+            Start-Sleep -Milliseconds 1500
+            [System.Windows.Forms.Application]::DoEvents()
+        }
+        $chkOut  = Get-Content $chkTmp -ErrorAction SilentlyContinue
+        Remove-Item $chkTmp -Force -ErrorAction SilentlyContinue
+        $chkExit = $chkProc.ExitCode
         [System.Windows.Forms.Application]::DoEvents()
 
-        if ($fsutilExit -eq 0) {
-            Write-SR "  ✓  Kein Dirty-Bit gesetzt – kein CHKDSK beim nächsten Start geplant." "Success"
-            Add-CheckResult -Name "CHKDSK Dirty-Bit" -Status "Green" -Detail "Kein CHKDSK geplant"
-        } elseif ($fsutilExit -eq 1) {
-            Write-SR "  ⚠  Dirty-Bit ist gesetzt! Windows führt beim nächsten Start CHKDSK aus." "Warning"
-            Write-SR "     Tipp: Kann nach unsauberem Herunterfahren oder Festplattenfehlern auftreten." "Warning"
-            Add-CheckResult -Name "CHKDSK Dirty-Bit" -Status "Yellow" -Detail "Dirty-Bit gesetzt – CHKDSK beim nächsten Start"
-            $results.NeedsChkdsk = $true
-        } else {
-            # Fallback: Ausgabe-Text prüfen (verschiedene Windows-Sprachversionen)
-            if ($fsutilOut -match "NOT|NICHT|non|pas") {
-                Write-SR "  ✓  Kein Dirty-Bit gesetzt – kein CHKDSK beim nächsten Start geplant." "Success"
-                Add-CheckResult -Name "CHKDSK Dirty-Bit" -Status "Green" -Detail "Kein CHKDSK geplant"
-            } elseif ($fsutilOut -match "Dirty|dirty|beschädigt|beschaedigt|sale|sucio") {
-                Write-SR "  ⚠  Dirty-Bit ist gesetzt! Windows führt beim nächsten Start CHKDSK aus." "Warning"
-                Add-CheckResult -Name "CHKDSK Dirty-Bit" -Status "Yellow" -Detail "Dirty-Bit gesetzt – CHKDSK beim nächsten Start"
+        if ($chkExit -eq 0) {
+            Write-SR "  ✓  CHKDSK Online-Scan: Keine Fehler auf C: gefunden." "Success"
+            Add-CheckResult -Name "CHKDSK (Online-Scan)" -Status "Green" -Detail "Keine Dateisystemfehler gefunden"
+        } elseif ($chkExit -eq 2) {
+            # Fehler gefunden die per Spot-Fix behebbar sind
+            Write-SR "  ⚠  CHKDSK: Dateisystemfehler gefunden – starte Spot-Fix..." "Warning"
+            [System.Windows.Forms.Application]::DoEvents()
+            try {
+                # /spotfix auf C: (Boot-Laufwerk): plant die Reparatur für den nächsten Start
+                $fixProc = Start-Process -FilePath "chkdsk.exe" -ArgumentList "C: /spotfix" `
+                    -NoNewWindow -PassThru -ErrorAction Stop
+                while (-not $fixProc.HasExited) {
+                    Start-Sleep -Milliseconds 1500
+                    [System.Windows.Forms.Application]::DoEvents()
+                }
+                if ($fixProc.ExitCode -eq 0) {
+                    Write-SR "  ✓  CHKDSK Spot-Fix eingeplant – Reparatur erfolgt beim nächsten Neustart." "Success"
+                    Write-SR "     Bitte starte Windows neu um die Reparatur abzuschließen." "Warning"
+                    Add-CheckResult -Name "CHKDSK (Online-Scan)" -Status "Yellow" -Detail "Spot-Fix geplant – Neustart abschließen"
+                } else {
+                    Write-SR "  ⚠  CHKDSK Spot-Fix konnte nicht alle Fehler einplanen (Exit $($fixProc.ExitCode))." "Warning"
+                    Add-CheckResult -Name "CHKDSK (Online-Scan)" -Status "Yellow" -Detail "Teilweise – manueller CHKDSK /f empfohlen"
+                }
                 $results.NeedsChkdsk = $true
+            } catch {
+                Write-SR "  ⚠  CHKDSK Spot-Fix fehlgeschlagen: $($_.Exception.Message)" "Warning"
+                Add-CheckResult -Name "CHKDSK (Online-Scan)" -Status "Yellow" -Detail "Spot-Fix nicht möglich – manuell empfohlen"
+                $results.NeedsChkdsk = $true
+            }
+        } else {
+            # Unbekannter Exit-Code – Fallback auf Dirty-Bit Prüfung
+            $fsutilOut  = & fsutil dirty query C: 2>&1
+            $fsutilExit = $LASTEXITCODE
+            if ($fsutilExit -eq 0 -or ($fsutilOut -match 'NOT|NICHT')) {
+                Write-SR "  ✓  C: ist sauber – kein CHKDSK erforderlich." "Success"
+                Add-CheckResult -Name "CHKDSK (Online-Scan)" -Status "Green" -Detail "Laufwerk C: OK"
             } else {
-                Write-SR "  ✓  Dirty-Bit Abfrage OK (Exit $fsutilExit)  |  $($fsutilOut -join ' ')" "Success"
-                Add-CheckResult -Name "CHKDSK Dirty-Bit" -Status "Green" -Detail "Kein CHKDSK geplant"
+                Write-SR "  ⚠  CHKDSK meldet Probleme auf C: (Exit $chkExit) – Offline-Prüfung empfohlen." "Warning"
+                Add-CheckResult -Name "CHKDSK (Online-Scan)" -Status "Yellow" -Detail "Offline-CHKDSK empfohlen (Exit $chkExit)"
+                $results.NeedsChkdsk = $true
             }
         }
     } catch {
-        Write-SR "  ⚠  CHKDSK-Prüfung fehlgeschlagen: $($_.Exception.Message)" "Warning"
-        Add-CheckResult -Name "CHKDSK Dirty-Bit" -Status "Yellow" -Detail "Prüfung nicht möglich"
+        Write-SR "  ⚠  CHKDSK Online-Scan fehlgeschlagen: $($_.Exception.Message)" "Warning"
+        Add-CheckResult -Name "CHKDSK (Online-Scan)" -Status "Yellow" -Detail "Scan nicht möglich"
     }
     Write-SR ""
 
@@ -928,8 +1016,8 @@ function Invoke-SmartRepair {
         Write-SR ""
         Write-SR "  Empfohlene Folge-Scans:" "Warning"
         if ($results.NeedsSFCscan)  { Write-SR "    ‣  SFC /scannow        System & Sicherheit › Wartung › SFC" "Warning" }
-        if ($results.NeedsDISMscan) { Write-SR "    ‣  DISM /ScanHealth     Diagnose & Reparatur › DISM Scan" "Warning" }
-        if ($results.NeedsChkdsk)   { Write-SR "    ‣  CHKDSK              Diagnose & Reparatur › CHKDSK" "Warning" }
+        if ($results.NeedsDISMscan) { Write-SR "    ‣  DISM /RestoreHealth  Diagnose & Reparatur › DISM Reparatur" "Warning" }
+        if ($results.NeedsChkdsk)   { Write-SR "    ‣  CHKDSK Neustart      Windows neu starten um Spot-Fix abzuschließen" "Warning" }
     }
 
     # C1 – Gesamtdauer
