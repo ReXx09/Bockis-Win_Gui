@@ -112,47 +112,83 @@ function Start-WindowsDefender {
         # Status in GUI aktualisieren
         Write-ToolLog -ToolName "WindowsDefender" -Message "Starte Windows Defender und rufe Status ab..." -OutputBox $outputBox -Style 'Action' -Level "Information" -NoTimestamp -SaveToDatabase
               
-        # Status abrufen und anzeigen
+        # Status abrufen
         $status = Get-MpComputerStatus
-        Write-ConsoleAndOutputBox -Message "Aktueller Windows Defender Status:" -Type "Info" -OutputBox $outputBox -ToolName "WindowsDefender" -NoTimestamp -SaveToDatabase
-        
-        Write-Host " - Antivirus: $($status.AntivirusEnabled)" -ForegroundColor Yellow
-        Write-ToolLog -ToolName "WindowsDefender" -Message " - Antivirus: $($status.AntivirusEnabled)" -OutputBox $outputBox -Level "Information" -NoTimestamp -SaveToDatabase
-        Write-Host " - Echtzeit-Schutz: $($status.RealTimeProtectionEnabled)" -ForegroundColor Yellow
-        Write-ToolLog -ToolName "WindowsDefender" -Message " - Echtzeit-Schutz: $($status.RealTimeProtectionEnabled)" -OutputBox $outputBox -Level "Information" -NoTimestamp -SaveToDatabase
 
-        Write-Host " - Virensignaturen: $($status.AntivirusSignatureVersion)" -ForegroundColor Yellow
-        Write-ToolLog -ToolName "WindowsDefender" -Message " - Virensignaturen: $($status.AntivirusSignatureVersion)" -OutputBox $outputBox -Level "Information" -NoTimestamp -SaveToDatabase
+        # ── Abschnitt: Status ─────────────────────────────────────────────────
+        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
+        $outputBox.AppendText("`r`n  " + ("═" * 66) + "`r`n")
+        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
+        $outputBox.AppendText("  Windows Defender – Aktueller Status`r`n")
+        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
+        $outputBox.AppendText("  " + ("═" * 66) + "`r`n`r`n")
 
-        Write-Host " - Letztes Update: $($status.AntivirusSignatureLastUpdated)" -ForegroundColor Yellow
-        Write-ToolLog -ToolName "WindowsDefender" -Message " - Letztes Update: $($status.AntivirusSignatureLastUpdated)" -OutputBox $outputBox -Level "Information" -NoTimestamp -SaveToDatabase
+        # Boolean-Werte lesbar darstellen
+        $avIcon      = if ($status.AntivirusEnabled)           { "✓ Aktiv"     } else { "✗ Inaktiv" }
+        $rtIcon      = if ($status.RealTimeProtectionEnabled)  { "✓ Aktiv"     } else { "✗ Inaktiv" }
+        $avStyle     = if ($status.AntivirusEnabled)           { 'Success'     } else { 'Error'     }
+        $rtStyle     = if ($status.RealTimeProtectionEnabled)  { 'Success'     } else { 'Error'     }
 
-        # Verbesserte Darstellung des letzten Scans mit genaueren Zeitangaben
+        # Signatur-Datum aufbereiten
+        $sigDate = try { $status.AntivirusSignatureLastUpdated.ToString("dd.MM.yyyy HH:mm") } catch { "Unbekannt" }
+
+        # Letzter Scan aufbereiten
         if ($status.QuickScanEndTime) {
             $timeSinceScan = (Get-Date) - $status.QuickScanEndTime
-            $scanTimeInfo = $status.QuickScanEndTime.ToString("dd.MM.yyyy HH:mm:ss")
-            
+            $scanTimeInfo  = $status.QuickScanEndTime.ToString("dd.MM.yyyy HH:mm:ss")
             if ($timeSinceScan.TotalHours -lt 1) {
-                $minutesSinceScan = [Math]::Round($timeSinceScan.TotalMinutes)
-                Write-Host " - Letzter Scan: vor $minutesSinceScan Minuten ($scanTimeInfo)" -ForegroundColor Blue
-                Write-ToolLog -ToolName "WindowsDefender" -Message " - Letzter Scan: vor $minutesSinceScan Minuten ($scanTimeInfo)" -OutputBox $outputBox -Level "Information" -NoTimestamp -SaveToDatabase
+                $lastScanText = "vor $([Math]::Round($timeSinceScan.TotalMinutes)) Min. ($scanTimeInfo)"
+            } else {
+                $lastScanText = "vor $([Math]::Round($timeSinceScan.TotalHours,1)) Std. ($scanTimeInfo)"
             }
-            else {
-                $hoursSinceScan = [Math]::Round($timeSinceScan.TotalHours, 1)
-                Write-Host " - Letzter Scan: vor $hoursSinceScan Stunden ($scanTimeInfo)" -ForegroundColor Blue
-                Write-ToolLog -ToolName "WindowsDefender" -Message " - Letzter Scan: vor $hoursSinceScan Stunden ($scanTimeInfo)" -OutputBox $outputBox -Level "Information" -NoTimestamp -SaveToDatabase
-            }
+        } else {
+            $lastScanText = "vor $($status.QuickScanAge) Std. (Uhrzeit unbekannt)"
         }
-        else {
-            Write-Host " - Letzter Scan: vor $($status.QuickScanAge) Stunden" -ForegroundColor Blue
-            Write-ToolLog -ToolName "WindowsDefender" -Message " - Letzter Scan: vor $($status.QuickScanAge) Stunden" -OutputBox $outputBox -Level "Information" -NoTimestamp -SaveToDatabase
-        }        
+
+        # Konsole
+        Write-Host "  ┌─ Antivirus-Schutz  : $avIcon" -ForegroundColor Yellow
+        Write-Host "  ├─ Echtzeit-Schutz   : $rtIcon" -ForegroundColor Yellow
+        Write-Host "  ├─ Signaturversion   : $($status.AntivirusSignatureVersion)" -ForegroundColor Yellow
+        Write-Host "  ├─ Signatur-Update   : $sigDate" -ForegroundColor Yellow
+        Write-Host "  └─ Letzter Quick-Scan: $lastScanText" -ForegroundColor Cyan
+
+        # outputBox
+        Set-OutputSelectionStyle -OutputBox $outputBox -Style $avStyle
+        $outputBox.AppendText("  ┌─ Antivirus-Schutz  : $avIcon`r`n")
+        Set-OutputSelectionStyle -OutputBox $outputBox -Style $rtStyle
+        $outputBox.AppendText("  ├─ Echtzeit-Schutz   : $rtIcon`r`n")
+        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
+        $outputBox.AppendText("  ├─ Signaturversion   : $($status.AntivirusSignatureVersion)`r`n")
+        $outputBox.AppendText("  ├─ Signatur-Update   : $sigDate`r`n")
+        $outputBox.AppendText("  └─ Letzter Quick-Scan: $lastScanText`r`n")
+
+        # Warnungen bei inaktivem Schutz
         if (-not $status.AntivirusEnabled) {
-            Write-ConsoleAndOutputBox -Message "WARNUNG: Windows Defender Antivirus ist nicht aktiv!" -Type "Warning" -OutputBox $outputBox -ToolName "WindowsDefender" -NoTimestamp -SaveToDatabase
+            Write-Host "`n  [!] WARNUNG: Antivirus ist deaktiviert!" -ForegroundColor Red
+            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
+            $outputBox.AppendText("`r`n  [!] WARNUNG: Antivirus ist deaktiviert!`r`n")
+            Write-ToolLog -ToolName "WindowsDefender" -Message "WARNUNG: Antivirus ist deaktiviert!" -OutputBox $null -Level "Warning" -SaveToDatabase
         }
-        Write-Host "`n" + ("═" * 70) -ForegroundColor Cyan
-        
-        # Starte Quick Scan in der PowerShell
+        if (-not $status.RealTimeProtectionEnabled) {
+            Write-Host "  [!] WARNUNG: Echtzeit-Schutz ist deaktiviert!" -ForegroundColor Red
+            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
+            $outputBox.AppendText("  [!] WARNUNG: Echtzeit-Schutz ist deaktiviert!`r`n")
+            Write-ToolLog -ToolName "WindowsDefender" -Message "WARNUNG: Echtzeit-Schutz ist deaktiviert!" -OutputBox $null -Level "Warning" -SaveToDatabase
+        }
+
+        Write-ToolLog -ToolName "WindowsDefender" -Message "Status: AV=$avIcon | RT=$rtIcon | Sig=$($status.AntivirusSignatureVersion) | Update=$sigDate | Scan=$lastScanText" -OutputBox $null -Level "Information" -SaveToDatabase
+
+        # ── Abschnitt: Quick Scan ─────────────────────────────────────────────
+        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
+        $outputBox.AppendText("`r`n  " + ("═" * 66) + "`r`n")
+        $outputBox.AppendText("  Quick Scan`r`n")
+        $outputBox.AppendText("  " + ("═" * 66) + "`r`n`r`n")
+        Write-Host
+        Write-Host ("  " + ("═" * 66)) -ForegroundColor Cyan
+        Write-Host "  Quick Scan" -ForegroundColor Cyan
+        Write-Host ("  " + ("═" * 66)) -ForegroundColor Cyan
+
+        # Starte Quick Scan
         Write-ConsoleAndOutputBox -Message "Starte Windows Defender Quick Scan..." -Type "Start" -OutputBox $outputBox -ToolName "WindowsDefender" -NoTimestamp -SaveToDatabase
         
         Update-ProgressStatus -StatusText "Führe Quick Scan aus..." -ProgressValue 10 -TextColor ([System.Drawing.Color]::White) -progressBarParam $progressBar
@@ -230,7 +266,6 @@ function Start-WindowsDefender {
                     
                     $scanSuccessful = $true
                     Write-ConsoleAndOutputBox -Message "Windows Defender Quick Scan abgeschlossen." -Type "Success" -OutputBox $outputBox -ToolName "WindowsDefender" -NoTimestamp -SaveToDatabase
-                    Write-Host "`n" + ("═" * 70) -ForegroundColor Cyan
                 }
                 catch {
                     $errorMsg = $_.Exception.Message
@@ -329,28 +364,44 @@ function Start-WindowsDefender {
                 }
             }            
             
+            # ── Abschnitt: Scan-Ergebnis ──────────────────────────────────────
+            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
+            $outputBox.AppendText("`r`n  " + ("═" * 66) + "`r`n")
+            $outputBox.AppendText("  Scan-Ergebnis`r`n")
+            $outputBox.AppendText("  " + ("═" * 66) + "`r`n`r`n")
+            Write-Host
+            Write-Host ("  " + ("═" * 66)) -ForegroundColor Cyan
+            Write-Host "  Scan-Ergebnis" -ForegroundColor Cyan
+            Write-Host ("  " + ("═" * 66)) -ForegroundColor Cyan
+
             # Scan-Ergebnisse nur auswerten, wenn Scan erfolgreich war
             if ($scanSuccessful) {
                 Write-ConsoleAndOutputBox -Message "Scan-Ergebnisse werden ausgewertet..." -Type "Info" -OutputBox $outputBox -ToolName "WindowsDefender" -NoTimestamp -SaveToDatabase
                 
                 $threats = $null
                 try {
-                    # Versuche, aktuelle Bedrohungen zu ermitteln
                     if (Get-Command Get-MpThreatDetection -ErrorAction SilentlyContinue) {
-                        $threats = Get-MpThreatDetection | Where-Object { $_.ThreatStatus -ne "Resolved" }
+                        $threats = @(Get-MpThreatDetection | Where-Object { $_.ThreatStatus -ne "Resolved" })
                     }
                     if ($threats -and $threats.Count -gt 0) {
                         $threatCount = $threats.Count
-                        Write-ConsoleAndOutputBox -Message "Scan-Ergebnis: $threatCount aktive Bedrohung(en) erkannt!" -Type "Warning" -OutputBox $outputBox -ToolName "WindowsDefender" -NoTimestamp -SaveToDatabase
-                        
-                        # Liste alle erkannten Bedrohungen auf
+
+                        Write-Host "  [!] $threatCount aktive Bedrohung(en) erkannt:" -ForegroundColor Red
+                        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
+                        $outputBox.AppendText("  [!] $threatCount aktive Bedrohung(en) erkannt:`r`n")
+
                         foreach ($threat in $threats) {
-                            Write-Host "    - $($threat.ThreatName) ($($threat.ThreatID))" -ForegroundColor Red
-                            Write-ToolLog -ToolName "WindowsDefender" -Message "- $($threat.ThreatName) ($($threat.ThreatID))" -OutputBox $outputBox -Style 'Error' -Level "Warning" -NoTimestamp -SaveToDatabase
+                            Write-Host "      ├─ $($threat.ThreatName) (ID: $($threat.ThreatID))" -ForegroundColor Red
+                            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
+                            $outputBox.AppendText("      ├─ $($threat.ThreatName) (ID: $($threat.ThreatID))`r`n")
+                            Write-ToolLog -ToolName "WindowsDefender" -Message "Bedrohung: $($threat.ThreatName) (ID: $($threat.ThreatID))" -OutputBox $null -Level "Warning" -SaveToDatabase
                         }
                     }
                     else {
-                        Write-ConsoleAndOutputBox -Message "Scan-Ergebnis: Keine Bedrohungen erkannt - System ist sauber." -Type "Success" -OutputBox $outputBox -ToolName "WindowsDefender" -NoTimestamp -SaveToDatabase
+                        Write-Host "  [✓] Keine Bedrohungen erkannt – System ist sauber." -ForegroundColor Green
+                        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
+                        $outputBox.AppendText("  [✓] Keine Bedrohungen erkannt – System ist sauber.`r`n")
+                        Write-ToolLog -ToolName "WindowsDefender" -Message "Keine Bedrohungen erkannt – System ist sauber." -OutputBox $null -Level "Information" -SaveToDatabase
                     }            
                 }
                 catch {
@@ -358,8 +409,16 @@ function Start-WindowsDefender {
                 }
             }
             else {
-                Write-ConsoleAndOutputBox -Message "Scan wurde nicht erfolgreich abgeschlossen - Keine Ergebnisse verfügbar." -Type "Warning" -OutputBox $outputBox -ToolName "WindowsDefender" -NoTimestamp -SaveToDatabase
-            }        
+                Write-Host "  [⚠] Scan nicht abgeschlossen – keine Ergebnisse verfügbar." -ForegroundColor Orange
+                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
+                $outputBox.AppendText("  [⚠] Scan nicht abgeschlossen – keine Ergebnisse verfügbar.`r`n")
+                Write-ToolLog -ToolName "WindowsDefender" -Message "Scan nicht abgeschlossen." -OutputBox $null -Level "Warning" -SaveToDatabase
+            }
+
+            # Abschlusslinie
+            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
+            $outputBox.AppendText("`r`n  " + ("═" * 66) + "`r`n")
+            Write-Host ("  " + ("═" * 66)) -ForegroundColor Cyan        
         }
         catch {
             Write-ConsoleAndOutputBox -Message "Fehler beim Ausführen des Windows Defender Scans: $_" -Type "Error" -OutputBox $outputBox -ToolName "WindowsDefender" -SaveToDatabase

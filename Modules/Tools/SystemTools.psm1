@@ -38,7 +38,7 @@ function Start-QuickMRT {
     }
     
     # In Log-Datei und Datenbank schreiben, dass der Scan startet
-    Write-ToolLog -ToolName "QuickMRT" -Message "Quick MRT Scan wird gestartet" -OutputBox $outputBox -Style 'Action' -Level "Information" -SaveToDatabase
+    Write-ToolLog -ToolName "QuickMRT" -Message "Quick MRT Scan wird gestartet" -OutputBox $null -Style 'Action' -Level "Information" -SaveToDatabase
     
     # Rahmen und Systeminformationen erstellen
     #$computerName = $env:COMPUTERNAME
@@ -90,17 +90,18 @@ function Start-QuickMRT {
     try {
         # Header für den Scan
         Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
-        $outputBox.AppendText("`r`n===== MICROSOFT MALICIOUS SOFTWARE REMOVAL TOOL (MRT) =====`r`n")
+        $outputBox.AppendText("`r`n  " + ("═" * 54) + "`r`n")
+        $outputBox.AppendText("  ══  MRT – Quick Scan  ══`r`n")
+        $outputBox.AppendText("  " + ("═" * 54) + "`r`n")
         Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
-        $outputBox.AppendText("Modus: Quick Scan`r`n")
-        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
-        $outputBox.AppendText("Zeitstempel: $(Get-Date -Format 'dd.MM.yyyy HH:mm:ss')`r`n`r`n")
+        $outputBox.AppendText("  Modus: Quick Scan`r`n")
+        $outputBox.AppendText("  Zeitstempel: $(Get-Date -Format 'dd.MM.yyyy HH:mm:ss')`r`n`r`n")
         
         # Prüfe ob MRT.exe existiert
         $mrtPath = "$env:windir\System32\mrt.exe"
         if (-not (Test-Path $mrtPath)) {
             Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
-            $outputBox.AppendText("[!] FEHLER: MRT.exe wurde nicht gefunden!`r`n")
+            $outputBox.AppendText("  [✗] FEHLER: MRT.exe wurde nicht gefunden!`r`n")
             Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
             $outputBox.AppendText("    Pfad: $mrtPath`r`n")
             return
@@ -117,14 +118,14 @@ function Start-QuickMRT {
         
         # Scan starten
         Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
-        $outputBox.AppendText("[>] Quick Scan wird gestartet...`r`n")
+        $outputBox.AppendText("  [►] Quick Scan wird gestartet...`r`n")
              
         
         Write-Host
         Write-Host
         Write-Host "     [►] Bitte warten bis der Scan abgeschlossen ist !!!" -ForegroundColor Blue
         Write-Host
-        Write-Host "`n" + ("═" * 70) -ForegroundColor Cyan 
+        Write-Host ("  " + ("═" * 66)) -ForegroundColor Cyan
         Write-Host
         Write-Host "     [ Quick Scan wird gestartet... ]" -ForegroundColor $secondaryColor
 
@@ -187,8 +188,8 @@ function Start-QuickMRT {
         $progressIndex = 0  # Index für die Animationszeichen
         
         # Fortschrittsanzeige: Scan wird gestartet
-        Write-Host "     [>] Scan wird gestartet. Bitte warten... (Dies kann einige Minuten dauern)" -ForegroundColor Yellow
-        Write-Host "     [>] Scan läuft | Dauer: 00:00 " -NoNewline -ForegroundColor Yellow
+        Write-Host "     [►] Scan wird gestartet. Bitte warten... (Dies kann einige Minuten dauern)" -ForegroundColor Yellow
+        Write-Host "     [►] Scan läuft | Dauer: 00:00 " -NoNewline -ForegroundColor Yellow
         
         while (-not $process.HasExited) {
             $elapsedTime = (Get-Date) - $startTime
@@ -199,21 +200,21 @@ function Start-QuickMRT {
             $progressIndex = ($progressIndex + 1) % $progressChars.Length
             
             # Fortschrittsanzeige mit Zeitdauer aktualisieren
-            Write-Host "`r     [>] Scan läuft $progressChar Dauer: $formattedTime " -NoNewline -ForegroundColor Yellow
+            Write-Host "`r     [►] Scan läuft $progressChar Dauer: $formattedTime " -NoNewline -ForegroundColor Yellow
             
             # Timeout-Prüfung
             if ($elapsedTime -gt $timeoutDuration) {
                 Write-Host "" # Neue Zeile nach Animation
                 Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
-                $outputBox.AppendText("[!] Timeout: Der Scan dauert länger als erwartet und wird beendet.`r`n")
+                $outputBox.AppendText("  [⚠] Timeout: Der Scan dauert länger als erwartet und wird beendet.`r`n")
                 
                 try {
                     $process.Kill()
                     $hasTimedOut = $true
-                    $outputBox.AppendText("[!] MRT-Prozess wurde beendet.`r`n")
+                    $outputBox.AppendText("  [⚠] MRT-Prozess wurde beendet.`r`n")
                 }
                 catch {
-                    $outputBox.AppendText("[!] Fehler beim Beenden des MRT-Prozesses: $_`r`n")
+                    $outputBox.AppendText("  [✗] Fehler beim Beenden des MRT-Prozesses: $_`r`n")
                 }
                 
                 Update-ProgressStatus -StatusText "MRT Quick-Scan abgebrochen (Timeout)" -ProgressValue 0 -TextColor ([System.Drawing.Color]::Red) -progressBarParam $progressBar
@@ -241,9 +242,7 @@ function Start-QuickMRT {
             if ($expectedPhase -gt $currentPhase) {
                 $currentPhase = $expectedPhase
                 Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
-                $outputBox.AppendText("[>] Phase: $($scanPhases[$currentPhase].Name)`r`n")
-                                                
-                
+                $outputBox.AppendText("  [►] Phase: $($scanPhases[$currentPhase].Name)`r`n")
                 Write-Host "   ├─ Phase: $($scanPhases[$currentPhase].Name)" -ForegroundColor Cyan
                
                 Update-ProgressStatus -StatusText "MRT Quick-Scan: $($scanPhases[$currentPhase].Name)" `
@@ -279,7 +278,7 @@ function Start-QuickMRT {
                 foreach ($line in $lastLines) {
                     if ($line -match "Error|Failed|Exception") {
                         Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
-                        $outputBox.AppendText("[!] Warnung: $line`r`n")
+                        $outputBox.AppendText("  [⚠] Warnung: $line`r`n")
                         Update-ProgressStatus -StatusText "Warnung aufgetreten" -ProgressValue $progressBar.Value -TextColor ([System.Drawing.Color]::Red) -progressBarParam $progressBar
                     }
                 }
@@ -294,7 +293,7 @@ function Start-QuickMRT {
         # Zeige die Gesamtdauer des Scans an
         $totalScanTime = (Get-Date) - $startTime
         $formattedTotalTime = "{0:mm}:{0:ss}" -f $totalScanTime
-        Write-Host "     [√] Scan abgeschlossen. Gesamtdauer: $formattedTotalTime" -ForegroundColor Green
+        Write-Host "     [✓] Scan abgeschlossen. Gesamtdauer: $formattedTotalTime" -ForegroundColor Green
         
         # Warte auf Prozessende und hole Exit-Code
         $process.WaitForExit()
@@ -329,45 +328,13 @@ function Start-QuickMRT {
                 default { "Quick MRT Scan mit Exit-Code $exitCode beendet." }
             }
             
-            # Stelle sicher, dass die Ergebnisse in der Log-Datei erscheinen
-            # mit expliziter Fehlerbehandlung
-            # Versuche das Ergebnis zu loggen, merke dir den Erfolg
-            $logSuccess = $false
+            # Ergebnis in Log und Datenbank schreiben
+            # Write-ToolLog hat eingebaute Retry-Logik (3 Versuche) und DB-Speicherung
             try {
-                $logSuccess = Write-ToolLog -ToolName "QuickMRT" -Message $resultMessage -OutputBox $outputBox -Style 'Action' -Level "Information" -SaveToDatabase
+                Write-ToolLog -ToolName "QuickMRT" -Message $resultMessage -OutputBox $outputBox -Style 'Action' -Level "Information" -SaveToDatabase
             }
             catch {
-                $logSuccess = $false
                 Write-Host "Fehler beim Schreiben des QuickMRT-Logs: $_" -ForegroundColor Red
-            }
-            
-            # Nur Fallback verwenden, wenn der erste Versuch fehlgeschlagen ist
-            if (-not $logSuccess) {
-                try {
-                    $logFilePath = Join-Path $PSScriptRoot "..\..\Data\Logs\QuickMRT.log"
-                    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-                    $logEntry = "$timestamp - [INFO] $resultMessage"
-                    
-                    # Direktes Schreiben nur als Fallback mit Cloud-Fehlerbehandlung
-                    try {
-                        [System.IO.File]::AppendAllText($logFilePath, "$logEntry`r`n", [System.Text.Encoding]::UTF8)
-                        Write-Verbose "Fallback-Logging für QuickMRT erfolgreich"
-                    }
-                    catch {
-                        # Prüfe auf Cloud-Provider-Fehler
-                        $errorMsg = $_.Exception.Message
-                        if ($errorMsg -notmatch "Clouddateianbieter|cloud file provider|STATUS_CLOUD_FILE_PROVIDER_NOT_RUNNING") {
-                            Write-Verbose "Fehler beim Fallback-Logging: $_"
-                        }
-                    }
-                }
-                catch {
-                    # Prüfe auf Cloud-Provider-Fehler
-                    $errorMsg = $_.Exception.Message
-                    if ($errorMsg -notmatch "Clouddateianbieter|cloud file provider|STATUS_CLOUD_FILE_PROVIDER_NOT_RUNNING") {
-                        Write-Verbose "Fehler beim Schreiben des Scan-Ergebnisses: $_"
-                    }
-                }
             }
         }
         catch {
@@ -417,7 +384,7 @@ function Start-QuickMRT {
             Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
             $outputBox.AppendText("    [✗] Status: Scan-Timeout`r`n")
             Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
-            $outputBox.AppendText("    [!] Der Scan wurde wegen Zeitüberschreitung abgebrochen`r`n")
+            $outputBox.AppendText("    [⚠] Der Scan wurde wegen Zeitüberschreitung abgebrochen`r`n")
             Update-ProgressStatus -StatusText "Scan-Timeout" -ProgressValue 100 -TextColor ([System.Drawing.Color]::Red) -progressBarParam $progressBar
             
             # Neustart-Dialog für Timeout-Fall
@@ -454,7 +421,7 @@ function Start-QuickMRT {
                 Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
                 $outputBox.AppendText("    [✗] Status: Malware gefunden!`r`n")
                 Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
-                $outputBox.AppendText("    [!] Windows Defender Offline-Scan wird empfohlen`r`n")
+                $outputBox.AppendText("    [⚠] Windows Defender Offline-Scan wird empfohlen`r`n")
                 Update-ProgressStatus -StatusText "Malware gefunden!" -ProgressValue 100 -TextColor ([System.Drawing.Color]::Red) -progressBarParam $progressBar
                 
                 # Neustart-Dialog für Malware-Fall
@@ -465,16 +432,16 @@ function Start-QuickMRT {
             }
             2 {
                 Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Alert'
-                $outputBox.AppendText("    [!] Status: Scan abgebrochen`r`n")
+                $outputBox.AppendText("    [⚠] Status: Scan abgebrochen`r`n")
                 Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
-                $outputBox.AppendText("    [!] Der Scan wurde manuell oder durch Zeitüberschreitung beendet`r`n")
+                $outputBox.AppendText("    [⚠] Der Scan wurde manuell oder durch Zeitüberschreitung beendet`r`n")
                 Update-ProgressStatus -StatusText "Scan abgebrochen" -ProgressValue 100 -TextColor ([System.Drawing.Color]::SaddleBrown) -progressBarParam $progressBar
             }
             3 {
                 Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
-                $outputBox.AppendText("    [!] Status: Initialisierungsfehler`r`n")
+                $outputBox.AppendText("    [⚠] Status: Initialisierungsfehler`r`n")
                 Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
-                $outputBox.AppendText("    [!] Neustart erforderlich für MRT-Initialisierung`r`n")
+                $outputBox.AppendText("    [⚠] Neustart erforderlich für MRT-Initialisierung`r`n")
                 Update-ProgressStatus -StatusText "Initialisierungsfehler - Neustart empfohlen" -ProgressValue 100 -TextColor ([System.Drawing.Color]::Red) -progressBarParam $progressBar
                 
                 # Neustart-Dialog für Initialisierungsfehler
@@ -492,7 +459,7 @@ function Start-QuickMRT {
             }
             8 {
                 Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
-                $outputBox.AppendText("    [!] Status: System-Neustart erforderlich`r`n")
+                $outputBox.AppendText("    [⚠] Status: System-Neustart erforderlich`r`n")
                 Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
                 $outputBox.AppendText("    [i] Bitte führen Sie einen System-Neustart durch`r`n")
                 Update-ProgressStatus -StatusText "Neustart erforderlich" -ProgressValue 100 -TextColor ([System.Drawing.Color]::Orange) -progressBarParam $progressBar
@@ -507,7 +474,7 @@ function Start-QuickMRT {
                 Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
                 $outputBox.AppendText("    [✗] Status: Schwerwiegende Malware gefunden`r`n")
                 Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
-                $outputBox.AppendText("    [!] Windows Defender Offline-Scan wird dringend empfohlen`r`n")
+                $outputBox.AppendText("    [⚠] Windows Defender Offline-Scan wird dringend empfohlen`r`n")
                 Update-ProgressStatus -StatusText "Schwerwiegende Malware gefunden!" -ProgressValue 100 -TextColor ([System.Drawing.Color]::Red) -progressBarParam $progressBar
                 
                 # Neustart-Dialog für schwerwiegende Malware
@@ -601,11 +568,11 @@ function Start-QuickMRT {
             foreach ($line in $lastLines) {
                 if ($line -match "Error|Failed|Exception") {
                     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
-                    $outputBox.AppendText("    [!] $line`r`n")
+                    $outputBox.AppendText("    [✗] $line`r`n")
                 }
                 elseif ($line -match "Warning") {
                     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
-                    $outputBox.AppendText("    [!] $line`r`n")
+                    $outputBox.AppendText("    [⚠] $line`r`n")
                 }
                 elseif ($line -match "Success|Complete") {
                     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
@@ -618,21 +585,21 @@ function Start-QuickMRT {
         Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
         $outputBox.AppendText("`r`n[i] Scan abgeschlossen um $(Get-Date -Format 'HH:mm:ss')`r`n")
         Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
-        $outputBox.AppendText("=".PadRight(60, "=") + "`r`n")
+        $outputBox.AppendText(("  " + ("═" * 54)) + "`r`n")
         
         Write-Host
-        Write-Host "`n" + ("═" * 70) -ForegroundColor Cyan
+        Write-Host ("  " + ("═" * 66)) -ForegroundColor Cyan
         Write-Host
         Write-Host "     Scan abgeschlossen um $(Get-Date -Format 'HH:mm:ss')" -ForegroundColor Yellow
         Write-Host
-        Write-Host "`n" + ("═" * 70) -ForegroundColor Cyan
+        Write-Host ("  " + ("═" * 66)) -ForegroundColor Cyan
         Write-Host
 
         return $exitCode
     }
     catch {
         Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
-        $outputBox.AppendText("`r`n[-] FEHLER: $_`r`n")
+        $outputBox.AppendText("`r`n  [✗] FEHLER: $_`r`n")
         return -1
     }
     finally {
@@ -656,7 +623,7 @@ function Start-FullMRT {
     }
     
     # In Log-Datei und Datenbank schreiben, dass der Full MRT Scan startet
-    Write-ToolLog -ToolName "FullMRT" -Message "Full MRT Scan wird gestartet" -OutputBox $outputBox -Style 'Action' -Level "Information" -SaveToDatabase
+    Write-ToolLog -ToolName "FullMRT" -Message "Full MRT Scan wird gestartet" -OutputBox $null -Style 'Action' -Level "Information" -SaveToDatabase
     
     # Essentielle Informationen sammeln
     #$computerName = $env:COMPUTERNAME
@@ -708,18 +675,19 @@ function Start-FullMRT {
     # Header für den Scan
     try {
         Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
-        $outputBox.AppendText("`r`n===== MICROSOFT MALICIOUS SOFTWARE REMOVAL TOOL (MRT) =====`r`n")
+        $outputBox.AppendText("`r`n  " + ("═" * 54) + "`r`n")
+        $outputBox.AppendText("  ══  MRT – Full Scan  ══`r`n")
+        $outputBox.AppendText("  " + ("═" * 54) + "`r`n")
         Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
-        $outputBox.AppendText("Modus: Full Scan`r`n")
-        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
-        $outputBox.AppendText("Zeitstempel: $(Get-Date -Format 'dd.MM.yyyy HH:mm:ss')`r`n`r`n")
+        $outputBox.AppendText("  Modus: Full Scan`r`n")
+        $outputBox.AppendText("  Zeitstempel: $(Get-Date -Format 'dd.MM.yyyy HH:mm:ss')`r`n`r`n")
         
         Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
-        $outputBox.AppendText("[>] Windows-Fenster für MRT Full Scan wird geöffnet...`r`n")
+        $outputBox.AppendText("  [►] Windows-Fenster für MRT Full Scan wird geöffnet...`r`n")
     }
     catch {
         Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
-        $outputBox.AppendText("`r`n[-] FEHLER: $_`r`n")
+        $outputBox.AppendText("`r`n  [✗] FEHLER: $_`r`n")
         return -1
     }
     
@@ -727,9 +695,9 @@ function Start-FullMRT {
     Write-Host
     Write-Host "     [►] Bitte warten bis der Scan abgeschlossen ist !!!" -ForegroundColor Blue
     Write-Host
-    Write-Host "`n" + ("═" * 70) -ForegroundColor Cyan 
+    Write-Host ("  " + ("═" * 66)) -ForegroundColor Cyan
     Write-Host
-    Write-Host "     [>] Windows-Fenster für MRT Full Scan wird geöffnet... " -ForegroundColor $secondaryColor
+    Write-Host "     [►] Windows-Fenster für MRT Full Scan wird geöffnet... " -ForegroundColor $secondaryColor
     Write-Host "     [►] Bitte starten Sie den Scan im Dialog-Fenster ... " -ForegroundColor Blue
     Write-Host
     
