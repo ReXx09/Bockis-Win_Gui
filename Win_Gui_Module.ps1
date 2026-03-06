@@ -390,6 +390,13 @@ function Show-SystemToolLogo {
 # Logo anzeigen
 Show-SystemToolLogo
 
+# Skriptpfad auf Script-Ebene sichern (hier ist $MyInvocation korrekt,
+# innerhalb von Funktionen zeigt $MyInvocation.MyCommand.Path auf die Funktion!)
+$script:MyScriptPath = $MyInvocation.MyCommand.Path
+if ([string]::IsNullOrEmpty($script:MyScriptPath)) {
+    $script:MyScriptPath = $PSCommandPath
+}
+
 # Alle Module importieren
 $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
 $modulesPath = Join-Path -Path $scriptPath -ChildPath "Modules"
@@ -421,6 +428,7 @@ $moduleOrder = @(
     # 'HardwareInfo               ', # DEPRECATED - Nicht mehr verwendet (direkt in Win_Gui_Module.ps1)
     'Tools\DefenderTools          ', # Windows Defender Tools
     'Tools\WindowsUpdateTools     ', # Windows Update Tools
+    'Tools\SmartRepair            ', # 1-Klick Smart Repair
     'DatabaseManager              ', # Datenbank-Integration
     'UpdateManager                ' # GitHub Update-Funktionalität
 )
@@ -1400,18 +1408,40 @@ function Reload-GUI {
         Write-Host "Reload-GUI: Starte neuen GUI-Prozess..."
         Update-LogFile -Message "Reload-GUI: Neuer GUI-Prozess wird gestartet"
         
-        # Aktuellen Skriptpfad ermitteln
-        $scriptPath = $PSCommandPath
-        if ([string]::IsNullOrEmpty($scriptPath)) {
-            $scriptPath = $MyInvocation.MyCommand.Path
+        # Aktuellen Skriptpfad ermitteln – Priorität:
+        # 1. $PSCommandPath  (zuverlässig wenn per -File gestartet)
+        # 2. $script:MyScriptPath  (falls beim Start gesichert)
+        # 3. $PSScriptRoot  (Verzeichnis des Skripts – $MyInvocation.MyCommand.Path
+        #    ist INNERHALB einer Funktion der Pfad der Funktion, NICHT des Skripts!)
+        $reloadScriptPath = $PSCommandPath
+        if ([string]::IsNullOrEmpty($reloadScriptPath) -and -not [string]::IsNullOrEmpty($script:MyScriptPath)) {
+            $reloadScriptPath = $script:MyScriptPath
+        }
+        if ([string]::IsNullOrEmpty($reloadScriptPath) -and -not [string]::IsNullOrEmpty($PSScriptRoot)) {
+            $reloadScriptPath = Join-Path $PSScriptRoot "Win_Gui_Module.ps1"
         }
         
-        # Neuen PowerShell-Prozess starten
+        if ([string]::IsNullOrEmpty($reloadScriptPath) -or -not (Test-Path $reloadScriptPath)) {
+            throw "Reload-GUI: Skriptpfad konnte nicht ermittelt werden ('$reloadScriptPath'). Bitte neu starten."
+        }
+        
+        Write-Host "Reload-GUI: Skriptpfad -> $reloadScriptPath"
+        Update-LogFile -Message "Reload-GUI: Skriptpfad -> $reloadScriptPath"
+
+        # Explizit Windows PowerShell 5.1 verwenden (identisch mit dem BAT-Launcher)
+        $ps51Path = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+        if (-not (Test-Path $ps51Path)) {
+            $ps51Path = "powershell.exe"   # Fallback
+        }
+
+        # Neuen Prozess MIT Admin-Rechten starten (Verb RunAs), damit kein
+        # doppelter UAC-Prompt durch den Test-Admin-Check im Skript entsteht
         $processStartInfo = New-Object System.Diagnostics.ProcessStartInfo
-        $processStartInfo.FileName = "powershell.exe"
-        $processStartInfo.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`""
+        $processStartInfo.FileName        = $ps51Path
+        $processStartInfo.Arguments       = "-NoProfile -ExecutionPolicy Bypass -File `"$reloadScriptPath`""
         $processStartInfo.UseShellExecute = $true
-        $processStartInfo.WorkingDirectory = $PSScriptRoot
+        $processStartInfo.Verb            = "RunAs"   # Admin-Rechte direkt anfordern
+        $processStartInfo.WorkingDirectory = Split-Path -Parent $reloadScriptPath
         
         try {
             $newProcess = [System.Diagnostics.Process]::Start($processStartInfo)
@@ -2075,6 +2105,9 @@ function New-CollapsiblePanel {
             elseif ($panelTag -eq "cleanupPanel" -and $tblCleanup) {
                 $tblCleanup.Visible = $false
             }
+            elseif ($panelTag -eq "smartRepairPanel" -and $global:tblSmartRepair) {
+                $global:tblSmartRepair.Visible = $false
+            }
             elseif ($panelTag -eq "infoPanel") {
                 # Info-Panel View-Panels ausblenden
                 if ($outputViewPanel) { $outputViewPanel.Visible = $false }
@@ -2310,6 +2343,7 @@ function Reset-MainPanelStates {
     if ($tblNetwork) { $tblNetwork.Visible = $false }
     if ($tblCleanup) { $tblCleanup.Visible = $false }
     if ($global:tblDependencies) { $global:tblDependencies.Visible = $false }
+    if ($global:tblSmartRepair) { $global:tblSmartRepair.Visible = $false }
     
     # SearchPanel ausblenden (wird nur für Tool-Downloads benötigt)
     if ($searchPanel) { $searchPanel.Visible = $false }
@@ -2327,13 +2361,15 @@ function Reset-MainPanelStates {
     if ($diskPanel) { $diskPanel.Header.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38) }
     if ($networkPanel) { $networkPanel.Header.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38) }
     if ($cleanupPanel) { $cleanupPanel.Header.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38) }
+    if ($global:smartRepairPanel) { $global:smartRepairPanel.Header.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38) }
     
     # Aktiven Panel-Header hervorheben
     switch ($ActivePanel) {
-        "system"  { if ($systemPanel) { $systemPanel.Header.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43) } }
-        "disk"    { if ($diskPanel) { $diskPanel.Header.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43) } }
-        "network" { if ($networkPanel) { $networkPanel.Header.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43) } }
-        "cleanup" { if ($cleanupPanel) { $cleanupPanel.Header.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43) } }
+        "system"      { if ($systemPanel) { $systemPanel.Header.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43) } }
+        "disk"        { if ($diskPanel) { $diskPanel.Header.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43) } }
+        "network"     { if ($networkPanel) { $networkPanel.Header.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43) } }
+        "cleanup"     { if ($cleanupPanel) { $cleanupPanel.Header.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43) } }
+        "smartRepair" { if ($global:smartRepairPanel) { $global:smartRepairPanel.Header.BackColor = [System.Drawing.Color]::FromArgb(0, 100, 180) } }
     }
 }
 
@@ -2359,8 +2395,85 @@ function Hide-MainInfoSupportPanels {
     }
 }
 
+# ================================================
+# ++++ 1-Klick Smart Repair Panel (oben/featured) ++++
+# ================================================
+$global:smartRepairPanel = New-CollapsiblePanel -Title "1-Klick Reparatur" -YPosition 5 -Tag "smartRepairPanel" -ParentPanel $mainButtonPanel -IconCode 0xE946 -OnExpand {
+    Reset-MainPanelStates -ActivePanel "smartRepair"
+    $outputBox.Clear()
+    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'BannerFrame'
+    $outputBox.AppendText("`t╔═══════════════════════════════════════════════════════════════╗`r`n")
+    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'BannerTitle'
+    $outputBox.AppendText("`t║              1-KLICK SMART REPAIR                             ║`r`n")
+    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'BannerFrame'
+    $outputBox.AppendText("`t╚═══════════════════════════════════════════════════════════════╝`r`n`r`n")
+
+    # C5 – Letzter Scan-Zeitstempel anzeigen
+    if ($script:lastSmartRepairTime) {
+        $elapsed = (Get-Date) - $script:lastSmartRepairTime
+        $elapsedStr = if ($elapsed.TotalMinutes -lt 1) { "vor $([int]$elapsed.TotalSeconds) Sekunden" }
+                      elseif ($elapsed.TotalHours   -lt 1) { "vor $([int]$elapsed.TotalMinutes) Minuten" }
+                      else { "am $($script:lastSmartRepairTime.ToString('dd.MM.yyyy HH:mm')) Uhr" }
+        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Muted'
+        $outputBox.AppendText("  Letzter Scan: $elapsedStr`r`n`r`n")
+    }
+
+    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Heading'
+    $outputBox.AppendText("Smart Repair analysiert automatisch (22 Checks):`r`n`r`n")
+    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
+    $outputBox.AppendText("  ● Windows Update-Status`r`n")
+    $outputBox.AppendText("  ● Defender-Status (Echtzeitschutz)`r`n")
+    $outputBox.AppendText("  ● System-Integrität (CBS-Log Analyse)`r`n")
+    $outputBox.AppendText("  ● Ereignisprotokoll (kritische Fehler)`r`n")
+    $outputBox.AppendText("  ● Netzwerk / Internetverbindung`r`n")
+    $outputBox.AppendText("  ● Temp-Cleanup (automatisch)`r`n")
+    $outputBox.AppendText("  ● Neustart-Empfehlung`r`n")
+    $outputBox.AppendText("  ● Festplatten-Speicherplatz (C:)`r`n")
+    $outputBox.AppendText("  ● Windows-Firewall Status`r`n")
+    $outputBox.AppendText("  ● Kritische Windows-Dienste`r`n")
+    $outputBox.AppendText("  ● Windows-Aktivierungsstatus`r`n")
+    $outputBox.AppendText("  ● Festplatten-Gesundheit (SMART)`r`n")
+    $outputBox.AppendText("  ● Systemzeit-Synchronisation`r`n")
+    $outputBox.AppendText("  ● RAM-Auslastung`r`n")
+    $outputBox.AppendText("  ● Hosts-Datei-Integrität`r`n")
+    $outputBox.AppendText("  ● DISM Component-Store (CheckHealth)`r`n")
+    $outputBox.AppendText("  ● CHKDSK Dirty-Bit (C:)`r`n")
+    $outputBox.AppendText("  ● Auslagerungsdatei (Pagefile)`r`n")
+    $outputBox.AppendText("  ● Geplante Tasks (Fehlerstatus)`r`n")
+    $outputBox.AppendText("  ● Root-Zertifikate (Gültigkeit)`r`n")
+    $outputBox.AppendText("  ● Energieplan`r`n")
+    $outputBox.AppendText("  ● Windows-Suchdienst (WSearch)`r`n`r`n")
+    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Muted'
+    $outputBox.AppendText("  → Klicken Sie auf [Smart Repair starten] um die Analyse zu beginnen.`r`n")
+
+    Switch-OutputView -viewName "outputView"
+    Hide-MainInfoSupportPanels
+
+    $global:tblSmartRepair.Visible = $true
+    $global:tblSmartRepair.BringToFront()
+    $script:currentMainView = "smartRepairView"
+}
+
+# Sub-Button im SmartRepair-Panel (wird nach Erstellung von $tblSmartRepair befüllt – Placeholder)
+$global:btnStartSmartRepairNav = New-Object System.Windows.Forms.Button
+$global:btnStartSmartRepairNav.Text = "Smart Repair starten"
+$global:btnStartSmartRepairNav.Size = New-Object System.Drawing.Size(210, 35)
+$global:btnStartSmartRepairNav.Location = New-Object System.Drawing.Point(0, 0)
+$global:btnStartSmartRepairNav.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+$global:btnStartSmartRepairNav.BackColor = [System.Drawing.Color]::FromArgb(0, 100, 180)
+$global:btnStartSmartRepairNav.ForeColor = [System.Drawing.Color]::White
+$global:btnStartSmartRepairNav.FlatAppearance.BorderSize = 0
+$global:btnStartSmartRepairNav.FlatAppearance.MouseOverBackColor = [System.Drawing.Color]::FromArgb(0, 120, 215)
+$global:btnStartSmartRepairNav.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
+$global:btnStartSmartRepairNav.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
+Add-ButtonIcon -Button $global:btnStartSmartRepairNav -IconCode 0xE946 -IconSize 12 -LeftMargin 10
+$global:smartRepairPanel.Content.Controls.Add($global:btnStartSmartRepairNav)
+$global:smartRepairPanel.Content.Height = 35
+
+$mainButtonPanel.Controls.Add($global:smartRepairPanel.Container)
+
 # System & Sicherheit Panel
-$systemPanel = New-CollapsiblePanel -Title "System/Sicherheit" -YPosition 5 -Tag "systemPanel" -ParentPanel $mainButtonPanel -IconCode 0xE83D -OnExpand {
+$systemPanel = New-CollapsiblePanel -Title "System/Sicherheit" -YPosition 40 -Tag "systemPanel" -ParentPanel $mainButtonPanel -IconCode 0xE83D -OnExpand {
     # Panels zurücksetzen und System als aktiv markieren
     Reset-MainPanelStates -ActivePanel "system"
     
@@ -2475,7 +2588,7 @@ $systemPanel.Content.Height = 70  # 2 Buttons × 35px
 $mainButtonPanel.Controls.Add($systemPanel.Container)
 
 # Diagnose & Reparatur Panel
-$diskPanel = New-CollapsiblePanel -Title "Diagnose/Reparatur" -YPosition 40 -Tag "diskPanel" -ParentPanel $mainButtonPanel -IconCode 0xE90F -OnExpand {
+$diskPanel = New-CollapsiblePanel -Title "Diagnose/Reparatur" -YPosition 75 -Tag "diskPanel" -ParentPanel $mainButtonPanel -IconCode 0xE90F -OnExpand {
     # Panels zurücksetzen und Disk als aktiv markieren
     Reset-MainPanelStates -ActivePanel "disk"
     
@@ -2593,7 +2706,7 @@ $diskPanel.Content.Height = 70  # 2 Buttons × 35px
 $mainButtonPanel.Controls.Add($diskPanel.Container)
 
 # Netzwerk-Tools Panel
-$networkPanel = New-CollapsiblePanel -Title "Netzwerk-Tools" -YPosition 75 -Tag "networkPanel" -ParentPanel $mainButtonPanel -IconCode 0xE774 -OnExpand {
+$networkPanel = New-CollapsiblePanel -Title "Netzwerk-Tools" -YPosition 110 -Tag "networkPanel" -ParentPanel $mainButtonPanel -IconCode 0xE774 -OnExpand {
     # Panels zurücksetzen und Network als aktiv markieren
     Reset-MainPanelStates -ActivePanel "network"
     
@@ -2705,7 +2818,7 @@ $networkPanel.Content.Height = 70  # 2 Buttons × 35px
 $mainButtonPanel.Controls.Add($networkPanel.Container)
 
 # Bereinigung Panel
-$cleanupPanel = New-CollapsiblePanel -Title "Bereinigung" -YPosition 110 -Tag "cleanupPanel" -ParentPanel $mainButtonPanel -IconCode 0xE74C -OnExpand {
+$cleanupPanel = New-CollapsiblePanel -Title "Bereinigung" -YPosition 145 -Tag "cleanupPanel" -ParentPanel $mainButtonPanel -IconCode 0xE74C -OnExpand {
     # Panels zurücksetzen und Cleanup als aktiv markieren
     Reset-MainPanelStates -ActivePanel "cleanup"
     
@@ -2828,6 +2941,204 @@ $global:tblDependencies.Size = New-Object System.Drawing.Size(735, 230)
 $global:tblDependencies.BackColor = [System.Drawing.Color]::Transparent
 $global:tblDependencies.Visible = $false
 $mainContentPanel.Controls.Add($global:tblDependencies)
+
+# ================================================
+# ++++ 1-Klick Smart Repair – Content-Panel ++++
+# Passt sich dem 48px-Layout des mainContentPanel an (wie alle anderen tbl-Panels)
+# Ergebnisse werden in outputBox + StatusBar angezeigt
+# ================================================
+$global:tblSmartRepair = New-Object System.Windows.Forms.Panel
+$global:tblSmartRepair.Location = New-Object System.Drawing.Point(0, 0)
+$global:tblSmartRepair.Size = New-Object System.Drawing.Size(735, 38)
+$global:tblSmartRepair.BackColor = [System.Drawing.Color]::Transparent
+$global:tblSmartRepair.Visible = $false
+$mainContentPanel.Controls.Add($global:tblSmartRepair)
+
+# Einziger Button: Smart Repair starten (entspricht dem Muster aller anderen Tool-Buttons)
+$btnStartSmartRepair = New-Object System.Windows.Forms.Button
+$btnStartSmartRepair.Name = "btnStartSmartRepair"
+$btnStartSmartRepair.Text = "Smart Repair starten"
+$btnStartSmartRepair.Size = New-Object System.Drawing.Size(210, 35)
+$btnStartSmartRepair.Location = New-Object System.Drawing.Point(5, 0)
+$btnStartSmartRepair.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+$btnStartSmartRepair.BackColor = [System.Drawing.Color]::FromArgb(0, 100, 180)
+$btnStartSmartRepair.ForeColor = [System.Drawing.Color]::White
+$btnStartSmartRepair.FlatAppearance.BorderSize = 0
+$btnStartSmartRepair.FlatAppearance.MouseOverBackColor = [System.Drawing.Color]::FromArgb(0, 120, 215)
+$btnStartSmartRepair.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+$btnStartSmartRepair.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
+$btnStartSmartRepair.Cursor = [System.Windows.Forms.Cursors]::Hand
+Add-ButtonIcon -Button $btnStartSmartRepair -IconCode 0xE946 -IconSize 11 -LeftMargin 10
+$global:tblSmartRepair.Controls.Add($btnStartSmartRepair)
+
+# Gesamtergebnis-Label (rechts neben dem Button, in der gleichen Zeile – 38px hoch)
+$global:lblSmartRepairOverall = New-Object System.Windows.Forms.Label
+$global:lblSmartRepairOverall.Text = ""
+$global:lblSmartRepairOverall.Size = New-Object System.Drawing.Size(220, 35)
+$global:lblSmartRepairOverall.Location = New-Object System.Drawing.Point(225, 0)
+$global:lblSmartRepairOverall.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+$global:lblSmartRepairOverall.ForeColor = [System.Drawing.Color]::FromArgb(160, 160, 160)
+$global:lblSmartRepairOverall.BackColor = [System.Drawing.Color]::Transparent
+$global:lblSmartRepairOverall.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
+$global:tblSmartRepair.Controls.Add($global:lblSmartRepairOverall)
+
+# -------- Hilfsfunktion: Check-Zeile aktualisieren (schreibt nur noch in outputBox) ----------
+$global:srCheckLabels = @{}  # Leer-Hashtable für Rückwärtskompatibilität
+
+function Update-SmartRepairRow {
+    param([string]$Name, [string]$Status, [string]$Detail)
+    # Keine separaten Labels mehr – Ergebnisse laufen über outputBox (schon in SmartRepair.psm1)
+}
+
+# -------- Hilfsfunktion: Status zurücksetzen ----------
+function Reset-SmartRepairRows {
+    $global:lblSmartRepairOverall.Text      = ""
+    $global:lblSmartRepairOverall.ForeColor = [System.Drawing.Color]::FromArgb(160, 160, 160)
+}
+
+# -------- Click-Handler des Start-Buttons ----------
+$btnStartSmartRepair.Add_Click({
+    # Admin-Warnung (kein Block – einige Checks laufen auch ohne Admin)
+    $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    if (-not $isAdmin) {
+        [System.Windows.Forms.MessageBox]::Show(
+            "Smart Repair benoetigt Administrator-Rechte fuer einige Pruefschritte.`nBitte starten Sie das Tool als Administrator.",
+            "Administrator-Rechte empfohlen",
+            [System.Windows.Forms.MessageBoxButtons]::OK,
+            [System.Windows.Forms.MessageBoxIcon]::Warning
+        ) | Out-Null
+    }
+
+    # UI vorbereiten
+    $btnStartSmartRepair.Enabled = $false
+    $btnStartSmartRepair.Text    = "Analyse laeuft..."
+    Reset-SmartRepairRows
+    $outputBox.Clear()
+    Switch-OutputView -viewName "outputView"
+    Update-ProgressStatus -StatusText "Smart Repair wird ausgefuehrt..." -ProgressValue 0 -TextColor ([System.Drawing.Color]::White)
+
+    # Fortschritt-Callback
+    $progressCB = {
+        param([int]$Step, [int]$Total, [string]$Name)
+        $pct = [int](($Step / $Total) * 100)
+        Update-ProgressStatus -StatusText "$Name ($Step/$Total)" -ProgressValue $pct -TextColor ([System.Drawing.Color]::White)
+        [System.Windows.Forms.Application]::DoEvents()
+    }
+
+    # Check-Callback (nur DoEvents, outputBox schreibt das Modul direkt)
+    $checkCB = {
+        param([string]$Name, [string]$Status, [string]$Detail)
+        [System.Windows.Forms.Application]::DoEvents()
+    }
+
+    try {
+        # Prüfe ob Funktion verfügbar (Modul geladen?)
+        if (-not (Get-Command -Name Invoke-SmartRepair -ErrorAction SilentlyContinue)) {
+            throw [System.Exception]::new("[E-001] Modul 'SmartRepair' nicht geladen. Starten Sie das Tool neu.")
+        }
+
+        $smartResult = Invoke-SmartRepair `
+            -OutputBox        $outputBox `
+            -ProgressBar      $progressBar `
+            -ProgressCallback $progressCB `
+            -OnCheckComplete  $checkCB
+
+        # Exit-Code aus Ergebnis ableiten
+        $global:lastSmartRepairExitCode = switch ($smartResult.Overall) {
+            "Green"  { 0 }   # E-000: Alles OK
+            "Yellow" { 1 }   # E-001: Warnungen
+            "Red"    { 2 }   # E-002: Kritisch
+            default  { -1 }
+        }
+
+        switch ($smartResult.Overall) {
+            "Green"  {
+                $global:lblSmartRepairOverall.Text      = "  Alles OK  [Exit 0]"
+                $global:lblSmartRepairOverall.ForeColor = [System.Drawing.Color]::FromArgb(80, 200, 80)
+                Update-ProgressStatus -StatusText "Smart Repair: Alles OK (Exit 0)" -ProgressValue 100 -TextColor ([System.Drawing.Color]::LimeGreen)
+            }
+            "Yellow" {
+                $global:lblSmartRepairOverall.Text      = "  Kleinere Probleme  [Exit 1]"
+                $global:lblSmartRepairOverall.ForeColor = [System.Drawing.Color]::FromArgb(220, 180, 40)
+                Update-ProgressStatus -StatusText "Smart Repair: Kleinere Probleme (Exit 1)" -ProgressValue 100 -TextColor ([System.Drawing.Color]::Orange)
+            }
+            "Red"    {
+                $global:lblSmartRepairOverall.Text      = "  Kritische Probleme!  [Exit 2]"
+                $global:lblSmartRepairOverall.ForeColor = [System.Drawing.Color]::FromArgb(220, 60, 60)
+                Update-ProgressStatus -StatusText "Smart Repair: Kritische Probleme! (Exit 2)" -ProgressValue 100 -TextColor ([System.Drawing.Color]::Red)
+            }
+        }
+
+        # ---- Optionaler Repair-Dialog wenn tiefergehende Scans empfohlen ----
+        if ($smartResult -and ($smartResult.NeedsSFCscan -or $smartResult.NeedsDISMscan -or $smartResult.NeedsChkdsk)) {
+            $repairMsg = "Smart Repair hat folgende tiefergehende Scans empfohlen:`r`n`r`n"
+            if ($smartResult.NeedsSFCscan)  { $repairMsg += "  ‣  SFC /scannow        (System File Checker)`r`n" }
+            if ($smartResult.NeedsDISMscan) { $repairMsg += "  ‣  DISM /ScanHealth     (Komponentenspeicher)`r`n" }
+            if ($smartResult.NeedsChkdsk)   { $repairMsg += "  ‣  CHKDSK              (Datenträgerprüfung)`r`n" }
+            $repairMsg += "`r`nDiese Scans finden Sie unter 'Diagnose & Reparatur'.`r`nJetzt dorthin navigieren?"
+
+            $repairChoice = [System.Windows.Forms.MessageBox]::Show(
+                $repairMsg,
+                "Tiefergehende Scans empfohlen",
+                [System.Windows.Forms.MessageBoxButtons]::YesNo,
+                [System.Windows.Forms.MessageBoxIcon]::Information
+            )
+
+            if ($repairChoice -eq [System.Windows.Forms.DialogResult]::Yes) {
+                # Disk-Panel aufklappen (enthält DISM, CHKDSK, SFC)
+                if ($diskPanel -and $diskPanel.Header) {
+                    $diskPanel.Header.PerformClick()
+                }
+            }
+        }
+    }
+    catch {
+        $errMsg   = $_.Exception.Message
+        $errLine  = $_.InvocationInfo.ScriptLineNumber
+        $errFile  = if ($_.InvocationInfo.ScriptName) { [System.IO.Path]::GetFileName($_.InvocationInfo.ScriptName) } else { 'n/a' }
+        $exitCode = if ($errMsg -match '\[E-\d+\]') { ($errMsg | Select-String '\[E-(\d+)\]').Matches[0].Groups[1].Value } else { '99' }
+
+        $global:lastSmartRepairExitCode = [int]$exitCode
+        $global:lblSmartRepairOverall.Text      = "  Fehler  [Exit $exitCode]"
+        $global:lblSmartRepairOverall.ForeColor = [System.Drawing.Color]::FromArgb(220, 60, 60)
+        Update-ProgressStatus -StatusText "Smart Repair: Fehler (Exit $exitCode)" -ProgressValue 0 -TextColor ([System.Drawing.Color]::Red)
+        Write-ToolLog -ToolName "SmartRepair" -Message "[Exit $exitCode] $errMsg (Zeile $errLine in $errFile)" -Level "Error"
+
+        # Fehler in outputBox schreiben damit User ihn sehen kann
+        try {
+            $outputBox.SelectionStart  = $outputBox.TextLength
+            $outputBox.SelectionLength = 0
+            $outputBox.SelectionColor  = [System.Drawing.Color]::FromArgb(220, 60, 60)
+            $outputBox.AppendText("`r`n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`r`n")
+            $outputBox.AppendText("  SMART REPAIR FEHLER  [Exit Code $exitCode]`r`n")
+            $outputBox.AppendText("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`r`n`r`n")
+            $outputBox.SelectionColor  = [System.Drawing.Color]::FromArgb(220, 180, 40)
+            $outputBox.AppendText("  Fehlermeldung:`r`n  $errMsg`r`n`r`n")
+            $outputBox.SelectionColor  = [System.Drawing.Color]::FromArgb(140, 140, 140)
+            $outputBox.AppendText("  Ort:  $errFile  (Zeile $errLine)`r`n")
+            $outputBox.AppendText("`r`n  Exit-Code Referenz:`r`n")
+            $outputBox.AppendText("    Exit 0  = Alles OK`r`n")
+            $outputBox.AppendText("    Exit 1  = Warnungen / kleinere Probleme`r`n")
+            $outputBox.AppendText("    Exit 2  = Kritische Probleme`r`n")
+            $outputBox.AppendText("    Exit 99 = Unerwarteter Fehler in Smart Repair`r`n")
+            $outputBox.AppendText("    E-001   = Modul nicht geladen (Tool neu starten)`r`n")
+            $outputBox.SelectionColor  = $outputBox.ForeColor
+            $outputBox.ScrollToCaret()
+        } catch {}
+    }
+    finally {
+        $btnStartSmartRepair.Enabled = $true
+        $btnStartSmartRepair.Text    = "Smart Repair starten"
+    }
+})
+
+# Sidebar-Nav-Button des SmartRepair-Panels verlinken
+$global:btnStartSmartRepairNav.Add_Click({
+    # sicherstellen dass Panel sichtbar ist, dann starten
+    if ($global:tblSmartRepair.Visible) {
+        $btnStartSmartRepair.PerformClick()
+    }
+})
 
 # Hilfsvariable für aktives Systempanel
 $script:currentSystemView = "securityView"
@@ -3683,6 +3994,7 @@ $btnCheckDependenciesH.Add_Click({
     if ($tblNetwork) { $tblNetwork.Visible = $false }
     if ($tblCleanup) { $tblCleanup.Visible = $false }
     if ($global:tblDependencies) { $global:tblDependencies.Visible = $false }
+    if ($global:tblSmartRepair) { $global:tblSmartRepair.Visible = $false }
 
     # Horizontale Header-Container sichtbar halten
     if ($infoHorizontalPanel -and $infoHorizontalPanel.Container) {
@@ -4160,6 +4472,7 @@ $downloadsPanel = New-CollapsiblePanel -Title "Tool-Downloads" -YPosition 157 -T
     if ($tblNetwork) { $tblNetwork.Visible = $false }
     if ($tblCleanup) { $tblCleanup.Visible = $false }
     if ($global:tblDependencies) { $global:tblDependencies.Visible = $false }
+    if ($global:tblSmartRepair) { $global:tblSmartRepair.Visible = $false }
     
     # Horizontale Container ausblenden
     if ($infoHorizontalPanel -and $infoHorizontalPanel.Container) {
@@ -4330,6 +4643,7 @@ $btnAllTools.Add_Click({
     if ($tblNetwork) { $tblNetwork.Visible = $false }
     if ($tblCleanup) { $tblCleanup.Visible = $false }
     if ($global:tblDependencies) { $global:tblDependencies.Visible = $false }
+    if ($global:tblSmartRepair) { $global:tblSmartRepair.Visible = $false }
     
     # Downloads-View anzeigen (OutputBox wird nicht verwendet, da Tool-Kacheln direkt angezeigt werden)
     Switch-OutputView -viewName "downloadsView"
@@ -4385,6 +4699,7 @@ $btnSystemTools.Add_Click({
     if ($tblNetwork) { $tblNetwork.Visible = $false }
     if ($tblCleanup) { $tblCleanup.Visible = $false }
     if ($global:tblDependencies) { $global:tblDependencies.Visible = $false }
+    if ($global:tblSmartRepair) { $global:tblSmartRepair.Visible = $false }
     
     # Downloads-View anzeigen (OutputBox wird nicht verwendet, da Tool-Kacheln direkt angezeigt werden)
     Switch-OutputView -viewName "downloadsView"
@@ -4440,6 +4755,7 @@ $btnApplications.Add_Click({
     if ($tblNetwork) { $tblNetwork.Visible = $false }
     if ($tblCleanup) { $tblCleanup.Visible = $false }
     if ($global:tblDependencies) { $global:tblDependencies.Visible = $false }
+    if ($global:tblSmartRepair) { $global:tblSmartRepair.Visible = $false }
     
     # Downloads-View anzeigen (OutputBox wird nicht verwendet, da Tool-Kacheln direkt angezeigt werden)
     Switch-OutputView -viewName "downloadsView"
@@ -4495,6 +4811,7 @@ $btnAudioTV.Add_Click({
     if ($tblNetwork) { $tblNetwork.Visible = $false }
     if ($tblCleanup) { $tblCleanup.Visible = $false }
     if ($global:tblDependencies) { $global:tblDependencies.Visible = $false }
+    if ($global:tblSmartRepair) { $global:tblSmartRepair.Visible = $false }
     
     # Downloads-View anzeigen (OutputBox wird nicht verwendet, da Tool-Kacheln direkt angezeigt werden)
     Switch-OutputView -viewName "downloadsView"
@@ -4550,6 +4867,7 @@ $btnCodingTools.Add_Click({
     if ($tblNetwork) { $tblNetwork.Visible = $false }
     if ($tblCleanup) { $tblCleanup.Visible = $false }
     if ($global:tblDependencies) { $global:tblDependencies.Visible = $false }
+    if ($global:tblSmartRepair) { $global:tblSmartRepair.Visible = $false }
     
     # Downloads-View anzeigen (OutputBox wird nicht verwendet, da Tool-Kacheln direkt angezeigt werden)
     Switch-OutputView -viewName "downloadsView"
@@ -4997,6 +5315,7 @@ $btnOutput.Add_Click({
     if ($tblNetwork) { $tblNetwork.Visible = $false }
     if ($tblCleanup) { $tblCleanup.Visible = $false }
     if ($global:tblDependencies) { $global:tblDependencies.Visible = $false }
+    if ($global:tblSmartRepair) { $global:tblSmartRepair.Visible = $false }
     
     # Suchfeld ausblenden (gehört zu Tool-Downloads)
     if ($searchPanel) { $searchPanel.Visible = $false }

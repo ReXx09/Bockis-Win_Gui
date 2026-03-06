@@ -206,7 +206,7 @@ function Start-PingTest {
                     Write-Host $pingResultText -ForegroundColor Green
                 }
                 else {
-                    $pingErrorText = "  [X] Zeitüberschreitung der Anforderung oder Fehler: $($result.Status)"
+                    $pingErrorText = "  [✗] Zeitüberschreitung der Anforderung oder Fehler: $($result.Status)"
                     Set-NetworkOutputStyle -OutputBox $outputBox -Style 'Error'
                     $outputBox.AppendText("$pingErrorText`r`n")
                     Write-Host $pingErrorText -ForegroundColor Red
@@ -236,36 +236,37 @@ function Start-PingTest {
                 $avgTime = 0
             }
             
-            # Zusammenfassung anzeigen
             $outputBox.AppendText("`r`n")
             Set-NetworkOutputStyle -OutputBox $outputBox -Style 'Action'
-            $outputBox.AppendText("`t=======  Ping-Statistik für $targetHost  ========`r`n")
+            $outputBox.AppendText("  " + ("═" * 54) + "`r`n")
+            $outputBox.AppendText("  ══  Ping-Statistik für $targetHost  ══`r`n")
+            $outputBox.AppendText("  " + ("═" * 54) + "`r`n")
             Set-NetworkOutputStyle -OutputBox $outputBox -Style 'Default'
-            $outputBox.AppendText("`n  Pakete: Gesendet = $count, Empfangen = $successCount, Verloren = $failCount ($(100 - $successRate)% Verlust)`r`n")
+            $outputBox.AppendText("`r`n  Pakete: Gesendet = $count, Empfangen = $successCount, Verloren = $failCount ($(100 - $successRate)% Verlust)`r`n")
             if ($successCount -gt 0) {
                 Set-NetworkOutputStyle -OutputBox $outputBox -Style 'Default'
                 $outputBox.AppendText("  Ca. Zeitangaben in Millisek.:`r`n")
                 Set-NetworkOutputStyle -OutputBox $outputBox -Style 'Default'
                 $outputBox.AppendText("    Minimum = $minTime ms, Maximum = $maxTime ms, Mittelwert = $([Math]::Round($avgTime, 2)) ms`r`n")
                 Set-NetworkOutputStyle -OutputBox $outputBox -Style 'Default'
-                $outputbox.Appendtext(" ===================================================================`r`n")
+                $outputBox.AppendText("  " + ("─" * 66) + "`r`n")
             }
             
             # Dieselbe Zusammenfassung auch in der PowerShell-Konsole anzeigen
-            Write-Host "`n" + ("═" * 50) -ForegroundColor Cyan
-            Write-Host "`n`t======= Ping-Statistik für $targetHost ========" -ForegroundColor Green
+            Write-Host ("  " + ("═" * 50)) -ForegroundColor Cyan
+            Write-Host "  ══  Ping-Statistik für $targetHost  ══" -ForegroundColor Cyan
             Write-Host "`n  Pakete: Gesendet = $count, Empfangen = $successCount, Verloren = $failCount ($(100 - $successRate)% Verlust)"
             if ($successCount -gt 0) {
                 Write-Host "  Ca. Zeitangaben in Millisek.:"
                 Write-Host "    Minimum = $minTime ms, Maximum = $maxTime ms, Mittelwert = $([Math]::Round($avgTime, 2)) ms"
             }
-            Write-Host "`n" + ("═" * 50) -ForegroundColor Cyan
+            Write-Host ("  " + ("═" * 50)) -ForegroundColor Cyan
             Write-Host
             # Gesamtergebnis bewerten
             $outputBox.AppendText("`r`n")
             if ($successRate -eq 100) {
                 Set-NetworkOutputStyle -OutputBox $outputBox -Style 'Success'
-                $message = "  [>]Netzwerkverbindung zu $targetHost ist STABIL (100% Erfolgsrate)"
+                $message = "  [✓] Netzwerkverbindung zu $targetHost ist STABIL (100% Erfolgsrate)"
                 $outputBox.AppendText("$message`r`n")
                 Write-ToolLog -ToolName "NetworkTools" -Message $message -OutputBox $null -Style 'Success' -Level "Success" -SaveToDatabase
                 # Auch in der PowerShell-Konsole anzeigen
@@ -273,7 +274,7 @@ function Start-PingTest {
             }
             elseif ($successRate -ge 75) {
                 Set-NetworkOutputStyle -OutputBox $outputBox -Style 'Success'
-                $message = "  [>]Netzwerkverbindung zu $targetHost ist GUT (${successRate}% Erfolgsrate)"
+                $message = "  [✓] Netzwerkverbindung zu $targetHost ist GUT (${successRate}% Erfolgsrate)"
                 $outputBox.AppendText("$message`r`n")
                 Write-ToolLog -ToolName "NetworkTools" -Message $message -OutputBox $null -Style 'Success' -Level "Success" -SaveToDatabase
                 # Auch in der PowerShell-Konsole anzeigen
@@ -281,7 +282,7 @@ function Start-PingTest {
             }
             elseif ($successRate -ge 25) {
                 Set-NetworkOutputStyle -OutputBox $outputBox -Style 'Warning'
-                $message = "  [>]Netzwerkverbindung zu $targetHost ist INSTABIL (${successRate}% Erfolgsrate)"
+                $message = "  [⚠] Netzwerkverbindung zu $targetHost ist INSTABIL (${successRate}% Erfolgsrate)"
                 $outputBox.AppendText("$message`r`n")
                 Write-ToolLog -ToolName "NetworkTools" -Message $message -OutputBox $null -Style 'Warning' -Level "Warning" -SaveToDatabase
                 # Auch in der PowerShell-Konsole anzeigen
@@ -289,7 +290,7 @@ function Start-PingTest {
             }
             else {
                 Set-NetworkOutputStyle -OutputBox $outputBox -Style 'Error'
-                $message = "  [>]Netzwerkverbindung zu $targetHost ist NICHT VERFÜGBAR (${successRate}% Erfolgsrate)"
+                $message = "  [✗] Netzwerkverbindung zu $targetHost ist NICHT VERFÜGBAR (${successRate}% Erfolgsrate)"
                 $outputBox.AppendText("$message`r`n")
                 Write-ToolLog -ToolName "NetworkTools" -Message $message -OutputBox $null -Style 'Error' -Level "Error" -SaveToDatabase
                 # Auch in der PowerShell-Konsole anzeigen
@@ -297,7 +298,7 @@ function Start-PingTest {
             }
             
             # Abschlusszeile in PowerShell anzeigen
-            Write-Host "`n" + ("═" * 50) -ForegroundColor Cyan
+            Write-Host ("  " + ("═" * 50)) -ForegroundColor Cyan
         }
         catch {
             Set-NetworkOutputStyle -OutputBox $outputBox -Style 'Error'
