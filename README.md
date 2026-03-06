@@ -551,6 +551,6 @@ Jede Unterstützung hilft dabei, das Tool aktiv weiterzuentwickeln, neue Feature
 ---
 
 **Entwickelt mit ❤️ von Bocki**
-*Version 4.1.8 - März 2026*
+*Version 4.1.9 - März 2026*
 
 
