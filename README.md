@@ -5,6 +5,14 @@ Ein professionelles PowerShell-basiertes Systemwartungs-Tool mit moderner grafis
 [![PowerShell](https://img.shields.io/badge/PowerShell-5.1+-blue.svg)](https://github.com/PowerShell/PowerShell)
 [![Windows](https://img.shields.io/badge/Windows-10%2F11-blue.svg)](https://www.microsoft.com/windows)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE.txt)
+[![GitHub Sponsors](https://img.shields.io/badge/Sponsor-%E2%9D%A4-ea4aaa?logo=github-sponsors&logoColor=white)](https://github.com/sponsors/ReXx09)
+
+---
+
+> 💖 **Dieses Projekt gefällt dir?** Unterstütze die Weiterentwicklung mit einem Sponsoring!
+> **[➜ Jetzt auf GitHub Sponsors unterstützen](https://github.com/sponsors/ReXx09)**
+
+---
 
 ## 🔑 Hauptfunktionen
 
@@ -532,9 +540,17 @@ Beiträge sind willkommen! Bitte:
 
 ---
 
-**Entwickelt mit ❤️ von Bocki**  
-*Version 4.0 - November 2025*
+## 💖 Projekt unterstützen
 
+Wenn dir das Bockis System-Tool hilft und du die Weiterentwicklung unterstützen möchtest, freue ich mich über ein Sponsoring:
 
+[![GitHub Sponsors](https://img.shields.io/badge/Sponsor-%E2%9D%A4-ea4aaa?logo=github-sponsors&logoColor=white&style=for-the-badge)](https://github.com/sponsors/ReXx09)
+
+Jede Unterstützung hilft dabei, das Tool aktiv weiterzuentwickeln, neue Features zu implementieren und Bugs schnell zu beheben. Danke! 🙏
+
+---
+
+**Entwickelt mit ❤️ von Bocki**
+*Version 4.1.8 - März 2026*
 
 
