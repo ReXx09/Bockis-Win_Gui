@@ -166,7 +166,7 @@ if ($CreateRelease) {
     Write-Step "GitHub-Release erstellen..."
 
     if (-not $ReleaseNotes) {
-        $ReleaseNotes = "Vollstaendige Release Notes: https://github.com/ReXx09/Bockis-Win_Gui_DEV/releases/tag/$Tag"
+        $ReleaseNotes = "Vollstaendige Release Notes: https://github.com/ReXx09/Bockis-Win_Gui/releases/tag/$Tag"
     }
 
     $nl = "`n"
@@ -184,8 +184,57 @@ if ($CreateRelease) {
     try {
         $resp = Invoke-RestMethod -Uri "$ReleaseRepoApi/releases" -Method Post -Headers $Headers -Body $releaseBody -ContentType "application/json"
         Write-OK "Release erstellt: $($resp.html_url)"
+
+        # ─── ZIP erstellen und als Asset hochladen ────────────────────────────
+        Write-Step "ZIP-Paket erstellen und hochladen..."
+
+        $zipName    = "Bockis-System-Tool-$Tag.zip"
+        $zipPath    = Join-Path ([System.IO.Path]::GetTempPath()) $zipName
+        $buildPath  = Join-Path ([System.IO.Path]::GetTempPath()) "Bockis-Release-Build"
+
+        if (Test-Path $buildPath) { Remove-Item $buildPath -Recurse -Force }
+        New-Item -ItemType Directory -Path $buildPath -Force | Out-Null
+
+        # Gleiche Dateien wie beim Push kopieren
+        foreach ($folder in $FoldersToCopy) {
+            $src = Join-Path $TempClonePath $folder
+            if (Test-Path $src) {
+                Copy-Item $src (Join-Path $buildPath $folder) -Recurse -Force
+            }
+        }
+        foreach ($file in $FilesToCopy) {
+            $src = Join-Path $TempClonePath $file
+            if (Test-Path $src) { Copy-Item $src (Join-Path $buildPath $file) -Force }
+        }
+        foreach ($ext in $ExtensionsToCopy) {
+            Get-ChildItem $TempClonePath -Filter $ext -File | ForEach-Object {
+                Copy-Item $_.FullName (Join-Path $buildPath $_.Name) -Force
+            }
+        }
+
+        if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
+        Compress-Archive -Path "$buildPath\*" -DestinationPath $zipPath -Force
+        Remove-Item $buildPath -Recurse -Force
+
+        $zipSize = [math]::Round((Get-Item $zipPath).Length / 1MB, 1)
+        Write-OK "ZIP erstellt: $zipName ($zipSize MB)"
+
+        # Upload-URL aus dem Release holen
+        $uploadUrl = $resp.upload_url -replace '\{\?name,label\}', ''
+        $uploadHeaders = @{
+            "Authorization"        = "Bearer $Token"
+            "Content-Type"         = "application/zip"
+            "X-GitHub-Api-Version" = "2022-11-28"
+        }
+        $uploadUri = "$uploadUrl`?name=$zipName"
+
+        $uploadResp = Invoke-RestMethod -Uri $uploadUri -Method Post -Headers $uploadHeaders -InFile $zipPath
+        Write-OK "Asset hochgeladen: $($uploadResp.browser_download_url)"
+
+        Remove-Item $zipPath -Force
+
     } catch {
-        Write-Fail "Release konnte nicht erstellt werden: $_"
+        Write-Fail "Release/Upload fehlgeschlagen: $_"
     }
 }
 

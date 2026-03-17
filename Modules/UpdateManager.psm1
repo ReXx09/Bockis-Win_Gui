@@ -46,6 +46,15 @@ function Install-Update {
     if (-not $asset) {
         Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Error'
         $OutputBox.AppendText("[✗] Kein Download-Asset gefunden!`r`n")
+        $OutputBox.AppendText("[i] Dieser Release enthält kein ZIP-Paket.`r`n")
+        $OutputBox.AppendText("[i] Bitte den Release-Ersteller kontaktieren oder manuell herunterladen:`r`n")
+        $OutputBox.AppendText("    https://github.com/ReXx09/Bockis-Win_Gui/releases`r`n")
+        [System.Windows.Forms.MessageBox]::Show(
+            "Der Release v$LatestVersion hat kein Download-Paket (ZIP) angehängt.`n`nBitte manuell herunterladen:`nhttps://github.com/ReXx09/Bockis-Win_Gui/releases",
+            "Kein Download verfügbar",
+            [System.Windows.Forms.MessageBoxButtons]::OK,
+            [System.Windows.Forms.MessageBoxIcon]::Warning
+        ) | Out-Null
         return $false
     }
     
