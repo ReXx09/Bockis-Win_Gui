@@ -6672,7 +6672,10 @@ function Invoke-GuiReleaseAction {
             -OutputBox $outputBox `
             -ProgressBar $progressBar `
             -MainForm $mainform `
-            -ApplicationPath $PSScriptRoot
+            -ApplicationPath $PSScriptRoot `
+            -RepoOwner "ReXx09" `
+            -RepoName "Bockis-Win_Gui" `
+            -GitHubToken ""
     }
     catch {
         return @{ Success = $false; Cancelled = $false; Message = $_.Exception.Message }
