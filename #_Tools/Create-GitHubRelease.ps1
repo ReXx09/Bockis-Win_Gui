@@ -14,7 +14,7 @@ param(
 $TokenFile = "C:\Users\ReXx\Desktop\VS-CODE-Repos\Github---- Update-Token.txt"
 if ([string]::IsNullOrWhiteSpace($Token)) {
     if (Test-Path $TokenFile) {
-        $Token = (Get-Content $TokenFile | Where-Object { $_ -match "ghp_" } | Select-Object -First 1).Trim()
+        $Token = (Get-Content $TokenFile | Where-Object { $_ -match "ghp_|github_pat_" } | Select-Object -First 1).Trim()
     }
     if ([string]::IsNullOrWhiteSpace($Token)) {
         Write-Host "[!] Kein GitHub-Token gefunden!" -ForegroundColor Red
@@ -126,17 +126,17 @@ $apiUrl = "https://api.github.com/repos/$RepoOwner/$RepoName/releases"
 
 $headers = @{
     "Authorization" = "token $Token"
-    "Accept" = "application/vnd.github+json"
-    "User-Agent" = "Bockis-Release-Script"
+    "Accept"        = "application/vnd.github+json"
+    "User-Agent"    = "Bockis-Release-Script"
 }
 
 $body = @{
-    tag_name = $tagName
+    tag_name         = $tagName
     target_commitish = "main"  # oder "master" je nach Branch
-    name = $releaseName
-    body = $releaseBody
-    draft = $Draft.IsPresent
-    prerelease = $PreRelease.IsPresent
+    name             = $releaseName
+    body             = $releaseBody
+    draft            = $Draft.IsPresent
+    prerelease       = $PreRelease.IsPresent
 } | ConvertTo-Json
 
 Write-Host "   Repository: $RepoOwner/$RepoName" -ForegroundColor Gray
@@ -148,8 +148,7 @@ try {
     $release = Invoke-RestMethod -Uri $apiUrl -Method Post -Headers $headers -Body $body -ContentType "application/json"
     Write-Host "   ✓ Release erstellt!" -ForegroundColor Green
     Write-Host ""
-}
-catch {
+} catch {
     Write-Host "   ✗ Fehler beim Erstellen des Release!" -ForegroundColor Red
     Write-Host "   $($_.Exception.Message)" -ForegroundColor Red
     
@@ -163,13 +162,11 @@ catch {
             $existingReleaseUrl = "https://api.github.com/repos/$RepoOwner/$RepoName/releases/tags/$tagName"
             $release = Invoke-RestMethod -Uri $existingReleaseUrl -Method Get -Headers $headers
             Write-Host "   ✓ Existierenden Release gefunden!" -ForegroundColor Green
-        }
-        catch {
+        } catch {
             Write-Host "   ✗ Konnte Release nicht finden!" -ForegroundColor Red
             exit 1
         }
-    }
-    else {
+    } else {
         exit 1
     }
 }
@@ -182,8 +179,8 @@ $uploadUrl = $release.upload_url -replace '\{\?name,label\}', "?name=$zipName"
 # Datei hochladen
 $uploadHeaders = @{
     "Authorization" = "token $Token"
-    "Content-Type" = "application/zip"
-    "User-Agent" = "Bockis-Release-Script"
+    "Content-Type"  = "application/zip"
+    "User-Agent"    = "Bockis-Release-Script"
 }
 
 try {
@@ -195,8 +192,7 @@ try {
     Write-Host "   ✓ Asset hochgeladen!" -ForegroundColor Green
     Write-Host "   Download-URL: $($asset.browser_download_url)" -ForegroundColor Cyan
     Write-Host ""
-}
-catch {
+} catch {
     Write-Host "   ✗ Fehler beim Hochladen: $($_.Exception.Message)" -ForegroundColor Red
 }
 

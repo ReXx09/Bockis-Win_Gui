@@ -58,7 +58,7 @@ if (-not (Test-Path $TokenFile)) {
     Write-Fail "Token-Datei nicht gefunden: $TokenFile"
     exit 1
 }
-$Token = (Get-Content $TokenFile | Where-Object { $_ -match "ghp_" }).Trim()
+$Token = (Get-Content $TokenFile | Where-Object { $_ -match "ghp_|github_pat_" } | Select-Object -First 1).Trim()
 if (-not $Token) { Write-Fail "Kein GitHub-Token gefunden!"; exit 1 }
 
 $AuthUrl  = "https://$Token@github.com/ReXx09/Bockis-Win_Gui.git"
