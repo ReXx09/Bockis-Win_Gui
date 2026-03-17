@@ -5,10 +5,24 @@ param(
     [string]$Version = "4.1.7",
     [string]$RepoOwner = "ReXx09",
     [string]$RepoName = "Bockis-Win_Gui-DEV",
-    [string]$Token = "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",
+    [string]$Token = "",           # Leer lassen – wird aus Token-Datei gelesen
     [switch]$PreRelease = $false,
     [switch]$Draft = $false
 )
+
+# ─── Token laden (aus sicherer Datei außerhalb des Repos) ─────────────────────
+$TokenFile = "C:\Users\ReXx\Desktop\VS-CODE-Repos\Github---- Update-Token.txt"
+if ([string]::IsNullOrWhiteSpace($Token)) {
+    if (Test-Path $TokenFile) {
+        $Token = (Get-Content $TokenFile | Where-Object { $_ -match "ghp_" } | Select-Object -First 1).Trim()
+    }
+    if ([string]::IsNullOrWhiteSpace($Token)) {
+        Write-Host "[!] Kein GitHub-Token gefunden!" -ForegroundColor Red
+        Write-Host "    Erstelle die Datei: $TokenFile" -ForegroundColor Yellow
+        Write-Host "    Und trage deinen Token (ghp_...) ein." -ForegroundColor Yellow
+        exit 1
+    }
+}
 
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host " GitHub Release Creator" -ForegroundColor Cyan

@@ -354,15 +354,24 @@ function Start-AsyncDownload {
     )
     
     Update-ProgressStatus -StatusText "Download läuft..." -ProgressValue 0 -TextColor ([System.Drawing.Color]::White) -ProgressBar $ProgressBar
-    
-    $downloadUrl = $Asset.url
+
+    $hasValidToken = $GitHubToken -and $GitHubToken -ne "ghp_DEIN_TOKEN_HIER"
+
+    # Für Public Repos: browser_download_url nutzen (kein Auth nötig, kein Redirect-Problem)
+    # Für Private Repos mit Token: asset.url (GitHub API-URL mit Auth-Header)
+    if ($hasValidToken) {
+        $downloadUrl = $Asset.url
+    } else {
+        $downloadUrl = if ($Asset.browser_download_url) { $Asset.browser_download_url } else { $Asset.url }
+    }
+
     $downloadHeaders = @{
         "User-Agent" = "Bockis-System-Tool"
-        "Accept"     = "application/octet-stream"
     }
-    
-    if ($GitHubToken -and $GitHubToken -ne "ghp_DEIN_TOKEN_HIER") {
+
+    if ($hasValidToken) {
         $downloadHeaders["Authorization"] = "token $GitHubToken"
+        $downloadHeaders["Accept"] = "application/octet-stream"
     }
     
     try {
