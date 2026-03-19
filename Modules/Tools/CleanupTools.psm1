@@ -64,7 +64,7 @@ function Start-DiskCleanup {
         }
 
         # In Log-Datei und Datenbank schreiben, dass Disk Cleanup gestartet wird
-        Write-ToolLog -ToolName "DiskCleanup" -Message "Disk Cleanup wird gestartet" -OutputBox $null -Style 'Action' -Level "Information" -SaveToDatabase
+        Write-ToolLog -ToolName "DiskCleanup" -Message "Disk Cleanup wird gestartet" -OutputBox $outputBox -Style 'Action' -Level "Information" -SaveToDatabase
 
         # Verfügbare Laufwerke ermitteln (nur feste Laufwerke)
         $drives = Get-WmiObject Win32_LogicalDisk | Where-Object { $_.DriveType -eq 3 } | Select-Object -ExpandProperty DeviceID
@@ -75,12 +75,9 @@ function Start-DiskCleanup {
         $totalSkippedFiles = 0
 
         Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
-        $outputBox.AppendText("`r`n  " + ("═" * 54) + "`r`n")
-        $outputBox.AppendText("  ══  Disk Cleanup  ══`r`n")
-        $outputBox.AppendText("  " + ("═" * 54) + "`r`n")
         $outputBox.AppendText("Schnelle Datenträgerbereinigung wird gestartet...`r`n")
         Write-Host "`n  [►] Schnelle Datenträgerbereinigung wird gestartet..." -ForegroundColor green
-        $outputBox.AppendText(("─" * 66) + "`r`n")        # Quick-Cleanup-Pfade definieren (ähnlich dem Referenzskript)
+        $outputBox.AppendText(("-" * 60) + "`r`n")        # Quick-Cleanup-Pfade definieren (ähnlich dem Referenzskript)
         $cleanupPaths = @(
             @{ Name = "Windows Temp"; PathPattern = "Windows\Temp\*" },
             @{ Name = "Benutzer Temp"; PathPattern = "Users\*\AppData\Local\Temp\*" },
@@ -112,7 +109,7 @@ function Start-DiskCleanup {
             $driveSkippedFiles = 0
 
             Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
-            $outputBox.AppendText("`r`n┌─ Bereinige Laufwerk ${driveLetter}... ($currentDriveIndex von $totalDrives)`r`n")
+            $outputBox.AppendText("`r`n>>> Bereinige Laufwerk ${driveLetter}... ($currentDriveIndex von $totalDrives)`r`n")
 
             $pathCount = $cleanupPaths.Count
             $currentPathIndex = 0
@@ -205,7 +202,7 @@ function Start-DiskCleanup {
             }
                 
             $outputBox.AppendText("`r`n")
-            $outputBox.AppendText(("─" * 66) + "`r`n")
+            $outputBox.AppendText(("-" * 50) + "`r`n")
 
             # Nach jedem Laufwerk die Änderungen sofort anzeigen
             [System.Windows.Forms.Application]::DoEvents()
@@ -214,9 +211,9 @@ function Start-DiskCleanup {
             $progressBar.Value = 100
         }
         Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
-        $outputBox.AppendText("`r`n  " + ("═" * 54) + "`r`n")
+        $outputBox.AppendText("`r`n================================================`r`n")
         Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
-        $outputBox.AppendText("  [✓] Schnelle Datenträgerbereinigung abgeschlossen!`r`n")
+        $outputBox.AppendText("✅ Schnelle Datenträgerbereinigung abgeschlossen!`r`n")
         Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
         $outputBox.AppendText("   Insgesamt entfernt: $totalFilesRemoved Dateien`r`n")
         Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
@@ -228,39 +225,77 @@ function Start-DiskCleanup {
             Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
         }
             
-        $outputBox.AppendText("  " + ("═" * 54) + "`r`n")
+        $outputBox.AppendText("================================================`r`n")
         
         # Zusätzliche Ausgabe in der PowerShell-Konsole
-        Write-Host ("  " + ("═" * 66)) -ForegroundColor Cyan 
+        Write-Host "`n" + ("═" * 70) -ForegroundColor Cyan 
         Write-Host "`n  [►] Schnelle Datenträgerbereinigung abgeschlossen!" -ForegroundColor Green
         Write-Host "  [✓] Insgesamt entfernt:    $totalFilesRemoved Dateien" -ForegroundColor Cyan
         Write-Host "  [✓] Insgesamt freigegeben: $(Format-Size -Size $totalFreedSpace)" -ForegroundColor Cyan
         
         if ($totalSkippedFiles -gt 0) {
-            Write-Host "  [⚠] Übersprungene Dateien: $totalSkippedFiles (in Verwendung)" -ForegroundColor Yellow
+            Write-Host "  [!] Übersprungene Dateien: $totalSkippedFiles (in Verwendung)" -ForegroundColor Yellow
         }
-        Write-Host ("  " + ("═" * 66)) -ForegroundColor Cyan 
+        Write-Host "`n" + ("═" * 70) -ForegroundColor Cyan 
         Write-Host
         
-        # Log-Eintrag erstellen (Summary-basiert, da Datei-Objekte nicht pro Laufwerk gesammelt werden)
+        # Log-Eintrag erstellen
         try {
             $logFilePath = Join-Path $PSScriptRoot "..\..\Data\Temp\cleanup_log.txt"
-
-            $logMessage  = "Disk Cleanup durchgeführt: $(Get-Date -Format 'dd.MM.yyyy HH:mm:ss')`r`n"
-            $logMessage += "Entfernte Dateien:         $totalFilesRemoved`r`n"
-            $logMessage += "Freigegebener Speicher:    $(Format-Size -Size $totalFreedSpace)`r`n"
-            $logMessage += "Übersprungene Dateien:     $totalSkippedFiles (gesperrt/in Verwendung)`r`n"
-            $logMessage += "─" * 60 + "`r`n"
-
-            $logMessage | Out-File -Append -FilePath $logFilePath -Encoding UTF8
-
-            $outputBox.AppendText("[✓] Protokollierung erfolgreich: $logFilePath`r`n")
+            $skippedFilePath = Join-Path $PSScriptRoot "..\..\Data\Temp\skipped_files.txt"
+            
+            # Log-Eintrag für entfernte Dateien
+            if ($totalFilesRemoved -gt 0) {
+                $removedFilesList = ($filesToDelete | Where-Object { $_.Length -gt 0 } | Select-Object -First 10)
+                $removedFilesCount = $removedFilesList.Count
+                $removedFilesSize = ($removedFilesList | Measure-Object -Property Length -Sum).Sum
+                # Detaillierte Informationen zu entfernten Dateien (max. 10)
+                $detailedRemovedFiles = $removedFilesList | ForEach-Object {
+                    "$($_.FullName) - $(Format-Size -Size $_.Length)"
+                }
+                
+                # Log-Nachricht
+                $logMessage = "Entfernte Dateien: $removedFilesCount, Freigegebener Speicher: $(Format-Size -Size $removedFilesSize)`r`n"
+                $logMessage += ($detailedRemovedFiles -join "`r`n") + "`r`n"
+                
+                # An das Log anhängen
+                $logMessage | Out-File -Append -FilePath $logFilePath -Encoding UTF8
+            }
+            
+            # Log-Eintrag für übersprungene Dateien
+            if ($totalSkippedFiles -gt 0) {
+                $skippedFilesList = ($skippedFiles | Select-Object -First 10)
+                $skippedFilesCount = $skippedFilesList.Count
+                $skippedFilesSize = ($skippedFilesList | Measure-Object -Property Length -Sum).Sum
+                # Detaillierte Informationen zu übersprungenen Dateien (max. 10)
+                $detailedSkippedFiles = $skippedFilesList | ForEach-Object {
+                    "$($_.FullName) - $(Format-Size -Size $_.Length)"
+                }
+                
+                # Log-Nachricht
+                $skippedMessage = "Übersprungene Dateien: $skippedFilesCount, Größe: $(Format-Size -Size $skippedFilesSize)`r`n"
+                $skippedMessage += ($detailedSkippedFiles -join "`r`n") + "`r`n"
+                
+                # An das Log anhängen
+                $skippedMessage | Out-File -Append -FilePath $logFilePath -Encoding UTF8
+            }
+            
+            # Allgemeine Log-Information
+            $generalLogMessage = "Disk Cleanup durchgeführt: $(Get-Date -Format 'dd.MM.yyyy HH:mm:ss')`r`n"
+            $generalLogMessage += "Entfernte Dateien: $totalFilesRemoved, Freigegebener Speicher: $(Format-Size -Size $totalFreedSpace)`r`n"
+            $generalLogMessage += "Übersprungene Dateien: $totalSkippedFiles`r`n"
+            
+            # An das allgemeine Log anhängen
+            $generalLogMessage | Out-File -Append -FilePath $logFilePath -Encoding UTF8
+            
+            # Erfolgreiche Protokollierung
+            $outputBox.AppendText("✅ Protokollierung erfolgreich: $logFilePath`r`n")
         } catch {
-            $outputBox.AppendText("[✗] Fehler bei der Protokollierung: $($_.Exception.Message)`r`n")
+            $outputBox.AppendText("❌ Fehler bei der Protokollierung: $($_.Exception.Message)`r`n")
         }
     } catch {
         Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
-        $outputBox.AppendText("`r`n  [✗] FEHLER während der Bereinigung: $($_.Exception.Message)`r`n")
+        $outputBox.AppendText("`r`n❌ FEHLER während der Bereinigung: $($_.Exception.Message)`r`n")
         if ($null -ne $progressBar) {
             $progressBar.Value = 0 # Oder auf einen Fehlerwert setzen
         }
@@ -404,9 +439,7 @@ function Start-TempFilesCleanup {
         # outputBox zuruecksetzen
         $outputBox.Clear()
         Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
-        $outputBox.AppendText("`r`n  " + ("═" * 54) + "`r`n")
-        $outputBox.AppendText("  ══  Bereinigung Temporärer Dateien  ══`r`n")
-        $outputBox.AppendText("  " + ("═" * 54) + "`r`n")
+        $outputBox.AppendText("===== BEREINIGUNG TEMPORAERER DATEIEN =====`r`n")
         Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
         $outputBox.AppendText("Modus: Systemreinigung`r`n")
         Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
@@ -571,7 +604,7 @@ function Start-TempFilesCleanup {
             }
             
             Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
-            $outputBox.AppendText("  ├─ Untersuche Ordner: $folder`r`n")
+            $outputBox.AppendText("  -> Untersuche Ordner: $folder`r`n")
             
             # Ueberpruefe, ob der Ordner existiert
             if (Test-Path -Path $folder) {
@@ -596,13 +629,13 @@ function Start-TempFilesCleanup {
         }
         # Erfolgsnotiz
         Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
-        $outputBox.AppendText("`r`n[✓] Bereinigung temporärer Dateien erfolgreich abgeschlossen.`r`n")
+        $outputBox.AppendText("`r`n[√] Bereinigung temporaerer Dateien erfolgreich abgeschlossen.`r`n")
         
         # Farbe zuruecksetzen
         Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
     } catch {
         Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
-        $outputBox.AppendText("`r`n  [✗] Allgemeiner Fehler: " + $_.Exception.Message + "`r`n")
+        $outputBox.AppendText("`r`n[-] Allgemeiner Fehler: " + $_.Exception.Message + "`r`n")
     }
 }
 
@@ -1617,7 +1650,7 @@ function Start-TempFilesCleanupAdvanced {
             $global:optionSizes = @{}
             $statusBox.Clear()
             Set-OutputSelectionStyle -OutputBox $statusBox -Style 'Action'
-            $statusBox.AppendText("  ══  Berechnung Bereinigungsgröße  ══`r`n")
+            $statusBox.AppendText("=== BERECHNUNG BEREINIGUNGSGRÖSSE ===`r`n")
             $statusBox.AppendText("Zeitstempel: $(Get-Date -Format 'dd.MM.yyyy HH:mm:ss')`r`n")
             $statusBox.AppendText("System: $env:COMPUTERNAME ($env:USERNAME)`r`n`r`n")
             [System.Windows.Forms.Application]::DoEvents()
@@ -1707,7 +1740,7 @@ function Start-TempFilesCleanupAdvanced {
                 $totalFiles = 0
                 
                 Set-OutputSelectionStyle -OutputBox $statusBox -Style 'Success'
-                $statusBox.AppendText("  ── $($option.Text)  ──`r`n")
+                $statusBox.AppendText("--- $($option.Text) ---`r`n")
                 [System.Windows.Forms.Application]::DoEvents()
                 
                 # Größenschätzung für diese Option zurücksetzen
@@ -1883,7 +1916,7 @@ function Start-TempFilesCleanupAdvanced {
             
             # Status aktualisieren
             Set-OutputSelectionStyle -OutputBox $statusBox -Style 'Action'
-            $statusBox.AppendText("  ══  Berechnung abgeschlossen  ══`r`n")
+            $statusBox.AppendText("=== BERECHNUNG ABGESCHLOSSEN ===`r`n")
             Set-OutputSelectionStyle -OutputBox $statusBox -Style 'Success'
             $statusBox.AppendText("Potentiell freizugebender Speicher: " + (Format-Size -Size $totalPotentialCleanup) + "`r`n")
             $statusBox.AppendText("Zu bereinigende Dateien: $totalFileCount`r`n")
@@ -1955,9 +1988,7 @@ function Start-TempFilesCleanupAdvanced {
                 # Ausgabe im Hauptfenster initialisieren
                 $outputBox.Clear()
                 Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
-                $outputBox.AppendText("`r`n  " + ("═" * 54) + "`r`n")
-                $outputBox.AppendText("  ══  Bereinigung Temporärer Dateien (Erweitert)  ══`r`n")
-                $outputBox.AppendText("  " + ("═" * 54) + "`r`n")
+                $outputBox.AppendText("===== BEREINIGUNG TEMPORAERER DATEIEN (ERWEITERT) =====`r`n")
                 Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
                 $outputBox.AppendText("Modus: Erweiterte Bereinigung laeuft...`r`n")
                 Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
@@ -2072,9 +2103,7 @@ function Start-TempFilesCleanupAdvanced {
                 }
                 # Abschluss
                 Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
-                $outputBox.AppendText("  " + ("═" * 54) + "`r`n")
-                $outputBox.AppendText("  [✓] Bereinigung abgeschlossen`r`n")
-                $outputBox.AppendText("  " + ("═" * 54) + "`r`n")
+                $outputBox.AppendText("==== Bereinigung abgeschlossen ====`r`n")
                 Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
                 $outputBox.AppendText("Insgesamt freigegeben: " + (Format-Size -Size $totalFreed) + "`r`n")
                 Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
@@ -2086,15 +2115,15 @@ function Start-TempFilesCleanupAdvanced {
                 }
                 
                 # Zusätzliche Ausgabe in der PowerShell-Konsole (konsistent mit Disk-Cleanup)
-                Write-Host ("  " + ("═" * 66)) -ForegroundColor Cyan 
+                Write-Host "`n" + ("═" * 70) -ForegroundColor Cyan 
                 Write-Host "`n  [►] Benutzerdefinierte Bereinigung abgeschlossen!" -ForegroundColor Green
                 Write-Host "  [✓] Insgesamt entfernt:    $totalFilesDeleted Dateien" -ForegroundColor Cyan
                 Write-Host "  [✓] Insgesamt freigegeben: $(Format-Size -Size $totalFreed)" -ForegroundColor Cyan
                 
                 if ($totalFilesSkipped -gt 0) {
-                    Write-Host "  [⚠] Übersprungene Dateien: $totalFilesSkipped (in Verwendung)" -ForegroundColor Yellow
+                    Write-Host "  [!] Übersprungene Dateien: $totalFilesSkipped (in Verwendung)" -ForegroundColor Yellow
                 }
-                Write-Host ("  " + ("═" * 66)) -ForegroundColor Cyan 
+                Write-Host "`n" + ("═" * 70) -ForegroundColor Cyan 
                 Write-Host
                 
                 # ProgressBar auf 100% setzen

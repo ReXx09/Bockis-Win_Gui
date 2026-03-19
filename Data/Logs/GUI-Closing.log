@@ -4066,383 +4066,227 @@
 2026-03-03 14:23:35 - [INFO] Tool-Cache wurde geleert
 2026-03-03 14:23:35 - [INFO] Garbage Collection durchgeführt
 2026-03-03 14:23:35 - [INFO] Anwendung wurde ordnungsgemäß beendet
-2026-03-03 16:10:49 - [INFO] Close-FormSafely: Schließvorgang gestartet
-2026-03-03 16:10:49 - [INFO] Close-FormSafely: Datenbankverbindung wird geschlossen
-2026-03-03 16:10:49 - [INFO] Close-FormSafely: Controls deaktiviert
-2026-03-03 16:10:49 - [INFO] Close-FormSafely: Garbage Collection durchgeführt
-2026-03-03 16:10:49 - [INFO] Close-FormSafely: Anwendung wird beendet
-2026-03-03 16:10:59 - [INFO] Close-FormSafely: Schließvorgang gestartet
-2026-03-03 16:10:59 - [INFO] Close-FormSafely: Datenbankverbindung wird geschlossen
-2026-03-03 16:10:59 - [INFO] Close-FormSafely: Controls deaktiviert
-2026-03-03 16:11:00 - [INFO] Close-FormSafely: Garbage Collection durchgeführt
-2026-03-03 16:11:00 - [INFO] Close-FormSafely: Anwendung wird beendet
-2026-03-03 16:11:02 - [INFO] Close-FormSafely: Schließvorgang gestartet
-2026-03-03 16:11:02 - [INFO] Close-FormSafely: Datenbankverbindung wird geschlossen
-2026-03-03 16:11:02 - [INFO] Close-FormSafely: Controls deaktiviert
-2026-03-03 16:11:03 - [INFO] Close-FormSafely: Garbage Collection durchgeführt
-2026-03-03 16:11:03 - [INFO] Close-FormSafely: Anwendung wird beendet
-2026-03-04 12:53:24 - [INFO] GUI-Reload wurde vom Benutzer initiiert
-2026-03-04 12:53:24 - [INFO] Reload-GUI: GUI-Reload gestartet
-2026-03-04 12:53:24 - [INFO] Reload-GUI: Alle Timer werden gestoppt
-2026-03-04 12:53:24 - [INFO] Reload-GUI: Datenbankverbindung wird geschlossen
-2026-03-04 12:53:24 - [INFO] Reload-GUI: Controls werden aufgeräumt
-2026-03-04 12:53:24 - [INFO] Reload-GUI: Tool-Cache wird geleert
-2026-03-04 12:53:24 - [INFO] Reload-GUI: Neuer GUI-Prozess wird gestartet
-2026-03-04 12:53:24 - [INFO] Reload-GUI: Neuer Prozess gestartet (PID: 23256)
-2026-03-04 12:53:25 - [INFO] Reload-GUI: Garbage Collection durchgeführt
-2026-03-04 12:53:25 - [INFO] Reload-GUI: Formular wird geschlossen
-2026-03-04 12:53:25 - [INFO] Anwendung wird geschlossen
-2026-03-04 12:53:25 - [INFO] Fensterposition wurde gespeichert
-2026-03-04 12:53:25 - [INFO] Schließvorgang initiiert
-2026-03-04 12:53:25 - [INFO] Tool-Cache wurde geleert
-2026-03-04 12:53:25 - [INFO] Garbage Collection durchgeführt
-2026-03-04 12:53:25 - [INFO] Anwendung wurde ordnungsgemäß beendet
-2026-03-04 12:55:08 - [INFO] Close-FormSafely: Schließvorgang gestartet
-2026-03-04 12:55:08 - [INFO] Close-FormSafely: Datenbankverbindung wird geschlossen
-2026-03-04 12:55:08 - [INFO] Close-FormSafely: Controls deaktiviert
-2026-03-04 12:55:08 - [INFO] Close-FormSafely: Garbage Collection durchgeführt
-2026-03-04 12:55:08 - [INFO] Close-FormSafely: Anwendung wird beendet
-2026-03-04 13:03:14 - [INFO] GUI-Reload wurde vom Benutzer initiiert
-2026-03-04 13:03:14 - [INFO] Reload-GUI: GUI-Reload gestartet
-2026-03-04 13:03:14 - [INFO] Reload-GUI: Alle Timer werden gestoppt
-2026-03-04 13:03:14 - [INFO] Reload-GUI: Datenbankverbindung wird geschlossen
-2026-03-04 13:03:14 - [INFO] Reload-GUI: Controls werden aufgeräumt
-2026-03-04 13:03:14 - [INFO] Reload-GUI: Tool-Cache wird geleert
-2026-03-04 13:03:14 - [INFO] Reload-GUI: Neuer GUI-Prozess wird gestartet
-2026-03-04 13:03:14 - [INFO] Reload-GUI: Neuer Prozess gestartet (PID: 17032)
-2026-03-04 13:03:14 - [INFO] Reload-GUI: Garbage Collection durchgeführt
-2026-03-04 13:03:15 - [INFO] Reload-GUI: Formular wird geschlossen
-2026-03-04 13:03:15 - [INFO] Anwendung wird geschlossen
-2026-03-04 13:03:15 - [INFO] Fensterposition wurde gespeichert
-2026-03-04 13:03:15 - [INFO] Schließvorgang initiiert
-2026-03-04 13:03:15 - [INFO] Tool-Cache wurde geleert
-2026-03-04 13:03:15 - [INFO] Garbage Collection durchgeführt
-2026-03-04 13:03:15 - [INFO] Anwendung wurde ordnungsgemäß beendet
-2026-03-04 13:08:45 - [INFO] GUI-Reload wurde vom Benutzer initiiert
-2026-03-04 13:08:45 - [INFO] Reload-GUI: GUI-Reload gestartet
-2026-03-04 13:08:45 - [INFO] Reload-GUI: Alle Timer werden gestoppt
-2026-03-04 13:08:45 - [INFO] Reload-GUI: Datenbankverbindung wird geschlossen
-2026-03-04 13:08:45 - [INFO] Reload-GUI: Controls werden aufgeräumt
-2026-03-04 13:08:45 - [INFO] Reload-GUI: Tool-Cache wird geleert
-2026-03-04 13:08:45 - [INFO] Reload-GUI: Neuer GUI-Prozess wird gestartet
-2026-03-04 13:08:45 - [INFO] Reload-GUI: Neuer Prozess gestartet (PID: 22596)
-2026-03-04 13:08:46 - [INFO] Reload-GUI: Garbage Collection durchgeführt
-2026-03-04 13:08:46 - [INFO] Reload-GUI: Formular wird geschlossen
-2026-03-04 13:08:46 - [INFO] Anwendung wird geschlossen
-2026-03-04 13:08:46 - [INFO] Fensterposition wurde gespeichert
-2026-03-04 13:08:46 - [INFO] Schließvorgang initiiert
-2026-03-04 13:08:46 - [INFO] Tool-Cache wurde geleert
-2026-03-04 13:08:46 - [INFO] Garbage Collection durchgeführt
-2026-03-04 13:08:46 - [INFO] Anwendung wurde ordnungsgemäß beendet
-2026-03-04 13:09:31 - [INFO] Close-FormSafely: Schließvorgang gestartet
-2026-03-04 13:09:31 - [INFO] Close-FormSafely: Datenbankverbindung wird geschlossen
-2026-03-04 13:09:31 - [INFO] Close-FormSafely: Controls deaktiviert
-2026-03-04 13:09:31 - [INFO] Close-FormSafely: Garbage Collection durchgeführt
-2026-03-04 13:09:31 - [INFO] Close-FormSafely: Anwendung wird beendet
-2026-03-04 13:09:42 - [INFO] Close-FormSafely: Schließvorgang gestartet
-2026-03-04 13:09:42 - [INFO] Close-FormSafely: Datenbankverbindung wird geschlossen
-2026-03-04 13:09:42 - [INFO] Close-FormSafely: Controls deaktiviert
-2026-03-04 13:09:42 - [INFO] Close-FormSafely: Garbage Collection durchgeführt
-2026-03-04 13:09:42 - [INFO] Close-FormSafely: Anwendung wird beendet
-2026-03-04 13:15:49 - [INFO] GUI-Reload wurde vom Benutzer initiiert
-2026-03-04 13:15:49 - [INFO] Reload-GUI: GUI-Reload gestartet
-2026-03-04 13:15:49 - [INFO] Reload-GUI: Alle Timer werden gestoppt
-2026-03-04 13:15:49 - [INFO] Reload-GUI: Datenbankverbindung wird geschlossen
-2026-03-04 13:15:49 - [INFO] Reload-GUI: Controls werden aufgeräumt
-2026-03-04 13:15:49 - [INFO] Reload-GUI: Tool-Cache wird geleert
-2026-03-04 13:15:49 - [INFO] Reload-GUI: Neuer GUI-Prozess wird gestartet
-2026-03-04 13:15:49 - [INFO] Reload-GUI: Skriptpfad -> C:\Users\ReXx\Desktop\VS-CODE-Repos\Bockis-Win_Gui_DEV\Win_Gui_Module.ps1
-2026-03-04 13:15:49 - [INFO] Reload-GUI: Neuer Prozess gestartet (PID: 23336)
-2026-03-04 13:15:49 - [INFO] Reload-GUI: Garbage Collection durchgeführt
-2026-03-04 13:15:49 - [INFO] Reload-GUI: Formular wird geschlossen
-2026-03-04 13:15:49 - [INFO] Anwendung wird geschlossen
-2026-03-04 13:15:49 - [INFO] Fensterposition wurde gespeichert
-2026-03-04 13:15:49 - [INFO] Schließvorgang initiiert
-2026-03-04 13:15:49 - [INFO] Tool-Cache wurde geleert
-2026-03-04 13:15:49 - [INFO] Garbage Collection durchgeführt
-2026-03-04 13:15:49 - [INFO] Anwendung wurde ordnungsgemäß beendet
-2026-03-04 13:26:57 - [INFO] GUI-Reload wurde vom Benutzer initiiert
-2026-03-04 13:26:57 - [INFO] Reload-GUI: GUI-Reload gestartet
-2026-03-04 13:26:57 - [INFO] Reload-GUI: Alle Timer werden gestoppt
-2026-03-04 13:26:57 - [INFO] Reload-GUI: Datenbankverbindung wird geschlossen
-2026-03-04 13:26:57 - [INFO] Reload-GUI: Controls werden aufgeräumt
-2026-03-04 13:26:57 - [INFO] Reload-GUI: Tool-Cache wird geleert
-2026-03-04 13:26:57 - [INFO] Reload-GUI: Neuer GUI-Prozess wird gestartet
-2026-03-04 13:26:57 - [INFO] Reload-GUI: Skriptpfad -> C:\Users\ReXx\Desktop\VS-CODE-Repos\Bockis-Win_Gui_DEV\Win_Gui_Module.ps1
-2026-03-04 13:26:57 - [INFO] Reload-GUI: Neuer Prozess gestartet (PID: 6404)
-2026-03-04 13:26:58 - [INFO] Reload-GUI: Garbage Collection durchgeführt
-2026-03-04 13:26:58 - [INFO] Reload-GUI: Formular wird geschlossen
-2026-03-04 13:26:58 - [INFO] Anwendung wird geschlossen
-2026-03-04 13:26:58 - [INFO] Fensterposition wurde gespeichert
-2026-03-04 13:26:58 - [INFO] Schließvorgang initiiert
-2026-03-04 13:26:58 - [INFO] Tool-Cache wurde geleert
-2026-03-04 13:26:58 - [INFO] Garbage Collection durchgeführt
-2026-03-04 13:26:58 - [INFO] Anwendung wurde ordnungsgemäß beendet
-2026-03-04 13:38:21 - [INFO] GUI-Reload wurde vom Benutzer initiiert
-2026-03-04 13:38:21 - [INFO] Reload-GUI: GUI-Reload gestartet
-2026-03-04 13:38:21 - [INFO] Reload-GUI: Alle Timer werden gestoppt
-2026-03-04 13:38:21 - [INFO] Reload-GUI: Datenbankverbindung wird geschlossen
-2026-03-04 13:38:21 - [INFO] Reload-GUI: Controls werden aufgeräumt
-2026-03-04 13:38:21 - [INFO] Reload-GUI: Tool-Cache wird geleert
-2026-03-04 13:38:21 - [INFO] Reload-GUI: Neuer GUI-Prozess wird gestartet
-2026-03-04 13:38:21 - [INFO] Reload-GUI: Skriptpfad -> C:\Users\ReXx\Desktop\VS-CODE-Repos\Bockis-Win_Gui_DEV\Win_Gui_Module.ps1
-2026-03-04 13:38:21 - [INFO] Reload-GUI: Neuer Prozess gestartet (PID: 22784)
-2026-03-04 13:38:21 - [INFO] Reload-GUI: Garbage Collection durchgeführt
-2026-03-04 13:38:21 - [INFO] Reload-GUI: Formular wird geschlossen
-2026-03-04 13:38:21 - [INFO] Anwendung wird geschlossen
-2026-03-04 13:38:21 - [INFO] Fensterposition wurde gespeichert
-2026-03-04 13:38:21 - [INFO] Schließvorgang initiiert
-2026-03-04 13:38:21 - [INFO] Tool-Cache wurde geleert
-2026-03-04 13:38:21 - [INFO] Garbage Collection durchgeführt
-2026-03-04 13:38:21 - [INFO] Anwendung wurde ordnungsgemäß beendet
-2026-03-04 13:50:40 - [INFO] GUI-Reload wurde vom Benutzer initiiert
-2026-03-04 13:50:40 - [INFO] Reload-GUI: GUI-Reload gestartet
-2026-03-04 13:50:40 - [INFO] Reload-GUI: Alle Timer werden gestoppt
-2026-03-04 13:50:40 - [INFO] Reload-GUI: Datenbankverbindung wird geschlossen
-2026-03-04 13:50:40 - [INFO] Reload-GUI: Controls werden aufgeräumt
-2026-03-04 13:50:40 - [INFO] Reload-GUI: Tool-Cache wird geleert
-2026-03-04 13:50:40 - [INFO] Reload-GUI: Neuer GUI-Prozess wird gestartet
-2026-03-04 13:50:40 - [INFO] Reload-GUI: Skriptpfad -> C:\Users\ReXx\Desktop\VS-CODE-Repos\Bockis-Win_Gui_DEV\Win_Gui_Module.ps1
-2026-03-04 13:50:40 - [INFO] Reload-GUI: Neuer Prozess gestartet (PID: 20824)
-2026-03-04 13:50:41 - [INFO] Reload-GUI: Garbage Collection durchgeführt
-2026-03-04 13:50:41 - [INFO] Reload-GUI: Formular wird geschlossen
-2026-03-04 13:50:41 - [INFO] Anwendung wird geschlossen
-2026-03-04 13:50:41 - [INFO] Fensterposition wurde gespeichert
-2026-03-04 13:50:41 - [INFO] Schließvorgang initiiert
-2026-03-04 13:50:41 - [INFO] Tool-Cache wurde geleert
-2026-03-04 13:50:41 - [INFO] Garbage Collection durchgeführt
-2026-03-04 13:50:41 - [INFO] Anwendung wurde ordnungsgemäß beendet
-2026-03-04 14:19:17 - [INFO] Close-FormSafely: Schließvorgang gestartet
-2026-03-04 14:19:17 - [INFO] Close-FormSafely: Datenbankverbindung wird geschlossen
-2026-03-04 14:19:17 - [INFO] Close-FormSafely: Controls deaktiviert
-2026-03-04 14:19:17 - [INFO] Close-FormSafely: Garbage Collection durchgeführt
-2026-03-04 14:19:17 - [INFO] Close-FormSafely: Anwendung wird beendet
-2026-03-04 14:51:13 - [INFO] GUI-Reload wurde vom Benutzer initiiert
-2026-03-04 14:51:13 - [INFO] Reload-GUI: GUI-Reload gestartet
-2026-03-04 14:51:13 - [INFO] Reload-GUI: Alle Timer werden gestoppt
-2026-03-04 14:51:13 - [INFO] Reload-GUI: Datenbankverbindung wird geschlossen
-2026-03-04 14:51:13 - [INFO] Reload-GUI: Controls werden aufgeräumt
-2026-03-04 14:51:13 - [INFO] Reload-GUI: Tool-Cache wird geleert
-2026-03-04 14:51:13 - [INFO] Reload-GUI: Neuer GUI-Prozess wird gestartet
-2026-03-04 14:51:13 - [INFO] Reload-GUI: Skriptpfad -> C:\Users\ReXx\Desktop\VS-CODE-Repos\Bockis-Win_Gui_DEV\Win_Gui_Module.ps1
-2026-03-04 14:51:13 - [INFO] Reload-GUI: Neuer Prozess gestartet (PID: 588)
-2026-03-04 14:51:13 - [INFO] Reload-GUI: Garbage Collection durchgeführt
-2026-03-04 14:51:13 - [INFO] Reload-GUI: Formular wird geschlossen
-2026-03-04 14:51:13 - [INFO] Anwendung wird geschlossen
-2026-03-04 14:51:13 - [INFO] Fensterposition wurde gespeichert
-2026-03-04 14:51:13 - [INFO] Schließvorgang initiiert
-2026-03-04 14:51:13 - [INFO] Tool-Cache wurde geleert
-2026-03-04 14:51:13 - [INFO] Garbage Collection durchgeführt
-2026-03-04 14:51:13 - [INFO] Anwendung wurde ordnungsgemäß beendet
-2026-03-04 15:03:29 - [INFO] GUI-Reload wurde vom Benutzer initiiert
-2026-03-04 15:03:29 - [INFO] Reload-GUI: GUI-Reload gestartet
-2026-03-04 15:03:29 - [INFO] Reload-GUI: Alle Timer werden gestoppt
-2026-03-04 15:03:29 - [INFO] Reload-GUI: Datenbankverbindung wird geschlossen
-2026-03-04 15:03:29 - [INFO] Reload-GUI: Controls werden aufgeräumt
-2026-03-04 15:03:29 - [INFO] Reload-GUI: Tool-Cache wird geleert
-2026-03-04 15:03:29 - [INFO] Reload-GUI: Neuer GUI-Prozess wird gestartet
-2026-03-04 15:03:29 - [INFO] Reload-GUI: Skriptpfad -> C:\Users\ReXx\Desktop\VS-CODE-Repos\Bockis-Win_Gui_DEV\Win_Gui_Module.ps1
-2026-03-04 15:03:29 - [INFO] Reload-GUI: Neuer Prozess gestartet (PID: 22804)
-2026-03-04 15:03:29 - [INFO] Reload-GUI: Garbage Collection durchgeführt
-2026-03-04 15:03:29 - [INFO] Reload-GUI: Formular wird geschlossen
-2026-03-04 15:03:29 - [INFO] Anwendung wird geschlossen
-2026-03-04 15:03:29 - [INFO] Fensterposition wurde gespeichert
-2026-03-04 15:03:29 - [INFO] Schließvorgang initiiert
-2026-03-04 15:03:29 - [INFO] Tool-Cache wurde geleert
-2026-03-04 15:03:29 - [INFO] Garbage Collection durchgeführt
-2026-03-04 15:03:29 - [INFO] Anwendung wurde ordnungsgemäß beendet
-2026-03-04 15:11:37 - [INFO] GUI-Reload wurde vom Benutzer initiiert
-2026-03-04 15:11:37 - [INFO] Reload-GUI: GUI-Reload gestartet
-2026-03-04 15:11:37 - [INFO] Reload-GUI: Alle Timer werden gestoppt
-2026-03-04 15:11:37 - [INFO] Reload-GUI: Datenbankverbindung wird geschlossen
-2026-03-04 15:11:37 - [INFO] Reload-GUI: Controls werden aufgeräumt
-2026-03-04 15:11:37 - [INFO] Reload-GUI: Tool-Cache wird geleert
-2026-03-04 15:11:37 - [INFO] Reload-GUI: Neuer GUI-Prozess wird gestartet
-2026-03-04 15:11:37 - [INFO] Reload-GUI: Skriptpfad -> C:\Users\ReXx\Desktop\VS-CODE-Repos\Bockis-Win_Gui_DEV\Win_Gui_Module.ps1
-2026-03-04 15:11:37 - [INFO] Reload-GUI: Neuer Prozess gestartet (PID: 11008)
-2026-03-04 15:11:38 - [INFO] Reload-GUI: Garbage Collection durchgeführt
-2026-03-04 15:11:38 - [INFO] Reload-GUI: Formular wird geschlossen
-2026-03-04 15:11:38 - [INFO] Anwendung wird geschlossen
-2026-03-04 15:11:38 - [INFO] Fensterposition wurde gespeichert
-2026-03-04 15:11:38 - [INFO] Schließvorgang initiiert
-2026-03-04 15:11:38 - [INFO] Tool-Cache wurde geleert
-2026-03-04 15:11:38 - [INFO] Garbage Collection durchgeführt
-2026-03-04 15:11:38 - [INFO] Anwendung wurde ordnungsgemäß beendet
-2026-03-04 15:18:59 - [INFO] GUI-Reload wurde vom Benutzer initiiert
-2026-03-04 15:18:59 - [INFO] Reload-GUI: GUI-Reload gestartet
-2026-03-04 15:18:59 - [INFO] Reload-GUI: Alle Timer werden gestoppt
-2026-03-04 15:18:59 - [INFO] Reload-GUI: Datenbankverbindung wird geschlossen
-2026-03-04 15:18:59 - [INFO] Reload-GUI: Controls werden aufgeräumt
-2026-03-04 15:18:59 - [INFO] Reload-GUI: Tool-Cache wird geleert
-2026-03-04 15:18:59 - [INFO] Reload-GUI: Neuer GUI-Prozess wird gestartet
-2026-03-04 15:18:59 - [INFO] Reload-GUI: Skriptpfad -> C:\Users\ReXx\Desktop\VS-CODE-Repos\Bockis-Win_Gui_DEV\Win_Gui_Module.ps1
-2026-03-04 15:18:59 - [INFO] Reload-GUI: Neuer Prozess gestartet (PID: 23464)
-2026-03-04 15:18:59 - [INFO] Reload-GUI: Garbage Collection durchgeführt
-2026-03-04 15:18:59 - [INFO] Reload-GUI: Formular wird geschlossen
-2026-03-04 15:18:59 - [INFO] Anwendung wird geschlossen
-2026-03-04 15:18:59 - [INFO] Fensterposition wurde gespeichert
-2026-03-04 15:18:59 - [INFO] Schließvorgang initiiert
-2026-03-04 15:18:59 - [INFO] Tool-Cache wurde geleert
-2026-03-04 15:18:59 - [INFO] Garbage Collection durchgeführt
-2026-03-04 15:18:59 - [INFO] Anwendung wurde ordnungsgemäß beendet
-2026-03-04 15:20:41 - [INFO] GUI-Reload wurde vom Benutzer initiiert
-2026-03-04 15:20:41 - [INFO] Reload-GUI: GUI-Reload gestartet
-2026-03-04 15:20:41 - [INFO] Reload-GUI: Alle Timer werden gestoppt
-2026-03-04 15:20:41 - [INFO] Reload-GUI: Datenbankverbindung wird geschlossen
-2026-03-04 15:20:41 - [INFO] Reload-GUI: Controls werden aufgeräumt
-2026-03-04 15:20:41 - [INFO] Reload-GUI: Tool-Cache wird geleert
-2026-03-04 15:20:41 - [INFO] Reload-GUI: Neuer GUI-Prozess wird gestartet
-2026-03-04 15:20:41 - [INFO] Reload-GUI: Skriptpfad -> C:\Users\ReXx\Desktop\VS-CODE-Repos\Bockis-Win_Gui_DEV\Win_Gui_Module.ps1
-2026-03-04 15:20:41 - [INFO] Reload-GUI: Neuer Prozess gestartet (PID: 21564)
-2026-03-04 15:20:42 - [INFO] Reload-GUI: Garbage Collection durchgeführt
-2026-03-04 15:20:42 - [INFO] Reload-GUI: Formular wird geschlossen
-2026-03-04 15:20:42 - [INFO] Anwendung wird geschlossen
-2026-03-04 15:20:42 - [INFO] Fensterposition wurde gespeichert
-2026-03-04 15:20:42 - [INFO] Schließvorgang initiiert
-2026-03-04 15:20:42 - [INFO] Tool-Cache wurde geleert
-2026-03-04 15:20:42 - [INFO] Garbage Collection durchgeführt
-2026-03-04 15:20:42 - [INFO] Anwendung wurde ordnungsgemäß beendet
-2026-03-04 15:33:02 - [INFO] GUI-Reload wurde vom Benutzer initiiert
-2026-03-04 15:33:02 - [INFO] Reload-GUI: GUI-Reload gestartet
-2026-03-04 15:33:02 - [INFO] Reload-GUI: Alle Timer werden gestoppt
-2026-03-04 15:33:02 - [INFO] Reload-GUI: Datenbankverbindung wird geschlossen
-2026-03-04 15:33:02 - [INFO] Reload-GUI: Controls werden aufgeräumt
-2026-03-04 15:33:02 - [INFO] Reload-GUI: Tool-Cache wird geleert
-2026-03-04 15:33:02 - [INFO] Reload-GUI: Neuer GUI-Prozess wird gestartet
-2026-03-04 15:33:02 - [INFO] Reload-GUI: Skriptpfad -> C:\Users\ReXx\Desktop\VS-CODE-Repos\Bockis-Win_Gui_DEV\Win_Gui_Module.ps1
-2026-03-04 15:33:02 - [INFO] Reload-GUI: Neuer Prozess gestartet (PID: 23336)
-2026-03-04 15:33:03 - [INFO] Reload-GUI: Garbage Collection durchgeführt
-2026-03-04 15:33:03 - [INFO] Reload-GUI: Formular wird geschlossen
-2026-03-04 15:33:03 - [INFO] Anwendung wird geschlossen
-2026-03-04 15:33:03 - [INFO] Fensterposition wurde gespeichert
-2026-03-04 15:33:03 - [INFO] Schließvorgang initiiert
-2026-03-04 15:33:03 - [INFO] Tool-Cache wurde geleert
-2026-03-04 15:33:03 - [INFO] Garbage Collection durchgeführt
-2026-03-04 15:33:03 - [INFO] Anwendung wurde ordnungsgemäß beendet
-2026-03-04 15:35:06 - [INFO] GUI-Reload wurde vom Benutzer initiiert
-2026-03-04 15:35:06 - [INFO] Reload-GUI: GUI-Reload gestartet
-2026-03-04 15:35:06 - [INFO] Reload-GUI: Alle Timer werden gestoppt
-2026-03-04 15:35:06 - [INFO] Reload-GUI: Datenbankverbindung wird geschlossen
-2026-03-04 15:35:06 - [INFO] Reload-GUI: Controls werden aufgeräumt
-2026-03-04 15:35:06 - [INFO] Reload-GUI: Tool-Cache wird geleert
-2026-03-04 15:35:06 - [INFO] Reload-GUI: Neuer GUI-Prozess wird gestartet
-2026-03-04 15:35:06 - [INFO] Reload-GUI: Skriptpfad -> C:\Users\ReXx\Desktop\VS-CODE-Repos\Bockis-Win_Gui_DEV\Win_Gui_Module.ps1
-2026-03-04 15:35:06 - [INFO] Reload-GUI: Neuer Prozess gestartet (PID: 9288)
-2026-03-04 15:35:06 - [INFO] Reload-GUI: Garbage Collection durchgeführt
-2026-03-04 15:35:06 - [INFO] Reload-GUI: Formular wird geschlossen
-2026-03-04 15:35:06 - [INFO] Anwendung wird geschlossen
-2026-03-04 15:35:06 - [INFO] Fensterposition wurde gespeichert
-2026-03-04 15:35:06 - [INFO] Schließvorgang initiiert
-2026-03-04 15:35:06 - [INFO] Tool-Cache wurde geleert
-2026-03-04 15:35:06 - [INFO] Garbage Collection durchgeführt
-2026-03-04 15:35:06 - [INFO] Anwendung wurde ordnungsgemäß beendet
-2026-03-04 15:50:05 - [INFO] GUI-Reload wurde vom Benutzer initiiert
-2026-03-04 15:50:05 - [INFO] Reload-GUI: GUI-Reload gestartet
-2026-03-04 15:50:05 - [INFO] Reload-GUI: Alle Timer werden gestoppt
-2026-03-04 15:50:05 - [INFO] Reload-GUI: Datenbankverbindung wird geschlossen
-2026-03-04 15:50:05 - [INFO] Reload-GUI: Controls werden aufgeräumt
-2026-03-04 15:50:05 - [INFO] Reload-GUI: Tool-Cache wird geleert
-2026-03-04 15:50:05 - [INFO] Reload-GUI: Neuer GUI-Prozess wird gestartet
-2026-03-04 15:50:05 - [INFO] Reload-GUI: Skriptpfad -> C:\Users\ReXx\Desktop\VS-CODE-Repos\Bockis-Win_Gui_DEV\Win_Gui_Module.ps1
-2026-03-04 15:50:05 - [INFO] Reload-GUI: Neuer Prozess gestartet (PID: 21784)
-2026-03-04 15:50:05 - [INFO] Reload-GUI: Garbage Collection durchgeführt
-2026-03-04 15:50:05 - [INFO] Reload-GUI: Formular wird geschlossen
-2026-03-04 15:50:05 - [INFO] Anwendung wird geschlossen
-2026-03-04 15:50:05 - [INFO] Fensterposition wurde gespeichert
-2026-03-04 15:50:05 - [INFO] Schließvorgang initiiert
-2026-03-04 15:50:05 - [INFO] Tool-Cache wurde geleert
-2026-03-04 15:50:05 - [INFO] Garbage Collection durchgeführt
-2026-03-04 15:50:05 - [INFO] Anwendung wurde ordnungsgemäß beendet
-2026-03-04 15:52:25 - [INFO] GUI-Reload wurde vom Benutzer initiiert
-2026-03-04 15:52:25 - [INFO] Reload-GUI: GUI-Reload gestartet
-2026-03-04 15:52:25 - [INFO] Reload-GUI: Alle Timer werden gestoppt
-2026-03-04 15:52:25 - [INFO] Reload-GUI: Datenbankverbindung wird geschlossen
-2026-03-04 15:52:25 - [INFO] Reload-GUI: Controls werden aufgeräumt
-2026-03-04 15:52:25 - [INFO] Reload-GUI: Tool-Cache wird geleert
-2026-03-04 15:52:25 - [INFO] Reload-GUI: Neuer GUI-Prozess wird gestartet
-2026-03-04 15:52:25 - [INFO] Reload-GUI: Skriptpfad -> C:\Users\ReXx\Desktop\VS-CODE-Repos\Bockis-Win_Gui_DEV\Win_Gui_Module.ps1
-2026-03-04 15:52:25 - [INFO] Reload-GUI: Neuer Prozess gestartet (PID: 5972)
-2026-03-04 15:52:26 - [INFO] Reload-GUI: Garbage Collection durchgeführt
-2026-03-04 15:52:26 - [INFO] Reload-GUI: Formular wird geschlossen
-2026-03-04 15:52:26 - [INFO] Anwendung wird geschlossen
-2026-03-04 15:52:26 - [INFO] Fensterposition wurde gespeichert
-2026-03-04 15:52:26 - [INFO] Schließvorgang initiiert
-2026-03-04 15:52:26 - [INFO] Tool-Cache wurde geleert
-2026-03-04 15:52:26 - [INFO] Garbage Collection durchgeführt
-2026-03-04 15:52:26 - [INFO] Anwendung wurde ordnungsgemäß beendet
-2026-03-04 16:03:03 - [INFO] GUI-Reload wurde vom Benutzer initiiert
-2026-03-04 16:03:03 - [INFO] Reload-GUI: GUI-Reload gestartet
-2026-03-04 16:03:03 - [INFO] Reload-GUI: Alle Timer werden gestoppt
-2026-03-04 16:03:03 - [INFO] Reload-GUI: Datenbankverbindung wird geschlossen
-2026-03-04 16:03:03 - [INFO] Reload-GUI: Controls werden aufgeräumt
-2026-03-04 16:03:03 - [INFO] Reload-GUI: Tool-Cache wird geleert
-2026-03-04 16:03:03 - [INFO] Reload-GUI: Neuer GUI-Prozess wird gestartet
-2026-03-04 16:03:03 - [INFO] Reload-GUI: Skriptpfad -> C:\Users\ReXx\Desktop\VS-CODE-Repos\Bockis-Win_Gui_DEV\Win_Gui_Module.ps1
-2026-03-04 16:03:03 - [INFO] Reload-GUI: Neuer Prozess gestartet (PID: 14676)
-2026-03-04 16:03:03 - [INFO] Reload-GUI: Garbage Collection durchgeführt
-2026-03-04 16:03:03 - [INFO] Reload-GUI: Formular wird geschlossen
-2026-03-04 16:03:03 - [INFO] Anwendung wird geschlossen
-2026-03-04 16:03:03 - [INFO] Fensterposition wurde gespeichert
-2026-03-04 16:03:03 - [INFO] Schließvorgang initiiert
-2026-03-04 16:03:03 - [INFO] Tool-Cache wurde geleert
-2026-03-04 16:03:03 - [INFO] Garbage Collection durchgeführt
-2026-03-04 16:03:03 - [INFO] Anwendung wurde ordnungsgemäß beendet
-2026-03-04 16:08:38 - [INFO] GUI-Reload wurde vom Benutzer initiiert
-2026-03-04 16:08:38 - [INFO] Reload-GUI: GUI-Reload gestartet
-2026-03-04 16:08:38 - [INFO] Reload-GUI: Alle Timer werden gestoppt
-2026-03-04 16:08:38 - [INFO] Reload-GUI: Datenbankverbindung wird geschlossen
-2026-03-04 16:08:38 - [INFO] Reload-GUI: Controls werden aufgeräumt
-2026-03-04 16:08:38 - [INFO] Reload-GUI: Tool-Cache wird geleert
-2026-03-04 16:08:38 - [INFO] Reload-GUI: Neuer GUI-Prozess wird gestartet
-2026-03-04 16:08:38 - [INFO] Reload-GUI: Skriptpfad -> C:\Users\ReXx\Desktop\VS-CODE-Repos\Bockis-Win_Gui_DEV\Win_Gui_Module.ps1
-2026-03-04 16:08:38 - [INFO] Reload-GUI: Neuer Prozess gestartet (PID: 6864)
-2026-03-04 16:08:38 - [INFO] Reload-GUI: Garbage Collection durchgeführt
-2026-03-04 16:08:38 - [INFO] Reload-GUI: Formular wird geschlossen
-2026-03-04 16:08:38 - [INFO] Anwendung wird geschlossen
-2026-03-04 16:08:38 - [INFO] Fensterposition wurde gespeichert
-2026-03-04 16:08:38 - [INFO] Schließvorgang initiiert
-2026-03-04 16:08:38 - [INFO] Tool-Cache wurde geleert
-2026-03-04 16:08:39 - [INFO] Garbage Collection durchgeführt
-2026-03-04 16:08:39 - [INFO] Anwendung wurde ordnungsgemäß beendet
-2026-03-04 16:10:08 - [INFO] Close-FormSafely: Schließvorgang gestartet
-2026-03-04 16:10:08 - [INFO] Close-FormSafely: Datenbankverbindung wird geschlossen
-2026-03-04 16:10:08 - [INFO] Close-FormSafely: Controls deaktiviert
-2026-03-04 16:10:08 - [INFO] Close-FormSafely: Garbage Collection durchgeführt
-2026-03-04 16:10:08 - [INFO] Close-FormSafely: Anwendung wird beendet
-2026-03-05 12:07:53 - [INFO] Close-FormSafely: Schließvorgang gestartet
-2026-03-05 12:07:53 - [INFO] Close-FormSafely: Datenbankverbindung wird geschlossen
-2026-03-05 12:07:53 - [INFO] Close-FormSafely: Controls deaktiviert
-2026-03-05 12:07:53 - [INFO] Close-FormSafely: Garbage Collection durchgeführt
-2026-03-05 12:07:53 - [INFO] Close-FormSafely: Anwendung wird beendet
-2026-03-06 22:51:38 - [INFO] GUI-Reload wurde vom Benutzer initiiert
-2026-03-06 22:51:38 - [INFO] Reload-GUI: GUI-Reload gestartet
-2026-03-06 22:51:38 - [INFO] Reload-GUI: Alle Timer werden gestoppt
-2026-03-06 22:51:38 - [INFO] Reload-GUI: Datenbankverbindung wird geschlossen
-2026-03-06 22:51:38 - [INFO] Reload-GUI: Controls werden aufgeräumt
-2026-03-06 22:51:38 - [INFO] Reload-GUI: Tool-Cache wird geleert
-2026-03-06 22:51:38 - [INFO] Reload-GUI: Neuer GUI-Prozess wird gestartet
-2026-03-06 22:51:38 - [INFO] Reload-GUI: Skriptpfad -> C:\Users\ReXx\Desktop\VS-CODE-Repos\Bockis-Win_Gui_DEV\Win_Gui_Module.ps1
-2026-03-06 22:51:38 - [INFO] Reload-GUI: Neuer Prozess gestartet (PID: 20524)
-2026-03-06 22:51:38 - [INFO] Reload-GUI: Garbage Collection durchgeführt
-2026-03-06 22:51:38 - [INFO] Reload-GUI: Formular wird geschlossen
-2026-03-06 22:51:38 - [INFO] Anwendung wird geschlossen
-2026-03-06 22:51:38 - [INFO] Fensterposition wurde gespeichert
-2026-03-06 22:51:38 - [INFO] Schließvorgang initiiert
-2026-03-06 22:51:38 - [INFO] Tool-Cache wurde geleert
-2026-03-06 22:51:38 - [INFO] Garbage Collection durchgeführt
-2026-03-06 22:51:38 - [INFO] Anwendung wurde ordnungsgemäß beendet
-2026-03-06 23:49:04 - [INFO] Close-FormSafely: Schließvorgang gestartet
-2026-03-06 23:49:04 - [INFO] Close-FormSafely: Datenbankverbindung wird geschlossen
-2026-03-06 23:49:04 - [INFO] Close-FormSafely: Controls deaktiviert
-2026-03-06 23:49:04 - [INFO] Close-FormSafely: Garbage Collection durchgeführt
-2026-03-06 23:49:04 - [INFO] Close-FormSafely: Anwendung wird beendet
-2026-03-07 00:12:24 - [INFO] Close-FormSafely: Schließvorgang gestartet
-2026-03-07 00:12:24 - [INFO] Close-FormSafely: Datenbankverbindung wird geschlossen
-2026-03-07 00:12:24 - [INFO] Close-FormSafely: Controls deaktiviert
-2026-03-07 00:12:24 - [INFO] Close-FormSafely: Garbage Collection durchgeführt
-2026-03-07 00:12:25 - [INFO] Close-FormSafely: Anwendung wird beendet
-2026-03-07 00:12:39 - [INFO] Close-FormSafely: Schließvorgang gestartet
-2026-03-07 00:12:39 - [INFO] Close-FormSafely: Datenbankverbindung wird geschlossen
-2026-03-07 00:12:39 - [INFO] Close-FormSafely: Controls deaktiviert
-2026-03-07 00:12:39 - [INFO] Close-FormSafely: Garbage Collection durchgeführt
-2026-03-07 00:12:39 - [INFO] Close-FormSafely: Anwendung wird beendet
+2026-03-17 15:31:40 - [INFO] Close-FormSafely: Schließvorgang gestartet
+2026-03-17 15:31:40 - [INFO] Close-FormSafely: Datenbankverbindung wird geschlossen
+2026-03-17 15:31:40 - [INFO] Close-FormSafely: Controls deaktiviert
+2026-03-17 15:31:40 - [INFO] Close-FormSafely: Garbage Collection durchgeführt
+2026-03-17 15:31:40 - [INFO] Close-FormSafely: Anwendung wird beendet
+2026-03-18 14:32:02 - [INFO] GUI-Reload wurde vom Benutzer initiiert
+2026-03-18 14:32:02 - [INFO] Reload-GUI: GUI-Reload gestartet
+2026-03-18 14:32:02 - [INFO] Reload-GUI: Alle Timer werden gestoppt
+2026-03-18 14:32:02 - [INFO] Reload-GUI: Datenbankverbindung wird geschlossen
+2026-03-18 14:32:02 - [INFO] Reload-GUI: Controls werden aufgeräumt
+2026-03-18 14:32:02 - [INFO] Reload-GUI: Tool-Cache wird geleert
+2026-03-18 14:32:02 - [INFO] Reload-GUI: Neuer GUI-Prozess wird gestartet
+2026-03-18 14:32:02 - [INFO] Reload-GUI: Neuer Prozess gestartet (PID: 12016)
+2026-03-18 14:32:03 - [INFO] Reload-GUI: Garbage Collection durchgeführt
+2026-03-18 14:32:03 - [INFO] Reload-GUI: Formular wird geschlossen
+2026-03-18 14:32:03 - [INFO] Anwendung wird geschlossen
+2026-03-18 14:32:03 - [INFO] Fensterposition wurde gespeichert
+2026-03-18 14:32:03 - [INFO] Schließvorgang initiiert
+2026-03-18 14:32:03 - [INFO] Tool-Cache wurde geleert
+2026-03-18 14:32:03 - [INFO] Garbage Collection durchgeführt
+2026-03-18 14:32:03 - [INFO] Anwendung wurde ordnungsgemäß beendet
+2026-03-18 14:36:08 - [INFO] GUI-Reload wurde vom Benutzer initiiert
+2026-03-18 14:36:08 - [INFO] Reload-GUI: GUI-Reload gestartet
+2026-03-18 14:36:08 - [INFO] Reload-GUI: Alle Timer werden gestoppt
+2026-03-18 14:36:08 - [INFO] Reload-GUI: Datenbankverbindung wird geschlossen
+2026-03-18 14:36:08 - [INFO] Reload-GUI: Controls werden aufgeräumt
+2026-03-18 14:36:08 - [INFO] Reload-GUI: Tool-Cache wird geleert
+2026-03-18 14:36:08 - [INFO] Reload-GUI: Neuer GUI-Prozess wird gestartet
+2026-03-18 14:36:08 - [INFO] Reload-GUI: Neuer Prozess gestartet (PID: 17616)
+2026-03-18 14:36:08 - [INFO] Reload-GUI: Garbage Collection durchgeführt
+2026-03-18 14:36:09 - [INFO] Reload-GUI: Formular wird geschlossen
+2026-03-18 14:36:09 - [INFO] Anwendung wird geschlossen
+2026-03-18 14:36:09 - [INFO] Fensterposition wurde gespeichert
+2026-03-18 14:36:09 - [INFO] Schließvorgang initiiert
+2026-03-18 14:36:09 - [INFO] Tool-Cache wurde geleert
+2026-03-18 14:36:09 - [INFO] Garbage Collection durchgeführt
+2026-03-18 14:36:09 - [INFO] Anwendung wurde ordnungsgemäß beendet
+2026-03-18 14:42:14 - [INFO] GUI-Reload wurde vom Benutzer initiiert
+2026-03-18 14:42:14 - [INFO] Reload-GUI: GUI-Reload gestartet
+2026-03-18 14:42:14 - [INFO] Reload-GUI: Alle Timer werden gestoppt
+2026-03-18 14:42:14 - [INFO] Reload-GUI: Datenbankverbindung wird geschlossen
+2026-03-18 14:42:14 - [INFO] Reload-GUI: Controls werden aufgeräumt
+2026-03-18 14:42:14 - [INFO] Reload-GUI: Tool-Cache wird geleert
+2026-03-18 14:42:14 - [INFO] Reload-GUI: Neuer GUI-Prozess wird gestartet
+2026-03-18 14:42:14 - [INFO] Reload-GUI: Neuer Prozess gestartet (PID: 24448)
+2026-03-18 14:42:14 - [INFO] Reload-GUI: Garbage Collection durchgeführt
+2026-03-18 14:42:14 - [INFO] Reload-GUI: Formular wird geschlossen
+2026-03-18 14:42:14 - [INFO] Anwendung wird geschlossen
+2026-03-18 14:42:14 - [INFO] Fensterposition wurde gespeichert
+2026-03-18 14:42:14 - [INFO] Schließvorgang initiiert
+2026-03-18 14:42:14 - [INFO] Tool-Cache wurde geleert
+2026-03-18 14:42:14 - [INFO] Garbage Collection durchgeführt
+2026-03-18 14:42:14 - [INFO] Anwendung wurde ordnungsgemäß beendet
+2026-03-18 14:48:51 - [INFO] GUI-Reload wurde vom Benutzer initiiert
+2026-03-18 14:48:51 - [INFO] Reload-GUI: GUI-Reload gestartet
+2026-03-18 14:48:51 - [INFO] Reload-GUI: Alle Timer werden gestoppt
+2026-03-18 14:48:51 - [INFO] Reload-GUI: Datenbankverbindung wird geschlossen
+2026-03-18 14:48:51 - [INFO] Reload-GUI: Controls werden aufgeräumt
+2026-03-18 14:48:51 - [INFO] Reload-GUI: Tool-Cache wird geleert
+2026-03-18 14:48:51 - [INFO] Reload-GUI: Neuer GUI-Prozess wird gestartet
+2026-03-18 14:48:51 - [INFO] Reload-GUI: Neuer Prozess gestartet (PID: 9416)
+2026-03-18 14:48:51 - [INFO] Reload-GUI: Garbage Collection durchgeführt
+2026-03-18 14:48:52 - [INFO] Reload-GUI: Formular wird geschlossen
+2026-03-18 14:48:52 - [INFO] Anwendung wird geschlossen
+2026-03-18 14:48:52 - [INFO] Fensterposition wurde gespeichert
+2026-03-18 14:48:52 - [INFO] Schließvorgang initiiert
+2026-03-18 14:48:52 - [INFO] Tool-Cache wurde geleert
+2026-03-18 14:48:52 - [INFO] Garbage Collection durchgeführt
+2026-03-18 14:48:52 - [INFO] Anwendung wurde ordnungsgemäß beendet
+2026-03-18 14:52:03 - [INFO] GUI-Reload wurde vom Benutzer initiiert
+2026-03-18 14:52:03 - [INFO] Reload-GUI: GUI-Reload gestartet
+2026-03-18 14:52:03 - [INFO] Reload-GUI: Alle Timer werden gestoppt
+2026-03-18 14:52:03 - [INFO] Reload-GUI: Datenbankverbindung wird geschlossen
+2026-03-18 14:52:03 - [INFO] Reload-GUI: Controls werden aufgeräumt
+2026-03-18 14:52:03 - [INFO] Reload-GUI: Tool-Cache wird geleert
+2026-03-18 14:52:03 - [INFO] Reload-GUI: Neuer GUI-Prozess wird gestartet
+2026-03-18 14:52:03 - [INFO] Reload-GUI: Neuer Prozess gestartet (PID: 8524)
+2026-03-18 14:52:03 - [INFO] Reload-GUI: Garbage Collection durchgeführt
+2026-03-18 14:52:04 - [INFO] Reload-GUI: Formular wird geschlossen
+2026-03-18 14:52:04 - [INFO] Anwendung wird geschlossen
+2026-03-18 14:52:04 - [INFO] Fensterposition wurde gespeichert
+2026-03-18 14:52:04 - [INFO] Schließvorgang initiiert
+2026-03-18 14:52:04 - [INFO] Tool-Cache wurde geleert
+2026-03-18 14:52:04 - [INFO] Garbage Collection durchgeführt
+2026-03-18 14:52:04 - [INFO] Anwendung wurde ordnungsgemäß beendet
+2026-03-18 15:50:23 - [INFO] GUI-Reload wurde vom Benutzer initiiert
+2026-03-18 15:50:23 - [INFO] Reload-GUI: GUI-Reload gestartet
+2026-03-18 15:50:23 - [INFO] Reload-GUI: Alle Timer werden gestoppt
+2026-03-18 15:50:23 - [INFO] Reload-GUI: Datenbankverbindung wird geschlossen
+2026-03-18 15:50:23 - [INFO] Reload-GUI: Controls werden aufgeräumt
+2026-03-18 15:50:23 - [INFO] Reload-GUI: Tool-Cache wird geleert
+2026-03-18 15:50:23 - [INFO] Reload-GUI: Neuer GUI-Prozess wird gestartet
+2026-03-18 15:50:23 - [INFO] Reload-GUI: Neuer Prozess gestartet (PID: 4228)
+2026-03-18 15:50:23 - [INFO] Reload-GUI: Garbage Collection durchgeführt
+2026-03-18 15:50:23 - [INFO] Reload-GUI: Formular wird geschlossen
+2026-03-18 15:50:23 - [INFO] Anwendung wird geschlossen
+2026-03-18 15:50:23 - [INFO] Fensterposition wurde gespeichert
+2026-03-18 15:50:23 - [INFO] Schließvorgang initiiert
+2026-03-18 15:50:23 - [INFO] Tool-Cache wurde geleert
+2026-03-18 15:50:23 - [INFO] Garbage Collection durchgeführt
+2026-03-18 15:50:23 - [INFO] Anwendung wurde ordnungsgemäß beendet
+2026-03-18 16:06:14 - [INFO] GUI-Reload wurde vom Benutzer initiiert
+2026-03-18 16:06:14 - [INFO] Reload-GUI: GUI-Reload gestartet
+2026-03-18 16:06:14 - [INFO] Reload-GUI: Alle Timer werden gestoppt
+2026-03-18 16:06:14 - [INFO] Reload-GUI: Datenbankverbindung wird geschlossen
+2026-03-18 16:06:14 - [INFO] Reload-GUI: Controls werden aufgeräumt
+2026-03-18 16:06:14 - [INFO] Reload-GUI: Tool-Cache wird geleert
+2026-03-18 16:06:14 - [INFO] Reload-GUI: Neuer GUI-Prozess wird gestartet
+2026-03-18 16:06:14 - [INFO] Reload-GUI: Neuer Prozess gestartet (PID: 10848)
+2026-03-18 16:06:14 - [INFO] Reload-GUI: Garbage Collection durchgeführt
+2026-03-18 16:06:14 - [INFO] Reload-GUI: Formular wird geschlossen
+2026-03-18 16:06:14 - [INFO] Anwendung wird geschlossen
+2026-03-18 16:06:14 - [INFO] Fensterposition wurde gespeichert
+2026-03-18 16:06:14 - [INFO] Schließvorgang initiiert
+2026-03-18 16:06:14 - [INFO] Tool-Cache wurde geleert
+2026-03-18 16:06:14 - [INFO] Garbage Collection durchgeführt
+2026-03-18 16:06:14 - [INFO] Anwendung wurde ordnungsgemäß beendet
+2026-03-18 16:06:47 - [INFO] Close-FormSafely: Schließvorgang gestartet
+2026-03-18 16:06:47 - [INFO] Close-FormSafely: Datenbankverbindung wird geschlossen
+2026-03-18 16:06:47 - [INFO] Close-FormSafely: Controls deaktiviert
+2026-03-18 16:06:47 - [INFO] Close-FormSafely: Garbage Collection durchgeführt
+2026-03-18 16:06:47 - [INFO] Close-FormSafely: Anwendung wird beendet
+2026-03-19 11:36:13 - [INFO] GUI-Reload wurde vom Benutzer initiiert
+2026-03-19 11:36:13 - [INFO] Reload-GUI: GUI-Reload gestartet
+2026-03-19 11:36:13 - [INFO] Reload-GUI: Alle Timer werden gestoppt
+2026-03-19 11:36:13 - [INFO] Reload-GUI: Datenbankverbindung wird geschlossen
+2026-03-19 11:36:13 - [INFO] Reload-GUI: Controls werden aufgeräumt
+2026-03-19 11:36:13 - [INFO] Reload-GUI: Tool-Cache wird geleert
+2026-03-19 11:36:13 - [INFO] Reload-GUI: Neuer GUI-Prozess wird gestartet
+2026-03-19 11:36:13 - [INFO] Reload-GUI: Neuer Prozess gestartet (PID: 11768)
+2026-03-19 11:36:14 - [INFO] Reload-GUI: Garbage Collection durchgeführt
+2026-03-19 11:36:14 - [INFO] Reload-GUI: Formular wird geschlossen
+2026-03-19 11:36:14 - [INFO] Anwendung wird geschlossen
+2026-03-19 11:36:14 - [INFO] Fensterposition wurde gespeichert
+2026-03-19 11:36:14 - [INFO] Schließvorgang initiiert
+2026-03-19 11:36:14 - [INFO] Tool-Cache wurde geleert
+2026-03-19 11:36:14 - [INFO] Garbage Collection durchgeführt
+2026-03-19 11:36:14 - [INFO] Anwendung wurde ordnungsgemäß beendet
+2026-03-19 11:41:39 - [INFO] GUI-Reload wurde vom Benutzer initiiert
+2026-03-19 11:41:39 - [INFO] Reload-GUI: GUI-Reload gestartet
+2026-03-19 11:41:39 - [INFO] Reload-GUI: Alle Timer werden gestoppt
+2026-03-19 11:41:39 - [INFO] Reload-GUI: Datenbankverbindung wird geschlossen
+2026-03-19 11:41:39 - [INFO] Reload-GUI: Controls werden aufgeräumt
+2026-03-19 11:41:39 - [INFO] Reload-GUI: Tool-Cache wird geleert
+2026-03-19 11:41:39 - [INFO] Reload-GUI: Neuer GUI-Prozess wird gestartet
+2026-03-19 11:41:39 - [INFO] Reload-GUI: Neuer Prozess gestartet (PID: 10840)
+2026-03-19 11:41:39 - [INFO] Reload-GUI: Garbage Collection durchgeführt
+2026-03-19 11:41:39 - [INFO] Reload-GUI: Formular wird geschlossen
+2026-03-19 11:41:39 - [INFO] Anwendung wird geschlossen
+2026-03-19 11:41:39 - [INFO] Fensterposition wurde gespeichert
+2026-03-19 11:41:39 - [INFO] Schließvorgang initiiert
+2026-03-19 11:41:40 - [INFO] Tool-Cache wurde geleert
+2026-03-19 11:41:40 - [INFO] Garbage Collection durchgeführt
+2026-03-19 11:41:40 - [INFO] Anwendung wurde ordnungsgemäß beendet
+2026-03-19 11:50:25 - [INFO] GUI-Reload wurde vom Benutzer initiiert
+2026-03-19 11:50:25 - [INFO] Reload-GUI: GUI-Reload gestartet
+2026-03-19 11:50:25 - [INFO] Reload-GUI: Alle Timer werden gestoppt
+2026-03-19 11:50:25 - [INFO] Reload-GUI: Datenbankverbindung wird geschlossen
+2026-03-19 11:50:25 - [INFO] Reload-GUI: Controls werden aufgeräumt
+2026-03-19 11:50:25 - [INFO] Reload-GUI: Tool-Cache wird geleert
+2026-03-19 11:50:25 - [INFO] Reload-GUI: Neuer GUI-Prozess wird gestartet
+2026-03-19 11:50:25 - [INFO] Reload-GUI: Neuer Prozess gestartet (PID: 19604)
+2026-03-19 11:50:25 - [INFO] Reload-GUI: Garbage Collection durchgeführt
+2026-03-19 11:50:25 - [INFO] Reload-GUI: Formular wird geschlossen
+2026-03-19 11:50:25 - [INFO] Anwendung wird geschlossen
+2026-03-19 11:50:25 - [INFO] Fensterposition wurde gespeichert
+2026-03-19 11:50:25 - [INFO] Schließvorgang initiiert
+2026-03-19 11:50:25 - [INFO] Tool-Cache wurde geleert
+2026-03-19 11:50:25 - [INFO] Garbage Collection durchgeführt
+2026-03-19 11:50:26 - [INFO] Anwendung wurde ordnungsgemäß beendet
+2026-03-19 11:54:53 - [INFO] GUI-Reload wurde vom Benutzer initiiert
+2026-03-19 11:54:53 - [INFO] Reload-GUI: GUI-Reload gestartet
+2026-03-19 11:54:53 - [INFO] Reload-GUI: Alle Timer werden gestoppt
+2026-03-19 11:54:53 - [INFO] Reload-GUI: Datenbankverbindung wird geschlossen
+2026-03-19 11:54:53 - [INFO] Reload-GUI: Controls werden aufgeräumt
+2026-03-19 11:54:53 - [INFO] Reload-GUI: Tool-Cache wird geleert
+2026-03-19 11:54:53 - [INFO] Reload-GUI: Neuer GUI-Prozess wird gestartet
+2026-03-19 11:54:53 - [INFO] Reload-GUI: Neuer Prozess gestartet (PID: 4648)
+2026-03-19 11:54:53 - [INFO] Reload-GUI: Garbage Collection durchgeführt
+2026-03-19 11:54:53 - [INFO] Reload-GUI: Formular wird geschlossen
+2026-03-19 11:54:53 - [INFO] Anwendung wird geschlossen
+2026-03-19 11:54:53 - [INFO] Fensterposition wurde gespeichert
+2026-03-19 11:54:53 - [INFO] Schließvorgang initiiert
+2026-03-19 11:54:53 - [INFO] Tool-Cache wurde geleert
+2026-03-19 11:54:53 - [INFO] Garbage Collection durchgeführt
+2026-03-19 11:54:53 - [INFO] Anwendung wurde ordnungsgemäß beendet
+2026-03-19 11:58:04 - [INFO] GUI-Reload wurde vom Benutzer initiiert
+2026-03-19 11:58:04 - [INFO] Reload-GUI: GUI-Reload gestartet
+2026-03-19 11:58:04 - [INFO] Reload-GUI: Alle Timer werden gestoppt
+2026-03-19 11:58:04 - [INFO] Reload-GUI: Datenbankverbindung wird geschlossen
+2026-03-19 11:58:04 - [INFO] Reload-GUI: Controls werden aufgeräumt
+2026-03-19 11:58:04 - [INFO] Reload-GUI: Tool-Cache wird geleert
+2026-03-19 11:58:04 - [INFO] Reload-GUI: Neuer GUI-Prozess wird gestartet
+2026-03-19 11:58:04 - [INFO] Reload-GUI: Neuer Prozess gestartet (PID: 7912)
+2026-03-19 11:58:04 - [INFO] Reload-GUI: Garbage Collection durchgeführt
+2026-03-19 11:58:04 - [INFO] Reload-GUI: Formular wird geschlossen
+2026-03-19 11:58:04 - [INFO] Anwendung wird geschlossen
+2026-03-19 11:58:04 - [INFO] Fensterposition wurde gespeichert
+2026-03-19 11:58:04 - [INFO] Schließvorgang initiiert
+2026-03-19 11:58:04 - [INFO] Tool-Cache wurde geleert
+2026-03-19 11:58:04 - [INFO] Garbage Collection durchgeführt
+2026-03-19 11:58:05 - [INFO] Anwendung wurde ordnungsgemäß beendet
+2026-03-19 12:22:57 - [INFO] Close-FormSafely: Schließvorgang gestartet
+2026-03-19 12:22:57 - [INFO] Close-FormSafely: Datenbankverbindung wird geschlossen
+2026-03-19 12:22:57 - [INFO] Close-FormSafely: Controls deaktiviert
+2026-03-19 12:22:57 - [INFO] Close-FormSafely: Garbage Collection durchgeführt
+2026-03-19 12:22:57 - [INFO] Close-FormSafely: Anwendung wird beendet
+2026-03-19 12:25:04 - [INFO] GUI-Reload wurde vom Benutzer initiiert
+2026-03-19 12:25:04 - [INFO] Reload-GUI: GUI-Reload gestartet
+2026-03-19 12:25:04 - [INFO] Reload-GUI: Alle Timer werden gestoppt
+2026-03-19 12:25:04 - [INFO] Reload-GUI: Datenbankverbindung wird geschlossen
+2026-03-19 12:25:04 - [INFO] Reload-GUI: Controls werden aufgeräumt
+2026-03-19 12:25:04 - [INFO] Reload-GUI: Tool-Cache wird geleert
+2026-03-19 12:25:04 - [INFO] Reload-GUI: Neuer GUI-Prozess wird gestartet
+2026-03-19 12:25:04 - [INFO] Reload-GUI: Skriptpfad -> C:\Users\ReXx\Desktop\VS-CODE-Repos\Bockis-Win_Gui_DEV\Win_Gui_Module.ps1
+2026-03-19 12:25:04 - [INFO] Reload-GUI: Neuer Prozess gestartet (PID: 10824)
+2026-03-19 12:25:05 - [INFO] Reload-GUI: Garbage Collection durchgeführt
+2026-03-19 12:25:05 - [INFO] Reload-GUI: Formular wird geschlossen
+2026-03-19 12:25:05 - [INFO] Anwendung wird geschlossen
+2026-03-19 12:25:05 - [INFO] Fensterposition wurde gespeichert
+2026-03-19 12:25:05 - [INFO] Schließvorgang initiiert
+2026-03-19 12:25:05 - [INFO] Tool-Cache wurde geleert
+2026-03-19 12:25:05 - [INFO] Garbage Collection durchgeführt
+2026-03-19 12:25:05 - [INFO] Anwendung wurde ordnungsgemäß beendet

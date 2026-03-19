@@ -5,19 +5,13 @@ Import-Module "$PSScriptRoot\..\Core\TextStyle.psm1" -Force -Global
 # Add Windows Update configuration to SystemToolConfig
 $Global:SystemToolConfig.Tools["WindowsUpdate"] = @{
     RequiresAdmin = $true
-    Timeout       = 1800   # 30 Minuten - Updates können länger dauern
+    Timeout       = 300
     Description   = "Windows Update"
 }
 
 # Hilfsfunktion zur Interpretation von Update-Fehlercodes
 function Get-UpdateErrorDescription {
-    # [long] verwenden, da HRESULT-Werte > 0x7FFFFFFF als [int64] in der Hashtabelle gespeichert werden
-    param([long]$HResult)
-    
-    # Negative Werte (signed Int32) in ihren unsigned Äquivalent umrechnen (z.B. -2145804281 → 0x80246007)
-    if ($HResult -lt 0) {
-        $HResult = [long][uint32]$HResult
-    }
+    param([int]$HResult)
     
     $errorDescriptions = @{
         0x80070020 = "Datei wird verwendet (ein Neustart könnte helfen)"
@@ -34,23 +28,6 @@ function Get-UpdateErrorDescription {
         0x8007000D = "Beschädigte Daten"
         0x80070643 = "Installation fehlgeschlagen (allgemeiner Fehler)"
         0x800F0922 = "Nicht genügend Speicherplatz"
-        # Häufige Download- und Netzwerk-Fehlercodes
-        0x80246007 = "BITS-Download fehlgeschlagen / Update-Datenbank beschädigt (wuauclt.exe /resetauthorization empfohlen)"
-        0x80246008 = "SusClientId ungültig - Windows Update Agent muss registriert werden"
-        0x8024402C = "DNS-Fehler beim Verbinden zu Windows Update"
-        0x8024402F = "Proxy-Authentifizierung fehlgeschlagen"
-        0x80072EFD = "Internetverbindung unterbrochen oder Timeout"
-        0x80072EFE = "Verbindung wurde unerwartet getrennt"
-        0x80072F8F = "SSL/TLS-Zertifikatsfehler (Systemuhr prüfen)"
-        0x80072EE2 = "Verbindungs-Timeout - Server nicht erreichbar"
-        0x80072EE7 = "Server konnte nicht gefunden werden"
-        0x80248015 = "Update abgelaufen oder nicht mehr verfügbar"
-        0x80240034 = "Fehler bei der Update-Suche - Cache neu aufbauen empfohlen"
-        0x80240017 = "Update nicht anwendbar (Systemvoraussetzungen nicht erfüllt)"
-        0x8024D009 = "Windows Update Agent konnte nicht gestartet werden"
-        0x80070422 = "Windows Update-Dienst ist deaktiviert"
-        0x80070BC9 = "Neustart für vorherige Update-Installation ausstehend"
-        0xC1900101 = "Treiber-Inkompatibilität verhindert Installation"
     }
     
     if ($errorDescriptions.ContainsKey($HResult)) {
@@ -245,19 +222,10 @@ function Get-WindowsUpdateStatus {
             
         $searchResult = $updateSearcher.Search("IsInstalled=0 AND IsHidden=0")
         
-        # Prüfe auf wichtige Updates – @() sichert Array-Verhalten bei einzelnem COM-Objekt
-        # IUpdate.Type: 1 = Software, 2 = Driver (kein "Security"-String!)
-        # MsrcSeverity: "Critical", "Important", "Moderate", "Low", $null/$empty für Treiber
-        $criticalUpdates = @($searchResult.Updates | Where-Object { $_.MsrcSeverity -eq "Critical" })
-        $securityUpdates = @($searchResult.Updates | Where-Object { $_.MsrcSeverity -eq "Important" -or $_.MsrcSeverity -eq "Moderate" -or $_.MsrcSeverity -eq "Low" })
-        $driverUpdates   = @($searchResult.Updates | Where-Object { $_.Type -eq 2 })
-        $normalUpdates   = @($searchResult.Updates | Where-Object { 
-            $_.MsrcSeverity -ne "Critical" -and
-            $_.MsrcSeverity -ne "Important" -and
-            $_.MsrcSeverity -ne "Moderate" -and
-            $_.MsrcSeverity -ne "Low" -and
-            $_.Type -ne 2
-        })
+        # Prüfe auf wichtige Updates
+        $criticalUpdates = $searchResult.Updates | Where-Object { $_.MsrcSeverity -eq "Critical" }
+        $securityUpdates = $searchResult.Updates | Where-Object { $_.Type -eq "Security" }
+        $normalUpdates = $searchResult.Updates | Where-Object { $_.MsrcSeverity -ne "Critical" -and $_.Type -ne "Security" }
 
        
 
@@ -280,73 +248,46 @@ function Get-WindowsUpdateStatus {
             
             Write-Host
             Write-Host "          ├─ $($searchResult.Updates.Count) Updates verfügbar:" -ForegroundColor Yellow
-            Write-Host ("  " + ("═" * 68)) -ForegroundColor Cyan
-
+            Write-Host
+            Write-Host "`n" + ("═" * 70) -ForegroundColor Cyan
             # Kritische Updates anzeigen
             if ($criticalUpdates.Count -gt 0) {
                 Write-ToolLog -ToolName "WindowsUpdate" `
                     -Message "`nKritische Updates ($($criticalUpdates.Count)):" `
                     -OutputBox $outputBox `
                     -Style 'Error' -NoTimestamp
-                Write-Host
-                Write-Host "  [!] Kritische Updates ($($criticalUpdates.Count)):" -ForegroundColor Red
                 foreach ($update in $criticalUpdates) {
                     Write-ToolLog -ToolName "WindowsUpdate" `
                         -Message "- $($update.Title)" `
                         -OutputBox $outputBox -NoTimestamp
-                    Write-Host "      ├─ $($update.Title)" -ForegroundColor Red
                 }
             }
             
-            # Sicherheitsupdates anzeigen (Important / Moderate / Low)
+            # Sicherheitsupdates anzeigen
             if ($securityUpdates.Count -gt 0) {
                 Write-ToolLog -ToolName "WindowsUpdate" `
                     -Message "`nSicherheitsupdates ($($securityUpdates.Count)):" `
                     -OutputBox $outputBox `
                     -Style 'Warning' -NoTimestamp
-                Write-Host
-                Write-Host "  [►] Sicherheitsupdates ($($securityUpdates.Count)):" -ForegroundColor Yellow
                 foreach ($update in $securityUpdates) {
                     Write-ToolLog -ToolName "WindowsUpdate" `
                         -Message "- $($update.Title)" `
                         -OutputBox $outputBox -NoTimestamp
-                    Write-Host "      ├─ $($update.Title)" -ForegroundColor Yellow
-                }
-            }
-
-            # Treiber-Updates anzeigen
-            if ($driverUpdates.Count -gt 0) {
-                Write-ToolLog -ToolName "WindowsUpdate" `
-                    -Message "`nTreiber-Updates ($($driverUpdates.Count)):" `
-                    -OutputBox $outputBox `
-                    -Style 'Info' -NoTimestamp
-                Write-Host
-                Write-Host "  [D] Treiber-Updates ($($driverUpdates.Count)):" -ForegroundColor Cyan
-                foreach ($update in $driverUpdates) {
-                    Write-ToolLog -ToolName "WindowsUpdate" `
-                        -Message "- $($update.Title)" `
-                        -OutputBox $outputBox -NoTimestamp
-                    Write-Host "      ├─ $($update.Title)" -ForegroundColor Cyan
                 }
             }
             
-            # Optionale / sonstige Updates anzeigen
+            # Normale Updates anzeigen
             if ($normalUpdates.Count -gt 0) {
                 Write-ToolLog -ToolName "WindowsUpdate" `
                     -Message "`nOptionale Updates ($($normalUpdates.Count)):" `
                     -OutputBox $outputBox `
                     -Style 'Info' -NoTimestamp
-                Write-Host
-                Write-Host "  [i] Optionale Updates ($($normalUpdates.Count)):" -ForegroundColor Gray
                 foreach ($update in $normalUpdates) {
                     Write-ToolLog -ToolName "WindowsUpdate" `
                         -Message "- $($update.Title)" `
                         -OutputBox $outputBox -NoTimestamp
-                    Write-Host "      ├─ $($update.Title)" -ForegroundColor Gray
                 }
             }
-
-            Write-Host ("  " + ("═" * 68)) -ForegroundColor Cyan
 
         }
         else {
@@ -475,11 +416,6 @@ function Install-AvailableWindowsUpdates {
         Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
         $outputBox.AppendText("PSWindowsUpdate-Modul nicht gefunden. Verwende Windows Update COM-Objekt...`r`n")
         
-        # Hinweis zur optionalen PSWindowsUpdate-Installation
-        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
-        $outputBox.AppendText("  Tipp: Für erweiterte Update-Steuerung können Sie PSWindowsUpdate installieren:`r`n")
-        $outputBox.AppendText("        Install-Module PSWindowsUpdate -Force (Als Administrator in PowerShell)`r`n`r`n")
-        
         # Fortschrittsanzeige aktualisieren
         if ($progressBar) {
             $progressBar.Value = 60
@@ -510,39 +446,9 @@ function Install-AvailableWindowsUpdates {
                 
                 $updatesToInstall = New-Object -ComObject Microsoft.Update.UpdateColl
                 foreach ($update in $searchResult.Updates) {
-                    if ($update.EulaAccepted -eq $false) {
-                        $update.AcceptEula()
-                    }
                     $updatesToInstall.Add($update) | Out-Null
                     $outputBox.AppendText("- " + $update.Title + "  `r`n")
                 }
-                
-                # ── Download-Phase (getrennt von Installation) ──────────────────
-                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
-                $outputBox.AppendText("`r`nUpdates werden heruntergeladen...`r`n")
-                if ($progressBar) {
-                    $progressBar.Value = 83
-                    $progressBar.CustomText = "Updates werden heruntergeladen..."
-                }
-                
-                $downloader = $updateSession.CreateUpdateDownloader()
-                $downloader.Updates = $updatesToInstall
-                try {
-                    $downloadResult = $downloader.Download()
-                    if ($downloadResult.ResultCode -ne 2) {
-                        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
-                        $outputBox.AppendText("Warnung: Download möglicherweise unvollständig (ResultCode: $($downloadResult.ResultCode))`r`n")
-                        $outputBox.AppendText("  → Prüfen Sie die Internetverbindung, den BITS-Dienst und den Speicherplatz.`r`n")
-                    } else {
-                        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
-                        $outputBox.AppendText("Download abgeschlossen.`r`n")
-                    }
-                } catch {
-                    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
-                    $outputBox.AppendText("Download-Fehler: $_`r`n")
-                    $outputBox.AppendText("Installationsversuch wird trotzdem gestartet...`r`n")
-                }
-                # ────────────────────────────────────────────────────────────────
                 
                 $installer = $updateSession.CreateUpdateInstaller()
                 $installer.Updates = $updatesToInstall
@@ -580,13 +486,10 @@ function Install-AvailableWindowsUpdates {
                             $failedCount++
                             Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
                             $outputBox.AppendText("  ✗ Fehlgeschlagen: $($update.Title)`r`n")
-                            if ($updateResult.HResult -ne 0) {
+                            if ($updateResult.HResult) {
                                 $hresult = $updateResult.HResult
-                                # Als UInt32 für lesbare Hex-Darstellung, als long für den Lookup
-                                $hresultUInt  = [uint32]$hresult
-                                $hresultLong  = [long]$hresultUInt
-                                $errorDesc = Get-UpdateErrorDescription -HResult $hresultLong
-                                $outputBox.AppendText("    Fehlercode: 0x$($hresultUInt.ToString('X8')) - $errorDesc`r`n")
+                                $errorDesc = Get-UpdateErrorDescription -HResult $hresult
+                                $outputBox.AppendText("    Fehlercode: 0x$($hresult.ToString('X8')) - $errorDesc`r`n")
                             }
                         }
                         5 { 
@@ -627,8 +530,7 @@ function Install-AvailableWindowsUpdates {
                 }
                 
                 # Fortschrittsanzeige und Status aktualisieren
-                # Individuelle Zähler haben Vorrang vor dem Gesamt-ResultCode
-                if ($failedCount -eq 0 -and $successCount -gt 0) {
+                if ($result.ResultCode -eq 2) {
                     if ($progressBar) {
                         $progressBar.Value = 100
                         $progressBar.CustomText = "Alle Updates erfolgreich installiert"
@@ -636,15 +538,6 @@ function Install-AvailableWindowsUpdates {
                     }
                     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
                     $outputBox.AppendText("`r`nAlle Updates wurden erfolgreich installiert.`r`n")
-                }
-                elseif ($failedCount -gt 0 -and $successCount -gt 0) {
-                    if ($progressBar) {
-                        $progressBar.Value = 100
-                        $progressBar.CustomText = "$successCount OK / $failedCount fehlgeschlagen"
-                        $progressBar.TextColor = [System.Drawing.Color]::Orange
-                    }
-                    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
-                    $outputBox.AppendText("`r`n$successCount Update(s) installiert, $failedCount fehlgeschlagen.`r`n")
                 }
                 elseif ($result.ResultCode -eq 3) {
                     if ($progressBar) {

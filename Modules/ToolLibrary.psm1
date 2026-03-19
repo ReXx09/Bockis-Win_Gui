@@ -122,6 +122,51 @@ $script:toolLibrary['system'] = @(
         Category    = 'System-Tools'
         Tags        = @('Microsoft', 'Winget', 'Installer', 'System')
         Winget      = 'Microsoft.AppInstaller'
+    },
+    @{
+        Name        = 'Snipping Tool'
+        Description = 'Windows Screenshot- und Bildschirmaufnahme-Tool mit Anmerkungsfunktion'
+        Version     = 'Aktuell'
+        DownloadUrl = 'https://apps.microsoft.com/detail/9MZ95KL8MR0L'
+        Category    = 'System-Tools'
+        Tags        = @('Screenshot', 'Screen Capture', 'Microsoft', 'Utility')
+        Winget      = '9MZ95KL8MR0L'
+    },
+    @{
+        Name        = 'CrystalDiskInfo'
+        Description = 'HDD/SSD-Gesundheitsüberwachung mit S.M.A.R.T.-Analyse und Temperaturanzeige'
+        Version     = 'Aktuell'
+        DownloadUrl = 'https://crystalmark.info/en/software/crystaldiskinfo/'
+        Category    = 'System-Tools'
+        Tags        = @('Disk', 'HDD', 'SSD', 'SMART', 'Health', 'Monitoring')
+        Winget      = 'CrystalDewWorld.CrystalDiskInfo'
+    },
+    @{
+        Name        = 'Microsoft PowerToys'
+        Description = 'Sammlung von Dienstprogrammen für Power-User: FancyZones, PowerRename, Color Picker und mehr'
+        Version     = 'Aktuell'
+        DownloadUrl = 'https://github.com/microsoft/PowerToys/releases'
+        Category    = 'System-Tools'
+        Tags        = @('Microsoft', 'Utilities', 'Productivity', 'Power User', 'Tools')
+        Winget      = 'Microsoft.PowerToys'
+    },
+    @{
+        Name        = 'IrfanView'
+        Description = 'Schneller und vielseitiger Bildbetrachter mit Batch-Konvertierung und Bearbeitungsfunktionen'
+        Version     = 'Aktuell'
+        DownloadUrl = 'https://www.irfanview.com/main_download_engl.htm'
+        Category    = 'System-Tools'
+        Tags        = @('Image Viewer', 'Photo', 'Batch', 'Converter', 'Lightweight')
+        Winget      = '9PJZ3BTL5PV6'
+    },
+    @{
+        Name        = 'ShareX'
+        Description = 'Kostenlose Open-Source Screenshot- und Screenrecording-Software mit umfangreichen Funktionen'
+        Version     = 'Aktuell'
+        DownloadUrl = 'https://getsharex.com/'
+        Category    = 'System-Tools'
+        Tags        = @('Screenshot', 'Screen Recording', 'Annotation', 'Open-Source', 'Capture')
+        Winget      = 'ShareX.ShareX'
     }
 )
 
@@ -198,6 +243,51 @@ $script:toolLibrary['applications'] = @(
         Category    = 'Anwendungen'
         Tags        = @('Cloud', 'Storage', 'Sync', 'Collaboration', 'Open-Source')
         Winget      = 'Nextcloud.NextcloudDesktop'
+    },
+    @{
+        Name        = 'PDFCreator'
+        Description = 'Kostenloser PDF-Drucker und Konverter zum Erstellen von PDF-Dateien aus jeder Anwendung'
+        Version     = 'Aktuell'
+        DownloadUrl = 'https://www.pdfforge.org/pdfcreator/download'
+        Category    = 'Anwendungen'
+        Tags        = @('PDF', 'Printer', 'Converter', 'Documents')
+        Winget      = 'Avanquestpdfforge.PDFCreator-Free'
+    },
+    @{
+        Name        = 'Elgato Stream Deck'
+        Description = 'Steuerungssoftware für das Elgato Stream Deck – Makros, Shortcuts und Streaming-Integration'
+        Version     = 'Aktuell'
+        DownloadUrl = 'https://www.elgato.com/downloads'
+        Category    = 'Anwendungen'
+        Tags        = @('Stream Deck', 'Streaming', 'Macros', 'Shortcuts', 'Elgato')
+        Winget      = 'Elgato.StreamDeck'
+    },
+    @{
+        Name        = 'Steam'
+        Description = 'Gaming-Plattform von Valve zum Kaufen, Verwalten und Spielen von PC-Spielen'
+        Version     = 'Aktuell'
+        DownloadUrl = 'https://store.steampowered.com/about/'
+        Category    = 'Anwendungen'
+        Tags        = @('Gaming', 'Games', 'Store', 'Valve')
+        Winget      = 'Valve.Steam'
+    },
+    @{
+        Name        = 'Total Commander'
+        Description = 'Leistungsstarker Dateimanager mit Zwei-Panel-Ansicht, FTP-Client und Archiv-Unterstützung'
+        Version     = 'Aktuell'
+        DownloadUrl = 'https://www.ghisler.com/download.htm'
+        Category    = 'Anwendungen'
+        Tags        = @('File Manager', 'FTP', 'Explorer', 'Tools')
+        Winget      = 'Ghisler.TotalCommander'
+    },
+    @{
+        Name        = 'Mozilla Thunderbird'
+        Description = 'Kostenloser E-Mail-Client von Mozilla mit Kalender, Aufgaben und Spam-Schutz'
+        Version     = 'Aktuell'
+        DownloadUrl = 'https://www.thunderbird.net/de/'
+        Category    = 'Anwendungen'
+        Tags        = @('Email', 'Mail Client', 'Communication', 'Calendar', 'Mozilla')
+        Winget      = 'Mozilla.Thunderbird.de'
     }
 )
 
@@ -283,6 +373,24 @@ $script:toolLibrary['audiotv'] = @(
         Category    = 'Audio / TV'
         Tags        = @('Audio', 'Mixer', 'Virtual Device', 'Streaming')
         Winget      = 'VB-Audio.Voicemeeter.Potato'
+    },
+    @{
+        Name        = 'AIMP'
+        Description = 'Kostenloser Audioplayer mit umfangreicher Formatunterstützung und modernem Interface'
+        Version     = 'Aktuell'
+        DownloadUrl = 'https://www.aimp.ru/'
+        Category    = 'Audio / TV'
+        Tags        = @('Audio', 'Music', 'Media Player', 'Playlist')
+        Winget      = 'AIMP.AIMP'
+    },
+    @{
+        Name        = 'Elgato Wave Link'
+        Description = 'Audio-Mixing-Software für Elgato Wave Mikrofone mit Mehrkanal-Routing'
+        Version     = 'Aktuell'
+        DownloadUrl = 'https://www.elgato.com/downloads'
+        Category    = 'Audio / TV'
+        Tags        = @('Audio', 'Mixer', 'Elgato', 'Microphone', 'Streaming')
+        Winget      = 'Elgato.WaveLink'
     }
 )
 
@@ -347,6 +455,42 @@ $script:toolLibrary['coding'] = @(
         Category    = 'Coding / IT'
         Tags        = @('VPN', 'Security', 'Network', 'Encryption')
         Winget      = 'WireGuard.WireGuard'
+    },
+    @{
+        Name        = 'Inno Setup 6'
+        Description = 'Kostenloses Installationsprogramm-Erstellungstool für Windows-Anwendungen'
+        Version     = 'Aktuell'
+        DownloadUrl = 'https://jrsoftware.org/isdl.php'
+        Category    = 'Coding / IT'
+        Tags        = @('Installer', 'Setup', 'Packaging', 'Development')
+        Winget      = 'JRSoftware.InnoSetup'
+    },
+    @{
+        Name        = 'GitHub CLI'
+        Description = 'Offizielles GitHub-Kommandozeilenwerkzeug für Repositories, PRs und Issues'
+        Version     = 'Aktuell'
+        DownloadUrl = 'https://cli.github.com/'
+        Category    = 'Coding / IT'
+        Tags        = @('Git', 'GitHub', 'CLI', 'Development', 'Version Control')
+        Winget      = 'GitHub.cli'
+    },
+    @{
+        Name        = 'Advanced IP Scanner'
+        Description = 'Kostenloser Netzwerkscanner zum Erkennen aller Geräte im lokalen Netzwerk'
+        Version     = 'Aktuell'
+        DownloadUrl = 'https://www.advanced-ip-scanner.com/de/'
+        Category    = 'Coding / IT'
+        Tags        = @('Network', 'Scanner', 'IP', 'LAN', 'Monitoring')
+        Winget      = 'Famatech.AdvancedIPScanner'
+    },
+    @{
+        Name        = 'Nmap'
+        Description = 'Leistungsstarker Open-Source Netzwerkscanner für Sicherheitsanalysen und Port-Scans'
+        Version     = 'Aktuell'
+        DownloadUrl = 'https://nmap.org/download.html'
+        Category    = 'Coding / IT'
+        Tags        = @('Network', 'Scanner', 'Security', 'Port Scan', 'Open-Source')
+        Winget      = 'Insecure.Nmap'
     }
 )
 
@@ -430,8 +574,7 @@ function Get-ToolDownload {
             [System.Windows.Forms.MessageBoxIcon]::Information
         )
         return $true
-    }
-    catch {
+    } catch {
         [System.Windows.Forms.MessageBox]::Show(
             "Fehler beim Öffnen des Download-Links: $_",
             "Fehler",
@@ -517,9 +660,9 @@ function Show-ToolAcquisitionDialog {
     $installButton.Margin = New-Object System.Windows.Thickness(0, 0, 10, 0)
     $installButton.Background = [System.Windows.Media.Brushes]::LightGreen
     $installButton.Add_Click({
-        $dialog.Tag = "Install"
-        $dialog.Close()
-    })
+            $dialog.Tag = "Install"
+            $dialog.Close()
+        })
     $buttonPanel.Children.Add($installButton)
     
     # Button: Download
@@ -530,9 +673,9 @@ function Show-ToolAcquisitionDialog {
     $downloadButton.Margin = New-Object System.Windows.Thickness(0, 0, 10, 0)
     $downloadButton.Background = [System.Windows.Media.Brushes]::LightSkyBlue
     $downloadButton.Add_Click({
-        $dialog.Tag = "Download"
-        $dialog.Close()
-    })
+            $dialog.Tag = "Download"
+            $dialog.Close()
+        })
     $buttonPanel.Children.Add($downloadButton)
     
     # Button: Abbrechen
@@ -541,9 +684,9 @@ function Show-ToolAcquisitionDialog {
     $cancelButton.Width = 100
     $cancelButton.Height = 30
     $cancelButton.Add_Click({
-        $dialog.Tag = "Cancel"
-        $dialog.Close()
-    })
+            $dialog.Tag = "Cancel"
+            $dialog.Close()
+        })
     $buttonPanel.Children.Add($cancelButton)
     
     $grid.Children.Add($buttonPanel)
@@ -572,7 +715,7 @@ function Test-ToolDownloaded {
     
     # Hole alle Installer-Dateien im Download-Ordner
     $allFiles = Get-ChildItem -Path $DownloadPath -ErrorAction SilentlyContinue | 
-                Where-Object { $_.Extension -in @('.exe', '.zip', '.msi') }
+        Where-Object { $_.Extension -in @('.exe', '.zip', '.msi') }
     
     if ($allFiles.Count -eq 0) {
         return $false
@@ -639,8 +782,8 @@ function Get-ToolLocalInstallerPath {
     
     # Hole alle Installer-Dateien im Download-Ordner
     $allFiles = Get-ChildItem -Path $DownloadPath -ErrorAction SilentlyContinue | 
-                Where-Object { $_.Extension -in @('.exe', '.zip', '.msi') } |
-                Sort-Object LastWriteTime -Descending
+        Where-Object { $_.Extension -in @('.exe', '.zip', '.msi') } |
+            Sort-Object LastWriteTime -Descending
     
     if ($allFiles.Count -eq 0) {
         return $null
@@ -847,9 +990,9 @@ function Invoke-ToolDownload {
                     if ($firstText -match '<html|<!DOCTYPE|<head>|<body>') {
                         Remove-Item $finalPath -Force -ErrorAction SilentlyContinue
                         return @{
-                            Success = $false
+                            Success  = $false
                             FilePath = $null
-                            Message = "Download fehlgeschlagen: Es wurde eine HTML-Seite statt der Datei heruntergeladen.`n`nDie URL führt wahrscheinlich zu einer Webseite.`n`nBitte:`n1. Besuchen Sie $($Tool.DownloadUrl) im Browser`n2. Laden Sie die Datei manuell herunter`n3. Speichern Sie sie in: $DownloadPath"
+                            Message  = "Download fehlgeschlagen: Es wurde eine HTML-Seite statt der Datei heruntergeladen.`n`nDie URL führt wahrscheinlich zu einer Webseite.`n`nBitte:`n1. Besuchen Sie $($Tool.DownloadUrl) im Browser`n2. Laden Sie die Datei manuell herunter`n3. Speichern Sie sie in: $DownloadPath"
                         }
                     }
                 }
@@ -871,19 +1014,18 @@ function Invoke-ToolDownload {
                 }
                 
                 return @{
-                    Success = $true
+                    Success  = $true
                     FilePath = $finalPath
-                    Message = "Download erfolgreich: $finalFileName ($fileSizeMB MB)`n`nGespeichert in: $DownloadPath"
+                    Message  = "Download erfolgreich: $finalFileName ($fileSizeMB MB)`n`nGespeichert in: $DownloadPath"
                 }
             } else {
                 return @{
-                    Success = $false
+                    Success  = $false
                     FilePath = $null
-                    Message = "Download fehlgeschlagen: Datei konnte nicht erstellt werden"
+                    Message  = "Download fehlgeschlagen: Datei konnte nicht erstellt werden"
                 }
             }
-        }
-        finally {
+        } finally {
             # Aufräumen: Temporäre Datei löschen falls noch vorhanden
             if (Test-Path $tempFile) {
                 Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
@@ -899,8 +1041,7 @@ function Invoke-ToolDownload {
                 } catch {}
             }
         }
-    }
-    catch {
+    } catch {
         $errorMsg = $_.Exception.Message
         Update-ToolWorkflowProgress -ProgressBar $ProgressBar -StatusText "Download fehlgeschlagen" -ProgressValue 0 -TextColor ([System.Drawing.Color]::Red)
         
@@ -919,9 +1060,9 @@ function Invoke-ToolDownload {
         $detailMsg += "3. Laden Sie die Datei manuell herunter und speichern Sie sie in:`n   $DownloadPath"
         
         return @{
-            Success = $false
+            Success  = $false
             FilePath = $null
-            Message = $detailMsg
+            Message  = $detailMsg
         }
     }
 }
@@ -951,17 +1092,17 @@ function Expand-ZipAndFindInstaller {
         # Suche nach installierbaren Dateien (EXE, MSI, Setup)
         $installerFiles = Get-ChildItem -Path $tempExtractPath -Recurse -Include *.exe, *.msi | 
             Where-Object { -not $_.PSIsContainer } |
-            Sort-Object { 
-                # Priorisiere Setup/Install-Dateien
-                if ($_.Name -match 'setup|install') { 0 }
-                elseif ($_.Name -match '\.exe$') { 1 }
-                else { 2 }
-            }
+                Sort-Object { 
+                    # Priorisiere Setup/Install-Dateien
+                    if ($_.Name -match 'setup|install') { 0 }
+                    elseif ($_.Name -match '\.exe$') { 1 }
+                    else { 2 }
+                }
         
         if ($installerFiles.Count -eq 0) {
             return @{
-                Success = $false
-                Message = "Keine Installer-Datei (.exe/.msi) im ZIP gefunden.`n`nDas Paket scheint portable zu sein.`nBitte verwenden Sie die WinGet-Installation oder entpacken Sie manuell."
+                Success     = $false
+                Message     = "Keine Installer-Datei (.exe/.msi) im ZIP gefunden.`n`nDas Paket scheint portable zu sein.`nBitte verwenden Sie die WinGet-Installation oder entpacken Sie manuell."
                 ExtractPath = $tempExtractPath
             }
         }
@@ -973,16 +1114,15 @@ function Expand-ZipAndFindInstaller {
         Update-ToolWorkflowProgress -ProgressBar $ProgressBar -StatusText "Installer gefunden: $($installerFile.Name)" -ProgressValue 88 -TextColor ([System.Drawing.Color]::LightGreen)
         
         return @{
-            Success = $true
+            Success       = $true
             InstallerPath = $installerFile.FullName
-            ExtractPath = $tempExtractPath
-            Message = "ZIP erfolgreich entpackt. Installer gefunden: $($installerFile.Name)"
+            ExtractPath   = $tempExtractPath
+            Message       = "ZIP erfolgreich entpackt. Installer gefunden: $($installerFile.Name)"
         }
-    }
-    catch {
+    } catch {
         return @{
-            Success = $false
-            Message = "Fehler beim Entpacken der ZIP: $($_.Exception.Message)"
+            Success     = $false
+            Message     = "Fehler beim Entpacken der ZIP: $($_.Exception.Message)"
             ExtractPath = $tempExtractPath
         }
     }
@@ -1071,8 +1211,7 @@ function Install-ToolFromLocal {
                 Message = "Die heruntergeladene Datei ist eine HTML-Webseite, kein Installer!`n`nDie Download-URL führt zu einer Webseite statt zur Installer-Datei.`n`nBitte:`n1. Löschen Sie die Datei aus dem ToolDownloads-Ordner`n2. Besuchen Sie die Download-Webseite manuell`n3. Laden Sie die richtige Installer-Datei herunter`n4. Speichern Sie diese im ToolDownloads-Ordner"
             }
         }
-    }
-    catch {
+    } catch {
         # Fehler beim Lesen ignorieren, Datei könnte gesperrt sein
     }
     
@@ -1083,7 +1222,7 @@ function Install-ToolFromLocal {
         # Verwende Start-Process für bessere Kompatibilität
         $startParams = @{
             FilePath = $InstallerPath
-            Verb = 'RunAs'
+            Verb     = 'RunAs'
             PassThru = $true
         }
         
@@ -1148,8 +1287,7 @@ function Install-ToolFromLocal {
                 Message = "Installer wurde erfolgreich gestartet.`n`nBitte folgen Sie den Anweisungen des Installers."
             }
         }
-    }
-    catch {
+    } catch {
         $errorMsg = $_.Exception.Message
         Write-Host "✗ Fehler beim Starten des Installers: $errorMsg" -ForegroundColor Red
         Update-ToolWorkflowProgress -ProgressBar $ProgressBar -StatusText "Fehler beim Starten des Installers" -ProgressValue 0 -TextColor ([System.Drawing.Color]::Red)
@@ -1209,8 +1347,7 @@ function Install-ToolPackage {
         }
         
         return $true
-    }
-    catch {
+    } catch {
         Write-Error "Fehler beim Herunterladen/Installieren von $($tool.Name): $_"
         return $false
     }
@@ -1244,8 +1381,7 @@ function Stop-ToolProcess {
                     $processes | Stop-Process -Force
                     Start-Sleep -Milliseconds 500  # Kurz warten bis Prozess beendet ist
                     return $true
-                }
-                catch {
+                } catch {
                     [System.Windows.Forms.MessageBox]::Show(
                         "Fehler beim Beenden des Prozesses: $($_.Exception.Message)",
                         "Fehler",
@@ -1272,9 +1408,9 @@ function Get-WingetErrorDescription {
         -1978335189 { return "Installation fehlgeschlagen (Hash-Fehler oder beschädigte Datei)." }
         -1978335222 { return "Administratorrechte erforderlich." }
         -1978335145 { return "Portable-Paket wurde geändert. Verwenden Sie 'winget uninstall --id <ID> --force' zum Deinstallieren." }
-        0x80070005   { return "Zugriff verweigert (Admin-Rechte erforderlich)." }
-        0x800704C7   { return "Vorgang wurde abgebrochen oder Datei wird verwendet." }
-        default      { return "Unbekannter Fehler. Winget-Exit-Code: $ErrorCode" }
+        0x80070005 { return "Zugriff verweigert (Admin-Rechte erforderlich)." }
+        0x800704C7 { return "Vorgang wurde abgebrochen oder Datei wird verwendet." }
+        default { return "Unbekannter Fehler. Winget-Exit-Code: $ErrorCode" }
     }
 }
 
@@ -1325,8 +1461,7 @@ function Update-ToolWorkflowProgress {
 
         $ProgressBar.Refresh()
         [System.Windows.Forms.Application]::DoEvents()
-    }
-    catch {
+    } catch {
     }
 }
 
@@ -1419,8 +1554,7 @@ function Invoke-WingetWithLiveOutput {
         if ($process.HasExited -and -not $timedOut) {
             try {
                 $exitCodeRaw = $process.ExitCode
-            }
-            catch {
+            } catch {
                 $exitCodeRaw = $null
             }
         }
@@ -1429,8 +1563,7 @@ function Invoke-WingetWithLiveOutput {
         if ($null -ne $exitCodeRaw -and -not [string]::IsNullOrWhiteSpace("$exitCodeRaw")) {
             try {
                 $exitCode = [int]$exitCodeRaw
-            }
-            catch {
+            } catch {
                 $exitCode = -1
             }
         }
@@ -1443,8 +1576,8 @@ function Invoke-WingetWithLiveOutput {
 
                 # Nur starke, abschließende Erfolgssignale akzeptieren
                 $hasStrongSuccess = ($logTail -match '(?im)^\s*(Erfolgreich installiert|Successfully installed)\s*$') -or
-                                    ($logTail -match '(?im)Installation process succeeded\.') -or
-                                    ($logTail -match '(?im)Setup .* completed successfully')
+                ($logTail -match '(?im)Installation process succeeded\.') -or
+                ($logTail -match '(?im)Setup .* completed successfully')
 
                 # Häufige Fehlersignale blockieren den Fallback
                 $hasFailureSignal = $logTail -match '(?im)\b(error|fehler|failed|fehlgeschlagen|aborted|cancelled|rollback|fatal)\b'
@@ -1453,8 +1586,7 @@ function Invoke-WingetWithLiveOutput {
                     $derivedSuccess = $true
                     $exitCode = 0
                 }
-            }
-            catch {
+            } catch {
             }
         }
 
@@ -1467,23 +1599,22 @@ function Invoke-WingetWithLiveOutput {
         }
 
         return @{
-            Success = (-not $timedOut -and $exitCode -eq 0)
+            Success  = (-not $timedOut -and $exitCode -eq 0)
             ExitCode = $exitCode
             TimedOut = $timedOut
-            Command = "winget $argumentString"
-            LogPath = $wingetLogPath
+            Command  = "winget $argumentString"
+            LogPath  = $wingetLogPath
         }
-    }
-    catch {
+    } catch {
         if (Get-Command -Name Write-ToolLog -ErrorAction SilentlyContinue) {
             Write-ToolLog -ToolName "Winget-Operations" -Message "Ausführung fehlgeschlagen: $($_.Exception.Message)" -Level Error
         }
 
         return @{
-            Success = $false
-            ExitCode = -1
-            TimedOut = $false
-            Command = "winget $argumentString"
+            Success      = $false
+            ExitCode     = -1
+            TimedOut     = $false
+            Command      = "winget $argumentString"
             ErrorMessage = $_.Exception.Message
         }
     }
@@ -1526,10 +1657,10 @@ function Initialize-ToolEntry {
     
     # Bestimme die Breite basierend auf TileSize
     $tileWidth = switch ($TileSize) {
-        "Large"  { $script:toolResourceDictionary["ToolTileWidthLarge"] }
+        "Large" { $script:toolResourceDictionary["ToolTileWidthLarge"] }
         "Medium" { $script:toolResourceDictionary["ToolTileWidthMedium"] }
-        "List"   { $script:toolResourceDictionary["ToolTileWidthList"] }
-        default  { $script:toolResourceDictionary["ToolTileWidthMedium"] }
+        "List" { $script:toolResourceDictionary["ToolTileWidthList"] }
+        default { $script:toolResourceDictionary["ToolTileWidthMedium"] }
     }
     
     $border = New-Object Windows.Controls.Border
@@ -1570,18 +1701,15 @@ function Initialize-ToolEntry {
         # Update verfügbar - Orange/Gelb
         $border.Background = [Windows.Media.Brushes]::LightGoldenrodYellow
         $border.BorderBrush = [Windows.Media.Brushes]::Orange
-    }
-    elseif ($isInstalled -eq $true) {
+    } elseif ($isInstalled -eq $true) {
         # Installiert und aktuell - Grün
         $border.Background = [Windows.Media.Brushes]::LightGreen
         $border.BorderBrush = [Windows.Media.Brushes]::Green
-    } 
-    elseif ($isDownloaded) {
+    } elseif ($isDownloaded) {
         # Heruntergeladen, nicht installiert - Hellblau/Lavender
         $border.Background = [Windows.Media.Brushes]::Lavender
         $border.BorderBrush = [Windows.Media.Brushes]::SteelBlue
-    }
-    else {
+    } else {
         # Nicht installiert - Standard
         $border.Background = $script:toolResourceDictionary["ToolInstallUnselectedColor"]
         $border.BorderBrush = [Windows.Media.Brushes]::LightGray
@@ -1595,15 +1723,13 @@ function Initialize-ToolEntry {
             $tooltipText += ": $($versionInfo.InstalledVersion) → $($versionInfo.AvailableVersion)"
         }
         $tooltipText += "] " + $Tool.Description
-    }
-    elseif ($isInstalled) {
+    } elseif ($isInstalled) {
         $tooltipText = "[INSTALLIERT"
         if ($versionInfo -and $versionInfo.InstalledVersion) {
             $tooltipText += " v$($versionInfo.InstalledVersion)"
         }
         $tooltipText += "] " + $Tool.Description
-    }
-    elseif ($isDownloaded) {
+    } elseif ($isDownloaded) {
         $tooltipText = "[HERUNTERGELADEN - BEREIT ZUR INSTALLATION] " + $Tool.Description
     }
     $border.ToolTip = $tooltipText
@@ -1630,11 +1756,9 @@ function Initialize-ToolEntry {
     $border.Add_MouseEnter({
             if ($updateStatus) {
                 $this.Background = [Windows.Media.Brushes]::Gold
-            }
-            elseif ($installedStatus) {
+            } elseif ($installedStatus) {
                 $this.Background = [Windows.Media.Brushes]::MediumSeaGreen
-            }
-            elseif ($downloadedStatus) {
+            } elseif ($downloadedStatus) {
                 $this.Background = [Windows.Media.Brushes]::LightSkyBlue
             } else {
                 $this.Background = $highlightColor
@@ -1643,11 +1767,9 @@ function Initialize-ToolEntry {
     $border.Add_MouseLeave({
             if ($updateStatus) {
                 $this.Background = [Windows.Media.Brushes]::LightGoldenrodYellow
-            }
-            elseif ($installedStatus) {
+            } elseif ($installedStatus) {
                 $this.Background = [Windows.Media.Brushes]::LightGreen
-            }
-            elseif ($downloadedStatus) {
+            } elseif ($downloadedStatus) {
                 $this.Background = [Windows.Media.Brushes]::Lavender
             } else {
                 $this.Background = $unselectedColor
@@ -1721,8 +1843,7 @@ function Initialize-ToolEntry {
             $statusBlock.Text = $statusText
             $statusBlock.Foreground = [Windows.Media.Brushes]::DarkOrange
             $statusBlock.FontWeight = [Windows.FontWeights]::Bold
-        }
-        elseif ($isInstalled) {
+        } elseif ($isInstalled) {
             $statusText = "✓ Installiert"
             if ($versionInfo -and $versionInfo.InstalledVersion) {
                 $statusText = "✓ Installiert (v$($versionInfo.InstalledVersion))"
@@ -1816,8 +1937,7 @@ function Initialize-ToolEntry {
                 if ($versionInfo.HasUpdate -and $versionInfo.AvailableVersion) {
                     $infoText += "Verfügbare Version: $($versionInfo.AvailableVersion) ⚠`n"
                 }
-            }
-            elseif ($toolInfo.Version) {
+            } elseif ($toolInfo.Version) {
                 $infoText += "Version: $($toolInfo.Version)`n"
             }
             
@@ -1827,12 +1947,10 @@ function Initialize-ToolEntry {
             if ($isInstalled) {
                 if ($versionInfo -and $versionInfo.HasUpdate) {
                     $infoText += "Status: INSTALLIERT (Update verfügbar)`n`n"
-                }
-                else {
+                } else {
                     $infoText += "Status: INSTALLIERT (Aktuell)`n`n"
                 }
-            }
-            else {
+            } else {
                 $infoText += "Status: Nicht installiert`n`n"
             }
             
@@ -1871,21 +1989,18 @@ function Initialize-ToolEntry {
             $actionIcon.Foreground = [Windows.Media.Brushes]::DarkOrange
             $actionButton.ToolTip = "Update durchführen"
             $actionButton.Background = [Windows.Media.Brushes]::LightYellow
-        }
-        elseif ($isInstalled) {
+        } elseif ($isInstalled) {
             # Installiert und aktuell → Neu installieren/reparieren
             $actionIcon.Text = [char]0xE117  # Sync-Symbol
             $actionIcon.Foreground = [Windows.Media.Brushes]::Green
             $actionButton.ToolTip = "Neu installieren/reparieren"
-        }
-        elseif ($isDownloaded) {
+        } elseif ($isDownloaded) {
             # Zustand 2: Heruntergeladen, nicht installiert → Installieren
             $actionIcon.Text = [char]0xE8B5  # Install-Symbol
             $actionIcon.Foreground = [Windows.Media.Brushes]::Blue
             $actionButton.ToolTip = "Von lokalem Download installieren"
             $actionButton.Background = [Windows.Media.Brushes]::LightCyan
-        }
-        else {
+        } else {
             # Zustand 1: Nicht heruntergeladen → Herunterladen
             $actionIcon.Text = [char]0xE896  # Download-Symbol
             $actionIcon.Foreground = [Windows.Media.Brushes]::Green
@@ -1896,10 +2011,10 @@ function Initialize-ToolEntry {
         $actionIcon.FontSize = 20
         $actionButton.Content = $actionIcon
         $actionButton.Tag = @{ 
-            Tool = $Tool
-            HasUpdate = $hasUpdate
-            IsInstalled = $isInstalled
-            IsDownloaded = $isDownloaded
+            Tool               = $Tool
+            HasUpdate          = $hasUpdate
+            IsInstalled        = $isInstalled
+            IsDownloaded       = $isDownloaded
             LocalInstallerPath = $localInstallerPath
         }
         
@@ -1946,15 +2061,14 @@ function Initialize-ToolEntry {
                             -TimeoutSeconds 300
 
                         if ($wingetResult.Success) {
-                                Update-ToolWorkflowProgress -ProgressBar $global:progressBar -StatusText "Update erfolgreich: $($toolInfo.Name)" -ProgressValue 100 -TextColor ([System.Drawing.Color]::LightGreen)
-                                [System.Windows.Forms.MessageBox]::Show(
-                                    "$($toolInfo.Name) wurde erfolgreich aktualisiert!",
-                                    "Update erfolgreich",
-                                    [System.Windows.Forms.MessageBoxButtons]::OK,
-                                    [System.Windows.Forms.MessageBoxIcon]::Information
-                                )
-                        }
-                        elseif ($wingetResult.TimedOut) {
+                            Update-ToolWorkflowProgress -ProgressBar $global:progressBar -StatusText "Update erfolgreich: $($toolInfo.Name)" -ProgressValue 100 -TextColor ([System.Drawing.Color]::LightGreen)
+                            [System.Windows.Forms.MessageBox]::Show(
+                                "$($toolInfo.Name) wurde erfolgreich aktualisiert!",
+                                "Update erfolgreich",
+                                [System.Windows.Forms.MessageBoxButtons]::OK,
+                                [System.Windows.Forms.MessageBoxIcon]::Information
+                            )
+                        } elseif ($wingetResult.TimedOut) {
                             Update-ToolWorkflowProgress -ProgressBar $global:progressBar -StatusText "Update Timeout: $($toolInfo.Name)" -ProgressValue 0 -TextColor ([System.Drawing.Color]::Red)
                             [System.Windows.Forms.MessageBox]::Show(
                                 "Update Timeout (>5 Min). Bitte manuell prüfen.",
@@ -1962,8 +2076,7 @@ function Initialize-ToolEntry {
                                 [System.Windows.Forms.MessageBoxButtons]::OK,
                                 [System.Windows.Forms.MessageBoxIcon]::Warning
                             )
-                        }
-                        else {
+                        } else {
                             Update-ToolWorkflowProgress -ProgressBar $global:progressBar -StatusText "Update fehlgeschlagen: $($toolInfo.Name)" -ProgressValue 0 -TextColor ([System.Drawing.Color]::Red)
                             $errorDesc = Get-WingetErrorDescription -ErrorCode $wingetResult.ExitCode
                             [System.Windows.Forms.MessageBox]::Show(
@@ -2045,18 +2158,16 @@ function Initialize-ToolEntry {
                                     -TimeoutSeconds 300
 
                                 if ($wingetResult.Success) {
-                                        Update-ToolWorkflowProgress -ProgressBar $global:progressBar -StatusText "Installation erfolgreich: $($toolInfo.Name)" -ProgressValue 100 -TextColor ([System.Drawing.Color]::LightGreen)
-                                        [System.Windows.Forms.MessageBox]::Show(
-                                            "$($toolInfo.Name) wurde erfolgreich installiert!",
-                                            "Installation erfolgreich",
-                                            [System.Windows.Forms.MessageBoxButtons]::OK,
-                                            [System.Windows.Forms.MessageBoxIcon]::Information
-                                        )
-                                }
-                                elseif ($wingetResult.TimedOut) {
+                                    Update-ToolWorkflowProgress -ProgressBar $global:progressBar -StatusText "Installation erfolgreich: $($toolInfo.Name)" -ProgressValue 100 -TextColor ([System.Drawing.Color]::LightGreen)
+                                    [System.Windows.Forms.MessageBox]::Show(
+                                        "$($toolInfo.Name) wurde erfolgreich installiert!",
+                                        "Installation erfolgreich",
+                                        [System.Windows.Forms.MessageBoxButtons]::OK,
+                                        [System.Windows.Forms.MessageBoxIcon]::Information
+                                    )
+                                } elseif ($wingetResult.TimedOut) {
                                     Update-ToolWorkflowProgress -ProgressBar $global:progressBar -StatusText "Installation Timeout: $($toolInfo.Name)" -ProgressValue 0 -TextColor ([System.Drawing.Color]::Red)
-                                }
-                                else {
+                                } else {
                                     Update-ToolWorkflowProgress -ProgressBar $global:progressBar -StatusText "Installation fehlgeschlagen: $($toolInfo.Name)" -ProgressValue 0 -TextColor ([System.Drawing.Color]::Red)
                                     $errorDesc = Get-WingetErrorDescription -ErrorCode $wingetResult.ExitCode
                                     [System.Windows.Forms.MessageBox]::Show(
@@ -2066,8 +2177,7 @@ function Initialize-ToolEntry {
                                         [System.Windows.Forms.MessageBoxIcon]::Warning
                                     )
                                 }
-                            }
-                            elseif ($choice -eq "Download") {
+                            } elseif ($choice -eq "Download") {
                                 # Herunterladen
                                 [System.Windows.Forms.MessageBox]::Show(
                                     "Download von $($toolInfo.Name) wird gestartet...",
@@ -2123,16 +2233,15 @@ function Initialize-ToolEntry {
                                         # Aktualisiere Button-Tag mit neuen Daten
                                         $newLocalPath = Get-ToolLocalInstallerPath -Tool $toolInfo
                                         $currentButton.Tag = @{
-                                            Tool = $toolInfo
-                                            HasUpdate = $hasUpdate
-                                            IsInstalled = $false
-                                            IsDownloaded = $true
+                                            Tool               = $toolInfo
+                                            HasUpdate          = $hasUpdate
+                                            IsInstalled        = $false
+                                            IsDownloaded       = $true
                                             LocalInstallerPath = $newLocalPath
                                         }
                                         
                                         Write-Host "✓ UI erfolgreich aktualisiert - Kachel zeigt jetzt 'Heruntergeladen'-Status" -ForegroundColor Green
-                                    }
-                                    catch {
+                                    } catch {
                                         Write-Host "⚠ UI-Aktualisierung fehlgeschlagen: $($_.Exception.Message)" -ForegroundColor Yellow
                                     }
                                 }
@@ -2193,16 +2302,15 @@ function Initialize-ToolEntry {
                                     # Aktualisiere Button-Tag mit neuen Daten
                                     $newLocalPath = Get-ToolLocalInstallerPath -Tool $toolInfo
                                     $currentButton.Tag = @{
-                                        Tool = $toolInfo
-                                        HasUpdate = $hasUpdate
-                                        IsInstalled = $false
-                                        IsDownloaded = $true
+                                        Tool               = $toolInfo
+                                        HasUpdate          = $hasUpdate
+                                        IsInstalled        = $false
+                                        IsDownloaded       = $true
                                         LocalInstallerPath = $newLocalPath
                                     }
                                     
                                     Write-Host "✓ UI erfolgreich aktualisiert - Kachel zeigt jetzt 'Heruntergeladen'-Status" -ForegroundColor Green
-                                }
-                                catch {
+                                } catch {
                                     Write-Host "⚠ UI-Aktualisierung fehlgeschlagen: $($_.Exception.Message)" -ForegroundColor Yellow
                                 }
                             }
@@ -2254,8 +2362,7 @@ function Initialize-ToolEntry {
                                     [System.Windows.Forms.MessageBoxButtons]::OK,
                                     [System.Windows.Forms.MessageBoxIcon]::Information
                                 )
-                            }
-                            elseif ($wingetResult.TimedOut) {
+                            } elseif ($wingetResult.TimedOut) {
                                 Update-ToolWorkflowProgress -ProgressBar $global:progressBar -StatusText "Neuinstallation Timeout: $($toolInfo.Name)" -ProgressValue 0 -TextColor ([System.Drawing.Color]::Red)
                                 [System.Windows.Forms.MessageBox]::Show(
                                     "Neuinstallation Timeout (>5 Min). Bitte manuell prüfen.",
@@ -2263,8 +2370,7 @@ function Initialize-ToolEntry {
                                     [System.Windows.Forms.MessageBoxButtons]::OK,
                                     [System.Windows.Forms.MessageBoxIcon]::Warning
                                 )
-                            }
-                            else {
+                            } else {
                                 Update-ToolWorkflowProgress -ProgressBar $global:progressBar -StatusText "Neuinstallation fehlgeschlagen: $($toolInfo.Name)" -ProgressValue 0 -TextColor ([System.Drawing.Color]::Red)
                                 $errorDesc = Get-WingetErrorDescription -ErrorCode $wingetResult.ExitCode
                                 [System.Windows.Forms.MessageBox]::Show(
@@ -2281,8 +2387,7 @@ function Initialize-ToolEntry {
                     if (Get-Command -Name Update-ToolInstallationStatus -ErrorAction SilentlyContinue) {
                         Update-ToolInstallationStatus -Tool $toolInfo -IsInstalled $true
                     }
-                }
-                catch {
+                } catch {
                     [System.Windows.Forms.MessageBox]::Show(
                         "Fehler beim Ausführen der Aktion: $($_.Exception.Message)",
                         "Fehler",
@@ -2310,8 +2415,7 @@ function Initialize-ToolEntry {
             $toolInfo = $this.Parent.Parent.Parent.Tag
             try {
                 Start-Process $toolInfo.DownloadUrl
-            }
-            catch {
+            } catch {
                 [System.Windows.Forms.MessageBox]::Show(
                     "Fehler beim Öffnen der Download-URL: $($_.Exception.Message)",
                     "Fehler",
@@ -2379,8 +2483,7 @@ function Initialize-ToolEntry {
                             if (Get-Command -Name Update-ToolInstallationStatus -ErrorAction SilentlyContinue) {
                                 Update-ToolInstallationStatus -Tool $toolInfo -IsInstalled $false
                             }
-                        }
-                        elseif ($wingetResult.TimedOut) {
+                        } elseif ($wingetResult.TimedOut) {
                             Update-ToolWorkflowProgress -ProgressBar $global:progressBar -StatusText "Deinstallation Timeout: $($toolInfo.Name)" -ProgressValue 0 -TextColor ([System.Drawing.Color]::Red)
                             [System.Windows.Forms.MessageBox]::Show(
                                 "Deinstallation Timeout (>5 Min). Bitte manuell prüfen.",
@@ -2388,8 +2491,7 @@ function Initialize-ToolEntry {
                                 [System.Windows.Forms.MessageBoxButtons]::OK,
                                 [System.Windows.Forms.MessageBoxIcon]::Warning
                             )
-                        }
-                        else {
+                        } else {
                             Update-ToolWorkflowProgress -ProgressBar $global:progressBar -StatusText "Deinstallation fehlgeschlagen: $($toolInfo.Name)" -ProgressValue 0 -TextColor ([System.Drawing.Color]::Red)
                             $errorDesc = Get-WingetErrorDescription -ErrorCode $wingetResult.ExitCode
                             [System.Windows.Forms.MessageBox]::Show(
@@ -2399,8 +2501,7 @@ function Initialize-ToolEntry {
                                 [System.Windows.Forms.MessageBoxIcon]::Warning
                             )
                         }
-                    }
-                    catch {
+                    } catch {
                         [System.Windows.Forms.MessageBox]::Show(
                             "Fehler beim Starten der Deinstallation: $($_.Exception.Message)",
                             "Fehler",
@@ -2430,8 +2531,7 @@ function Show-ToolTileList {
     # Tools nach Kategorie filtern
     $filteredTools = if ($Category -eq "all") {
         Get-AllTools
-    }
-    else {
+    } else {
         Get-ToolsByCategory -Category $Category
     }
     
@@ -2489,14 +2589,13 @@ function Initialize-AvailableUpdatesCache {
             }
 
             $cache[$wingetId.ToLower()] = @{
-                HasUpdate = $true
+                HasUpdate        = $true
                 InstalledVersion = $installedVersion
                 AvailableVersion = $availableVersion
-                RawLine = $matchingLine
+                RawLine          = $matchingLine
             }
         }
-    }
-    catch {
+    } catch {
         Write-Verbose "Initialize-AvailableUpdatesCache: Fehler beim Laden der Updates: $_"
     }
 
@@ -2517,7 +2616,7 @@ function Get-ToolVersionInfo {
         return @{
             InstalledVersion = $null
             AvailableVersion = $null
-            HasUpdate = $false
+            HasUpdate        = $false
         }
     }
     
@@ -2532,7 +2631,7 @@ function Get-ToolVersionInfo {
             return @{
                 InstalledVersion = $cachedUpdate.InstalledVersion
                 AvailableVersion = $cachedUpdate.AvailableVersion
-                HasUpdate = $true
+                HasUpdate        = $true
             }
         }
 
@@ -2545,7 +2644,7 @@ function Get-ToolVersionInfo {
             $listOutput = winget list --id $wingetId --exact 2>$null | Out-String
             
             return @{
-                List = $listOutput
+                List    = $listOutput
                 Upgrade = $null
             }
         } -ArgumentList $Tool.Winget
@@ -2579,18 +2678,15 @@ function Get-ToolVersionInfo {
             return @{
                 InstalledVersion = $installedVersion
                 AvailableVersion = $availableVersion
-                HasUpdate = $hasUpdate
+                HasUpdate        = $hasUpdate
             }
-        }
-        else {
+        } else {
             Stop-Job -Job $job -ErrorAction SilentlyContinue
             Write-Verbose "Timeout beim Abrufen der Versionsinfo für $($Tool.Name)"
         }
-    }
-    catch {
+    } catch {
         Write-Verbose "Fehler beim Abrufen der Versionsinfo für $($Tool.Name): $_"
-    }
-    finally {
+    } finally {
         if ($null -ne $job) {
             Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
         }
@@ -2599,7 +2695,7 @@ function Get-ToolVersionInfo {
     return @{
         InstalledVersion = $null
         AvailableVersion = $null
-        HasUpdate = $false
+        HasUpdate        = $false
     }
 }
 
@@ -2644,17 +2740,14 @@ function Test-ToolInstalled {
             if ($installedPackage -match [regex]::Escape($Tool.Winget)) {
                 return $true
             }
-        }
-        else {
+        } else {
             # Timeout - Job stoppen
             Stop-Job -Job $job -ErrorAction SilentlyContinue
             Write-Warning "Timeout beim Prüfen von $($Tool.Name) (>8s)"
         }
-    }
-    catch {
+    } catch {
         Write-Verbose "Fehler beim Prüfen des installierten Status für $($Tool.Name): $_"
-    }
-    finally {
+    } finally {
         # Garantierter Job-Cleanup
         if ($null -ne $job) {
             Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
@@ -2692,8 +2785,7 @@ function Test-ToolUpdateAvailable {
         if ($updatesCache -and $updatesCache.ContainsKey($Tool.Winget.ToLower())) {
             return $true
         }
-    }
-    catch {
+    } catch {
         Write-Verbose "Fehler beim Prüfen von Updates für $($Tool.Name): $_"
     }
 
@@ -2722,9 +2814,21 @@ function Update-ToolsDisplay {
         [string]$TileSize = "Medium",
         
         [Parameter(Mandatory = $false)]
-        [bool]$ShowOnlyUpdates = $false
+        [bool]$ShowOnlyUpdates = $false,
+
+        [Parameter(Mandatory = $false)]
+        [string]$PostStatusText = "Bereit",
+
+        [Parameter(Mandatory = $false)]
+        [System.Drawing.Color]$PostStatusColor = [System.Drawing.Color]::White
     )
     
+    # Laufenden Display-Timer stoppen (verhindert Race Condition bei schneller Eingabe)
+    if ($script:activeDisplayTimer -and $script:activeDisplayTimer.IsEnabled) {
+        $script:activeDisplayTimer.Stop()
+        $script:activeDisplayTimer = $null
+    }
+
     # Bestehenden Content löschen
     $WrapPanel.Children.Clear()
     
@@ -2792,16 +2896,14 @@ function Update-ToolsDisplay {
         $progressPanel.Children.Add($internalProgressBar)
         $progressBorder.Child = $progressPanel
         $WrapPanel.Children.Add($progressBorder)
-    }
-    else {
+    } else {
         # Haupt-ProgressBar initialisieren
         # Prüfen, ob es sich um eine TextProgressBar handelt (mit den erweiterten Eigenschaften)
         if ($MainProgressBar.GetType().Name -eq "TextProgressBar") {
             $MainProgressBar.Value = 0
             $MainProgressBar.CustomText = "Lade Tool-Informationen..."
             $MainProgressBar.TextColor = [System.Drawing.Color]::White
-        }
-        else {
+        } else {
             # Standard ProgressBar ohne erweiterte Eigenschaften
             $MainProgressBar.Value = 0
         }
@@ -2832,8 +2934,7 @@ function Update-ToolsDisplay {
             if ($null -ne $categoryTools) {
                 # Stelle sicher, dass wir ein Array haben, auch wenn nur ein Element vorhanden ist
                 $filteredTools = @($categoryTools)
-            }
-            else {
+            } else {
                 # Initialisiere leeres Array, wenn keine Tools gefunden wurden
                 $filteredTools = @()
                 Write-Warning "Keine Tools für Kategorie '$Category' gefunden"
@@ -2842,11 +2943,11 @@ function Update-ToolsDisplay {
         
         # Filtere alle null-Elemente und ungültige Objekte heraus
         $filteredTools = @($filteredTools | Where-Object { 
-            $null -ne $_ -and 
-            $_ -is [hashtable] -and 
-            $_.ContainsKey('Name') -and 
-            ![string]::IsNullOrWhiteSpace($_.Name)
-        })
+                $null -ne $_ -and 
+                $_ -is [hashtable] -and 
+                $_.ContainsKey('Name') -and 
+                ![string]::IsNullOrWhiteSpace($_.Name)
+            })
         
         Write-Verbose "Nach Filterung: $($filteredTools.Count) gültige Tools für Kategorie '$Category'"
         
@@ -2854,15 +2955,14 @@ function Update-ToolsDisplay {
         if ($filteredTools.Count -gt 0 -and (Get-Command -Name Set-CachedToolsByCategory -ErrorAction SilentlyContinue)) {
             Set-CachedToolsByCategory -Category $Category -Tools $filteredTools
         }
-    }
-    else {
+    } else {
         # Auch gecachte Tools validieren
         $filteredTools = @($filteredTools | Where-Object { 
-            $null -ne $_ -and 
-            $_ -is [hashtable] -and 
-            $_.ContainsKey('Name') -and 
-            ![string]::IsNullOrWhiteSpace($_.Name)
-        })
+                $null -ne $_ -and 
+                $_ -is [hashtable] -and 
+                $_.ContainsKey('Name') -and 
+                ![string]::IsNullOrWhiteSpace($_.Name)
+            })
         Write-Verbose "Nach Cache-Validierung: $($filteredTools.Count) gültige Tools"
     }
     
@@ -2876,50 +2976,49 @@ function Update-ToolsDisplay {
             # Zu kurzer Suchbegriff - leere die Tool-Liste (keine Anzeige)
             $filteredTools = @()
             $totalTools = 0
-        }
-        else {
+        } else {
             $searchLower = $SearchQuery.ToLower()
             
             # Regex-Pattern für Wortgrenzen erstellen (sucht nach ganzen Wörtern oder Wortanfängen)
             $searchPattern = [regex]::Escape($searchLower)
             
             $filteredTools = @($filteredTools | Where-Object {
-            $tool = $_
+                    $tool = $_
             
-            # Hilfsfunktion zum Prüfen, ob der Suchbegriff am Wortanfang vorkommt
-            $matchesWordStart = {
-                param($text, $pattern)
-                if ([string]::IsNullOrWhiteSpace($text)) { return $false }
-                $textLower = $text.ToLower()
+                    # Hilfsfunktion zum Prüfen, ob der Suchbegriff am Wortanfang vorkommt
+                    $matchesWordStart = {
+                        param($text, $pattern)
+                        if ([string]::IsNullOrWhiteSpace($text)) { return $false }
+                        $textLower = $text.ToLower()
                 
-                # Prüfe ob am Anfang des Strings
-                if ($textLower.StartsWith($pattern)) { return $true }
+                        # Prüfe ob am Anfang des Strings
+                        if ($textLower.StartsWith($pattern)) { return $true }
                 
-                # Prüfe ob nach Leerzeichen, Bindestrich, Slash oder Klammer
-                if ($textLower -match "[\s\-/\(]$pattern") { return $true }
+                        # Prüfe ob nach Leerzeichen, Bindestrich, Slash oder Klammer
+                        if ($textLower -match "[\s\-/\(]$pattern") { return $true }
                 
-                # Prüfe CamelCase: Nach Großbuchstaben (z.B. "CCleaner" findet "cleaner")
-                # Regex sucht nach Großbuchstaben gefolgt vom Suchmuster
-                if ($text -and $text -cmatch "[A-Z]$pattern") { return $true }
+                        # Prüfe CamelCase: Nach Großbuchstaben (z.B. "CCleaner" findet "cleaner")
+                        # Regex sucht nach Großbuchstaben gefolgt vom Suchmuster
+                        if ($text -and $text -cmatch "[A-Z]$pattern") { return $true }
                 
-                # Prüfe auch nach Zahlen (z.B. "7Zip" oder "Win10")
-                if ($textLower -match "\d$pattern") { return $true }
+                        # Prüfe auch nach Zahlen (z.B. "7Zip" oder "Win10")
+                        if ($textLower -match "\d$pattern") { return $true }
                 
-                return $false
-            }
+                        return $false
+                    }
             
-            # Suche in Name (am Wortanfang)
-            (& $matchesWordStart $tool.Name $searchLower) -or
+                    # Suche in Name (am Wortanfang)
+                    (& $matchesWordStart $tool.Name $searchLower) -or
             
-            # Suche in Beschreibung (am Wortanfang)
-            (& $matchesWordStart $tool.Description $searchLower) -or
+                    # Suche in Beschreibung (am Wortanfang)
+                    (& $matchesWordStart $tool.Description $searchLower) -or
             
-            # Suche in Tags (am Wortanfang in jedem Tag)
-            ($tool.Tags -and ($tool.Tags | Where-Object { & $matchesWordStart $_ $searchLower }).Count -gt 0) -or
+                    # Suche in Tags (am Wortanfang in jedem Tag)
+                    ($tool.Tags -and ($tool.Tags | Where-Object { & $matchesWordStart $_ $searchLower }).Count -gt 0) -or
             
-            # Suche in Kategorie (am Wortanfang)
-            (& $matchesWordStart $tool.Category $searchLower)
-            })
+                    # Suche in Kategorie (am Wortanfang)
+                    (& $matchesWordStart $tool.Category $searchLower)
+                })
             
             # Aktualisiere Gesamtzahl nach Suche
             $totalTools = $filteredTools.Count
@@ -2935,11 +3034,9 @@ function Update-ToolsDisplay {
         $noToolsMessage = New-Object Windows.Controls.TextBlock
         if ($ShowOnlyUpdates) {
             $noToolsMessage.Text = "Keine Tools mit verfügbaren Updates gefunden."
-        }
-        elseif (-not [string]::IsNullOrWhiteSpace($SearchQuery)) {
+        } elseif (-not [string]::IsNullOrWhiteSpace($SearchQuery)) {
             $noToolsMessage.Text = "Keine Tools für Suchbegriff '$SearchQuery' gefunden."
-        }
-        else {
+        } else {
             $noToolsMessage.Text = "Keine Tools in der Kategorie '$Category' gefunden."
         }
         $noToolsMessage.FontSize = 16
@@ -2949,11 +3046,11 @@ function Update-ToolsDisplay {
         $noToolsMessage.Margin = New-Object Windows.Thickness(10)
         $WrapPanel.Children.Add($noToolsMessage)
         
-        # Bei leerer Kategorie direkt den ProgressBar zurücksetzen
+        # Bei 0 Ergebnissen ProgressBar sofort mit dem Post-Status beschriften (kein Timer)
         if ($MainProgressBar -and $MainProgressBar.GetType().Name -eq "TextProgressBar") {
             $MainProgressBar.Value = 0
-            $MainProgressBar.CustomText = "Bereit"
-            $MainProgressBar.TextColor = [System.Drawing.Color]::White
+            $MainProgressBar.CustomText = $PostStatusText
+            $MainProgressBar.TextColor = $PostStatusColor
         }
         
         return $totalTools
@@ -2963,136 +3060,142 @@ function Update-ToolsDisplay {
     # Timer starten, um asynchron die Tools zu laden und den Fortschritt anzuzeigen
     $timer = New-Object Windows.Threading.DispatcherTimer
     $timer.Interval = [TimeSpan]::FromMilliseconds(100)
+    $script:activeDisplayTimer = $timer  # Referenz merken damit nächster Aufruf diesen stoppen kann
     $timer.Tag = @{
-        "WrapPanel" = $WrapPanel
-        "ProgressBorder" = $progressBorder
+        "WrapPanel"       = $WrapPanel
+        "ProgressBorder"  = $progressBorder
         "MainProgressBar" = $MainProgressBar
-        "FilteredTools" = $filteredTools
-        "TotalTools" = $totalTools
-        "ProcessedTools" = $processedTools
-        "UseCache" = $useCachedTools
-        "TileSize" = $TileSize
+        "FilteredTools"   = $filteredTools
+        "TotalTools"      = $totalTools
+        "ProcessedTools"  = $processedTools
+        "UseCache"        = $useCachedTools
+        "TileSize"        = $TileSize
         "ShowOnlyUpdates" = $ShowOnlyUpdates
+        "PostStatusText"  = $PostStatusText
+        "PostStatusColor" = $PostStatusColor
     }
     $timer.Add_Tick({
-        # Variablen aus Tag abrufen
-        $WrapPanel = $this.Tag.WrapPanel
-        $progressBorder = $this.Tag.ProgressBorder
-        $MainProgressBar = $this.Tag.MainProgressBar
-        $filteredTools = $this.Tag.FilteredTools
-        $totalTools = $this.Tag.TotalTools
-        $processedTools = $this.Tag.ProcessedTools
-        $useCache = $this.Tag.UseCache
-        $TileSize = $this.Tag.TileSize
-        $ShowOnlyUpdates = $this.Tag.ShowOnlyUpdates
+            # Variablen aus Tag abrufen
+            $WrapPanel = $this.Tag.WrapPanel
+            $progressBorder = $this.Tag.ProgressBorder
+            $MainProgressBar = $this.Tag.MainProgressBar
+            $filteredTools = $this.Tag.FilteredTools
+            $totalTools = $this.Tag.TotalTools
+            $processedTools = $this.Tag.ProcessedTools
+            $useCache = $this.Tag.UseCache
+            $TileSize = $this.Tag.TileSize
+            $ShowOnlyUpdates = $this.Tag.ShowOnlyUpdates
+            $PostStatusText = $this.Tag.PostStatusText
+            $PostStatusColor = $this.Tag.PostStatusColor
         
-        # Abbruchbedingung: Alle Tools verarbeitet
-        if ($processedTools -ge $totalTools) {
-            # Timer stoppen
-            $this.Stop()
+            # Abbruchbedingung: Alle Tools verarbeitet
+            if ($processedTools -ge $totalTools) {
+                # Timer stoppen
+                $this.Stop()
+                $script:activeDisplayTimer = $null
             
-            # Progress-Anzeige entfernen wenn interne genutzt wird
-            if (-not $MainProgressBar) {
-                $WrapPanel.Children.Remove($progressBorder)
-            }
-            else {
-                # Haupt-ProgressBar zurücksetzen - mit Typ-Check
-                if ($MainProgressBar.GetType().Name -eq "TextProgressBar") {
-                    $MainProgressBar.Value = 100
-                    $MainProgressBar.CustomText = if ($useCache) { "Tool-Informationen aus Cache geladen" } else { "Tool-Informationen geladen" }
+                # Progress-Anzeige entfernen wenn interne genutzt wird
+                if (-not $MainProgressBar) {
+                    $WrapPanel.Children.Remove($progressBorder)
+                } else {
+                    # Haupt-ProgressBar zurücksetzen - mit Typ-Check
+                    if ($MainProgressBar.GetType().Name -eq "TextProgressBar") {
+                        $MainProgressBar.Value = 100
+                        $MainProgressBar.CustomText = if ($useCache) { "Tool-Informationen aus Cache geladen" } else { "Tool-Informationen geladen" }
                     
-                    # Nach kurzer Pause zurücksetzen
-                    $resetTimer = New-Object System.Windows.Forms.Timer
-                    $resetTimer.Interval = 1000
-                    $resetTimer.Add_Tick({
-                        $script:localProgressBar = $MainProgressBar
-                        if ($script:localProgressBar.GetType().Name -eq "TextProgressBar") {
-                            $script:localProgressBar.Value = 0
-                            $script:localProgressBar.CustomText = "Bereit"
-                            $script:localProgressBar.TextColor = [System.Drawing.Color]::White
-                        }
-                        else {
-                            $script:localProgressBar.Value = 0
-                        }
-                        $this.Stop()
-                    }.GetNewClosure())
-                    $resetTimer.Start()
-                }
-                else {
-                    # Standard ProgressBar ohne erweiterte Eigenschaften
-                    $MainProgressBar.Value = 100
+                        # Nach kurzer Pause auf den Post-Status setzen
+                        $resetTimer = New-Object System.Windows.Forms.Timer
+                        $resetTimer.Interval = 1000
+                        $resetTimer.Tag = @{ Bar = $MainProgressBar; Text = $PostStatusText; Color = $PostStatusColor }
+                        $resetTimer.Add_Tick({
+                                $bar = $this.Tag.Bar
+                                if ($bar.GetType().Name -eq "TextProgressBar") {
+                                    $bar.Value = 0
+                                    # Globale Overrides haben Vorrang (werden von Aufrufer nach dem Aufruf gesetzt)
+                                    $finalText = if ($global:progressBarPostText) { $global:progressBarPostText }  else { $this.Tag.Text }
+                                    $finalColor = if ($global:progressBarPostColor) { $global:progressBarPostColor } else { $this.Tag.Color }
+                                    $global:progressBarPostText = $null
+                                    $global:progressBarPostColor = $null
+                                    $bar.CustomText = $finalText
+                                    $bar.TextColor = $finalColor
+                                } else {
+                                    $bar.Value = 0
+                                }
+                                $this.Stop()
+                            })
+                        $resetTimer.Start()
+                    } else {
+                        # Standard ProgressBar ohne erweiterte Eigenschaften
+                        $MainProgressBar.Value = 100
                     
-                    # Nach kurzer Pause zurücksetzen
-                    $resetTimer = New-Object System.Windows.Forms.Timer
-                    $resetTimer.Interval = 1000
-                    $resetTimer.Add_Tick({
-                        $MainProgressBar.Value = 0
-                        $this.Stop()
-                    })
-                    $resetTimer.Start()
+                        # Nach kurzer Pause zurücksetzen
+                        $resetTimer = New-Object System.Windows.Forms.Timer
+                        $resetTimer.Interval = 1000
+                        $resetTimer.Add_Tick({
+                                $MainProgressBar.Value = 0
+                                $this.Stop()
+                            })
+                        $resetTimer.Start()
+                    }
                 }
-            }
             
-            # Gebe Anzahl der angezeigten Tools zurück
-            return $totalTools
-        }
+                # Gebe Anzahl der angezeigten Tools zurück
+                return $totalTools
+            }
         
-        # Aktuelles Tool verarbeiten - mit Fehlerbehandlung
-        try {
-            if ($processedTools -lt 0 -or $processedTools -ge $filteredTools.Count) {
-                Write-Warning "Update-ToolsDisplay: Index $processedTools außerhalb des gültigen Bereichs (0-$($filteredTools.Count - 1))"
-            }
-            else {
-                $tool = $filteredTools[$processedTools]
+            # Aktuelles Tool verarbeiten - mit Fehlerbehandlung
+            try {
+                if ($processedTools -lt 0 -or $processedTools -ge $filteredTools.Count) {
+                    Write-Warning "Update-ToolsDisplay: Index $processedTools außerhalb des gültigen Bereichs (0-$($filteredTools.Count - 1))"
+                } else {
+                    $tool = $filteredTools[$processedTools]
                 
-                # Nur verarbeiten, wenn das Tool nicht null ist
-                if ($null -ne $tool) {
-                    # Prüfe ob Update-Filter aktiv ist
-                    $shouldDisplay = $true
-                    if ($ShowOnlyUpdates) {
-                        # Prüfe ob Tool installiert ist und Update verfügbar
-                        if ($tool.Winget) {
-                            $isInstalled = Test-ToolInstalled -Tool $tool
-                            if ($isInstalled) {
-                                $versionInfo = Get-ToolVersionInfo -Tool $tool
-                                $shouldDisplay = ($null -ne $versionInfo -and $versionInfo.HasUpdate)
+                    # Nur verarbeiten, wenn das Tool nicht null ist
+                    if ($null -ne $tool) {
+                        # Prüfe ob Update-Filter aktiv ist
+                        $shouldDisplay = $true
+                        if ($ShowOnlyUpdates) {
+                            # Prüfe ob Tool installiert ist und Update verfügbar
+                            if ($tool.Winget) {
+                                $isInstalled = Test-ToolInstalled -Tool $tool
+                                if ($isInstalled) {
+                                    $versionInfo = Get-ToolVersionInfo -Tool $tool
+                                    $shouldDisplay = ($null -ne $versionInfo -and $versionInfo.HasUpdate)
+                                } else {
+                                    $shouldDisplay = $false
+                                }
                             } else {
                                 $shouldDisplay = $false
                             }
-                        } else {
-                            $shouldDisplay = $false
                         }
-                    }
                     
-                    # Tool nur anzeigen wenn Filter-Bedingung erfüllt
-                    if ($shouldDisplay) {
-                        Initialize-ToolEntry -TargetElement $WrapPanel -Tool $tool -TileSize $TileSize
+                        # Tool nur anzeigen wenn Filter-Bedingung erfüllt
+                        if ($shouldDisplay) {
+                            Initialize-ToolEntry -TargetElement $WrapPanel -Tool $tool -TileSize $TileSize
+                        }
+                    } else {
+                        Write-Warning "Update-ToolsDisplay: NULL-Tool an Index $processedTools gefunden"
                     }
                 }
-                else {
-                    Write-Warning "Update-ToolsDisplay: NULL-Tool an Index $processedTools gefunden"
+            } catch {
+                Write-Warning "Update-ToolsDisplay: Fehler beim Verarbeiten von Tool $processedTools - $_"
+            }
+        
+            # Fortschritt erhöhen
+            $processedTools++
+            $this.Tag.ProcessedTools = $processedTools
+        
+            # Fortschrittsanzeige aktualisieren wenn Haupt-ProgressBar vorhanden
+            if ($MainProgressBar) {
+                $progressPercentage = [Math]::Min(99, [Math]::Floor(($processedTools / $totalTools) * 100))
+                $MainProgressBar.Value = $progressPercentage
+            
+                # Prüfen, ob erweiterte Eigenschaften verfügbar sind (TextProgressBar)
+                if ($MainProgressBar.GetType().Name -eq "TextProgressBar") {
+                    $MainProgressBar.CustomText = "Lade Tools: $processedTools von $totalTools"
                 }
             }
-        }
-        catch {
-            Write-Warning "Update-ToolsDisplay: Fehler beim Verarbeiten von Tool $processedTools - $_"
-        }
-        
-        # Fortschritt erhöhen
-        $processedTools++
-        $this.Tag.ProcessedTools = $processedTools
-        
-        # Fortschrittsanzeige aktualisieren wenn Haupt-ProgressBar vorhanden
-        if ($MainProgressBar) {
-            $progressPercentage = [Math]::Min(99, [Math]::Floor(($processedTools / $totalTools) * 100))
-            $MainProgressBar.Value = $progressPercentage
-            
-            # Prüfen, ob erweiterte Eigenschaften verfügbar sind (TextProgressBar)
-            if ($MainProgressBar.GetType().Name -eq "TextProgressBar") {
-                $MainProgressBar.CustomText = "Lade Tools: $processedTools von $totalTools"
-            }
-        }
-    })
+        })
     $timer.Start()
 }
 

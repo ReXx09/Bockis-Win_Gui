@@ -59,12 +59,13 @@ function Start-CHKDSK {
     Write-Host "╚══════════════════════════════════════════════════════════════════════════════╝" -ForegroundColor Green    # 1 Sekunde warten vor dem Start
     Start-Sleep -Seconds 1
     $outputBox.Clear()
+    Write-Host 
     Write-Host
     Write-Host "     [>] Ein Dialog-Fenster für die Auswahl der Laufwerke wird geöffnet...... " -ForegroundColor $secondaryColor
     Write-Host
     Write-Host "     [i] Bitte wählen Sie die zu prüfenden Laufwerke und Optionen aus... " -ForegroundColor Blue
     Write-Host
-    Write-Host ("  " + ("═" * 66)) -ForegroundColor Cyan
+    Write-Host "`n" + ("═" * 70) -ForegroundColor Cyan 
     Write-Host
         
     # Verfügbare Laufwerke ermitteln
@@ -72,9 +73,7 @@ function Start-CHKDSK {
     Where-Object { $_.DriveType -eq 3 -or $_.DriveType -eq 2 } | 
     Select-Object -ExpandProperty DeviceID    # Laufwerksinformationen anzeigen
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
-    $outputBox.AppendText("`r`n  " + ("═" * 66) + "`r`n")
-    $outputBox.AppendText("  Verfügbare Laufwerkeübersicht`r`n")
-    $outputBox.AppendText("  " + ("═" * 66) + "`r`n`r`n")
+    $outputBox.AppendText("[►] VERFÜGBARE LAUFWERKE:`r`n`r`n")
     
     # Tabellenkopf erstellen
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
@@ -89,6 +88,7 @@ function Start-CHKDSK {
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Muted'
     $outputBox.AppendText("    " + "".PadRight(85, '─') + "`r`n")
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
+    
     # Laufwerksdaten in Tabellenform anzeigen
     foreach ($drive in $drives) {
         $driveInfo = Get-WmiObject Win32_LogicalDisk -Filter "DeviceID='$drive'"
@@ -137,9 +137,9 @@ function Start-CHKDSK {
     
     # Kurze Information zum weiteren Vorgehen
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
-    $outputBox.AppendText("  [►] Bitte wählen Sie die zu prüfenden Laufwerke und Optionen im Dialog-Fenster aus...`r`n")
-    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
-    $outputBox.AppendText("  " + ("═" * 66) + "`r`n")
+    $outputBox.AppendText("[►] VORBEREITUNG CHKDSK:`r`n")
+    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
+    $outputBox.AppendText("    Bitte wählen Sie die zu prüfenden Laufwerke und Optionen im Dialog-Fenster aus...`r`n")
 
     # Form für die Laufwerksauswahl erstellen
     $form = New-Object System.Windows.Forms.Form
@@ -321,16 +321,9 @@ function Start-CHKDSK {
         if ($checkBoxForceDisMount.Checked) { $chkdskParams += " /x" }
 
         # Kurze Zusammenfassung der Parameter anzeigen
-        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
-        $outputBox.AppendText("`r`n  " + ("═" * 66) + "`r`n")
-        $outputBox.AppendText("  CHKDSK – Durchführung`r`n")
-        $outputBox.AppendText("  " + ("═" * 66) + "`r`n`r`n")
-        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
-        $outputBox.AppendText("  [►] Parameter: chkdsk$chkdskParams`r`n")
+        $outputBox.AppendText("CHKDSK wird ausgeführt mit Parametern:$chkdskParams`r`n`r`n")
         if ($checkBoxScanSectors.Checked) {
-            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
-            $outputBox.AppendText("  [⚠] Hinweis: Die Prüfung auf fehlerhafte Sektoren kann sehr lange dauern.`r`n")
-            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
+            $outputBox.AppendText("Hinweis: Die Prüfung auf fehlerhafte Sektoren kann lange dauern.`r`n`r`n")
         }
 
         # Abbruch-Button aktivieren
@@ -351,24 +344,20 @@ function Start-CHKDSK {
             # Starten der Zeitmessung für dieses Laufwerk
             $driveStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
                 
-            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
-            $outputBox.AppendText("`r`n  ┌─ Laufwerk $drive ($currentDriveIndex von $totalDrives)`r`n")
-            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
-            $outputBox.AppendText("  ├─ Befehl  : chkdsk $drive$chkdskParams`r`n")
+            $outputBox.AppendText("CHKDSK für Laufwerk $drive gestartet ($currentDriveIndex von $totalDrives)...`r`n")
                 
             # Prüfen, ob es sich um das Systemlaufwerk handelt
             $isSystemDrive = $drive -eq $env:SystemDrive
             if ($isSystemDrive -and ($checkBoxFixErrors.Checked -or $checkBoxScanSectors.Checked)) {
-                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
-                $outputBox.AppendText("  ├─ [⚠] Systemlaufwerk erkannt – CHKDSK wird beim nächsten Neustart ausgeführt.`r`n")
-                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
+                $outputBox.AppendText("Systemlaufwerk $drive erkannt. CHKDSK wird beim nächsten Neustart ausgeführt.`r`n")
                 $restartRequired = $true
                     
                 # CHKDSK beim nächsten Neustart mit fsutil planen (zuverlässiger)
                 try {
                     # Zuerst das Laufwerk als "dirty" markieren
                     $fsutilResult = & fsutil dirty set $drive
-                        $outputBox.AppendText("  ├─ [►] Laufwerk als 'dirty' markiert.`r`n")
+                    $outputBox.AppendText("Laufwerk als 'dirty' markiert: $fsutilResult`r`n")
+                        
                     # Dann CHKDSK-Parameter für den nächsten Neustart setzen
                     $regPath = "HKLM:\System\CurrentControlSet\Control\Session Manager"
                     $regKey = Get-ItemProperty -Path $regPath -Name "BootExecute" -ErrorAction SilentlyContinue
@@ -387,29 +376,27 @@ function Start-CHKDSK {
                             }
                             $newBootExecute += $chkdskEntry
                             Set-ItemProperty -Path $regPath -Name "BootExecute" -Value $newBootExecute
-                            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
-                            $outputBox.AppendText("  ├─ [✓] CHKDSK für nächsten Neustart geplant (Parameter:$chkdskParams)`r`n")
-                            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
+                            $outputBox.AppendText("CHKDSK wurde für den nächsten Neustart geplant mit Parametern:$chkdskParams`r`n")
                         }
                     }
+                    # Prüfen, ob CHKDSK bereits geplant ist
                     $chkntfsResult = & chkntfs $drive
-                        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
-                        $outputBox.AppendText("  ├─ [►] chkntfs-Status: $chkntfsResult`r`n")
+                    $outputBox.AppendText("Status: $chkntfsResult`r`n")
                     
                     # Zeitmessung für Systemlaufwerk stoppen
                     $driveStopwatch.Stop()
                     $formattedTime = [math]::Round($driveStopwatch.Elapsed.TotalSeconds, 1)
                     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
-                    $outputBox.AppendText("  └─ [►] Einrichtungsdauer: $formattedTime Sek.`r`n")
-                    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Muted'
-                    $outputBox.AppendText("  " + ("─" * 66) + "`r`n")
+                    $outputBox.AppendText("[INFO] Laufwerk: $drive | Dauer der Einrichtung: $formattedTime Sekunden`r`n")
+                    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
+                    $outputBox.AppendText("____________________________________________________`r`n`r`n")
                     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
                 }
                 catch {
-                    $outputBox.AppendText("  ├─ [!] Fehler beim Setzen des CHKDSK-Neustarts: $_`r`n")
+                    $outputBox.AppendText("Fehler beim Setzen des CHKDSK-Neustarts: $_`r`n")
                     # Alternativer Ansatz mit direktem Befehl
                     if ($checkBoxAutoConfirmBusy.Checked) {
-                        $outputBox.AppendText("  ├─ [►] Verwende alternative Methode mit automatischer Bestätigung (J)`r`n")
+                        $outputBox.AppendText("Verwende alternative Methode mit automatischer Bestätigung (J)`r`n")
                         $chkdskCmd = "echo J | chkdsk $drive$chkdskParams /b"
                     } 
                     else {
@@ -421,8 +408,7 @@ function Start-CHKDSK {
             }
             else {
                 # Start CHKDSK process and capture exit code
-                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
-                $outputBox.AppendText("  ├─ [►] Starte CHKDSK...`r`n")
+                $outputBox.AppendText("Parameter: chkdsk $drive$chkdskParams`r`n")
                     
                 try {
                     # Je nach Einstellung für Auto-Bestätigung
@@ -435,43 +421,45 @@ function Start-CHKDSK {
                         
                     $exitCode = $process.ExitCode
                         
-                    # Exit-Code interpretieren und Stil setzen
-                    $exitStyle = switch ($exitCode) {
-                        0       { 'Success' }
-                        1       { 'Success' }
-                        2       { 'Warning' }
-                        3       { 'Error'   }
-                        default { 'Error'   }
-                    }
+                    # Exit-Code interpretieren
                     switch ($exitCode) {
-                        2 { $restartRequired = $true }
+                        0 { 
+                            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
+                        }
+                        1 { 
+                            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
+                        }
+                        2 { 
+                            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
+                            $restartRequired = $true
+                        }
+                        3 { 
+                            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
+                        }
+                        default { 
+                            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
+                        }
                     }
                     # Stoppe den Stopwatch für dieses Laufwerk
                     $driveStopwatch.Stop()
                     
                     # Schöne Ausgabe des Exit-Codes mit relevanten Informationen
                     $formattedTime = [math]::Round($driveStopwatch.Elapsed.TotalSeconds, 1)
-                    $exitIcon = switch ($exitCode) {
-                        0       { "[✓]" }
-                        1       { "[✓]" }
-                        2       { "[⚠]" }
-                        3       { "[✗]" }
-                        default { "[✗]" }
-                    }
                     $exitCodeMessage = switch ($exitCode) {
-                        0       { "Keine Fehler gefunden." }
-                        1       { "Fehler gefunden und korrigiert." }
-                        2       { "Neustart erforderlich, um die Prüfung abzuschließen." }
-                        3       { "Nicht alle Fehler behebbar – Laufwerk möglicherweise beschädigt." }
-                        default { "Unbekannter CHKDSK-Statuscode: $exitCode" }
+                        0 { "[OK] CHKDSK erfolgreich abgeschlossen. Keine Fehler gefunden." }
+                        1 { "[OK] CHKDSK hat Fehler gefunden und korrigiert." }
+                        2 { "[WARNUNG] CHKDSK wurde mit /f Option ausgeführt und erfordert einen Neustart." }
+                        3 { "[FEHLER] CHKDSK konnte nicht alle Fehler beheben. Laufwerk möglicherweise beschädigt." }
+                        default { "[FEHLER] Unbekannter CHKDSK-Statuscode: $exitCode" }
                     }
                         
-                    Set-OutputSelectionStyle -OutputBox $outputBox -Style $exitStyle
-                    $outputBox.AppendText("  ├─ $exitIcon CHKDSK-Status : $exitCodeMessage`r`n")
+                    $outputBox.AppendText("CHKDSK-Status: $exitCodeMessage`r`n")
                     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
-                    $outputBox.AppendText("  └─ [►] Exit-Code: $exitCode | Dauer: $formattedTime Sek.`r`n")
-                    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Muted'
-                    $outputBox.AppendText("  " + ("─" * 66) + "`r`n")
+                    $outputBox.AppendText("[INFO] Exit-Code: $exitCode | Laufwerk: $drive | Dauer: $formattedTime Sekunden`r`n")
+                    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
+                    $outputBox.AppendText("____________________________________________________`r`n`r`n")
+                        
+                    # Farbe zurücksetzen
                     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
                 }
                 catch {
@@ -480,41 +468,27 @@ function Start-CHKDSK {
                     $formattedTime = [math]::Round($driveStopwatch.Elapsed.TotalSeconds, 1)
                     
                     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
-                    $outputBox.AppendText("  ├─ [✗] Fehler: $($_.Exception.Message)`r`n")
+                    $outputBox.AppendText("❌ FEHLER: $($_.Exception.Message)`r`n")
                     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
-                    $outputBox.AppendText("  └─ [►] Dauer bis Fehler: $formattedTime Sek.`r`n")
-                    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Muted'
-                    $outputBox.AppendText("  " + ("─" * 66) + "`r`n")
+                    $outputBox.AppendText("[INFO] Laufwerk: $drive | Dauer bis zum Fehler: $formattedTime Sekunden`r`n")
+                    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
+                    $outputBox.AppendText("____________________________________________________`r`n`r`n")
                     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
                 }
             }
         }
             
-        # Abschluss-Sektion
-        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
-        $outputBox.AppendText("`r`n  " + ("═" * 66) + "`r`n")
-        $outputBox.AppendText("  Ergebnis`r`n")
-        $outputBox.AppendText("  " + ("═" * 66) + "`r`n`r`n")
-
         # Wenn ein Neustart erforderlich ist und Auto-Neustart aktiviert ist
         if ($restartRequired -and $checkBoxAutoRestart.Checked) {
             $seconds = [int]$numRestartTimer.Value
             if ($seconds -gt 0) {
-                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
-                $outputBox.AppendText("  [⚠] Neustart in $seconds Sekunden...`r`n")
+                $outputBox.AppendText("`r`nComputer wird in $seconds Sekunden neu gestartet...`r`n")
                 Start-Process -FilePath "shutdown.exe" -ArgumentList "/r /t $seconds /c `"CHKDSK erfordert einen Neustart`"" -NoNewWindow
             }
         }
         elseif ($restartRequired) {
-            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
-            $outputBox.AppendText("  [⚠] Bitte starten Sie den Computer neu, um die CHKDSK-Prüfung für das Systemlaufwerk durchzuführen.`r`n")
+            $outputBox.AppendText("`r`nBitte starten Sie den Computer neu, um die CHKDSK-Prüfung für das Systemlaufwerk durchzuführen.`r`n")
         }
-        else {
-            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
-            $outputBox.AppendText("  [✓] Alle gewählten Laufwerke wurden geprüft.`r`n")
-        }
-        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
-        $outputBox.AppendText("`r`n  " + ("═" * 66) + "`r`n")
             
         # Setze den Fortschrittsbalken auf 100%
         if ($null -ne $progressBar) {
@@ -524,8 +498,7 @@ function Start-CHKDSK {
         $script:chkdskRunning = $false
     }
     else {
-        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
-        $outputBox.AppendText("`r`n  [⚠] CHKDSK wurde vom Benutzer abgebrochen.`r`n")
+        $outputBox.AppendText("CHKDSK wurde abgebrochen.`r`n")
     }
 }
 

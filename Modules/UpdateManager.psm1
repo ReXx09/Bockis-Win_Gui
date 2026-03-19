@@ -46,15 +46,6 @@ function Install-Update {
     if (-not $asset) {
         Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Error'
         $OutputBox.AppendText("[✗] Kein Download-Asset gefunden!`r`n")
-        $OutputBox.AppendText("[i] Dieser Release enthält kein ZIP-Paket.`r`n")
-        $OutputBox.AppendText("[i] Bitte den Release-Ersteller kontaktieren oder manuell herunterladen:`r`n")
-        $OutputBox.AppendText("    https://github.com/ReXx09/Bockis-Win_Gui/releases`r`n")
-        [System.Windows.Forms.MessageBox]::Show(
-            "Der Release v$LatestVersion hat kein Download-Paket (ZIP) angehängt.`n`nBitte manuell herunterladen:`nhttps://github.com/ReXx09/Bockis-Win_Gui/releases",
-            "Kein Download verfügbar",
-            [System.Windows.Forms.MessageBoxButtons]::OK,
-            [System.Windows.Forms.MessageBoxIcon]::Warning
-        ) | Out-Null
         return $false
     }
     
@@ -128,7 +119,7 @@ function Get-ReleaseListWithFallback {
 
     $headers = @{
         "User-Agent" = "Bockis-System-Tool"
-        "Accept"     = "application/vnd.github+json"
+        "Accept" = "application/vnd.github+json"
     }
 
     if (-not [string]::IsNullOrWhiteSpace($GitHubToken) -and $GitHubToken -ne "ghp_DEIN_TOKEN_HIER") {
@@ -153,7 +144,8 @@ function Get-ReleaseListWithFallback {
             if ($releases -and $releases.Count -gt 0) {
                 return @($releases)
             }
-        } catch {
+        }
+        catch {
             $lastError = $_
         }
     }
@@ -161,7 +153,7 @@ function Get-ReleaseListWithFallback {
     if ($headers.ContainsKey('Authorization')) {
         $headersNoAuth = @{
             "User-Agent" = "Bockis-System-Tool"
-            "Accept"     = "application/vnd.github+json"
+            "Accept" = "application/vnd.github+json"
         }
 
         foreach ($candidate in ($repoCandidates | Select-Object -Unique)) {
@@ -171,7 +163,8 @@ function Get-ReleaseListWithFallback {
                 if ($releases -and $releases.Count -gt 0) {
                     return @($releases)
                 }
-            } catch {
+            }
+            catch {
                 $lastError = $_
             }
         }
@@ -181,7 +174,8 @@ function Get-ReleaseListWithFallback {
         Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Error'
         if ($lastError) {
             $OutputBox.AppendText("[✗] Keine Releases gefunden: $($lastError.Exception.Message)`r`n")
-        } else {
+        }
+        else {
             $OutputBox.AppendText("[✗] Keine Releases gefunden.`r`n")
         }
     }
@@ -229,12 +223,15 @@ function Show-ReleaseSelectionDialog {
         try {
             if ([version]$versionText -gt [version]$CurrentVersion) {
                 $mode = 'Update'
-            } elseif ([version]$versionText -lt [version]$CurrentVersion) {
+            }
+            elseif ([version]$versionText -lt [version]$CurrentVersion) {
                 $mode = 'Downgrade'
-            } else {
+            }
+            else {
                 $mode = 'Aktuell'
             }
-        } catch {
+        }
+        catch {
             if ($versionText -eq $CurrentVersion) {
                 $mode = 'Aktuell'
             }
@@ -243,11 +240,11 @@ function Show-ReleaseSelectionDialog {
         $published = if ($release.published_at) { (Get-Date $release.published_at -Format 'yyyy-MM-dd') } else { 'unbekannt' }
         $listText = "{0,-14} [{1}]  ({2})" -f $tag, $mode, $published
         $null = $listBox.Items.Add([PSCustomObject]@{
-                Display = $listText
-                Release = $release
-                Mode    = $mode
-                Version = $versionText
-            })
+            Display = $listText
+            Release = $release
+            Mode = $mode
+            Version = $versionText
+        })
     }
 
     $listBox.DisplayMember = 'Display'
@@ -291,29 +288,29 @@ function Show-ReleaseSelectionDialog {
 function Invoke-ReleaseSelectionUpdate {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory=$true)]
         [string]$CurrentVersion,
 
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory=$true)]
         [System.Windows.Forms.RichTextBox]$OutputBox,
 
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory=$true)]
         [System.Windows.Forms.ProgressBar]$ProgressBar,
 
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory=$true)]
         [System.Windows.Forms.Form]$MainForm,
 
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory=$true)]
         [string]$ApplicationPath,
 
-        [Parameter(Mandatory = $false)]
+        [Parameter(Mandatory=$false)]
         [string]$RepoOwner = "ReXx09",
 
-        [Parameter(Mandatory = $false)]
-        [string]$RepoName = "Bockis-Win_Gui",
+        [Parameter(Mandatory=$false)]
+        [string]$RepoName = "Bockis-Win_Gui-DEV",
 
-        [Parameter(Mandatory = $false)]
-        [string]$GitHubToken = ""
+        [Parameter(Mandatory=$false)]
+        [string]$GitHubToken = "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"
     )
 
     try {
@@ -346,7 +343,8 @@ function Invoke-ReleaseSelectionUpdate {
         }
 
         return @{ Success = $false; Cancelled = $false; Message = "Installation nicht gestartet" }
-    } catch {
+    }
+    catch {
         Show-UpdateError -ErrorRecord $_ -OutputBox $OutputBox
         return @{ Success = $false; Cancelled = $false; Message = $_.Exception.Message }
     }
@@ -363,24 +361,15 @@ function Start-AsyncDownload {
     )
     
     Update-ProgressStatus -StatusText "Download läuft..." -ProgressValue 0 -TextColor ([System.Drawing.Color]::White) -ProgressBar $ProgressBar
-
-    $hasValidToken = $GitHubToken -and $GitHubToken -ne "ghp_DEIN_TOKEN_HIER"
-
-    # Für Public Repos: browser_download_url nutzen (kein Auth nötig, kein Redirect-Problem)
-    # Für Private Repos mit Token: asset.url (GitHub API-URL mit Auth-Header)
-    if ($hasValidToken) {
-        $downloadUrl = $Asset.url
-    } else {
-        $downloadUrl = if ($Asset.browser_download_url) { $Asset.browser_download_url } else { $Asset.url }
-    }
-
+    
+    $downloadUrl = $Asset.url
     $downloadHeaders = @{
         "User-Agent" = "Bockis-System-Tool"
+        "Accept" = "application/octet-stream"
     }
-
-    if ($hasValidToken) {
+    
+    if ($GitHubToken -and $GitHubToken -ne "ghp_DEIN_TOKEN_HIER") {
         $downloadHeaders["Authorization"] = "token $GitHubToken"
-        $downloadHeaders["Accept"] = "application/octet-stream"
     }
     
     try {
@@ -393,7 +382,8 @@ function Start-AsyncDownload {
             try {
                 Invoke-WebRequest -Uri $url -Headers $headers -OutFile $outFile -TimeoutSec 300
                 return @{ Success = $true }
-            } catch {
+            }
+            catch {
                 return @{ Success = $false; Error = $_.Exception.Message }
             }
         } -ArgumentList $downloadUrl, $downloadHeaders, $ZipPath
@@ -404,25 +394,27 @@ function Start-AsyncDownload {
         $script:downloadProgress = 5
         
         $progressTimer.Add_Tick({
-                param($sender, $e)
+            param($sender, $e)
             
-                if ($downloadJob.State -eq 'Running') {
-                    $script:downloadProgress += 2
-                    if ($script:downloadProgress -gt 85) { $script:downloadProgress = 10 }
+            if ($downloadJob.State -eq 'Running') {
+                $script:downloadProgress += 2
+                if ($script:downloadProgress -gt 85) { $script:downloadProgress = 10 }
                 
-                    if (Test-Path $ZipPath) {
-                        $currentSize = (Get-Item $ZipPath).Length / 1MB
-                        Update-ProgressStatus -StatusText "Download: $([math]::Round($currentSize, 1)) MB..." -ProgressValue $script:downloadProgress -TextColor ([System.Drawing.Color]::White) -ProgressBar $ProgressBar
-                    } else {
-                        Update-ProgressStatus -StatusText "Download läuft..." -ProgressValue $script:downloadProgress -TextColor ([System.Drawing.Color]::White) -ProgressBar $ProgressBar
-                    }
-                
-                    [System.Windows.Forms.Application]::DoEvents()
-                } else {
-                    $sender.Stop()
-                    $sender.Dispose()
+                if (Test-Path $ZipPath) {
+                    $currentSize = (Get-Item $ZipPath).Length / 1MB
+                    Update-ProgressStatus -StatusText "Download: $([math]::Round($currentSize, 1)) MB..." -ProgressValue $script:downloadProgress -TextColor ([System.Drawing.Color]::White) -ProgressBar $ProgressBar
                 }
-            })
+                else {
+                    Update-ProgressStatus -StatusText "Download läuft..." -ProgressValue $script:downloadProgress -TextColor ([System.Drawing.Color]::White) -ProgressBar $ProgressBar
+                }
+                
+                [System.Windows.Forms.Application]::DoEvents()
+            }
+            else {
+                $sender.Stop()
+                $sender.Dispose()
+            }
+        })
         
         $progressTimer.Start()
         
@@ -452,7 +444,8 @@ function Start-AsyncDownload {
         [System.Windows.Forms.Application]::DoEvents()
         
         return $true
-    } catch {
+    }
+    catch {
         Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Error'
         $OutputBox.AppendText("[✗] Download fehlgeschlagen: $($_.Exception.Message)`r`n")
         return $false
@@ -482,7 +475,8 @@ function Start-AsyncExtract {
         try {
             Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force
             return @{ Success = $true }
-        } catch {
+        }
+        catch {
             return @{ Success = $false; Error = $_.Exception.Message }
         }
     } -ArgumentList $ZipPath, $ExtractPath

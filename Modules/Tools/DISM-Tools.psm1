@@ -3,33 +3,6 @@ Import-Module "$PSScriptRoot\..\Core\Core.psm1" -Force -Global
 Import-Module "$PSScriptRoot\..\Core\ProgressBarTools.psm1" -Force -Global
 Import-Module "$PSScriptRoot\..\Core\TextStyle.psm1" -Force -Global
 
-# DISM Exit-Code Beschreibung
-function Get-DismExitDescription {
-    param ([int]$ExitCode)
-    $map = @{
-        0          = "Kein Fehler gefunden – Vorgang erfolgreich abgeschlossen."
-        1          = "Allgemeiner Fehler (unbekannte Ursache)."
-        2          = "Datei oder Ressource nicht gefunden."
-        87         = "Ungültiger Parameter übergeben."
-        112        = "Nicht genügend Speicherplatz auf dem Datenträger."
-        1726       = "RPC-Aufruf fehlgeschlagen – Dienst nicht erreichbar."
-        3010       = "Vorgang erfolgreich – Neustart erforderlich."
-        -2146500586 = "0x800F0816 – Quelldateien konnten nicht gefunden werden."
-        -2146500577 = "0x800F081F – Quelldateien fehlen (Windows Update oder ISO prüfen)."
-        -2146500346 = "0x800F0906 – Netzwerkverbindung für die Reparatur erforderlich."
-        -2146500345 = "0x800F0907 – DISM benötigt Internetzugang zum Komponentenspeicher."
-        -2146500272 = "0x800F0950 – Windows Update-Reparatur läuft bereits."
-        -2146500268 = "0x800F0954 – Online-Reparatur nicht verfügbar (WSUS-Umgebung?)"
-        -2146500240 = "0x800F0970 – Systemabbild konnte nicht repariert werden."
-        -2146498548 = "0x800F0014 – Fehler beim Laden einer Komponente."
-        -2147024894 = "0x80070002 – Systemdatei nicht gefunden."
-        -1073741515 = "0xC0000135 – DLL konnte nicht gefunden werden."
-        -1073741502 = "0xC0000142 – Anwendung konnte nicht initialisiert werden."
-    }
-    if ($map.ContainsKey($ExitCode)) { return $map[$ExitCode] }
-    return "Unbekannter Exit-Code. Microsoft-Dokumentation oder Ereignisprotokoll prüfen."
-}
-
 # Function to run DISM Check Health
 function Start-CheckDISM {
     param (
@@ -47,7 +20,7 @@ function Start-CheckDISM {
     }
     
     # In Log-Datei und Datenbank schreiben, dass der DISM Check startet
-    Write-ToolLog -ToolName "DISM-Check" -Message "DISM Check Health wird gestartet" -OutputBox $null -Style 'Action' -Level "Information" -SaveToDatabase
+    Write-ToolLog -ToolName "DISM-Check" -Message "`n`t[►]DISM Check Health wird gestartet" -OutputBox $outputBox -Style 'Action' -Level "Information" -SaveToDatabase
     
     # Rahmen und Systeminformationen erstellen
     #$computerName = $env:COMPUTERNAME
@@ -105,11 +78,9 @@ function Start-CheckDISM {
 
     # Header für die Ausgabe
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
-    $outputBox.AppendText("`r`n  " + ("═" * 54) + "`r`n")
-    $outputBox.AppendText("  ══  DISM Check Health  ══`r`n")
-    $outputBox.AppendText("  " + ("═" * 54) + "`r`n")
+    $outputBox.AppendText("`n`t=== DISM Check Health ===`n")
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
-    $outputBox.AppendText("  Zeitstempel: $(Get-Date -Format 'dd.MM.yyyy HH:mm:ss')`r`n`r`n")
+    $outputBox.AppendText("`tZeitpunkt: $(Get-Date -Format 'dd.MM.yyyy HH:mm:ss')`n`n")
 
     try {
         # ProgressBar aktualisieren
@@ -143,36 +114,19 @@ function Start-CheckDISM {
             Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
         }
         $result | ConvertTo-Json | Set-Content -Path $resultPath
-        Write-Host ("  " + ("═" * 66)) -ForegroundColor Cyan
+        Write-Host "`n" + ("═" * 70) -ForegroundColor Cyan 
         # Ergebnis auswerten
-        $exitDesc = Get-DismExitDescription -ExitCode $process.ExitCode
         switch ($process.ExitCode) {
             0 { 
-                Write-Host "  [✓] DISM Check Health erfolgreich abgeschlossen!" -ForegroundColor Green
-                Write-Host "  └─ Exit-Code: 0 – $exitDesc" -ForegroundColor DarkGreen
-                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
-                $outputBox.AppendText("  [✓] DISM Check erfolgreich abgeschlossen.`r`n")
-                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
-                $outputBox.AppendText("  └─ Exit-Code: 0 – $exitDesc`r`n")
-            }
-            3010 {
-                Write-Host "  [⚠] DISM Check abgeschlossen – Neustart erforderlich!" -ForegroundColor Yellow
-                Write-Host "  └─ Exit-Code: 3010 – $exitDesc" -ForegroundColor Yellow
-                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
-                $outputBox.AppendText("  [⚠] DISM Check abgeschlossen – Neustart erforderlich.`r`n")
-                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
-                $outputBox.AppendText("  └─ Exit-Code: 3010 – $exitDesc`r`n")
+                Write-Host "`n`t[✓] DISM Check Health erfolgreich abgeschlossen!" -ForegroundColor Green
+                $outputBox.AppendText("`t[✓] DISM Check erfolgreich abgeschlossen.`r`n")
             }
             default {
-                Write-Host "  [✗] DISM Check Health fehlgeschlagen!" -ForegroundColor Red
-                Write-Host "  └─ Exit-Code: $($process.ExitCode) – $exitDesc" -ForegroundColor Red
-                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
-                $outputBox.AppendText("  [✗] DISM Check fehlgeschlagen.`r`n")
-                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
-                $outputBox.AppendText("  └─ Exit-Code: $($process.ExitCode) – $exitDesc`r`n")
+                Write-Host "`n`t[X] DISM Check Health fehlgeschlagen. Exit-Code: $($process.ExitCode)" -ForegroundColor Red
+                $outputBox.AppendText("`t[X] DISM Check fehlgeschlagen. Exit-Code: $($process.ExitCode)`r`n")
             }
         }
-        Write-Host ("  " + ("═" * 66)) -ForegroundColor Cyan
+        Write-Host "`n" + ("═" * 70) -ForegroundColor Cyan 
         # ProgressBar zurücksetzen
         if ($progressBar) {
             $progressBar.Value = 100
@@ -182,8 +136,8 @@ function Start-CheckDISM {
         }
     }
     catch {
-        Write-Host "  [✗] Fehler beim DISM Check: $_" -ForegroundColor Red
-        $outputBox.AppendText("  [✗] Fehler beim DISM Check: $_`r`n")
+        Write-Host "`n`t[X] Fehler beim DISM Check: $_" -ForegroundColor Red
+        $outputBox.AppendText("`t[X] Fehler beim DISM Check: $_`r`n")
         if ($progressBar) {
             $progressBar.Value = 0
         }
@@ -207,7 +161,7 @@ function Start-ScanDISM {
     }
     
     # In Log-Datei und Datenbank schreiben, dass der DISM Scan startet
-    Write-ToolLog -ToolName "DISM-Scan" -Message "DISM Scan Health wird gestartet" -OutputBox $null -Style 'Action' -Level "Information" -SaveToDatabase
+    Write-ToolLog -ToolName "DISM-Scan" -Message "`n`t[►]DISM Scan wird gestartet" -OutputBox $outputBox -Style 'Action' -Level "Information" -SaveToDatabase
     
     # Rahmen und Systeminformationen erstellen
     #$computerName = $env:COMPUTERNAME
@@ -261,11 +215,9 @@ function Start-ScanDISM {
 
     # Header für die Ausgabe
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
-    $outputBox.AppendText("`r`n  " + ("═" * 54) + "`r`n")
-    $outputBox.AppendText("  ══  DISM Scan Health  ══`r`n")
-    $outputBox.AppendText("  " + ("═" * 54) + "`r`n")
+    $outputBox.AppendText("`n`t=== DISM Scan Health ===`n")
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
-    $outputBox.AppendText("  Zeitstempel: $(Get-Date -Format 'dd.MM.yyyy HH:mm:ss')`r`n`r`n")
+    $outputBox.AppendText("`tZeitpunkt: $(Get-Date -Format 'dd.MM.yyyy HH:mm:ss')`n`n")
 
     try {
         # ProgressBar aktualisieren
@@ -304,36 +256,19 @@ function Start-ScanDISM {
             Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
         }
         $result | ConvertTo-Json | Set-Content -Path $resultPath
-        Write-Host ("  " + ("═" * 66)) -ForegroundColor Cyan
+        Write-Host "`n" + ("═" * 70) -ForegroundColor Cyan 
         # Ergebnis auswerten
-        $exitDesc = Get-DismExitDescription -ExitCode $process.ExitCode
         switch ($process.ExitCode) {
             0 { 
-                Write-Host "  [✓] DISM Scan Health erfolgreich abgeschlossen!" -ForegroundColor Green
-                Write-Host "  └─ Exit-Code: 0 – $exitDesc" -ForegroundColor DarkGreen
-                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
-                $outputBox.AppendText("  [✓] DISM Scan erfolgreich abgeschlossen.`r`n")
-                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
-                $outputBox.AppendText("  └─ Exit-Code: 0 – $exitDesc`r`n")
-            }
-            3010 {
-                Write-Host "  [⚠] DISM Scan abgeschlossen – Neustart erforderlich!" -ForegroundColor Yellow
-                Write-Host "  └─ Exit-Code: 3010 – $exitDesc" -ForegroundColor Yellow
-                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
-                $outputBox.AppendText("  [⚠] DISM Scan abgeschlossen – Neustart erforderlich.`r`n")
-                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
-                $outputBox.AppendText("  └─ Exit-Code: 3010 – $exitDesc`r`n")
+                Write-Host "`n`t[✓] DISM Scan Health erfolgreich abgeschlossen!" -ForegroundColor Green
+                $outputBox.AppendText("`t[✓] DISM Scan erfolgreich abgeschlossen.`r`n")
             }
             default {
-                Write-Host "  [✗] DISM Scan Health fehlgeschlagen!" -ForegroundColor Red
-                Write-Host "  └─ Exit-Code: $($process.ExitCode) – $exitDesc" -ForegroundColor Red
-                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
-                $outputBox.AppendText("  [✗] DISM Scan fehlgeschlagen.`r`n")
-                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
-                $outputBox.AppendText("  └─ Exit-Code: $($process.ExitCode) – $exitDesc`r`n")
+                Write-Host "`n`t[X] DISM Scan Health fehlgeschlagen. Exit-Code: $($process.ExitCode)" -ForegroundColor Red
+                $outputBox.AppendText("`t[X] DISM Scan fehlgeschlagen. Exit-Code: $($process.ExitCode)`r`n")
             }
         }
-        Write-Host ("  " + ("═" * 66)) -ForegroundColor Cyan
+        Write-Host "`n" + ("═" * 70) -ForegroundColor Cyan 
         # ProgressBar zurücksetzen
         if ($progressBar) {
             $progressBar.Value = 100
@@ -343,8 +278,8 @@ function Start-ScanDISM {
         }
     }
     catch {
-        Write-Host "  [✗] Fehler beim DISM Scan: $_" -ForegroundColor Red
-        $outputBox.AppendText("  [✗] Fehler beim DISM Scan: $_`r`n")
+        Write-Host "`n`t[X] Fehler beim DISM Scan: $_" -ForegroundColor Red
+        $outputBox.AppendText("`t[X] Fehler beim DISM Scan: $_`r`n")
         if ($progressBar) {
             $progressBar.Value = 0
         }
@@ -368,7 +303,7 @@ function Start-RestoreDISM {
     }
     
     # In Log-Datei und Datenbank schreiben, dass die DISM Reparatur startet
-    Write-ToolLog -ToolName "DISM-Repair" -Message "DISM Restore Health wird gestartet" -OutputBox $null -Style 'Action' -Level "Information" -SaveToDatabase
+    Write-ToolLog -ToolName "DISM-Repair" -Message "`n`t[►]DISM Restore Health wird gestartet" -OutputBox $outputBox -Style 'Action' -Level "Information" -SaveToDatabase
     
     # Rahmen und Systeminformationen erstellen
     #$computerName = $env:COMPUTERNAME
@@ -429,11 +364,9 @@ function Start-RestoreDISM {
 
     # Header für die Ausgabe
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
-    $outputBox.AppendText("`r`n  " + ("═" * 54) + "`r`n")
-    $outputBox.AppendText("  ══  DISM Restore Health  ══`r`n")
-    $outputBox.AppendText("  " + ("═" * 54) + "`r`n")
+    $outputBox.AppendText("`n`t=== DISM Restore Health ===`n")
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
-    $outputBox.AppendText("  Zeitstempel: $(Get-Date -Format 'dd.MM.yyyy HH:mm:ss')`r`n`r`n")
+    $outputBox.AppendText("`tZeitpunkt: $(Get-Date -Format 'dd.MM.yyyy HH:mm:ss')`n`n")
 
     try {
         # ProgressBar aktualisieren
@@ -473,36 +406,19 @@ function Start-RestoreDISM {
             Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
         }
         $result | ConvertTo-Json | Set-Content -Path $resultPath
-        Write-Host ("  " + ("═" * 66)) -ForegroundColor Cyan
+        Write-Host "`n" + ("═" * 70) -ForegroundColor Cyan 
         # Ergebnis auswerten
-        $exitDesc = Get-DismExitDescription -ExitCode $process.ExitCode
         switch ($process.ExitCode) {
             0 { 
-                Write-Host "  [✓] DISM Restore Health erfolgreich abgeschlossen!" -ForegroundColor Green
-                Write-Host "  └─ Exit-Code: 0 – $exitDesc" -ForegroundColor DarkGreen
-                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
-                $outputBox.AppendText("  [✓] DISM Restore erfolgreich abgeschlossen.`r`n")
-                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
-                $outputBox.AppendText("  └─ Exit-Code: 0 – $exitDesc`r`n")
-            }
-            3010 {
-                Write-Host "  [⚠] DISM Restore abgeschlossen – Neustart erforderlich!" -ForegroundColor Yellow
-                Write-Host "  └─ Exit-Code: 3010 – $exitDesc" -ForegroundColor Yellow
-                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
-                $outputBox.AppendText("  [⚠] DISM Restore abgeschlossen – Neustart erforderlich.`r`n")
-                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
-                $outputBox.AppendText("  └─ Exit-Code: 3010 – $exitDesc`r`n")
+                Write-Host "`n`t[✓] DISM Restore Health erfolgreich abgeschlossen!" -ForegroundColor Green
+                $outputBox.AppendText("`t[✓] DISM Restore erfolgreich abgeschlossen.`r`n")
             }
             default {
-                Write-Host "  [✗] DISM Restore Health fehlgeschlagen!" -ForegroundColor Red
-                Write-Host "  └─ Exit-Code: $($process.ExitCode) – $exitDesc" -ForegroundColor Red
-                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
-                $outputBox.AppendText("  [✗] DISM Restore fehlgeschlagen.`r`n")
-                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
-                $outputBox.AppendText("  └─ Exit-Code: $($process.ExitCode) – $exitDesc`r`n")
+                Write-Host "`n`t[X] DISM Restore Health fehlgeschlagen. Exit-Code: $($process.ExitCode)" -ForegroundColor Red
+                $outputBox.AppendText("`t[X] DISM Restore fehlgeschlagen. Exit-Code: $($process.ExitCode)`r`n")
             }
         }
-        Write-Host ("  " + ("═" * 66)) -ForegroundColor Cyan
+        Write-Host "`n" + ("═" * 70) -ForegroundColor Cyan 
         # ProgressBar zurücksetzen
         if ($progressBar) {
             $progressBar.Value = 100
@@ -512,8 +428,8 @@ function Start-RestoreDISM {
         }
     }
     catch {
-        Write-Host "  [✗] Fehler beim DISM Restore: $_" -ForegroundColor Red
-        $outputBox.AppendText("  [✗] Fehler beim DISM Restore: $_`r`n")
+        Write-Host "`n`t[X] Fehler beim DISM Restore: $_" -ForegroundColor Red
+        $outputBox.AppendText("`t[X] Fehler beim DISM Restore: $_`r`n")
         if ($progressBar) {
             $progressBar.Value = 0
         }

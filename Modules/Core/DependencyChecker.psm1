@@ -1084,10 +1084,10 @@ function Get-GuiReleaseDependencyStatus {
         [string]$RepoOwner = "ReXx09",
 
         [Parameter(Mandatory = $false)]
-        [string]$RepoName = "Bockis-Win_Gui",
+        [string]$RepoName = "Bockis-Win_Gui-DEV",
 
         [Parameter(Mandatory = $false)]
-        [string]$GitHubToken = ""
+        [string]$GitHubToken = "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"
     )
 
     $status = @{
@@ -1451,10 +1451,10 @@ function Get-DependencyStatusForGUI {
         [string]$RepoOwner = "ReXx09",
 
         [Parameter(Mandatory = $false)]
-        [string]$RepoName = "Bockis-Win_Gui",
+        [string]$RepoName = "Bockis-Win_Gui-DEV",
 
         [Parameter(Mandatory = $false)]
-        [string]$GitHubToken = ""
+        [string]$GitHubToken
     )
 
     $dependencies = @()
