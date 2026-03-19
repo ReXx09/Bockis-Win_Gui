@@ -3,6 +3,11 @@ Import-Module "$PSScriptRoot\..\Core\Core.psm1" -Force -Global
 Import-Module "$PSScriptRoot\..\Core\ProgressBarTools.psm1" -Force -Global
 Import-Module "$PSScriptRoot\..\Core\TextStyle.psm1" -Force -Global
 
+# WPF-Assemblies für den Dialog
+Add-Type -AssemblyName PresentationFramework
+Add-Type -AssemblyName PresentationCore
+Add-Type -AssemblyName WindowsBase
+
 # Function to run CHKDSK
 function Start-CHKDSK {
     param (
@@ -70,8 +75,8 @@ function Start-CHKDSK {
         
     # Verfügbare Laufwerke ermitteln
     $drives = Get-WmiObject Win32_LogicalDisk | 
-    Where-Object { $_.DriveType -eq 3 -or $_.DriveType -eq 2 } | 
-    Select-Object -ExpandProperty DeviceID    # Laufwerksinformationen anzeigen
+        Where-Object { $_.DriveType -eq 3 -or $_.DriveType -eq 2 } | 
+            Select-Object -ExpandProperty DeviceID    # Laufwerksinformationen anzeigen
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
     $outputBox.AppendText("[►] VERFÜGBARE LAUFWERKE:`r`n`r`n")
     
@@ -119,12 +124,10 @@ function Start-CHKDSK {
         if ($usedPercent -gt 90) {
             Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
             $outputBox.AppendText("$usedPercent% (Kritisch)")
-        } 
-        elseif ($usedPercent -gt 75) {
+        } elseif ($usedPercent -gt 75) {
             Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
             $outputBox.AppendText("$usedPercent% (Warnung)")
-        }
-        else {
+        } else {
             Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
             $outputBox.AppendText("$usedPercent% (OK)")
         }
@@ -141,365 +144,611 @@ function Start-CHKDSK {
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
     $outputBox.AppendText("    Bitte wählen Sie die zu prüfenden Laufwerke und Optionen im Dialog-Fenster aus...`r`n")
 
-    # Form für die Laufwerksauswahl erstellen
-    $form = New-Object System.Windows.Forms.Form
-    $form.Text = "CHKDSK - Laufwerksauswahl"
-    $form.Size = New-Object System.Drawing.Size(500, 560)
-    $form.StartPosition = "CenterScreen"
-    $form.FormBorderStyle = "FixedDialog"
-    $form.MaximizeBox = $false
+    # ── WPF-Dialog für Laufwerksauswahl ──────────────────────────────
+    [xml]$xaml = @'
+<Window
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="" Width="540" Height="620"
+    WindowStyle="None" AllowsTransparency="True" ResizeMode="NoResize"
+    WindowStartupLocation="Manual"
+    Background="Transparent">
 
-    $form.StartPosition = [System.Windows.Forms.FormStartPosition]::Manual
+    <Window.Resources>
+        <!-- Basis Button-Style -->
+        <Style x:Key="BtnBase" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd" CornerRadius="10"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Background"
+                                        Value="{Binding RelativeSource={RelativeSource TemplatedParent},
+                                               Path=Tag}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="bd" Property="Opacity" Value="0.85"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- CheckBox-Style dark -->
+        <Style TargetType="CheckBox">
+            <Setter Property="Foreground" Value="#E0E0E0"/>
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Margin" Value="0,5,0,0"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+
+        <!-- ScrollBar schlank -->
+        <Style TargetType="ScrollBar">
+            <Setter Property="Width" Value="6"/>
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+    </Window.Resources>
+
+    <!-- Äußerer Schatten + runde Ecken -->
+    <Border CornerRadius="12" Background="#1E1E1E"
+            BorderBrush="#484848" BorderThickness="1">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="20" ShadowDepth="6"
+                              Opacity="0.6" Color="#000000"/>
+        </Border.Effect>
+
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="42"/>    <!-- Header / Drag -->
+                <RowDefinition Height="2"/>     <!-- Accent Linie -->
+                <RowDefinition Height="Auto"/>  <!-- Laufwerk-Label -->
+                <RowDefinition Height="200"/>   <!-- Laufwerk-Liste -->
+                <RowDefinition Height="Auto"/>  <!-- Alle / Auto-Confirm -->
+                <RowDefinition Height="Auto"/>  <!-- CHKDSK-Optionen -->
+                <RowDefinition Height="Auto"/>  <!-- Neustart-Optionen -->
+                <RowDefinition Height="*"/>     <!-- Spacer -->
+                <RowDefinition Height="68"/>    <!-- Buttons -->
+            </Grid.RowDefinitions>
+
+            <!-- Header (Drag-Zone) -->
+            <Border Grid.Row="0" Background="#262626"
+                    CornerRadius="12,12,0,0" x:Name="DragHeader">
+                <Grid>
+                    <TextBlock Text="  ⬡  CHKDSK  –  Laufwerksauswahl"
+                               Foreground="#00B464" FontSize="13" FontWeight="Bold"
+                               FontFamily="Segoe UI"
+                               VerticalAlignment="Center" Margin="8,0,0,0"/>
+                    <!-- Schließen-Button -->
+                    <Button x:Name="BtnClose" Content="✕" HorizontalAlignment="Right"
+                            Width="42" Height="42" FontSize="14"
+                            Background="Transparent" Foreground="#888"
+                            BorderThickness="0" Cursor="Hand"
+                            Style="{x:Null}">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border x:Name="cb" Background="Transparent"
+                                        CornerRadius="0,12,0,0">
+                                    <ContentPresenter HorizontalAlignment="Center"
+                                                      VerticalAlignment="Center"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="cb" Property="Background" Value="#C42B1C"/>
+                                        <Setter Property="Foreground" Value="White"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                </Grid>
+            </Border>
+
+            <!-- Accent Linie -->
+            <Rectangle Grid.Row="1" Fill="#00B464"/>
+
+            <!-- Laufwerk-Label -->
+            <TextBlock Grid.Row="2" Text="Zu prüfende Laufwerke auswählen:"
+                       Foreground="#909090" FontFamily="Segoe UI" FontSize="11"
+                       Margin="14,10,14,4"/>
+
+            <!-- Laufwerk-Liste (CheckBoxen dynamisch) -->
+            <ScrollViewer Grid.Row="3" Margin="12,0,12,0"
+                          VerticalScrollBarVisibility="Auto"
+                          Background="#2B2B2B">
+                <StackPanel x:Name="DrivePanel" Grid.IsSharedSizeScope="True"
+                            Margin="2,8,2,8">
+                    <!-- Tabellen-Kopf -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition SharedSizeGroup="ColCB"    Width="Auto"/>
+                            <ColumnDefinition SharedSizeGroup="ColDrive" Width="Auto" MinWidth="34"/>
+                            <ColumnDefinition SharedSizeGroup="ColName"  Width="Auto" MinWidth="100"/>
+                            <ColumnDefinition SharedSizeGroup="ColFree"  Width="Auto" MinWidth="110"/>
+                            <ColumnDefinition SharedSizeGroup="ColTotal" Width="Auto" MinWidth="82"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="1" Text="LW"              Foreground="#585858" FontSize="10" FontFamily="Segoe UI" FontWeight="SemiBold" Margin="0,0,14,0"/>
+                        <TextBlock Grid.Column="2" Text="Bezeichnung"     Foreground="#585858" FontSize="10" FontFamily="Segoe UI" FontWeight="SemiBold" Margin="0,0,14,0"/>
+                        <TextBlock Grid.Column="3" Text="Freier Speicher" Foreground="#585858" FontSize="10" FontFamily="Segoe UI" FontWeight="SemiBold" Margin="0,0,14,0"/>
+                        <TextBlock Grid.Column="4" Text="Gesamt"          Foreground="#585858" FontSize="10" FontFamily="Segoe UI" FontWeight="SemiBold"/>
+                    </Grid>
+                    <!-- Trennlinie -->
+                    <Rectangle Height="1" Fill="#363636" Margin="0,5,0,3"/>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- Alle auswählen + Auto-Bestätigung -->
+            <Grid Grid.Row="4" Margin="14,10,14,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <CheckBox x:Name="ChkAll"   Grid.Column="0"
+                          Content="Alle auswählen" Margin="0,0,20,0"/>
+                <CheckBox x:Name="ChkAutoConfirm" Grid.Column="1"
+                          Content="Laufwerk-Freigabe automatisch bestätigen"
+                          IsChecked="True"/>
+            </Grid>
+
+            <!-- CHKDSK-Optionen GroupBox -->
+            <GroupBox Grid.Row="5" Margin="12,12,12,0"
+                      Header="CHKDSK-Optionen"
+                      Foreground="#909090" BorderBrush="#484848">
+                <StackPanel Margin="8,6,8,8">
+                    <CheckBox x:Name="ChkFixErrors"
+                              Content="Fehler auf dem Laufwerk beheben  (/f)"
+                              IsChecked="True"/>
+                    <CheckBox x:Name="ChkScanSectors"
+                              Content="Beschädigte Sektoren suchen und wiederherstellen  (/r)  – kann sehr lange dauern"/>
+                    <CheckBox x:Name="ChkLessIndex"
+                              Content="Indexeinträge weniger intensiv prüfen  (/i)  – schneller"/>
+                    <CheckBox x:Name="ChkForceMount"
+                              Content="Laufwerk bei Bedarf auswerfen  (/x)  – für gründlichere Prüfung"/>
+                </StackPanel>
+            </GroupBox>
+
+            <!-- Neustart-Optionen GroupBox -->
+            <GroupBox Grid.Row="6" Margin="12,10,12,0"
+                      Header="Neustartoptionen  (gilt für alle gewählten Laufwerke)"
+                      Foreground="#909090" BorderBrush="#484848">
+                <StackPanel Orientation="Horizontal" Margin="8,6,8,8">
+                    <CheckBox x:Name="ChkAutoRestart"
+                              Content="Automatisch neustarten" VerticalAlignment="Center"/>
+                    <TextBox x:Name="TxtRestartSec" Width="55" Margin="16,0,6,0"
+                             Text="30" VerticalAlignment="Center"
+                             IsEnabled="False"
+                             Background="#2B2B2B" Foreground="#E0E0E0"
+                             BorderBrush="#484848" FontFamily="Segoe UI" FontSize="12"
+                             Padding="4,2" TextAlignment="Center"/>
+                    <TextBlock Text="Sekunden" Foreground="#909090" FontSize="12"
+                               FontFamily="Segoe UI" VerticalAlignment="Center"/>
+                </StackPanel>
+            </GroupBox>
+
+            <!-- Buttons -->
+            <Grid Grid.Row="8" Margin="70,0,14,14">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="180"/>
+                    <ColumnDefinition Width="12"/>
+                    <ColumnDefinition Width="180"/>
+                </Grid.ColumnDefinitions>
+                <Button x:Name="BtnOk" Grid.Column="0"
+                        Content="▶  Prüfung starten" Height="32"
+                        Background="#00B464" Foreground="#141414"
+                        Tag="#00D47A"
+                        Style="{StaticResource BtnBase}"/>
+                <Button x:Name="BtnCancel" Grid.Column="2"
+                        Content="Abbrechen" Height="32"
+                        Background="#373737" Foreground="#E0E0E0"
+                        Tag="#484848"
+                        Style="{StaticResource BtnBase}"/>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>
+'@
+
+    # ── WPF-Fenster aus XAML erstellen ───────────────────────────────
+    $reader = New-Object System.Xml.XmlNodeReader $xaml
+    $wpfForm = [Windows.Markup.XamlReader]::Load($reader)
+
+    # Startposition: rechts neben der Hauptform
     if ($null -ne $mainform) {
-        $form.Location = New-Object System.Drawing.Point(
-            ($mainform.Location.X + $mainform.Width + 10),
-            $mainform.Location.Y
-        )
+        $wpfForm.Left = $mainform.Location.X + $mainform.Width + 10
+        $wpfForm.Top = $mainform.Location.Y
     }
 
-    # Label erstellen
-    $label = New-Object System.Windows.Forms.Label
-    $label.Location = New-Object System.Drawing.Point(10, 10)
-    $label.Size = New-Object System.Drawing.Size(300, 20)
-    $label.Text = "Bitte wählen Sie die zu prüfenden Laufwerke aus:"
-    $form.Controls.Add($label)
+    # Controls holen
+    $drivePanel = $wpfForm.FindName("DrivePanel")
+    $chkAll = $wpfForm.FindName("ChkAll")
+    $chkAutoConfirm = $wpfForm.FindName("ChkAutoConfirm")
+    $chkFixErrors = $wpfForm.FindName("ChkFixErrors")
+    $chkScanSectors = $wpfForm.FindName("ChkScanSectors")
+    $chkLessIndex = $wpfForm.FindName("ChkLessIndex")
+    $chkForceMount = $wpfForm.FindName("ChkForceMount")
+    $chkAutoRestart = $wpfForm.FindName("ChkAutoRestart")
+    $txtRestartSec = $wpfForm.FindName("TxtRestartSec")
+    $btnOk = $wpfForm.FindName("BtnOk")
+    $btnCancel = $wpfForm.FindName("BtnCancel")
+    $btnClose = $wpfForm.FindName("BtnClose")
+    $dragHeader = $wpfForm.FindName("DragHeader")
 
-    # CheckedListBox für Laufwerksauswahl erstellen
-    $checkedListBox = New-Object System.Windows.Forms.CheckedListBox
-    $checkedListBox.Location = New-Object System.Drawing.Point(10, 40)
-    $checkedListBox.Size = New-Object System.Drawing.Size(460, 200)
-    $checkedListBox.CheckOnClick = $true
-
-    # Laufwerke zur Liste hinzufügen
+    # ── Laufwerk-CheckBoxen dynamisch befüllen ────────────────────────
+    $driveCheckBoxes = @{}
     foreach ($drive in $drives) {
         $driveInfo = Get-WmiObject Win32_LogicalDisk -Filter "DeviceID='$drive'"
-        $driveLabel = if ($driveInfo.VolumeName) { "$drive ($($driveInfo.VolumeName))" } else { $drive }
-        $freeSpace = [Math]::Round($driveInfo.FreeSpace / 1GB, 2)
-        $totalSpace = [Math]::Round($driveInfo.Size / 1GB, 2)
-        $isSystemDrive = $drive -eq $env:SystemDrive
-        
-        # Füge (Systemlaufwerk) Hinweis hinzu
-        if ($isSystemDrive) {
-            $checkedListBox.Items.Add("$driveLabel - $freeSpace GB frei von $totalSpace GB (Systemlaufwerk)")
-        }
-        else {
-            $checkedListBox.Items.Add("$driveLabel - $freeSpace GB frei von $totalSpace GB")
-        }
-    }
-    $form.Controls.Add($checkedListBox)
+        $volName  = if ($driveInfo.VolumeName) { $driveInfo.VolumeName } else { "" }
+        $free     = [Math]::Round($driveInfo.FreeSpace / 1GB, 2)
+        $total    = [Math]::Round($driveInfo.Size / 1GB, 2)
+        $usedPct  = [Math]::Round(100 - (($driveInfo.FreeSpace / $driveInfo.Size) * 100), 1)
+        $isSystem = $drive -eq $env:SystemDrive
+        $freeHex  = if ($usedPct -gt 90) { "#E05050" } elseif ($usedPct -gt 75) { "#D4A010" } else { "#00B464" }
+        $bconv    = [System.Windows.Media.BrushConverter]::new()
 
-    # "Alle auswählen" Checkbox
-    $checkBoxAll = New-Object System.Windows.Forms.CheckBox
-    $checkBoxAll.Location = New-Object System.Drawing.Point(10, 250)
-    $checkBoxAll.Size = New-Object System.Drawing.Size(150, 20)
-    $checkBoxAll.Text = "Alle auswählen"
-    $checkBoxAll.Add_Click({
-            for ($i = 0; $i -lt $checkedListBox.Items.Count; $i++) {
-                $checkedListBox.SetItemChecked($i, $checkBoxAll.Checked)
+        # ── Tabellen-Zeile ───────────────────────────────────────────
+        $row = New-Object System.Windows.Controls.Grid
+        $row.Margin = New-Object System.Windows.Thickness(0, 4, 0, 0)
+
+        foreach ($grp in @("ColCB", "ColDrive", "ColName", "ColFree", "ColTotal")) {
+            $cd = New-Object System.Windows.Controls.ColumnDefinition
+            $cd.SharedSizeGroup = $grp
+            $cd.Width = [System.Windows.GridLength]::Auto
+            $row.ColumnDefinitions.Add($cd)
+        }
+        $cdStar = New-Object System.Windows.Controls.ColumnDefinition
+        $cdStar.Width = [System.Windows.GridLength]::new(1, [System.Windows.GridUnitType]::Star)
+        $row.ColumnDefinitions.Add($cdStar)
+
+        # CheckBox (kein Content – Text in separaten TextBlocks)
+        $cb = New-Object System.Windows.Controls.CheckBox
+        $cb.VerticalAlignment = [System.Windows.VerticalAlignment]::Center
+        $cb.Margin = New-Object System.Windows.Thickness(0, 0, 10, 0)
+        [System.Windows.Controls.Grid]::SetColumn($cb, 0)
+        $row.Children.Add($cb)
+
+        # Laufwerksbuchstabe
+        $tbDrive = New-Object System.Windows.Controls.TextBlock
+        $tbDrive.Text = $drive
+        $tbDrive.Foreground = [System.Windows.Media.Brushes]::White
+        $tbDrive.FontFamily = New-Object System.Windows.Media.FontFamily("Segoe UI")
+        $tbDrive.FontSize = 12
+        $tbDrive.FontWeight = [System.Windows.FontWeights]::SemiBold
+        $tbDrive.VerticalAlignment = [System.Windows.VerticalAlignment]::Center
+        $tbDrive.Margin = New-Object System.Windows.Thickness(0, 0, 14, 0)
+        [System.Windows.Controls.Grid]::SetColumn($tbDrive, 1)
+        $row.Children.Add($tbDrive)
+
+        # Bezeichnung (Volumename)
+        $tbName = New-Object System.Windows.Controls.TextBlock
+        $tbName.Text = if ($volName) { "($volName)" } else { "" }
+        $tbName.Foreground = $bconv.ConvertFrom("#909090")
+        $tbName.FontFamily = New-Object System.Windows.Media.FontFamily("Segoe UI")
+        $tbName.FontSize = 12
+        $tbName.VerticalAlignment = [System.Windows.VerticalAlignment]::Center
+        $tbName.Margin = New-Object System.Windows.Thickness(0, 0, 14, 0)
+        [System.Windows.Controls.Grid]::SetColumn($tbName, 2)
+        $row.Children.Add($tbName)
+
+        # Freier Speicher (Farbe nach Füllstand)
+        $tbFree = New-Object System.Windows.Controls.TextBlock
+        $tbFree.Text = "$free GB frei"
+        $tbFree.Foreground = $bconv.ConvertFrom($freeHex)
+        $tbFree.FontFamily = New-Object System.Windows.Media.FontFamily("Segoe UI")
+        $tbFree.FontSize = 12
+        $tbFree.VerticalAlignment = [System.Windows.VerticalAlignment]::Center
+        $tbFree.Margin = New-Object System.Windows.Thickness(0, 0, 14, 0)
+        [System.Windows.Controls.Grid]::SetColumn($tbFree, 3)
+        $row.Children.Add($tbFree)
+
+        # Gesamtgröße
+        $tbTotal = New-Object System.Windows.Controls.TextBlock
+        $tbTotal.Text = "von $total GB"
+        $tbTotal.Foreground = $bconv.ConvertFrom("#707070")
+        $tbTotal.FontFamily = New-Object System.Windows.Media.FontFamily("Segoe UI")
+        $tbTotal.FontSize = 12
+        $tbTotal.VerticalAlignment = [System.Windows.VerticalAlignment]::Center
+        [System.Windows.Controls.Grid]::SetColumn($tbTotal, 4)
+        $row.Children.Add($tbTotal)
+
+        # Systemlaufwerk-Badge
+        if ($isSystem) {
+            $badge = New-Object System.Windows.Controls.Border
+            $badge.CornerRadius = New-Object System.Windows.CornerRadius(3)
+            $badge.Background = $bconv.ConvertFrom("#0A3322")
+            $badge.BorderBrush = $bconv.ConvertFrom("#00B464")
+            $badge.BorderThickness = New-Object System.Windows.Thickness(1)
+            $badge.Margin = New-Object System.Windows.Thickness(10, 1, 0, 1)
+            $badge.Padding = New-Object System.Windows.Thickness(6, 1, 6, 1)
+            $badge.VerticalAlignment = [System.Windows.VerticalAlignment]::Center
+            $badgeText = New-Object System.Windows.Controls.TextBlock
+            $badgeText.Text = "Systemlaufwerk"
+            $badgeText.Foreground = $bconv.ConvertFrom("#00B464")
+            $badgeText.FontSize = 10
+            $badgeText.FontFamily = New-Object System.Windows.Media.FontFamily("Segoe UI")
+            $badge.Child = $badgeText
+            [System.Windows.Controls.Grid]::SetColumn($badge, 5)
+            $row.Children.Add($badge)
+        }
+
+        $drivePanel.Children.Add($row)
+        $driveCheckBoxes[$drive] = $cb
+
+        # Rücksync: Einzel-CB → ChkAll aktualisieren
+        $cb.Add_Checked({
+            if (-not $script:_bulkChanging) {
+                $allChecked = $true
+                foreach ($c in $driveCheckBoxes.Values) {
+                    if ($c.IsChecked -ne $true) { $allChecked = $false; break }
+                }
+                if ($allChecked) {
+                    $script:_bulkChanging = $true
+                    $chkAll.IsChecked = $true
+                    $script:_bulkChanging = $false
+                }
             }
         })
-    $form.Controls.Add($checkBoxAll)
+        $cb.Add_Unchecked({
+            if (-not $script:_bulkChanging) {
+                $script:_bulkChanging = $true
+                $chkAll.IsChecked = $false
+                $script:_bulkChanging = $false
+            }
+        })
+    }
 
-    # Auto-Bestätigung für Laufwerke, die in Benutzung sind
-    $checkBoxAutoConfirmBusy = New-Object System.Windows.Forms.CheckBox
-    $checkBoxAutoConfirmBusy.Location = New-Object System.Drawing.Point(180, 250)
-    $checkBoxAutoConfirmBusy.Size = New-Object System.Drawing.Size(290, 20)
-    $checkBoxAutoConfirmBusy.Text = "Laufwerk-Freigabe automatisch bestätigen (J/N)"
-    $checkBoxAutoConfirmBusy.Checked = $true
-    $form.Controls.Add($checkBoxAutoConfirmBusy)
+    # ── Events ───────────────────────────────────────────────────────
+    $script:_bulkChanging = $false   # Schutz-Flag gegen Kaskaden-Ereignisse
 
-    # GroupBox für CHKDSK-Optionen
-    $optionsGroupBox = New-Object System.Windows.Forms.GroupBox
-    $optionsGroupBox.Location = New-Object System.Drawing.Point(10, 280)
-    $optionsGroupBox.Size = New-Object System.Drawing.Size(460, 130)
-    $optionsGroupBox.Text = "CHKDSK-Optionen"
-    $form.Controls.Add($optionsGroupBox)
+    # Drag über Header
+    $dragHeader.Add_MouseLeftButtonDown({ $wpfForm.DragMove() })
 
-    # Checkbox für /f (Fehler beheben)
-    $checkBoxFixErrors = New-Object System.Windows.Forms.CheckBox
-    $checkBoxFixErrors.Location = New-Object System.Drawing.Point(10, 20)
-    $checkBoxFixErrors.Size = New-Object System.Drawing.Size(440, 20)
-    $checkBoxFixErrors.Text = "Fehler auf dem Laufwerk beheben (/f)"
-    $checkBoxFixErrors.Checked = $true
-    $optionsGroupBox.Controls.Add($checkBoxFixErrors)
-
-    # Checkbox für /r (Beschädigte Sektoren finden und wiederherstellen)
-    $checkBoxScanSectors = New-Object System.Windows.Forms.CheckBox
-    $checkBoxScanSectors.Location = New-Object System.Drawing.Point(10, 45)
-    $checkBoxScanSectors.Size = New-Object System.Drawing.Size(440, 20)
-    $checkBoxScanSectors.Text = "Beschädigte Sektoren suchen und wiederherstellen (/r) - kann sehr lange dauern"
-    $optionsGroupBox.Controls.Add($checkBoxScanSectors)
-
-    # Checkbox für /i (Nicht so gründliche Indexprüfung)
-    $checkBoxLessIntensiveIndex = New-Object System.Windows.Forms.CheckBox
-    $checkBoxLessIntensiveIndex.Location = New-Object System.Drawing.Point(10, 70)
-    $checkBoxLessIntensiveIndex.Size = New-Object System.Drawing.Size(440, 20)
-    $checkBoxLessIntensiveIndex.Text = "Indexeinträge weniger intensiv prüfen (/i) - schneller"
-    $optionsGroupBox.Controls.Add($checkBoxLessIntensiveIndex)
-
-    # Checkbox für /x (Laufwerk bei Bedarf auswerfen)
-    $checkBoxForceDisMount = New-Object System.Windows.Forms.CheckBox
-    $checkBoxForceDisMount.Location = New-Object System.Drawing.Point(10, 95)
-    $checkBoxForceDisMount.Size = New-Object System.Drawing.Size(440, 20)
-    $checkBoxForceDisMount.Text = "Laufwerk bei Bedarf auswerfen (/x) - für gründlichere Prüfung"
-    $optionsGroupBox.Controls.Add($checkBoxForceDisMount)
-
-    # Neue GroupBox für Neustartoptionen
-    $restartGroupBox = New-Object System.Windows.Forms.GroupBox
-    $restartGroupBox.Location = New-Object System.Drawing.Point(10, 420)
-    $restartGroupBox.Size = New-Object System.Drawing.Size(460, 60)
-    $restartGroupBox.Text = "Neustartoptionen (bei allen Laufwerken)"
-    $form.Controls.Add($restartGroupBox)
-
-    # Checkbox für Auto-Neustart
-    $checkBoxAutoRestart = New-Object System.Windows.Forms.CheckBox
-    $checkBoxAutoRestart.Location = New-Object System.Drawing.Point(10, 20)
-    $checkBoxAutoRestart.Size = New-Object System.Drawing.Size(200, 20)
-    $checkBoxAutoRestart.Text = "Automatisch neustarten"
-    $restartGroupBox.Controls.Add($checkBoxAutoRestart)
-
-    # NumericUpDown für Neustart-Timer
-    $numRestartTimer = New-Object System.Windows.Forms.NumericUpDown
-    $numRestartTimer.Location = New-Object System.Drawing.Point(220, 20)
-    $numRestartTimer.Size = New-Object System.Drawing.Size(60, 20)
-    $numRestartTimer.Minimum = 0
-    $numRestartTimer.Maximum = 600
-    $numRestartTimer.Value = 30
-    $numRestartTimer.Enabled = $false  # Deaktiviert bis Auto-Neustart ausgewählt wird
-    $restartGroupBox.Controls.Add($numRestartTimer)
-
-    $labelSeconds = New-Object System.Windows.Forms.Label
-    $labelSeconds.Location = New-Object System.Drawing.Point(290, 22)
-    $labelSeconds.Size = New-Object System.Drawing.Size(100, 20)
-    $labelSeconds.Text = "Sekunden"
-    $restartGroupBox.Controls.Add($labelSeconds)
-
-    # Event für die Aktivierung/Deaktivierung des Timers
-    $checkBoxAutoRestart.Add_CheckedChanged({
-            $numRestartTimer.Enabled = $checkBoxAutoRestart.Checked
+    # Alle auswählen (mit Flag, damit Einzel-CB-Events nicht kaskadieren)
+    $chkAll.Add_Checked({
+            $script:_bulkChanging = $true
+            foreach ($cb in $driveCheckBoxes.Values) { $cb.IsChecked = $true }
+            $script:_bulkChanging = $false
+        })
+    $chkAll.Add_Unchecked({
+            $script:_bulkChanging = $true
+            foreach ($cb in $driveCheckBoxes.Values) { $cb.IsChecked = $false }
+            $script:_bulkChanging = $false
         })
 
-    # OK-Button
-    $okButton = New-Object System.Windows.Forms.Button
-    $okButton.Location = New-Object System.Drawing.Point(150, 490)
-    $okButton.Size = New-Object System.Drawing.Size(140, 30)
-    $okButton.Text = "Prüfung starten"
-    $okButton.BackColor = [System.Drawing.Color]::LightGreen
-    $okButton.DialogResult = [System.Windows.Forms.DialogResult]::OK
-    $form.Controls.Add($okButton)
-    $form.AcceptButton = $okButton
+    # Neustart-Sekunden aktivieren
+    $chkAutoRestart.Add_Checked({ $txtRestartSec.IsEnabled = $true })
+    $chkAutoRestart.Add_Unchecked({ $txtRestartSec.IsEnabled = $false })
 
-    # Abbrechen-Button
-    $cancelButton = New-Object System.Windows.Forms.Button
-    $cancelButton.Location = New-Object System.Drawing.Point(300, 490)
-    $cancelButton.Size = New-Object System.Drawing.Size(140, 30)
-    $cancelButton.Text = "Abbrechen"
-    $cancelButton.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
-    $form.Controls.Add($cancelButton)
-    $form.CancelButton = $cancelButton
+    # /r impliziert /f – Fehler beheben automatisch aktivieren
+    $chkScanSectors.Add_Checked({ $chkFixErrors.IsChecked = $true })
 
-    # Form anzeigen und Ergebnis auswerten
-    $result = $form.ShowDialog()
+    # Schließen / Abbrechen
+    $script:_wpfResult = $false
+    $btnClose.Add_Click({ $script:_wpfResult = $false; $wpfForm.Close() })
+    $btnCancel.Add_Click({ $script:_wpfResult = $false; $wpfForm.Close() })
+    $btnOk.Add_Click({ $script:_wpfResult = $true; $wpfForm.Close() })
+
+    # ── Dialog anzeigen ──────────────────────────────────────────────
+    $wpfForm.ShowDialog() | Out-Null
     $outputBox.Clear()
-    
-    if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
-        $selectedDrives = @()
-        for ($i = 0; $i -lt $checkedListBox.Items.Count; $i++) {
-            if ($checkedListBox.GetItemChecked($i)) {
-                $selectedDrives += $drives[$i]
-            }
-        }        if ($selectedDrives.Count -eq 0) {
-            $outputBox.AppendText("Keine Laufwerke ausgewählt. CHKDSK abgebrochen.`r`n")
-            return
-        }
-        
-        # CHKDSK-Parameter aufbauen
-        $chkdskParams = ""
-        if ($checkBoxFixErrors.Checked) { $chkdskParams += " /f" }
-        if ($checkBoxScanSectors.Checked) { $chkdskParams += " /r" }
-        if ($checkBoxLessIntensiveIndex.Checked) { $chkdskParams += " /i" }
-        if ($checkBoxForceDisMount.Checked) { $chkdskParams += " /x" }
 
-        # Kurze Zusammenfassung der Parameter anzeigen
-        $outputBox.AppendText("CHKDSK wird ausgeführt mit Parametern:$chkdskParams`r`n`r`n")
-        if ($checkBoxScanSectors.Checked) {
-            $outputBox.AppendText("Hinweis: Die Prüfung auf fehlerhafte Sektoren kann lange dauern.`r`n`r`n")
-        }
-
-        # Abbruch-Button aktivieren
-        $script:chkdskRunning = $true
-            
-        $totalDrives = $selectedDrives.Count
-        $currentDriveIndex = 0
-        # Variable für Neustart-Erfordernis
-        $restartRequired = $false
-
-        foreach ($drive in $selectedDrives) {
-            $currentDriveIndex++
-            $progressPercent = [int](($currentDriveIndex - 1) / $totalDrives * 100)
-            if ($null -ne $progressBar) {
-                $progressBar.Value = $progressPercent
-            }
-            
-            # Starten der Zeitmessung für dieses Laufwerk
-            $driveStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
-                
-            $outputBox.AppendText("CHKDSK für Laufwerk $drive gestartet ($currentDriveIndex von $totalDrives)...`r`n")
-                
-            # Prüfen, ob es sich um das Systemlaufwerk handelt
-            $isSystemDrive = $drive -eq $env:SystemDrive
-            if ($isSystemDrive -and ($checkBoxFixErrors.Checked -or $checkBoxScanSectors.Checked)) {
-                $outputBox.AppendText("Systemlaufwerk $drive erkannt. CHKDSK wird beim nächsten Neustart ausgeführt.`r`n")
-                $restartRequired = $true
-                    
-                # CHKDSK beim nächsten Neustart mit fsutil planen (zuverlässiger)
-                try {
-                    # Zuerst das Laufwerk als "dirty" markieren
-                    $fsutilResult = & fsutil dirty set $drive
-                    $outputBox.AppendText("Laufwerk als 'dirty' markiert: $fsutilResult`r`n")
-                        
-                    # Dann CHKDSK-Parameter für den nächsten Neustart setzen
-                    $regPath = "HKLM:\System\CurrentControlSet\Control\Session Manager"
-                    $regKey = Get-ItemProperty -Path $regPath -Name "BootExecute" -ErrorAction SilentlyContinue
-                        
-                    if ($regKey) {
-                        $bootExecute = $regKey.BootExecute
-                        # Prüfen, ob bereits ein CHKDSK-Eintrag vorhanden ist
-                        $chkdskEntry = "autocheck autochk * $drive$chkdskParams"
-                            
-                        if ($bootExecute -notcontains $chkdskEntry) {
-                            $newBootExecute = @("autocheck autochk *")
-                            foreach ($item in $bootExecute) {
-                                if ($item -ne "autocheck autochk *") {
-                                    $newBootExecute += $item
-                                }
-                            }
-                            $newBootExecute += $chkdskEntry
-                            Set-ItemProperty -Path $regPath -Name "BootExecute" -Value $newBootExecute
-                            $outputBox.AppendText("CHKDSK wurde für den nächsten Neustart geplant mit Parametern:$chkdskParams`r`n")
-                        }
-                    }
-                    # Prüfen, ob CHKDSK bereits geplant ist
-                    $chkntfsResult = & chkntfs $drive
-                    $outputBox.AppendText("Status: $chkntfsResult`r`n")
-                    
-                    # Zeitmessung für Systemlaufwerk stoppen
-                    $driveStopwatch.Stop()
-                    $formattedTime = [math]::Round($driveStopwatch.Elapsed.TotalSeconds, 1)
-                    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
-                    $outputBox.AppendText("[INFO] Laufwerk: $drive | Dauer der Einrichtung: $formattedTime Sekunden`r`n")
-                    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
-                    $outputBox.AppendText("____________________________________________________`r`n`r`n")
-                    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
-                }
-                catch {
-                    $outputBox.AppendText("Fehler beim Setzen des CHKDSK-Neustarts: $_`r`n")
-                    # Alternativer Ansatz mit direktem Befehl
-                    if ($checkBoxAutoConfirmBusy.Checked) {
-                        $outputBox.AppendText("Verwende alternative Methode mit automatischer Bestätigung (J)`r`n")
-                        $chkdskCmd = "echo J | chkdsk $drive$chkdskParams /b"
-                    } 
-                    else {
-                        $chkdskCmd = "chkdsk $drive$chkdskParams /b"
-                    }
-                        
-                    Start-Process -FilePath "cmd.exe" -ArgumentList "/c $chkdskCmd" -Verb RunAs -Wait
-                }
-            }
-            else {
-                # Start CHKDSK process and capture exit code
-                $outputBox.AppendText("Parameter: chkdsk $drive$chkdskParams`r`n")
-                    
-                try {
-                    # Je nach Einstellung für Auto-Bestätigung
-                    if ($checkBoxAutoConfirmBusy.Checked) {
-                        $process = Start-Process -FilePath "cmd.exe" -ArgumentList "/c echo J | chkdsk $drive$chkdskParams" -NoNewWindow -PassThru -Wait
-                    }
-                    else {
-                        $process = Start-Process -FilePath "chkdsk.exe" -ArgumentList "$drive$chkdskParams" -NoNewWindow -PassThru -Wait
-                    }
-                        
-                    $exitCode = $process.ExitCode
-                        
-                    # Exit-Code interpretieren
-                    switch ($exitCode) {
-                        0 { 
-                            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
-                        }
-                        1 { 
-                            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
-                        }
-                        2 { 
-                            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
-                            $restartRequired = $true
-                        }
-                        3 { 
-                            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
-                        }
-                        default { 
-                            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
-                        }
-                    }
-                    # Stoppe den Stopwatch für dieses Laufwerk
-                    $driveStopwatch.Stop()
-                    
-                    # Schöne Ausgabe des Exit-Codes mit relevanten Informationen
-                    $formattedTime = [math]::Round($driveStopwatch.Elapsed.TotalSeconds, 1)
-                    $exitCodeMessage = switch ($exitCode) {
-                        0 { "[OK] CHKDSK erfolgreich abgeschlossen. Keine Fehler gefunden." }
-                        1 { "[OK] CHKDSK hat Fehler gefunden und korrigiert." }
-                        2 { "[WARNUNG] CHKDSK wurde mit /f Option ausgeführt und erfordert einen Neustart." }
-                        3 { "[FEHLER] CHKDSK konnte nicht alle Fehler beheben. Laufwerk möglicherweise beschädigt." }
-                        default { "[FEHLER] Unbekannter CHKDSK-Statuscode: $exitCode" }
-                    }
-                        
-                    $outputBox.AppendText("CHKDSK-Status: $exitCodeMessage`r`n")
-                    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
-                    $outputBox.AppendText("[INFO] Exit-Code: $exitCode | Laufwerk: $drive | Dauer: $formattedTime Sekunden`r`n")
-                    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
-                    $outputBox.AppendText("____________________________________________________`r`n`r`n")
-                        
-                    # Farbe zurücksetzen
-                    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
-                }
-                catch {
-                    # Stopwatch anhalten auch bei Fehlern
-                    $driveStopwatch.Stop()
-                    $formattedTime = [math]::Round($driveStopwatch.Elapsed.TotalSeconds, 1)
-                    
-                    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
-                    $outputBox.AppendText("❌ FEHLER: $($_.Exception.Message)`r`n")
-                    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
-                    $outputBox.AppendText("[INFO] Laufwerk: $drive | Dauer bis zum Fehler: $formattedTime Sekunden`r`n")
-                    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
-                    $outputBox.AppendText("____________________________________________________`r`n`r`n")
-                    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
-                }
-            }
-        }
-            
-        # Wenn ein Neustart erforderlich ist und Auto-Neustart aktiviert ist
-        if ($restartRequired -and $checkBoxAutoRestart.Checked) {
-            $seconds = [int]$numRestartTimer.Value
-            if ($seconds -gt 0) {
-                $outputBox.AppendText("`r`nComputer wird in $seconds Sekunden neu gestartet...`r`n")
-                Start-Process -FilePath "shutdown.exe" -ArgumentList "/r /t $seconds /c `"CHKDSK erfordert einen Neustart`"" -NoNewWindow
-            }
-        }
-        elseif ($restartRequired) {
-            $outputBox.AppendText("`r`nBitte starten Sie den Computer neu, um die CHKDSK-Prüfung für das Systemlaufwerk durchzuführen.`r`n")
-        }
-            
-        # Setze den Fortschrittsbalken auf 100%
-        if ($null -ne $progressBar) {
-            $progressBar.Value = 100
-        }
-        # CHKDSK-Lauf beendet
-        $script:chkdskRunning = $false
-    }
-    else {
+    if (-not $script:_wpfResult) {
         $outputBox.AppendText("CHKDSK wurde abgebrochen.`r`n")
+        return
     }
+
+    # ── Ergebnisse auslesen ──────────────────────────────────────────
+    $selectedDrives = @()
+    foreach ($drive in $drives) {
+        if ($driveCheckBoxes[$drive].IsChecked -eq $true) {
+            $selectedDrives += $drive
+        }
+    }
+
+    # Proxy-Variablen für die spätere Logik (identische Namen wie vorher)
+    $checkBoxFixErrors = $chkFixErrors
+    $checkBoxScanSectors = $chkScanSectors
+    $checkBoxLessIntensiveIndex = $chkLessIndex
+    $checkBoxForceDisMount = $chkForceMount
+    $checkBoxAutoConfirmBusy = $chkAutoConfirm
+    $checkBoxAutoRestart = $chkAutoRestart
+    $numRestartTimer = $txtRestartSec
+
+    if ($selectedDrives.Count -eq 0) {
+        $outputBox.AppendText("Keine Laufwerke ausgewählt. CHKDSK abgebrochen.`r`n")
+        return
+    }
+
+    # CHKDSK-Parameter aufbauen
+    $chkdskParams = ""
+    if ($checkBoxFixErrors.IsChecked -eq $true) { $chkdskParams += " /f" }
+    if ($checkBoxScanSectors.IsChecked -eq $true) { $chkdskParams += " /r" }
+    if ($checkBoxLessIntensiveIndex.IsChecked -eq $true) { $chkdskParams += " /i" }
+    if ($checkBoxForceDisMount.IsChecked -eq $true) { $chkdskParams += " /x" }
+
+    # Kurze Zusammenfassung der Parameter anzeigen
+    $outputBox.AppendText("CHKDSK wird ausgeführt mit Parametern:$chkdskParams`r`n`r`n")
+    if ($checkBoxScanSectors.IsChecked -eq $true) {
+        $outputBox.AppendText("Hinweis: Die Prüfung auf fehlerhafte Sektoren kann lange dauern.`r`n`r`n")
+    }
+
+    # Abbruch-Button aktivieren
+    $script:chkdskRunning = $true
+            
+    $totalDrives = $selectedDrives.Count
+    $currentDriveIndex = 0
+    # Variable für Neustart-Erfordernis
+    $restartRequired = $false
+
+    foreach ($drive in $selectedDrives) {
+        $currentDriveIndex++
+        $progressPercent = [int](($currentDriveIndex - 1) / $totalDrives * 100)
+        if ($null -ne $progressBar) {
+            $progressBar.Value = $progressPercent
+        }
+            
+        # Starten der Zeitmessung für dieses Laufwerk
+        $driveStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+                
+        $outputBox.AppendText("CHKDSK für Laufwerk $drive gestartet ($currentDriveIndex von $totalDrives)...`r`n")
+                
+        # Prüfen, ob es sich um das Systemlaufwerk handelt
+        $isSystemDrive = $drive -eq $env:SystemDrive
+        if ($isSystemDrive -and ($checkBoxFixErrors.IsChecked -eq $true -or $checkBoxScanSectors.IsChecked -eq $true)) {
+            $outputBox.AppendText("Systemlaufwerk $drive erkannt. CHKDSK wird beim nächsten Neustart ausgeführt.`r`n")
+            $restartRequired = $true
+                    
+            # CHKDSK beim nächsten Neustart mit fsutil planen (zuverlässiger)
+            try {
+                # Zuerst das Laufwerk als "dirty" markieren
+                $fsutilResult = & fsutil dirty set $drive
+                $outputBox.AppendText("Laufwerk als 'dirty' markiert: $fsutilResult`r`n")
+                        
+                # Dann CHKDSK-Parameter für den nächsten Neustart setzen
+                $regPath = "HKLM:\System\CurrentControlSet\Control\Session Manager"
+                $regKey = Get-ItemProperty -Path $regPath -Name "BootExecute" -ErrorAction SilentlyContinue
+                        
+                if ($regKey) {
+                    $bootExecute = $regKey.BootExecute
+                    # Prüfen, ob bereits ein CHKDSK-Eintrag vorhanden ist
+                    $chkdskEntry = "autocheck autochk * $drive$chkdskParams"
+                            
+                    if ($bootExecute -notcontains $chkdskEntry) {
+                        $newBootExecute = @("autocheck autochk *")
+                        foreach ($item in $bootExecute) {
+                            if ($item -ne "autocheck autochk *") {
+                                $newBootExecute += $item
+                            }
+                        }
+                        $newBootExecute += $chkdskEntry
+                        Set-ItemProperty -Path $regPath -Name "BootExecute" -Value $newBootExecute
+                        $outputBox.AppendText("CHKDSK wurde für den nächsten Neustart geplant mit Parametern:$chkdskParams`r`n")
+                    }
+                }
+                # Prüfen, ob CHKDSK bereits geplant ist
+                $chkntfsResult = & chkntfs $drive
+                $outputBox.AppendText("Status: $chkntfsResult`r`n")
+                    
+                # Zeitmessung für Systemlaufwerk stoppen
+                $driveStopwatch.Stop()
+                $formattedTime = [math]::Round($driveStopwatch.Elapsed.TotalSeconds, 1)
+                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
+                $outputBox.AppendText("[INFO] Laufwerk: $drive | Dauer der Einrichtung: $formattedTime Sekunden`r`n")
+                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
+                $outputBox.AppendText("____________________________________________________`r`n`r`n")
+                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
+            } catch {
+                $outputBox.AppendText("Fehler beim Setzen des CHKDSK-Neustarts: $_`r`n")
+                # Alternativer Ansatz mit direktem Befehl
+                if ($checkBoxAutoConfirmBusy.IsChecked -eq $true) {
+                    $outputBox.AppendText("Verwende alternative Methode mit automatischer Bestätigung (J)`r`n")
+                    $chkdskCmd = "echo J | chkdsk $drive$chkdskParams /b"
+                } else {
+                    $chkdskCmd = "chkdsk $drive$chkdskParams /b"
+                }
+                        
+                Start-Process -FilePath "cmd.exe" -ArgumentList "/c $chkdskCmd" -Verb RunAs -Wait
+            }
+        } else {
+            # Start CHKDSK process and capture exit code
+            $outputBox.AppendText("Parameter: chkdsk $drive$chkdskParams`r`n")
+                    
+            try {
+                # Je nach Einstellung für Auto-Bestätigung
+                if ($checkBoxAutoConfirmBusy.IsChecked -eq $true) {
+                    $process = Start-Process -FilePath "cmd.exe" -ArgumentList "/c echo J | chkdsk $drive$chkdskParams" -NoNewWindow -PassThru -Wait
+                } else {
+                    $process = Start-Process -FilePath "chkdsk.exe" -ArgumentList "$drive$chkdskParams" -NoNewWindow -PassThru -Wait
+                }
+                        
+                $exitCode = $process.ExitCode
+                        
+                # Exit-Code interpretieren
+                switch ($exitCode) {
+                    0 { 
+                        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
+                    }
+                    1 { 
+                        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
+                    }
+                    2 { 
+                        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
+                        $restartRequired = $true
+                    }
+                    3 { 
+                        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
+                    }
+                    default { 
+                        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
+                    }
+                }
+                # Stoppe den Stopwatch für dieses Laufwerk
+                $driveStopwatch.Stop()
+                    
+                # Schöne Ausgabe des Exit-Codes mit relevanten Informationen
+                $formattedTime = [math]::Round($driveStopwatch.Elapsed.TotalSeconds, 1)
+                $exitCodeMessage = switch ($exitCode) {
+                    0 { "[OK] CHKDSK erfolgreich abgeschlossen. Keine Fehler gefunden." }
+                    1 { "[OK] CHKDSK hat Fehler gefunden und korrigiert." }
+                    2 { "[WARNUNG] CHKDSK wurde mit /f Option ausgeführt und erfordert einen Neustart." }
+                    3 { "[FEHLER] CHKDSK konnte nicht alle Fehler beheben. Laufwerk möglicherweise beschädigt." }
+                    default { "[FEHLER] Unbekannter CHKDSK-Statuscode: $exitCode" }
+                }
+                        
+                $outputBox.AppendText("CHKDSK-Status: $exitCodeMessage`r`n")
+                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
+                $outputBox.AppendText("[INFO] Exit-Code: $exitCode | Laufwerk: $drive | Dauer: $formattedTime Sekunden`r`n")
+                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
+                $outputBox.AppendText("____________________________________________________`r`n`r`n")
+                        
+                # Farbe zurücksetzen
+                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
+            } catch {
+                # Stopwatch anhalten auch bei Fehlern
+                $driveStopwatch.Stop()
+                $formattedTime = [math]::Round($driveStopwatch.Elapsed.TotalSeconds, 1)
+                    
+                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
+                $outputBox.AppendText("❌ FEHLER: $($_.Exception.Message)`r`n")
+                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
+                $outputBox.AppendText("[INFO] Laufwerk: $drive | Dauer bis zum Fehler: $formattedTime Sekunden`r`n")
+                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
+                $outputBox.AppendText("____________________________________________________`r`n`r`n")
+                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
+            }
+        }
+    }
+            
+    # Wenn ein Neustart erforderlich ist und Auto-Neustart aktiviert ist
+    if ($restartRequired -and $checkBoxAutoRestart.IsChecked -eq $true) {
+        $seconds = [int]($numRestartTimer.Text -replace '[^0-9]', '')
+        if ($seconds -gt 0) {
+            $outputBox.AppendText("`r`nComputer wird in $seconds Sekunden neu gestartet...`r`n")
+            Start-Process -FilePath "shutdown.exe" -ArgumentList "/r /t $seconds /c `"CHKDSK erfordert einen Neustart`"" -NoNewWindow
+        }
+    } elseif ($restartRequired) {
+        $outputBox.AppendText("`r`nBitte starten Sie den Computer neu, um die CHKDSK-Prüfung für das Systemlaufwerk durchzuführen.`r`n")
+    }
+            
+    # Setze den Fortschrittsbalken auf 100%
+    if ($null -ne $progressBar) {
+        $progressBar.Value = 100
+    }
+    # CHKDSK-Lauf beendet
+    $script:chkdskRunning = $false
 }
 
 # Export functions

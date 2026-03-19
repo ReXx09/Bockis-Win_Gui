@@ -10,15 +10,74 @@ Add-Type -TypeDefinition @"
 using System;
 using System.Windows.Forms;
 using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Runtime.InteropServices;
 
 public class TextProgressBar : ProgressBar
 {
     private string _text = "";
     private Color _textColor = Color.DarkBlue;
+    private int _cornerRadius = 8;
 
     public TextProgressBar() : base()
     {
         this.SetStyle(ControlStyles.UserPaint, true);
+        this.SetStyle(ControlStyles.OptimizedDoubleBuffer, true);
+        this.SetStyle(ControlStyles.AllPaintingInWmPaint, true);
+    }
+
+    protected override System.Windows.Forms.CreateParams CreateParams
+    {
+        get
+        {
+            System.Windows.Forms.CreateParams cp = base.CreateParams;
+            cp.Style &= ~0x800000;   // entfernt WS_BORDER
+            cp.ExStyle &= ~0x200;    // entfernt WS_EX_CLIENTEDGE
+            return cp;
+        }
+    }
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetWindowDC(IntPtr hWnd);
+    [DllImport("user32.dll")]
+    private static extern bool ReleaseDC(IntPtr hWnd, IntPtr hDC);
+
+    protected override void WndProc(ref Message m)
+    {
+        if (m.Msg == 0x0085) // WM_NCPAINT – NC-Bereich mit Parent-Farbe füllen statt Desktop durchscheinen
+        {
+            IntPtr hdc = GetWindowDC(this.Handle);
+            if (hdc != IntPtr.Zero)
+            {
+                Color bg = (this.Parent != null) ? this.Parent.BackColor : Color.FromArgb(30, 30, 30);
+                using (Graphics g = Graphics.FromHdc(hdc))
+                using (SolidBrush b = new SolidBrush(bg))
+                {
+                    g.FillRectangle(b, 0, 0, this.Width, this.Height);
+                }
+                ReleaseDC(this.Handle, hdc);
+            }
+            return;
+        }
+        else if (m.Msg == 0x0003) // WM_MOVE – auch an Kind-Fenster wenn Parent-Form bewegt wird
+        {
+            base.WndProc(ref m);
+            // Client-Bereich als dirty markieren und NC-Bereich mit Parent-Farbe füllen
+            this.Invalidate();
+            IntPtr hdc = GetWindowDC(this.Handle);
+            if (hdc != IntPtr.Zero)
+            {
+                Color bg = (this.Parent != null) ? this.Parent.BackColor : Color.FromArgb(30, 30, 30);
+                using (Graphics g = Graphics.FromHdc(hdc))
+                using (SolidBrush b = new SolidBrush(bg))
+                {
+                    g.FillRectangle(b, 0, 0, this.Width, this.Height);
+                }
+                ReleaseDC(this.Handle, hdc);
+            }
+            return;
+        }
+        base.WndProc(ref m);
     }
 
     public string CustomText
@@ -39,36 +98,70 @@ public class TextProgressBar : ProgressBar
         }
     }
 
+    public int CornerRadius
+    {
+        get { return _cornerRadius; }
+        set {
+            _cornerRadius = value;
+            this.Invalidate();
+        }
+    }
+
+    private GraphicsPath RoundedRect(Rectangle bounds, int radius)
+    {
+        int d = radius * 2;
+        GraphicsPath path = new GraphicsPath();
+        path.AddArc(bounds.X, bounds.Y, d, d, 180, 90);
+        path.AddArc(bounds.Right - d, bounds.Y, d, d, 270, 90);
+        path.AddArc(bounds.Right - d, bounds.Bottom - d, d, d, 0, 90);
+        path.AddArc(bounds.X, bounds.Bottom - d, d, d, 90, 90);
+        path.CloseFigure();
+        return path;
+    }
+
     protected override void OnPaint(PaintEventArgs e)
     {
         Rectangle rect = this.ClientRectangle;
         Graphics g = e.Graphics;
+        g.SmoothingMode = SmoothingMode.AntiAlias;
 
-        // Dunkler Hintergrund für die ProgressBar
+        // Gesamten Client-Bereich mit Parent-Farbe füllen – Ecken-Artefakte verhindern
+        Color parentBg = (this.Parent != null) ? this.Parent.BackColor : Color.FromArgb(30, 30, 30);
+        using (SolidBrush parentBrush = new SolidBrush(parentBg))
+        {
+            g.FillRectangle(parentBrush, this.ClientRectangle);
+        }
+
+        // Hintergrund mit runden Ecken
+        using (GraphicsPath bgPath = RoundedRect(rect, _cornerRadius))
         using (SolidBrush bgBrush = new SolidBrush(Color.FromArgb(45, 45, 48)))
         {
-            g.FillRectangle(bgBrush, rect);
-        }
-        
-        // Rahmen zeichnen
-        using (Pen borderPen = new Pen(Color.FromArgb(60, 60, 60), 1))
-        {
-            g.DrawRectangle(borderPen, rect.X, rect.Y, rect.Width - 1, rect.Height - 1);
+            g.FillPath(bgBrush, bgPath);
         }
 
-        rect.Inflate(-3, -3);
+        // Fortschrittsbalken mit runden Ecken (geclippt)
+        rect.Inflate(-1, -1);
         if (Value > 0)
         {
-            Rectangle clip = new Rectangle(rect.X, rect.Y, (int)Math.Round(((float)Value / Maximum) * rect.Width), rect.Height);
-            // Fortschrittsbalken in Windows-Blau zeichnen
-            using (SolidBrush progressBrush = new SolidBrush(Color.FromArgb(0, 120, 215)))
+            int progressWidth = (int)Math.Round(((float)Value / Maximum) * rect.Width);
+            if (progressWidth > 0)
             {
-                g.FillRectangle(progressBrush, clip);
+                Rectangle progressRect = new Rectangle(rect.X, rect.Y, progressWidth, rect.Height);
+                // Clip auf den Bereich des Fortschritts, runden Ecken vom Gesamtpfad beibehalten
+                g.SetClip(progressRect);
+                using (GraphicsPath progressPath = RoundedRect(rect, _cornerRadius))
+                using (SolidBrush progressBrush = new SolidBrush(Color.FromArgb(0, 120, 215)))
+                {
+                    g.FillPath(progressBrush, progressPath);
+                }
+                g.ResetClip();
             }
         }
 
+        // Text zentriert
         if (!string.IsNullOrEmpty(_text))
         {
+            rect.Inflate(-3, -3);
             using (Font f = new Font("Segoe UI", 9, FontStyle.Bold))
             {
                 SizeF textSize = g.MeasureString(_text, f);
@@ -77,7 +170,6 @@ public class TextProgressBar : ProgressBar
                     (int)(rect.Y + (rect.Height / 2) - (textSize.Height / 2))
                 );
 
-                // Zeichne den Text mit Schatten für bessere Lesbarkeit
                 using (SolidBrush shadowBrush = new SolidBrush(Color.FromArgb(60, 0, 0, 0)))
                 {
                     g.DrawString(_text, f, shadowBrush, textPos.X + 1, textPos.Y + 1);
@@ -142,8 +234,7 @@ function Update-ProgressStatus {
     if ($null -eq $script:progressBar -and $null -ne $progressBarParam) {
         # Temporäre Initialisierung
         $script:progressBar = $progressBarParam
-    }
-    elseif ($null -eq $script:progressBar -and $null -eq $progressBarParam) {
+    } elseif ($null -eq $script:progressBar -and $null -eq $progressBarParam) {
         Write-Warning "ProgressBar-Komponente wurde nicht initialisiert. Bitte Initialize-ProgressComponents zuerst aufrufen."
         return
     }
@@ -152,8 +243,7 @@ function Update-ProgressStatus {
     if ($script:progressBar.GetType().Name -eq "TextProgressBar") {
         $script:progressBar.CustomText = $StatusText
         $script:progressBar.TextColor = $TextColor
-    }
-    elseif ($null -ne $script:progressStatusLabel) {
+    } elseif ($null -ne $script:progressStatusLabel) {
         # Fallback auf das separate Label, wenn es existiert
         $script:progressStatusLabel.Text = $StatusText
         $script:progressStatusLabel.ForeColor = $TextColor
@@ -178,8 +268,7 @@ function Reset-ProgressBar {
     if ($script:progressBar.GetType().Name -eq "TextProgressBar") {
         $script:progressBar.CustomText = "Bereit"
         $script:progressBar.TextColor = [System.Drawing.Color]::White
-    }
-    elseif ($null -ne $script:progressStatusLabel) {
+    } elseif ($null -ne $script:progressStatusLabel) {
         # Fallback auf das separate Label, wenn es existiert
         $script:progressStatusLabel.Text = "Bereit"
         $script:progressStatusLabel.ForeColor = [System.Drawing.Color]::White

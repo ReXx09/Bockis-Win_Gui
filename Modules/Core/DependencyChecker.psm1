@@ -25,19 +25,19 @@ function Update-LibreHardwareMonitorDll {
         Hashtable mit Success (bool), NewVersion (string), ErrorMessage (string)
     #>
     param(
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory = $true)]
         [string]$LibPath,
         
-        [Parameter(Mandatory=$false)]
+        [Parameter(Mandatory = $false)]
         [string]$TargetVersion = "0.9.6",
         
-        [Parameter(Mandatory=$false)]
+        [Parameter(Mandatory = $false)]
         [scriptblock]$ProgressCallback
     )
     
     $result = @{
-        Success = $false
-        NewVersion = $null
+        Success      = $false
+        NewVersion   = $null
         ErrorMessage = $null
     }
     
@@ -53,8 +53,7 @@ function Update-LibreHardwareMonitorDll {
         if (Test-Path $sourceDll) {
             if ($ProgressCallback) { & $ProgressCallback 60 "v$TargetVersion in Cache gefunden..." }
             Write-Verbose "✓ v$TargetVersion bereits im Cache"
-        }
-        else {
+        } else {
             # Download von NuGet
             if ($ProgressCallback) { & $ProgressCallback 55 "Lade v$TargetVersion von NuGet..." }
             
@@ -126,12 +125,11 @@ del "%~f0"
         
         if ($ProgressCallback) { & $ProgressCallback 95 "Update vorbereitet – Neustart erforderlich" }
         
-        $result.Success      = $true
-        $result.NewVersion   = $TargetVersion
+        $result.Success = $true
+        $result.NewVersion = $TargetVersion
         $result.PendingRestart = $true
         Write-Verbose "✓ DLL-Update vorbereitet: v$TargetVersion wird nach Neustart aktiv"
-    }
-    catch {
+    } catch {
         $result.Success = $false
         $result.ErrorMessage = $_.Exception.Message
         Write-Verbose "✗ Update fehlgeschlagen: $($result.ErrorMessage)"
@@ -170,11 +168,11 @@ function Initialize-HardwareMonitoringMode {
     )
     
     $result = @{
-        Available = $false
-        LibrePath = $null
+        Available    = $false
+        LibrePath    = $null
         PawnIOActive = $false
-        Message = ""
-        MissingDLLs = @()
+        Message      = ""
+        MissingDLLs  = @()
     }
     
     # ProgressBar-Update Hilfsfunktion
@@ -209,12 +207,10 @@ function Initialize-HardwareMonitoringMode {
         if ($pawnIOService -and $pawnIOService.Status -eq 'Running') {
             $pawnIOAvailable = $true
             Write-Verbose "✓ PawnIO-Treiber gefunden und aktiv"
-        }
-        else {
+        } else {
             Write-Verbose "✗ PawnIO-Treiber nicht verfügbar oder nicht gestartet"
         }
-    }
-    catch {
+    } catch {
         Write-Verbose "✗ PawnIO-Treiber-Prüfung fehlgeschlagen: $_"
     }
     
@@ -295,9 +291,9 @@ Nach Installation: System neu starten
         
         if (-not (Test-Path $dllFullPath)) {
             $missingDLLs += [PSCustomObject]@{
-                FileName = $dll
+                FileName    = $dll
                 Description = $requiredDLLs[$dll].Description
-                Path = $dllFullPath
+                Path        = $dllFullPath
             }
             Write-Verbose "Fehlende DLL: $dll ($($requiredDLLs[$dll].Description))"
         }
@@ -404,8 +400,7 @@ damit die neue DLL geladen wird.",
                                 # GUI neu starten erforderlich
                                 $result.Message = "Update erfolgreich! Bitte starten Sie die Anwendung neu."
                                 return $result
-                            }
-                            else {
+                            } else {
                                 Write-Verbose "✗ Update fehlgeschlagen: $($updateResult.ErrorMessage)"
                                 
                                 # Fehlermeldung mit Fallback auf manuelles Update
@@ -426,15 +421,13 @@ Lib-Ordner: $libPath
                                 Update-Progress -Value 100 -Text "Update fehlgeschlagen"
                                 return $result
                             }
-                        }
-                        catch {
+                        } catch {
                             Write-Verbose "✗ Update-Fehler: $_"
                             $result.Message = "Update fehlgeschlagen: $_\n\nBitte manuell updaten (siehe Tools\Update-LibreHardwareMonitor.ps1)"
                             Update-Progress -Value 100 -Text "Update-Fehler"
                             return $result
                         }
-                    }
-                    else {
+                    } else {
                         # Benutzer hat Update abgelehnt
                         $result.Message = @"
 Hardware-Monitor deaktiviert: LibreHardwareMonitorLib.dll veraltet
@@ -451,13 +444,11 @@ Update später durchführen:
                         Update-Progress -Value 100 -Text "Update abgelehnt"
                         return $result
                     }
-                }
-                else {
+                } else {
                     Write-Verbose "✓ LibreHardwareMonitorLib.dll Version $productVersion (PawnIO-kompatibel)"
                 }
             }
-        }
-        catch {
+        } catch {
             Write-Verbose "Warnung: Konnte Version von LibreHardwareMonitorLib.dll nicht prüfen: $_"
         }
     }
@@ -478,17 +469,14 @@ Update später durchführen:
             # Versuche DLL zu laden (ignoriere wenn bereits geladen)
             Add-Type -Path $dllFullPath -ErrorAction Stop
             Write-Verbose "✓ $dllName geladen"
-        }
-        catch {
+        } catch {
             if ($_.Exception.Message.Contains("bereits geladen") -or 
                 $_.Exception.Message.Contains("already loaded")) {
                 Write-Verbose "✓ $dllName bereits geladen"
-            }
-            elseif ($dllInfo.Optional) {
+            } elseif ($dllInfo.Optional) {
                 # Optionale DLL konnte nicht geladen werden - Warnung aber weitermachen
                 Write-Verbose "⚠ $dllName (optional) konnte nicht geladen werden: $($_.Exception.Message)"
-            }
-            else {
+            } else {
                 $result.Message = "DLL konnte nicht geladen werden: $dllName`n$($_.Exception.Message)"
                 Update-Progress -Value 100 -Text "Fehler beim Laden von $dllName"
                 Write-Verbose $result.Message
@@ -517,18 +505,16 @@ Update später durchführen:
         
         try {
             $testComputer.Open()
-        }
-        catch {
+        } catch {
             # Mutex-Error in PowerShell 7 abfangen
             if ($_.Exception.Message -like "*System.Threading.Mutex*" -and $isPowerShell7) {
                 $result.Message = "WARNUNG: LibreHardwareMonitorLib ist für PowerShell 5.1 optimiert.`n" + `
-                                  "In PowerShell 7 kann es zu Kompatibilitätsproblemen kommen.`n" + `
-                                  "Empfehlung: Starte mit 'powershell.exe' statt 'pwsh.exe'"
+                    "In PowerShell 7 kann es zu Kompatibilitätsproblemen kommen.`n" + `
+                    "Empfehlung: Starte mit 'powershell.exe' statt 'pwsh.exe'"
                 Update-Progress -Value 100 -Text "Hardware-Monitor: PowerShell 7 Kompatibilitätsproblem"
                 Write-Verbose $result.Message
                 return $result
-            }
-            else {
+            } else {
                 # Anderer Fehler - weiterwerfen
                 throw
             }
@@ -562,11 +548,9 @@ Update später durchführen:
 
             $sensorCountForMessage = if ($cpuTempSensors.Count -gt 0) {
                 $cpuTempSensors.Count
-            }
-            elseif ($cpuValueSensors.Count -gt 0) {
+            } elseif ($cpuValueSensors.Count -gt 0) {
                 $cpuValueSensors.Count
-            }
-            else {
+            } else {
                 $allValueSensors.Count
             }
 
@@ -598,16 +582,14 @@ Lib-Ordner: $libPath
         Update-Progress -Value 100 -Text "Keine Hardware-Sensoren verfügbar"
         Write-Verbose $result.Message
         return $result
-    }
-    catch {
+    } catch {
         $errorMsg = $_.Exception.Message
         
         # Spezielle Behandlung für bekannte Kompatibilitätsprobleme
         if ($errorMsg -like "*System.Threading.Mutex*") {
             $result.Message = "LibreHardwareMonitorLib Kompatibilitätsproblem: $errorMsg`n`n" + `
-                              "LÖSUNG: Verwende Windows PowerShell 5.1 statt PowerShell 7"
-        }
-        else {
+                "LÖSUNG: Verwende Windows PowerShell 5.1 statt PowerShell 7"
+        } else {
             $result.Message = "Fehler bei Hardware-Monitor Initialisierung: $errorMsg"
         }
         
@@ -637,7 +619,7 @@ Hashtable mit Informationen:
 #>
 function Test-DotNetFrameworkVersion {
     $result = @{
-        Found = $false
+        Found   = $false
         Version = $null
         Release = $null
     }
@@ -660,18 +642,15 @@ function Test-DotNetFrameworkVersion {
                     # Bestimme Version basierend auf Release-Nummer
                     if ($release -ge 533320) {
                         $result.Version = "4.8.1 oder höher"
-                    }
-                    elseif ($release -ge 528040) {
+                    } elseif ($release -ge 528040) {
                         $result.Version = "4.8"
-                    }
-                    elseif ($release -ge 461808) {
+                    } elseif ($release -ge 461808) {
                         $result.Version = "4.7.2"
                     }
                 }
             }
         }
-    }
-    catch {
+    } catch {
         Write-Verbose "Fehler bei .NET Framework Prüfung: $_"
     }
     
@@ -694,7 +673,7 @@ Hashtable mit Informationen:
 #>
 function Test-PowerShellVersion {
     $result = @{
-        Found = $false
+        Found   = $false
         Version = $null
         Edition = $null
     }
@@ -708,8 +687,7 @@ function Test-PowerShellVersion {
         if ($psVersion.Major -ge 6 -or ($psVersion.Major -eq 5 -and $psVersion.Minor -ge 1)) {
             $result.Found = $true
         }
-    }
-    catch {
+    } catch {
         Write-Verbose "Fehler bei PowerShell Version Prüfung: $_"
     }
     
@@ -733,10 +711,10 @@ Hashtable mit Informationen:
 #>
 function Test-WindowsVersion {
     $result = @{
-        Found = $false
+        Found   = $false
         Version = $null
-        Build = $null
-        Name = $null
+        Build   = $null
+        Name    = $null
     }
     
     try {
@@ -749,8 +727,7 @@ function Test-WindowsVersion {
         try {
             $productName = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -Name ProductName -ErrorAction SilentlyContinue).ProductName
             $result.Name = $productName
-        }
-        catch {
+        } catch {
             $result.Name = "Windows $($osVersion.Major).$($osVersion.Minor)"
         }
         
@@ -758,8 +735,7 @@ function Test-WindowsVersion {
         if ($osVersion.Build -ge 17763) {
             $result.Found = $true
         }
-    }
-    catch {
+    } catch {
         Write-Verbose "Fehler bei Windows Version Prüfung: $_"
     }
     
@@ -782,7 +758,7 @@ Hashtable mit Informationen:
 function Test-AdministratorRights {
     $result = @{
         Found = $false
-        User = $null
+        User  = $null
     }
     
     try {
@@ -791,8 +767,7 @@ function Test-AdministratorRights {
         
         $principal = New-Object Security.Principal.WindowsPrincipal($currentUser)
         $result.Found = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-    }
-    catch {
+    } catch {
         Write-Verbose "Fehler bei Administrator-Rechte Prüfung: $_"
     }
     
@@ -815,9 +790,9 @@ Hashtable mit Informationen:
 #>
 function Find-PowerShellCore {
     $result = @{
-        Found = $false
+        Found   = $false
         Version = $null
-        Path = $null
+        Path    = $null
     }
     
     try {
@@ -832,8 +807,7 @@ function Find-PowerShellCore {
                 $result.Version = [Version]$versionOutput
             }
         }
-    }
-    catch {
+    } catch {
         # PowerShell Core nicht gefunden
     }
     
@@ -852,9 +826,9 @@ Hashtable mit Informationen:
 #>
 function Find-WingetPackageManager {
     $result = @{
-        Found = $false
+        Found   = $false
         Version = $null
-        Path = $null
+        Path    = $null
     }
     
     try {
@@ -868,14 +842,12 @@ function Find-WingetPackageManager {
             if ($versionOutput -match 'v?([\d\.]+)') {
                 try {
                     $result.Version = [Version]$matches[1]
-                }
-                catch {
+                } catch {
                     $result.Version = $versionOutput
                 }
             }
         }
-    }
-    catch {
+    } catch {
         # Winget nicht gefunden
     }
     
@@ -904,8 +876,7 @@ function Get-ToolLibraryEntryByWingetId {
         if (Get-Command -Name Get-AllTools -ErrorAction SilentlyContinue) {
             return @(Get-AllTools | Where-Object { $_.Winget -eq $WingetId } | Select-Object -First 1)[0]
         }
-    }
-    catch {
+    } catch {
         Write-Verbose "ToolLibrary-Auflösung für '$WingetId' fehlgeschlagen: $_"
     }
 
@@ -929,12 +900,12 @@ Hashtable mit Informationen:
 #>
 function Find-AppInstaller {
     $result = @{
-        Found = $false
-        Version = $null
+        Found             = $false
+        Version           = $null
         PackageFamilyName = $null
-        InstallLocation = $null
-        WingetId = "Microsoft.AppInstaller"
-        DownloadUrl = $null
+        InstallLocation   = $null
+        WingetId          = "Microsoft.AppInstaller"
+        DownloadUrl       = $null
     }
 
     $appInstallerTool = Get-ToolLibraryEntryByWingetId -WingetId "Microsoft.AppInstaller"
@@ -948,7 +919,7 @@ function Find-AppInstaller {
     try {
         $appInstaller = Get-AppxPackage -Name "Microsoft.DesktopAppInstaller" -ErrorAction SilentlyContinue |
             Sort-Object Version -Descending |
-            Select-Object -First 1
+                Select-Object -First 1
 
         if ($appInstaller) {
             $result.Found = $true
@@ -956,8 +927,7 @@ function Find-AppInstaller {
             $result.PackageFamilyName = $appInstaller.PackageFamilyName
             $result.InstallLocation = $appInstaller.InstallLocation
         }
-    }
-    catch {
+    } catch {
         Write-Verbose "Fehler bei App Installer-Prüfung: $_"
     }
 
@@ -983,7 +953,7 @@ function Get-DependencyUpdateInfo {
     )
 
     $info = @{
-        UpdateAvailable = $false
+        UpdateAvailable  = $false
         AvailableVersion = $null
     }
 
@@ -1014,8 +984,7 @@ function Get-DependencyUpdateInfo {
                 $info.AvailableVersion = $matches[2]
             }
         }
-    }
-    catch {
+    } catch {
         Write-Verbose "Update-Prüfung für $WingetId fehlgeschlagen: $_"
     }
 
@@ -1091,23 +1060,23 @@ function Get-GuiReleaseDependencyStatus {
     )
 
     $status = @{
-        Name = "GUI-Update (GitHub)"
-        Description = "Prüfung auf neue GitHub-Release-Version"
-        Found = $true
-        Required = $false
-        Available = $false
-        Version = $CurrentVersion
-        Status = "⚠ Update-Prüfung nicht möglich"
-        StatusColor = "Yellow"
-        WingetId = $null
-        UpdateAvailable = $false
+        Name             = "GUI-Update (GitHub)"
+        Description      = "Prüfung auf neue GitHub-Release-Version"
+        Found            = $true
+        Required         = $false
+        Available        = $false
+        Version          = $CurrentVersion
+        Status           = "⚠ Update-Prüfung nicht möglich"
+        StatusColor      = "Yellow"
+        WingetId         = $null
+        UpdateAvailable  = $false
         AvailableVersion = $null
     }
 
     try {
         $headers = @{
             "User-Agent" = "Bockis-System-Tool"
-            "Accept" = "application/vnd.github+json"
+            "Accept"     = "application/vnd.github+json"
         }
 
         if (-not [string]::IsNullOrWhiteSpace($GitHubToken) -and $GitHubToken -ne "ghp_DEIN_TOKEN_HIER") {
@@ -1131,8 +1100,7 @@ function Get-GuiReleaseDependencyStatus {
                 $apiUrl = "https://api.github.com/repos/$RepoOwner/$repoCandidate/releases/latest"
                 $latestRelease = Invoke-RestMethod -Uri $apiUrl -Headers $headers -ErrorAction Stop
                 if ($latestRelease) { break }
-            }
-            catch {
+            } catch {
                 $statusCode = $null
                 if ($_.Exception -and $_.Exception.Response) {
                     try { $statusCode = [int]$_.Exception.Response.StatusCode.value__ } catch { $statusCode = $null }
@@ -1147,12 +1115,10 @@ function Get-GuiReleaseDependencyStatus {
                             $latestRelease = $allReleases[0]
                             break
                         }
-                    }
-                    catch {
+                    } catch {
                         # Nächsten Candidate testen
                     }
-                }
-                elseif ($statusCode -eq 401 -or $statusCode -eq 403) {
+                } elseif ($statusCode -eq 401 -or $statusCode -eq 403) {
                     # Später ohne Auth erneut versuchen
                 }
             }
@@ -1161,7 +1127,7 @@ function Get-GuiReleaseDependencyStatus {
         if (-not $latestRelease -and $headers.ContainsKey("Authorization")) {
             $headersNoAuth = @{
                 "User-Agent" = "Bockis-System-Tool"
-                "Accept" = "application/vnd.github+json"
+                "Accept"     = "application/vnd.github+json"
             }
 
             foreach ($repoCandidate in ($repoCandidates | Select-Object -Unique)) {
@@ -1169,8 +1135,7 @@ function Get-GuiReleaseDependencyStatus {
                     $apiUrl = "https://api.github.com/repos/$RepoOwner/$repoCandidate/releases/latest"
                     $latestRelease = Invoke-RestMethod -Uri $apiUrl -Headers $headersNoAuth -ErrorAction Stop
                     if ($latestRelease) { break }
-                }
-                catch {
+                } catch {
                     $statusCode = $null
                     if ($_.Exception -and $_.Exception.Response) {
                         try { $statusCode = [int]$_.Exception.Response.StatusCode.value__ } catch { $statusCode = $null }
@@ -1185,8 +1150,7 @@ function Get-GuiReleaseDependencyStatus {
                                 $latestRelease = $allReleases[0]
                                 break
                             }
-                        }
-                        catch {
+                        } catch {
                             # Nächsten Candidate testen
                         }
                     }
@@ -1215,29 +1179,24 @@ function Get-GuiReleaseDependencyStatus {
                 $status.UpdateAvailable = $true
                 $status.Status = "⬆ Update verfügbar"
                 $status.StatusColor = "Yellow"
-            }
-            elseif ([version]$currentVersionNormalized -gt [version]$latestVersion) {
+            } elseif ([version]$currentVersionNormalized -gt [version]$latestVersion) {
                 $status.Status = "✓ Entwicklungsstand"
                 $status.StatusColor = "Green"
-            }
-            else {
+            } else {
                 $status.Status = "✓ Aktuell"
                 $status.StatusColor = "Green"
             }
-        }
-        catch {
+        } catch {
             if ($latestVersion -ne $currentVersionNormalized) {
                 $status.UpdateAvailable = $true
                 $status.Status = "⬆ Versionsabweichung"
                 $status.StatusColor = "Yellow"
-            }
-            else {
+            } else {
                 $status.Status = "✓ Aktuell"
                 $status.StatusColor = "Green"
             }
         }
-    }
-    catch {
+    } catch {
         $status.Status = "⚠ Update-Prüfung fehlgeschlagen"
         $status.StatusColor = "Yellow"
     }
@@ -1278,8 +1237,8 @@ function Invoke-DependencyAction {
     )
 
     $result = @{
-        Success = $false
-        ExitCode = -1
+        Success      = $false
+        ExitCode     = -1
         ErrorMessage = $null
     }
 
@@ -1319,7 +1278,38 @@ function Invoke-DependencyAction {
         }
         Write-Host "[DependencyChecker] Winget-Befehl wird ausgeführt..." -ForegroundColor DarkCyan
 
-        $process = Start-Process -FilePath "winget" -ArgumentList $Action, "--id", $WingetId, "--silent", "--accept-package-agreements", "--accept-source-agreements" -Wait -NoNewWindow -PassThru
+        # PawnIO Ring-0-Treiber: Muss vor dem Update gestoppt werden (gesperrte Kernel-Dateien)
+        $isPawnIO = ($WingetId -eq "namazso.PawnIO") -and ($Action -eq 'upgrade')
+        if ($isPawnIO) {
+            Write-Host "[DependencyChecker] PawnIO erkannt – stoppe Dienst vor Update..." -ForegroundColor DarkYellow
+            if ($LogCallback) {
+                & $LogCallback "info" "PawnIO-Dienst wird vor Update gestoppt..."
+            }
+            if ($ProgressCallback) {
+                & $ProgressCallback 25 "PawnIO-Dienst wird gestoppt..."
+            }
+            try {
+                $pawnSvc = Get-Service -Name "PawnIO" -ErrorAction SilentlyContinue
+                if ($pawnSvc -and $pawnSvc.Status -eq 'Running') {
+                    Stop-Service -Name "PawnIO" -Force -ErrorAction Stop
+                    Start-Sleep -Milliseconds 1000
+                    Write-Host "[DependencyChecker] PawnIO-Dienst gestoppt." -ForegroundColor Green
+                }
+            } catch {
+                Write-Host "[DependencyChecker] Hinweis: PawnIO-Dienst konnte nicht gestoppt werden: $_" -ForegroundColor Yellow
+                if ($LogCallback) {
+                    & $LogCallback "info" "Hinweis: PawnIO-Dienst konnte nicht gestoppt werden: $_"
+                }
+            }
+            if ($ProgressCallback) {
+                & $ProgressCallback 35 "$actionLabel läuft (mit --force)..."
+            }
+        }
+
+        $wingetArgs = @($Action, "--id", $WingetId, "--silent", "--accept-package-agreements", "--accept-source-agreements")
+        if ($isPawnIO) { $wingetArgs += "--force" }
+
+        $process = Start-Process -FilePath "winget" -ArgumentList $wingetArgs -Wait -NoNewWindow -PassThru
         if ($ProgressCallback) {
             & $ProgressCallback 90 "$actionLabel wird abgeschlossen..."
         }
@@ -1336,8 +1326,7 @@ function Invoke-DependencyAction {
             if ($ProgressCallback) {
                 & $ProgressCallback 100 "$actionLabel fehlgeschlagen" ([System.Drawing.Color]::Red)
             }
-        }
-        else {
+        } else {
             Write-Host "[DependencyChecker] ✅ $actionLabel erfolgreich" -ForegroundColor Green
             if ($LogCallback) {
                 & $LogCallback "success" "$actionLabel erfolgreich"
@@ -1346,8 +1335,7 @@ function Invoke-DependencyAction {
                 & $ProgressCallback 100 "$actionLabel erfolgreich" ([System.Drawing.Color]::LimeGreen)
             }
         }
-    }
-    catch {
+    } catch {
         $result.ErrorMessage = $_.Exception.Message
         Write-Host "[DependencyChecker] ❌ Fehler: $($result.ErrorMessage)" -ForegroundColor Red
         if ($LogCallback) {
@@ -1378,9 +1366,9 @@ Hashtable mit Informationen:
 #>
 function Find-PawnIODriver {
     $result = @{
-        Found = $false
-        Running = $false
-        Version = $null
+        Found    = $false
+        Running  = $false
+        Version  = $null
         WingetId = "namazso.PawnIO"
     }
 
@@ -1402,21 +1390,18 @@ function Find-PawnIODriver {
                 $wingetList = winget list --id $($result.WingetId) --exact 2>$null | Out-String
                 if ($wingetList -match [regex]::Escape($result.WingetId) + '\s+([\d\.]+)') {
                     $result.Version = $matches[1]
-                }
-                elseif ($result.Found) {
+                } elseif ($result.Found) {
                     # Service existiert aber keine Version über winget - manuelle Installation
                     $result.Version = "Installiert (Version unbekannt)"
                 }
-            }
-            catch {
+            } catch {
                 # Winget nicht verfügbar oder Fehler
                 if ($result.Found) {
                     $result.Version = "Installiert (Version unbekannt)"
                 }
             }
         }
-    }
-    catch {
+    } catch {
         Write-Verbose "Fehler bei PawnIO-Prüfung: $_"
     }
     
@@ -1464,15 +1449,15 @@ function Get-DependencyStatusForGUI {
     $dotNet = Test-DotNetFrameworkVersion
     if ($dotNet.Found) {
         $dependencies += @{
-            Name = ".NET Framework"
+            Name        = ".NET Framework"
             Description = "Microsoft .NET Framework für Windows Forms"
-            Found = $true
-            Required = $false
-            Available = $false
-            Version = $dotNet.Version
-            Status = "✓ Installiert"
+            Found       = $true
+            Required    = $false
+            Available   = $false
+            Version     = $dotNet.Version
+            Status      = "✓ Installiert"
             StatusColor = "Green"
-            WingetId = $null
+            WingetId    = $null
         }
     }
     
@@ -1480,15 +1465,15 @@ function Get-DependencyStatusForGUI {
     $psVersion = Test-PowerShellVersion
     if ($psVersion.Found) {
         $dependencies += @{
-            Name = "PowerShell"
+            Name        = "PowerShell"
             Description = "Windows PowerShell für Skript-Ausführung"
-            Found = $true
-            Required = $false
-            Available = $false
-            Version = $psVersion.Version.ToString()
-            Status = "✓ Installiert"
+            Found       = $true
+            Required    = $false
+            Available   = $false
+            Version     = $psVersion.Version.ToString()
+            Status      = "✓ Installiert"
             StatusColor = "Green"
-            WingetId = $null
+            WingetId    = $null
         }
     }
     
@@ -1496,15 +1481,15 @@ function Get-DependencyStatusForGUI {
     $winVersion = Test-WindowsVersion
     if ($winVersion.Found) {
         $dependencies += @{
-            Name = "Windows Version"
+            Name        = "Windows Version"
             Description = "Betriebssystem-Version"
-            Found = $true
-            Required = $false
-            Available = $false
-            Version = "Build $($winVersion.Build)"
-            Status = "✓ Kompatibel"
+            Found       = $true
+            Required    = $false
+            Available   = $false
+            Version     = "Build $($winVersion.Build)"
+            Status      = "✓ Kompatibel"
             StatusColor = "Green"
-            WingetId = $null
+            WingetId    = $null
         }
     }
     
@@ -1512,27 +1497,27 @@ function Get-DependencyStatusForGUI {
     $adminRights = Test-AdministratorRights
     if ($adminRights.Found) {
         $dependencies += @{
-            Name = "Administrator-Rechte"
+            Name        = "Administrator-Rechte"
             Description = "Erhöhte Rechte für System-Tools"
-            Found = $true
-            Required = $false
-            Available = $false
-            Version = $adminRights.User
-            Status = "✓ Aktiv"
+            Found       = $true
+            Required    = $false
+            Available   = $false
+            Version     = $adminRights.User
+            Status      = "✓ Aktiv"
             StatusColor = "Green"
-            WingetId = $null
+            WingetId    = $null
         }
     } else {
         $dependencies += @{
-            Name = "Administrator-Rechte"
+            Name        = "Administrator-Rechte"
             Description = "Erhöhte Rechte für System-Tools"
-            Found = $false
-            Required = $false
-            Available = $false
-            Version = $adminRights.User
-            Status = "⚠ Nicht aktiv"
+            Found       = $false
+            Required    = $false
+            Available   = $false
+            Version     = $adminRights.User
+            Status      = "⚠ Nicht aktiv"
             StatusColor = "Yellow"
-            WingetId = $null
+            WingetId    = $null
         }
     }
     
@@ -1540,28 +1525,28 @@ function Get-DependencyStatusForGUI {
     $winget = Find-WingetPackageManager
     if ($winget.Found) {
         $dependencies += @{
-            Name = "Winget Package Manager"
+            Name        = "Winget Package Manager"
             Description = "Windows Paketmanager für Installationen"
-            Found = $true
-            Required = $false
-            Available = $false
-            Version = $winget.Version.ToString()
-            Status = "✓ Verfügbar"
+            Found       = $true
+            Required    = $false
+            Available   = $false
+            Version     = $winget.Version.ToString()
+            Status      = "✓ Verfügbar"
             StatusColor = "Green"
-            WingetId = $null
+            WingetId    = $null
         }
     } else {
         $allSatisfied = $false
         $dependencies += @{
-            Name = "Winget Package Manager"
+            Name        = "Winget Package Manager"
             Description = "Erforderlich für Auto-Installation"
-            Found = $false
-            Required = $true
-            Available = $false
-            Version = $null
-            Status = "❌ Fehlt"
+            Found       = $false
+            Required    = $true
+            Available   = $false
+            Version     = $null
+            Status      = "❌ Fehlt"
             StatusColor = "Red"
-            WingetId = $null
+            WingetId    = $null
         }
     }
 
@@ -1569,30 +1554,30 @@ function Get-DependencyStatusForGUI {
     $appInstaller = Find-AppInstaller
     if ($appInstaller.Found) {
         $dependencies += @{
-            Name = "App Installer (winget)"
+            Name        = "App Installer (winget)"
             Description = "Microsoft App Installer (Basis für Winget-Pakete)"
-            Found = $true
-            Required = $false
-            Available = $false
-            Version = $appInstaller.Version
-            Status = "✓ Installiert"
+            Found       = $true
+            Required    = $false
+            Available   = $false
+            Version     = $appInstaller.Version
+            Status      = "✓ Installiert"
             StatusColor = "Green"
-            WingetId = if ($winget.Found) { $appInstaller.WingetId } else { $null }
-            SourceUrl = $appInstaller.DownloadUrl
+            WingetId    = if ($winget.Found) { $appInstaller.WingetId } else { $null }
+            SourceUrl   = $appInstaller.DownloadUrl
         }
     } else {
         $allSatisfied = $false
         $dependencies += @{
-            Name = "App Installer (winget)"
+            Name        = "App Installer (winget)"
             Description = "Erforderlich für Winget-Paketinstallationen"
-            Found = $false
-            Required = $true
-            Available = $winget.Found
-            Version = $null
-            Status = "❌ Fehlt"
+            Found       = $false
+            Required    = $true
+            Available   = $winget.Found
+            Version     = $null
+            Status      = "❌ Fehlt"
             StatusColor = "Red"
-            WingetId = if ($winget.Found) { $appInstaller.WingetId } else { $null }
-            SourceUrl = $appInstaller.DownloadUrl
+            WingetId    = if ($winget.Found) { $appInstaller.WingetId } else { $null }
+            SourceUrl   = $appInstaller.DownloadUrl
         }
     }
     
@@ -1600,40 +1585,40 @@ function Get-DependencyStatusForGUI {
     $pawnIO = Find-PawnIODriver
     if ($pawnIO.Running) {
         $dependencies += @{
-            Name = "PawnIO Ring-0 Treiber"
+            Name        = "PawnIO Ring-0 Treiber"
             Description = "Sicherer Kernel-Treiber für Hardware-Zugriff"
-            Found = $true
-            Required = $false
-            Available = $true
-            Version = $pawnIO.Version
-            Status = "✓ Läuft"
+            Found       = $true
+            Required    = $false
+            Available   = $true
+            Version     = $pawnIO.Version
+            Status      = "✓ Läuft"
             StatusColor = "Green"
-            WingetId = $pawnIO.WingetId
+            WingetId    = $pawnIO.WingetId
         }
     } elseif ($pawnIO.Found) {
         $dependencies += @{
-            Name = "PawnIO Ring-0 Treiber"
+            Name        = "PawnIO Ring-0 Treiber"
             Description = "Service installiert, aber nicht gestartet"
-            Found = $true
-            Required = $false
-            Available = $true
-            Version = $pawnIO.Version
-            Status = "⚠ Neustart nötig"
+            Found       = $true
+            Required    = $false
+            Available   = $true
+            Version     = $pawnIO.Version
+            Status      = "⚠ Neustart nötig"
             StatusColor = "Yellow"
-            WingetId = $pawnIO.WingetId
+            WingetId    = $pawnIO.WingetId
         }
     } else {
         $allSatisfied = $false
         $dependencies += @{
-            Name = "PawnIO Ring-0 Treiber"
+            Name        = "PawnIO Ring-0 Treiber"
             Description = "Erforderlich für Hardware-Monitoring"
-            Found = $false
-            Required = $false
-            Available = $true
-            Version = $null
-            Status = "⚠ Nicht installiert"
+            Found       = $false
+            Required    = $false
+            Available   = $true
+            Version     = $null
+            Status      = "⚠ Nicht installiert"
             StatusColor = "Yellow"
-            WingetId = $pawnIO.WingetId
+            WingetId    = $pawnIO.WingetId
         }
     }
     
@@ -1641,27 +1626,27 @@ function Get-DependencyStatusForGUI {
     $lhm = Initialize-HardwareMonitoringMode
     if ($lhm.Available) {
         $dependencies += @{
-            Name = "Hardware-Monitoring"
+            Name        = "Hardware-Monitoring"
             Description = "LibreHardwareMonitorLib + PawnIO (Status-Komponente)"
-            Found = $true
-            Required = $false
-            Available = $false
-            Version = $lhm.Message
-            Status = "✓ Aktiv"
+            Found       = $true
+            Required    = $false
+            Available   = $false
+            Version     = $lhm.Message
+            Status      = "✓ Aktiv"
             StatusColor = "Green"
-            WingetId = $null
+            WingetId    = $null
         }
     } else {
         $dependencies += @{
-            Name = "Hardware-Monitoring"
+            Name        = "Hardware-Monitoring"
             Description = "Abhängig von PawnIO und lokaler DLL (nicht separat installierbar)"
-            Found = $false
-            Required = $false
-            Available = $false
-            Version = $null
-            Status = "⚠ Deaktiviert"
+            Found       = $false
+            Required    = $false
+            Available   = $false
+            Version     = $null
+            Status      = "⚠ Deaktiviert"
             StatusColor = "Yellow"
-            WingetId = $null
+            WingetId    = $null
         }
     }
 
@@ -1690,52 +1675,51 @@ function Get-DependencyStatusForGUI {
             }
 
             $dependencies += @{
-                Name           = "LibreHardwareMonitor DLL"
-                Description    = "Hardware-Monitoring Bibliothek (v$lhmTargetVersion verfügbar auf NuGet)"
-                Found          = $true
-                Required       = $false
-                Available      = $lhmUpdateAvailable
-                Version        = $lhmVersionClean
-                Status         = $lhmStatus
-                StatusColor    = $lhmStatusColor
-                WingetId       = $null
-                UpdateAvailable = $lhmUpdateAvailable
+                Name             = "LibreHardwareMonitor DLL"
+                Description      = "Hardware-Monitoring Bibliothek (v$lhmTargetVersion verfügbar auf NuGet)"
+                Found            = $true
+                Required         = $false
+                Available        = $lhmUpdateAvailable
+                Version          = $lhmVersionClean
+                Status           = $lhmStatus
+                StatusColor      = $lhmStatusColor
+                WingetId         = $null
+                UpdateAvailable  = $lhmUpdateAvailable
                 AvailableVersion = if ($lhmUpdateAvailable) { $lhmTargetVersion } else { $null }
-                LhmLibPath     = $lhmLibPath
+                LhmLibPath       = $lhmLibPath
                 LhmTargetVersion = $lhmTargetVersion
             }
-        }
-        catch {
+        } catch {
             $dependencies += @{
-                Name           = "LibreHardwareMonitor DLL"
-                Description    = "Hardware-Monitoring Bibliothek (Versionsprüfung fehlgeschlagen)"
-                Found          = $true
-                Required       = $false
-                Available      = $false
-                Version        = "Unbekannt"
-                Status         = "⚠ Prüfung fehlgeschlagen"
-                StatusColor    = "Yellow"
-                WingetId       = $null
-                UpdateAvailable = $false
+                Name             = "LibreHardwareMonitor DLL"
+                Description      = "Hardware-Monitoring Bibliothek (Versionsprüfung fehlgeschlagen)"
+                Found            = $true
+                Required         = $false
+                Available        = $false
+                Version          = "Unbekannt"
+                Status           = "⚠ Prüfung fehlgeschlagen"
+                StatusColor      = "Yellow"
+                WingetId         = $null
+                UpdateAvailable  = $false
                 AvailableVersion = $null
-                LhmLibPath     = $lhmLibPath
+                LhmLibPath       = $lhmLibPath
                 LhmTargetVersion = $lhmTargetVersion
             }
         }
     } else {
         $dependencies += @{
-            Name           = "LibreHardwareMonitor DLL"
-            Description    = "Hardware-Monitoring Bibliothek (nicht gefunden im Lib-Ordner)"
-            Found          = $false
-            Required       = $false
-            Available      = $true
-            Version        = $null
-            Status         = "❌ Nicht gefunden"
-            StatusColor    = "Red"
-            WingetId       = $null
-            UpdateAvailable = $false
+            Name             = "LibreHardwareMonitor DLL"
+            Description      = "Hardware-Monitoring Bibliothek (nicht gefunden im Lib-Ordner)"
+            Found            = $false
+            Required         = $false
+            Available        = $true
+            Version          = $null
+            Status           = "❌ Nicht gefunden"
+            StatusColor      = "Red"
+            WingetId         = $null
+            UpdateAvailable  = $false
             AvailableVersion = $lhmTargetVersion
-            LhmLibPath     = $lhmLibPath
+            LhmLibPath       = $lhmLibPath
             LhmTargetVersion = $lhmTargetVersion
         }
     }
@@ -1744,15 +1728,15 @@ function Get-DependencyStatusForGUI {
     $pwsh = Find-PowerShellCore
     if ($pwsh.Found) {
         $dependencies += @{
-            Name = "PowerShell Core"
+            Name        = "PowerShell Core"
             Description = "Moderne PowerShell 7+ (optional)"
-            Found = $true
-            Required = $false
-            Available = $false
-            Version = $pwsh.Version.ToString()
-            Status = "✓ Installiert"
+            Found       = $true
+            Required    = $false
+            Available   = $false
+            Version     = $pwsh.Version.ToString()
+            Status      = "✓ Installiert"
             StatusColor = "Green"
-            WingetId = $null
+            WingetId    = $null
         }
     }
 
@@ -1767,8 +1751,8 @@ function Get-DependencyStatusForGUI {
     $hasInstallableItems = ($dependencies | Where-Object { -not $_.Found -and $_.Available }).Count -gt 0
     
     return @{
-        Dependencies = $dependencies
-        AllSatisfied = $allSatisfied
+        Dependencies        = $dependencies
+        AllSatisfied        = $allSatisfied
         HasInstallableItems = $hasInstallableItems
     }
 }
@@ -1803,26 +1787,25 @@ function Test-SystemDependencies {
     $dotNet = Test-DotNetFrameworkVersion
     if ($dotNet.Found) {
         $dependencies += @{
-            Name = ".NET Framework"
+            Name        = ".NET Framework"
             Description = "Erforderlich für Windows Forms und WPF Assemblies"
-            Required = $true
-            Available = $false  # Systemkomponente
-            Found = $true
-            Version = "$($dotNet.Version) (Release $($dotNet.Release))"
-            Path = $null
+            Required    = $true
+            Available   = $false  # Systemkomponente
+            Found       = $true
+            Version     = "$($dotNet.Version) (Release $($dotNet.Release))"
+            Path        = $null
         }
         Write-Host "  ✓ .NET Framework $($dotNet.Version) gefunden" -ForegroundColor Green
-    }
-    else {
+    } else {
         $allSatisfied = $false
         $dependencies += @{
-            Name = ".NET Framework"
+            Name        = ".NET Framework"
             Description = "⚠️ .NET Framework 4.7.2+ erforderlich! Bitte über Windows Update installieren."
-            Required = $true
-            Available = $false
-            Found = $false
-            Version = if ($dotNet.Release) { "Gefunden: Release $($dotNet.Release) (zu alt)" } else { "Nicht gefunden" }
-            Path = $null
+            Required    = $true
+            Available   = $false
+            Found       = $false
+            Version     = if ($dotNet.Release) { "Gefunden: Release $($dotNet.Release) (zu alt)" } else { "Nicht gefunden" }
+            Path        = $null
         }
         Write-Host "  ❌ .NET Framework 4.7.2+ nicht gefunden!" -ForegroundColor Red
     }
@@ -1831,26 +1814,25 @@ function Test-SystemDependencies {
     $psVersion = Test-PowerShellVersion
     if ($psVersion.Found) {
         $dependencies += @{
-            Name = "PowerShell"
+            Name        = "PowerShell"
             Description = "PowerShell 5.1+ für moderne Features"
-            Required = $true
-            Available = $false  # Systemkomponente
-            Found = $true
-            Version = "$($psVersion.Version) ($($psVersion.Edition))"
-            Path = $null
+            Required    = $true
+            Available   = $false  # Systemkomponente
+            Found       = $true
+            Version     = "$($psVersion.Version) ($($psVersion.Edition))"
+            Path        = $null
         }
         Write-Host "  ✓ PowerShell $($psVersion.Version) gefunden" -ForegroundColor Green
-    }
-    else {
+    } else {
         $allSatisfied = $false
         $dependencies += @{
-            Name = "PowerShell"
+            Name        = "PowerShell"
             Description = "⚠️ PowerShell 5.1+ erforderlich! Bitte aktualisieren."
-            Required = $true
-            Available = $false
-            Found = $false
-            Version = if ($psVersion.Version) { "$($psVersion.Version) (zu alt)" } else { "Nicht gefunden" }
-            Path = $null
+            Required    = $true
+            Available   = $false
+            Found       = $false
+            Version     = if ($psVersion.Version) { "$($psVersion.Version) (zu alt)" } else { "Nicht gefunden" }
+            Path        = $null
         }
         Write-Host "  ❌ PowerShell 5.1+ nicht gefunden!" -ForegroundColor Red
     }
@@ -1859,26 +1841,25 @@ function Test-SystemDependencies {
     $winVersion = Test-WindowsVersion
     if ($winVersion.Found) {
         $dependencies += @{
-            Name = "Windows Version"
+            Name        = "Windows Version"
             Description = "Windows 10 1809+ (Build 17763+) für moderne APIs"
-            Required = $true
-            Available = $false  # Systemkomponente
-            Found = $true
-            Version = "$($winVersion.Name) Build $($winVersion.Build)"
-            Path = $null
+            Required    = $true
+            Available   = $false  # Systemkomponente
+            Found       = $true
+            Version     = "$($winVersion.Name) Build $($winVersion.Build)"
+            Path        = $null
         }
         Write-Host "  ✓ $($winVersion.Name) Build $($winVersion.Build) gefunden" -ForegroundColor Green
-    }
-    else {
+    } else {
         $allSatisfied = $false
         $dependencies += @{
-            Name = "Windows Version"
+            Name        = "Windows Version"
             Description = "⚠️ Windows 10 Build 17763+ erforderlich! Bitte System aktualisieren."
-            Required = $true
-            Available = $false
-            Found = $false
-            Version = if ($winVersion.Build) { "Build $($winVersion.Build) (zu alt)" } else { "Nicht ermittelbar" }
-            Path = $null
+            Required    = $true
+            Available   = $false
+            Found       = $false
+            Version     = if ($winVersion.Build) { "Build $($winVersion.Build) (zu alt)" } else { "Nicht ermittelbar" }
+            Path        = $null
         }
         Write-Host "  ❌ Windows 10 Build 17763+ nicht gefunden!" -ForegroundColor Red
     }
@@ -1887,25 +1868,24 @@ function Test-SystemDependencies {
     $adminRights = Test-AdministratorRights
     if ($adminRights.Found) {
         $dependencies += @{
-            Name = "Administrator-Rechte"
+            Name        = "Administrator-Rechte"
             Description = "Mit Administrator-Rechten (empfohlen für System-Tools)"
-            Required = $false
-            Available = $false  # Status
-            Found = $true
-            Version = "Benutzer: $($adminRights.User)"
-            Path = $null
+            Required    = $false
+            Available   = $false  # Status
+            Found       = $true
+            Version     = "Benutzer: $($adminRights.User)"
+            Path        = $null
         }
         Write-Host "  ✓ Administrator-Rechte vorhanden" -ForegroundColor Green
-    }
-    else {
+    } else {
         $dependencies += @{
-            Name = "Administrator-Rechte"
+            Name        = "Administrator-Rechte"
             Description = "⚠️ Einige Tools benötigen Admin-Rechte. Bitte als Administrator ausführen."
-            Required = $false
-            Available = $false
-            Found = $false
-            Version = "Benutzer: $($adminRights.User)"
-            Path = $null
+            Required    = $false
+            Available   = $false
+            Found       = $false
+            Version     = "Benutzer: $($adminRights.User)"
+            Path        = $null
         }
         Write-Host "  ⚠️  Keine Administrator-Rechte (einige Tools eingeschränkt)" -ForegroundColor Yellow
     }
@@ -1914,26 +1894,25 @@ function Test-SystemDependencies {
     $winget = Find-WingetPackageManager
     if ($winget.Found) {
         $dependencies += @{
-            Name = "Winget Package Manager"
+            Name        = "Winget Package Manager"
             Description = "Windows Paketmanager für automatische Software-Installation"
-            Required = $false
-            Available = $false  # Kann nicht über sich selbst installiert werden
-            Found = $true
-            Version = $winget.Version.ToString()
-            Path = $winget.Path
+            Required    = $false
+            Available   = $false  # Kann nicht über sich selbst installiert werden
+            Found       = $true
+            Version     = $winget.Version.ToString()
+            Path        = $winget.Path
         }
         Write-Host "  ✓ Winget Package Manager $($winget.Version) gefunden" -ForegroundColor Green
-    }
-    else {
+    } else {
         $allSatisfied = $false
         $dependencies += @{
-            Name = "Winget Package Manager"
+            Name        = "Winget Package Manager"
             Description = "Erforderlich für automatische Installation von Komponenten (via Microsoft Store)"
-            Required = $true
-            Available = $false
-            Found = $false
-            Version = $null
-            Path = $null
+            Required    = $true
+            Available   = $false
+            Found       = $false
+            Version     = $null
+            Path        = $null
         }
         Write-Host "  ⚠️  Winget Package Manager nicht gefunden (manuelle Installation erforderlich)" -ForegroundColor Yellow
     }
@@ -1942,30 +1921,29 @@ function Test-SystemDependencies {
     $appInstaller = Find-AppInstaller
     if ($appInstaller.Found) {
         $dependencies += @{
-            Name = "App Installer (winget)"
+            Name        = "App Installer (winget)"
             Description = "Microsoft App Installer (Basis für Winget-Paketinstallation)"
-            Required = $false
-            Available = $false
-            Found = $true
-            Version = $appInstaller.Version
-            Path = $appInstaller.InstallLocation
-            WingetId = if ($winget.Found) { $appInstaller.WingetId } else { $null }
-            SourceUrl = $appInstaller.DownloadUrl
+            Required    = $false
+            Available   = $false
+            Found       = $true
+            Version     = $appInstaller.Version
+            Path        = $appInstaller.InstallLocation
+            WingetId    = if ($winget.Found) { $appInstaller.WingetId } else { $null }
+            SourceUrl   = $appInstaller.DownloadUrl
         }
         Write-Host "  ✓ App Installer $($appInstaller.Version) gefunden" -ForegroundColor Green
-    }
-    else {
+    } else {
         $allSatisfied = $false
         $dependencies += @{
-            Name = "App Installer (winget)"
+            Name        = "App Installer (winget)"
             Description = "Erforderlich für Winget-Paketinstallation (Microsoft Store: App Installer)"
-            Required = $true
-            Available = $winget.Found
-            Found = $false
-            Version = $null
-            Path = $null
-            WingetId = if ($winget.Found) { $appInstaller.WingetId } else { $null }
-            SourceUrl = $appInstaller.DownloadUrl
+            Required    = $true
+            Available   = $winget.Found
+            Found       = $false
+            Version     = $null
+            Path        = $null
+            WingetId    = if ($winget.Found) { $appInstaller.WingetId } else { $null }
+            SourceUrl   = $appInstaller.DownloadUrl
         }
         Write-Host "  ⚠️  App Installer nicht gefunden (Winget-Paketinstallation eingeschränkt)" -ForegroundColor Yellow
     }
@@ -1976,44 +1954,42 @@ function Test-SystemDependencies {
         # PawnIO installiert - prüfe ob es läuft
         if ($pawnIO.Running) {
             $dependencies += @{
-                Name = "PawnIO Ring-0 Treiber"
+                Name        = "PawnIO Ring-0 Treiber"
                 Description = "Sicherer Kernel-Treiber für Hardware-Zugriff (erforderlich für Monitoring)"
-                Required = $false
-                Available = $true  # Über winget installierbar
-                Found = $true
-                Version = $pawnIO.Version
-                Path = "Service: PawnIO (Läuft)"
-                WingetId = $pawnIO.WingetId
+                Required    = $false
+                Available   = $true  # Über winget installierbar
+                Found       = $true
+                Version     = $pawnIO.Version
+                Path        = "Service: PawnIO (Läuft)"
+                WingetId    = $pawnIO.WingetId
             }
             Write-Host "  ✓ PawnIO-Treiber $($pawnIO.Version) installiert und läuft" -ForegroundColor Green
-        }
-        else {
+        } else {
             # Service existiert aber läuft nicht
             $dependencies += @{
-                Name = "PawnIO Ring-0 Treiber"
+                Name        = "PawnIO Ring-0 Treiber"
                 Description = "⚠️ PawnIO-Service ist installiert, läuft aber nicht. Bitte System neu starten."
-                Required = $false
-                Available = $true
-                Found = $true
-                Version = "$($pawnIO.Version) (Nicht gestartet)"
-                Path = "Service: PawnIO (Gestoppt)"
-                WingetId = $pawnIO.WingetId
+                Required    = $false
+                Available   = $true
+                Found       = $true
+                Version     = "$($pawnIO.Version) (Nicht gestartet)"
+                Path        = "Service: PawnIO (Gestoppt)"
+                WingetId    = $pawnIO.WingetId
             }
             Write-Host "  ⚠️  PawnIO-Treiber installiert, aber nicht gestartet (Neustart erforderlich)" -ForegroundColor Yellow
         }
-    }
-    else {
+    } else {
         # PawnIO fehlt - kritisch für Hardware-Monitoring
         $allSatisfied = $false
         $dependencies += @{
-            Name = "PawnIO Ring-0 Treiber"
+            Name        = "PawnIO Ring-0 Treiber"
             Description = "Sicherer Kernel-Treiber für Hardware-Zugriff. Ohne PawnIO kein Hardware-Monitoring!"
-            Required = $false
-            Available = $true  # Über winget installierbar
-            Found = $false
-            Version = $null
-            Path = $null
-            WingetId = $pawnIO.WingetId
+            Required    = $false
+            Available   = $true  # Über winget installierbar
+            Found       = $false
+            Version     = $null
+            Path        = $null
+            WingetId    = $pawnIO.WingetId
         }
         Write-Host "  ⚠️  PawnIO-Treiber nicht installiert (erforderlich für Hardware-Monitoring)" -ForegroundColor Yellow
     }
@@ -2025,8 +2001,7 @@ function Test-SystemDependencies {
     $libPath = Join-Path $PSScriptRoot "..\..\Lib"
     if (-not (Test-Path $libPath)) {
         Write-Host "  ⚠️  Lib-Ordner nicht gefunden: $libPath" -ForegroundColor Yellow
-    }
-    else {
+    } else {
         # 2a.1 LibreHardwareMonitorLib.dll (KRITISCH >= 0.9.5)
         $lhmDllPath = Join-Path $libPath "LibreHardwareMonitorLib.dll"
         if (Test-Path $lhmDllPath) {
@@ -2045,56 +2020,53 @@ function Test-SystemDependencies {
                 
                 if ($versionOK) {
                     $dependencies += @{
-                        Name = "LibreHardwareMonitorLib.dll"
+                        Name        = "LibreHardwareMonitorLib.dll"
                         Description = "Hardware-Sensor-Bibliothek v$lhmVersionClean (PawnIO-kompatibel ✓)"
-                        Required = $true
-                        Available = $true
-                        Found = $true
-                        Version = $lhmVersionClean
-                        Path = $lhmDllPath
+                        Required    = $true
+                        Available   = $true
+                        Found       = $true
+                        Version     = $lhmVersionClean
+                        Path        = $lhmDllPath
                     }
                     Write-Host "  ✓ LibreHardwareMonitorLib.dll v$lhmVersionClean (PawnIO-Version)" -ForegroundColor Green
-                }
-                else {
+                } else {
                     # Veraltete Version (< 0.9.5 → nutzt WinRing0!)
                     $allSatisfied = $false
                     $dependencies += @{
-                        Name = "LibreHardwareMonitorLib.dll"
+                        Name        = "LibreHardwareMonitorLib.dll"
                         Description = "⚠️ VERALTET v$lhmVersionClean (nutzt unsicheren WinRing0-Treiber statt PawnIO!)"
-                        Required = $true
-                        Available = $true
-                        Found = $false  # Als "nicht gefunden" markieren, da Version ungeeignet
-                        Version = "$lhmVersionClean (< 0.9.5)"
-                        Path = $lhmDllPath
+                        Required    = $true
+                        Available   = $true
+                        Found       = $false  # Als "nicht gefunden" markieren, da Version ungeeignet
+                        Version     = "$lhmVersionClean (< 0.9.5)"
+                        Path        = $lhmDllPath
                     }
                     Write-Host "  ⚠️  LibreHardwareMonitorLib.dll v$lhmVersionClean ist VERALTET!" -ForegroundColor Yellow
                     Write-Host "      → Benötigt: v0.9.5+ (PawnIO statt WinRing0)" -ForegroundColor Yellow
                     Write-Host "      → Update über Tools\Update-LibreHardwareMonitor.ps1" -ForegroundColor Gray
                 }
-            }
-            catch {
+            } catch {
                 $dependencies += @{
-                    Name = "LibreHardwareMonitorLib.dll"
+                    Name        = "LibreHardwareMonitorLib.dll"
                     Description = "Hardware-Sensor-Bibliothek (Version konnte nicht gelesen werden)"
-                    Required = $true
-                    Available = $true
-                    Found = $false
-                    Version = "Fehler beim Lesen"
-                    Path = $lhmDllPath
+                    Required    = $true
+                    Available   = $true
+                    Found       = $false
+                    Version     = "Fehler beim Lesen"
+                    Path        = $lhmDllPath
                 }
                 Write-Host "  ⚠️  LibreHardwareMonitorLib.dll: Version konnte nicht gelesen werden" -ForegroundColor Yellow
             }
-        }
-        else {
+        } else {
             $allSatisfied = $false
             $dependencies += @{
-                Name = "LibreHardwareMonitorLib.dll"
+                Name        = "LibreHardwareMonitorLib.dll"
                 Description = "Hardware-Sensor-Bibliothek (FEHLT!)"
-                Required = $true
-                Available = $false
-                Found = $false
-                Version = $null
-                Path = $lhmDllPath
+                Required    = $true
+                Available   = $false
+                Found       = $false
+                Version     = $null
+                Path        = $lhmDllPath
             }
             Write-Host "  ❌ LibreHardwareMonitorLib.dll nicht gefunden!" -ForegroundColor Red
         }
@@ -2107,29 +2079,27 @@ function Test-SystemDependencies {
                 $blacksharpVersionClean = if ($blacksharpVersion) { $blacksharpVersion } else { "Unbekannt" }
                 
                 $dependencies += @{
-                    Name = "BlackSharp.Core.dll"
+                    Name        = "BlackSharp.Core.dll"
                     Description = "BlackSharp Basis-Bibliothek"
-                    Required = $true
-                    Available = $true
-                    Found = $true
-                    Version = $blacksharpVersionClean
-                    Path = $blacksharpDllPath
+                    Required    = $true
+                    Available   = $true
+                    Found       = $true
+                    Version     = $blacksharpVersionClean
+                    Path        = $blacksharpDllPath
                 }
                 Write-Host "  ✓ BlackSharp.Core.dll v$blacksharpVersionClean" -ForegroundColor Green
-            }
-            catch {
+            } catch {
                 Write-Host "  ⚠️  BlackSharp.Core.dll: Version konnte nicht gelesen werden" -ForegroundColor Yellow
             }
-        }
-        else {
+        } else {
             $dependencies += @{
-                Name = "BlackSharp.Core.dll"
+                Name        = "BlackSharp.Core.dll"
                 Description = "BlackSharp Basis-Bibliothek (FEHLT!)"
-                Required = $true
-                Available = $false
-                Found = $false
-                Version = $null
-                Path = $blacksharpDllPath
+                Required    = $true
+                Available   = $false
+                Found       = $false
+                Version     = $null
+                Path        = $blacksharpDllPath
             }
             Write-Host "  ⚠️  BlackSharp.Core.dll nicht gefunden" -ForegroundColor Yellow
         }
@@ -2142,21 +2112,19 @@ function Test-SystemDependencies {
                 $hidsharpVersionClean = if ($hidsharpVersion) { $hidsharpVersion } else { "Unbekannt" }
                 
                 $dependencies += @{
-                    Name = "HidSharp.dll"
+                    Name        = "HidSharp.dll"
                     Description = "HID-Geräte-Bibliothek (optional für spezielle Hardware)"
-                    Required = $false
-                    Available = $true
-                    Found = $true
-                    Version = $hidsharpVersionClean
-                    Path = $hidsharpDllPath
+                    Required    = $false
+                    Available   = $true
+                    Found       = $true
+                    Version     = $hidsharpVersionClean
+                    Path        = $hidsharpDllPath
                 }
                 Write-Host "  ✓ HidSharp.dll v$hidsharpVersionClean" -ForegroundColor Green
-            }
-            catch {
+            } catch {
                 Write-Host "  ℹ️  HidSharp.dll: Version konnte nicht gelesen werden" -ForegroundColor Cyan
             }
-        }
-        else {
+        } else {
             Write-Host "  ℹ️  HidSharp.dll nicht gefunden (optional, nur für spezielle HID-Geräte)" -ForegroundColor Cyan
         }
         
@@ -2168,21 +2136,19 @@ function Test-SystemDependencies {
                 $ramspdVersionClean = if ($ramspdVersion) { $ramspdVersion } else { "Unbekannt" }
                 
                 $dependencies += @{
-                    Name = "RAMSPDToolkit-NDD.dll"
+                    Name        = "RAMSPDToolkit-NDD.dll"
                     Description = "RAM-SPD-Informationen (optional)"
-                    Required = $false
-                    Available = $true
-                    Found = $true
-                    Version = $ramspdVersionClean
-                    Path = $ramspdDllPath
+                    Required    = $false
+                    Available   = $true
+                    Found       = $true
+                    Version     = $ramspdVersionClean
+                    Path        = $ramspdDllPath
                 }
                 Write-Host "  ✓ RAMSPDToolkit-NDD.dll v$ramspdVersionClean" -ForegroundColor Green
-            }
-            catch {
+            } catch {
                 Write-Host "  ℹ️  RAMSPDToolkit-NDD.dll: Version konnte nicht gelesen werden" -ForegroundColor Cyan
             }
-        }
-        else {
+        } else {
             Write-Host "  ℹ️  RAMSPDToolkit-NDD.dll nicht gefunden (optional)" -ForegroundColor Cyan
         }
         
@@ -2194,21 +2160,19 @@ function Test-SystemDependencies {
                 $diskinfoVersionClean = if ($diskinfoVersion) { $diskinfoVersion } else { "Unbekannt" }
                 
                 $dependencies += @{
-                    Name = "DiskInfoToolkit.dll"
+                    Name        = "DiskInfoToolkit.dll"
                     Description = "Festplatten-Informationen (optional)"
-                    Required = $false
-                    Available = $true
-                    Found = $true
-                    Version = $diskinfoVersionClean
-                    Path = $diskinfoPath
+                    Required    = $false
+                    Available   = $true
+                    Found       = $true
+                    Version     = $diskinfoVersionClean
+                    Path        = $diskinfoPath
                 }
                 Write-Host "  ✓ DiskInfoToolkit.dll v$diskinfoVersionClean" -ForegroundColor Green
-            }
-            catch {
+            } catch {
                 Write-Host "  ℹ️  DiskInfoToolkit.dll: Version konnte nicht gelesen werden" -ForegroundColor Cyan
             }
-        }
-        else {
+        } else {
             Write-Host "  ℹ️  DiskInfoToolkit.dll nicht gefunden (optional)" -ForegroundColor Cyan
         }
     }
@@ -2218,26 +2182,25 @@ function Test-SystemDependencies {
     if (-not $lhm.Available) {
         $allSatisfied = $false
         $dependencies += @{
-            Name = "Hardware-Monitoring (LibreHardwareMonitorLib)"
+            Name        = "Hardware-Monitoring (LibreHardwareMonitorLib)"
             Description = "Lokale DLL-Bibliothek für Hardware-Sensoren (CPU/GPU/RAM) + PawnIO-Treiber"
-            Required = $false
-            Available = $lhm.Available
-            Found = $lhm.Available
-            Version = $null
-            Path = $lhm.LibrePath
+            Required    = $false
+            Available   = $lhm.Available
+            Found       = $lhm.Available
+            Version     = $null
+            Path        = $lhm.LibrePath
         }
         Write-Host "  ⚠️  Hardware-Monitoring nicht verfügbar: $($lhm.Message)" -ForegroundColor Yellow
-    }
-    else {
+    } else {
         # Auch bereits installierte Komponenten in Liste aufnehmen (für Dialog-Anzeige)
         $dependencies += @{
-            Name = "Hardware-Monitoring (LibreHardwareMonitorLib)"
+            Name        = "Hardware-Monitoring (LibreHardwareMonitorLib)"
             Description = "Lokale DLL-Bibliothek für Hardware-Sensoren (CPU/GPU/RAM) + PawnIO-Treiber aktiv"
-            Required = $false
-            Available = $true
-            Found = $true
-            Version = $lhm.Message
-            Path = $lhm.LibrePath
+            Required    = $false
+            Available   = $true
+            Found       = $true
+            Version     = $lhm.Message
+            Path        = $lhm.LibrePath
         }
         Write-Host "  ✓ Hardware-Monitoring verfügbar (lokale Bibliothek): $($lhm.LibrePath)" -ForegroundColor Green
         Write-Host "    Status: $($lhm.Message)" -ForegroundColor Gray
@@ -2249,17 +2212,16 @@ function Test-SystemDependencies {
     if ($pwsh.Found) {
         # Auch installierte PowerShell Core anzeigen
         $dependencies += @{
-            Name = "PowerShell Core"
+            Name        = "PowerShell Core"
             Description = "Moderne PowerShell 7+ für bessere Performance"
-            Required = $false
-            Available = $false  # Nicht über Winget installierbar in diesem Modul
-            Found = $true
-            Version = $pwsh.Version.ToString()
-            Path = $pwsh.Path
+            Required    = $false
+            Available   = $false  # Nicht über Winget installierbar in diesem Modul
+            Found       = $true
+            Version     = $pwsh.Version.ToString()
+            Path        = $pwsh.Path
         }
         Write-Host "  ✓ PowerShell Core $($pwsh.Version) gefunden" -ForegroundColor Green
-    }
-    else {
+    } else {
         Write-Host "  ℹ️  PowerShell Core nicht gefunden (Windows PowerShell wird verwendet)" -ForegroundColor Cyan
         # Optional: PowerShell Core als empfohlene Komponente hinzufügen
         # (Auskommentiert, da Installation komplex ist)

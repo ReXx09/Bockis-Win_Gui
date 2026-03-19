@@ -7,7 +7,7 @@
 # ===================================================================
 $script:AppVersion = "4.1.9"
 $script:AppName = "Bockis System-Tool"
-$script:AppPublisher = "Bockis"
+$script:AppPublisher = "Bocki"
 $script:VersionDate = "2026-03-03"
 # WinForms-Assemblies laden
 Add-Type -AssemblyName System.Drawing
@@ -324,6 +324,8 @@ function Update-Settings {
         $settings = Get-SystemToolSettings
         if ($settings) {
             $null = Initialize-TextStyle -Settings $settings -OutputBox $outputBox
+            # BackColor nach Initialize-TextStyle explizit setzen – verhindert Override durch Config-Defaults
+            $outputBox.BackColor = [System.Drawing.Color]::FromArgb(42, 42, 42)
         }
     }
 
@@ -639,12 +641,20 @@ if ($settingsResult -and $settingsResult.Success) {
 }
 
 # Erstelle das Hauptformular
+# Globale Hintergrundfarbe – wird von allen Panels verwendet (verhindert weißen Flicker)
+$script:BgColor = [System.Drawing.Color]::FromArgb(30, 30, 30)
+
 $mainform = New-Object System.Windows.Forms.Form
 $mainform.Text = "$script:AppName $script:AppVersion"
 $mainform.Font = New-Object System.Drawing.Font("Segoe UI", 10)
 $mainform.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::None  # Kein Rahmen
-$mainform.MinimumSize = New-Object System.Drawing.Size(1000, 850)
-$mainform.BackColor = [System.Drawing.Color]::FromArgb(30, 30, 30)  # Dunkles Grau wie UniGetUI
+$mainform.MinimumSize = New-Object System.Drawing.Size(1000, 800)
+$mainform.BackColor = $script:BgColor
+
+# DoubleBuffered via Reflection – verhindert weißes Flackern bei Fokus-Wechsel
+$mainform.GetType().GetProperty('DoubleBuffered',
+    [System.Reflection.BindingFlags]::Instance -bor [System.Reflection.BindingFlags]::NonPublic
+).SetValue($mainform, $true, $null)
 
 # Windows AutoScale für automatische Anpassung an alle Bildschirmauflösungen
 # Dies passt die GUI automatisch an HD, Full HD, 4K, 8K und alle DPI-Einstellungen an
@@ -654,7 +664,7 @@ $mainform.AutoScaleDimensions = New-Object System.Drawing.SizeF(96.0, 96.0)
 # Gespeicherte Fenstergröße und Position laden mit Boundary-Checking
 $mainform.StartPosition = "Manual"
 $savedWidth = if ($settings.WindowWidth) { [int]$settings.WindowWidth } else { 1000 }
-$savedHeight = if ($settings.WindowHeight) { [int]$settings.WindowHeight } else { 850 }
+$savedHeight = if ($settings.WindowHeight) { [int]$settings.WindowHeight } else { 800 }
 $savedLeft = if ($settings.WindowLeft) { [int]$settings.WindowLeft } else { $null }
 $savedTop = if ($settings.WindowTop) { [int]$settings.WindowTop } else { $null }
 
@@ -1406,11 +1416,6 @@ function Reload-GUI {
         Write-Host "Reload-GUI: Starte neuen GUI-Prozess..."
         Update-LogFile -Message "Reload-GUI: Neuer GUI-Prozess wird gestartet"
         
-        # Aktuellen Skriptpfad ermitteln – Priorität:
-        # 1. $PSCommandPath  (zuverlässig wenn per -File gestartet)
-        # 2. $script:MyScriptPath  (falls beim Start gesichert)
-        # 3. $PSScriptRoot  (Verzeichnis des Skripts – $MyInvocation.MyCommand.Path
-        #    ist INNERHALB einer Funktion der Pfad der Funktion, NICHT des Skripts!)
         $reloadScriptPath = $PSCommandPath
         if ([string]::IsNullOrEmpty($reloadScriptPath) -and -not [string]::IsNullOrEmpty($script:MyScriptPath)) {
             $reloadScriptPath = $script:MyScriptPath
@@ -1583,39 +1588,98 @@ $mainform.Add_LocationChanged({
 
 # Erstelle ein separates Panel für den Ausgabe-Button 
 $outputButtonPanel = New-Object System.Windows.Forms.Panel
-$outputButtonPanel.Location = New-Object System.Drawing.Point(3, 125)  
-$outputButtonPanel.Size = New-Object System.Drawing.Size(225, 45)  
-$outputButtonPanel.BackColor = [System.Drawing.Color]::Transparent
+$outputButtonPanel.Location = New-Object System.Drawing.Point(3, 115)  
+$outputButtonPanel.Size = New-Object System.Drawing.Size(215, 40)  
+$outputButtonPanel.BackColor = $script:BgColor
 $mainform.Controls.Add($outputButtonPanel)
 
 # Erstelle eine Button-Leiste für die Hauptnavigation (vertikal) 
 $mainButtonPanel = New-Object System.Windows.Forms.Panel
-$mainButtonPanel.Location = New-Object System.Drawing.Point(3, 175)  
-$mainButtonPanel.Size = New-Object System.Drawing.Size(217, 445)  
-$mainButtonPanel.BackColor = [System.Drawing.Color]::Transparent
+$mainButtonPanel.Location = New-Object System.Drawing.Point(3, 160)  
+$mainButtonPanel.Size = New-Object System.Drawing.Size(217, 440)  
+$mainButtonPanel.BackColor = $script:BgColor
 $mainform.Controls.Add($mainButtonPanel)
+
+# DoubleBuffered auf Button-Panels über Reflection (verhindert weißes Flackern bei Fokus-Verlust)
+$_dbProp = [System.Windows.Forms.Control].GetProperty('DoubleBuffered',
+    [System.Reflection.BindingFlags]::Instance -bor [System.Reflection.BindingFlags]::NonPublic)
+$_dbProp.SetValue($mainButtonPanel, $true, $null)
+$_dbProp.SetValue($outputButtonPanel, $true, $null)
 
 # Erstelle separates Panel für Neustart-Button (unterhalb mainButtonPanel)
 $restartButtonPanel = New-Object System.Windows.Forms.Panel
-$restartButtonPanel.Location = New-Object System.Drawing.Point(3, 630)  # Kurz vor unterem Rand
-$restartButtonPanel.Size = New-Object System.Drawing.Size(217, 190)
-$restartButtonPanel.BackColor = [System.Drawing.Color]::Transparent
+$restartButtonPanel.Location = New-Object System.Drawing.Point(3, 615)  # Kurz vor unterem Rand
+$restartButtonPanel.Size = New-Object System.Drawing.Size(217, 150)
+$restartButtonPanel.BackColor = $script:BgColor
 $mainform.Controls.Add($restartButtonPanel)
+$_dbProp.SetValue($restartButtonPanel, $true, $null)
 
 #------------------------------------------------------------------------------------------------------------
 
 # Erstelle ein Panel für die verschiedenen Hauptinhalte 
 $mainContentPanel = New-Object System.Windows.Forms.Panel
-$mainContentPanel.Location = New-Object System.Drawing.Point(220, 125)  
-$mainContentPanel.Size = New-Object System.Drawing.Size(775, 48)  
-$mainContentPanel.BackColor = [System.Drawing.Color]::Transparent
+$mainContentPanel.Location = New-Object System.Drawing.Point(220, 115)  
+$mainContentPanel.Size = New-Object System.Drawing.Size(775, 40)  
+$mainContentPanel.BackColor = $script:BgColor
 $mainform.Controls.Add($mainContentPanel)
+
+#------------------------------------------------------------------------------------------------------------
+# OUTPUT-PANEL & VIEW-PANELS (direkt unter mainContentPanel angedockt)
+#------------------------------------------------------------------------------------------------------------
+
+# Haupt-Ausgabebereich (unter mainContentPanel)
+$outputPanel = New-Object System.Windows.Forms.Panel
+$outputPanel.Location = New-Object System.Drawing.Point(225, 165)  # Button-Panels breiter gemacht
+$outputPanel.Size = New-Object System.Drawing.Size(765, 560)  # Breite für breitere Button-Panels reduziert
+$outputPanel.BackColor = [System.Drawing.Color]::FromArgb(30, 30, 30)  # Dunkles Grau wie Hauptfenster
+$mainform.Controls.Add($outputPanel)
+
+# Hilfsvariable für aktive Ansicht
+$script:currentView = "outputView"
+
+# Panel für die Standard-Ausgabe
+$outputViewPanel = New-Object System.Windows.Forms.Panel
+$outputViewPanel.Dock = [System.Windows.Forms.DockStyle]::Fill
+$outputViewPanel.Visible = $true
+$outputPanel.Controls.Add($outputViewPanel)
+
+# Panel für Status-Info
+$statusViewPanel = New-Object System.Windows.Forms.Panel
+$statusViewPanel.Dock = [System.Windows.Forms.DockStyle]::Fill
+$statusViewPanel.Visible = $false
+$outputPanel.Controls.Add($statusViewPanel)
+
+# Panel für Hardware-Info
+$hardwareViewPanel = New-Object System.Windows.Forms.Panel
+$hardwareViewPanel.Dock = [System.Windows.Forms.DockStyle]::Fill
+$hardwareViewPanel.Visible = $false
+$outputPanel.Controls.Add($hardwareViewPanel)
+
+# Panel für Tool-Info
+$toolInfoViewPanel = New-Object System.Windows.Forms.Panel
+$toolInfoViewPanel.Dock = [System.Windows.Forms.DockStyle]::Fill
+$toolInfoViewPanel.Visible = $false
+$outputPanel.Controls.Add($toolInfoViewPanel)
+
+# Panel für Tool-Downloads
+$downloadsViewPanel = New-Object System.Windows.Forms.Panel
+$downloadsViewPanel.Dock = [System.Windows.Forms.DockStyle]::Fill
+$downloadsViewPanel.Visible = $false
+$outputPanel.Controls.Add($downloadsViewPanel)
+
+# Panel für die ProgressBar (direkt unterhalb des outputPanel)
+$progressBarPanel = New-Object System.Windows.Forms.Panel
+$progressBarPanel.Location = New-Object System.Drawing.Point(225, 730)  
+$progressBarPanel.Size = New-Object System.Drawing.Size(765, 32)
+$progressBarPanel.BackColor = $script:BgColor
+$mainform.Controls.Add($progressBarPanel)
 
 # Suchfeld-Panel für Downloads (im mainContentPanel, oberhalb der Tool-Buttons)
 $searchPanel = New-Object System.Windows.Forms.Panel
-$searchPanel.Location = New-Object System.Drawing.Point(0, 0)
-$searchPanel.Size = New-Object System.Drawing.Size(735, 50)
-$searchPanel.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
+$searchPanel.Location = New-Object System.Drawing.Point(10, 0)
+$searchPanel.Size = New-Object System.Drawing.Size(775, 48)
+# $searchPanel.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
+$searchPanel.BackColor = $script:BgColor
 $searchPanel.Visible = $false  # Standardmäßig ausgeblendet
 $mainContentPanel.Controls.Add($searchPanel)
 
@@ -1708,46 +1772,59 @@ function Update-TileViewButtons {
     $btnListView.BackColor = if ($script:currentTileSize -eq "List") { $activeColor } else { $inactiveColor }
 }
 
-# Suchfeld-Label
+# Suchfeld-Label – vertikal zentriert im Panel
 $searchLabel = New-Object System.Windows.Forms.Label
 $searchLabel.Text = "Suche:"
-$searchLabel.Location = New-Object System.Drawing.Point(10, 15)
-$searchLabel.Size = New-Object System.Drawing.Size(60, 20)
-$searchLabel.ForeColor = [System.Drawing.Color]::White
-$searchLabel.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
+$searchLabel.Location = New-Object System.Drawing.Point(12, 15)
+$searchLabel.Size = New-Object System.Drawing.Size(55, 20)
+$searchLabel.ForeColor = [System.Drawing.Color]::FromArgb(180, 180, 180)
+$searchLabel.Font = New-Object System.Drawing.Font("Segoe UI", 10)
+$searchLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
 $searchPanel.Controls.Add($searchLabel)
 
-# Suchfeld-TextBox
-$searchTextBox = New-Object System.Windows.Forms.TextBox
-$searchTextBox.Location = New-Object System.Drawing.Point(75, 12)
-$searchTextBox.Size = New-Object System.Drawing.Size(300, 25)
-$searchTextBox.Font = New-Object System.Drawing.Font("Segoe UI", 10)
-$searchTextBox.BackColor = [System.Drawing.Color]::FromArgb(30, 30, 30)
-$searchTextBox.ForeColor = [System.Drawing.Color]::White
-$searchTextBox.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
-$searchPanel.Controls.Add($searchTextBox)
+# Wrapper-Panel für Suchfeld mit runden Ecken
+$searchBoxWrapper = New-Object System.Windows.Forms.Panel
+$searchBoxWrapper.Location = New-Object System.Drawing.Point(72, 10)
+$searchBoxWrapper.Size = New-Object System.Drawing.Size(340, 30)
+$searchBoxWrapper.BackColor = [System.Drawing.Color]::FromArgb(55, 55, 58)
+$searchBoxWrapper.Add_HandleCreated({
+        $rgn = [RoundedCorners]::CreateRoundRectRgn(0, 0, $searchBoxWrapper.Width, $searchBoxWrapper.Height, 8, 8)
+        $searchBoxWrapper.Region = [System.Drawing.Region]::FromHrgn($rgn)
+    })
+$searchPanel.Controls.Add($searchBoxWrapper)
 
-# Clear-Button für Suchfeld
+# Suchfeld-TextBox (innerhalb des Wrappers)
+$searchTextBox = New-Object System.Windows.Forms.TextBox
+$searchTextBox.Location = New-Object System.Drawing.Point(8, 4)
+$searchTextBox.Size = New-Object System.Drawing.Size(296, 22)
+$searchTextBox.Font = New-Object System.Drawing.Font("Segoe UI", 10)
+$searchTextBox.BackColor = [System.Drawing.Color]::FromArgb(55, 55, 58)
+$searchTextBox.ForeColor = [System.Drawing.Color]::White
+$searchTextBox.BorderStyle = [System.Windows.Forms.BorderStyle]::None
+$searchBoxWrapper.Controls.Add($searchTextBox)
+
+# Clear-Button (innerhalb des Wrappers, am rechten Rand)
 $searchClearButton = New-Object System.Windows.Forms.Button
 $searchClearButton.Text = "✕"
-$searchClearButton.Location = New-Object System.Drawing.Point(380, 12)
-$searchClearButton.Size = New-Object System.Drawing.Size(30, 25)
+$searchClearButton.Location = New-Object System.Drawing.Point(308, 2)
+$searchClearButton.Size = New-Object System.Drawing.Size(26, 26)
 $searchClearButton.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 $searchClearButton.FlatAppearance.BorderSize = 0
-$searchClearButton.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
-$searchClearButton.ForeColor = [System.Drawing.Color]::White
-$searchClearButton.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
+$searchClearButton.BackColor = [System.Drawing.Color]::FromArgb(55, 55, 58)
+$searchClearButton.ForeColor = [System.Drawing.Color]::FromArgb(160, 160, 160)
+$searchClearButton.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+$searchClearButton.Cursor = [System.Windows.Forms.Cursors]::Hand
 $searchClearButton.Add_Click({
         $searchTextBox.Text = ""
         $searchTextBox.Focus()
     })
-$searchPanel.Controls.Add($searchClearButton)
+$searchBoxWrapper.Controls.Add($searchClearButton)
 
 # Filter-Button für Updates
 $script:showOnlyUpdates = $false
 $btnFilterUpdates = New-Object System.Windows.Forms.Button
 $btnFilterUpdates.Text = "⬆ Updates"
-$btnFilterUpdates.Location = New-Object System.Drawing.Point(420, 12)
+$btnFilterUpdates.Location = New-Object System.Drawing.Point(422, 12)
 $btnFilterUpdates.Size = New-Object System.Drawing.Size(90, 25)
 $btnFilterUpdates.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 $btnFilterUpdates.FlatAppearance.BorderSize = 1
@@ -1906,8 +1983,13 @@ function New-CollapsiblePanel {
     $container = New-Object System.Windows.Forms.Panel
     $container.Location = New-Object System.Drawing.Point(5, $YPosition)
     $container.Size = New-Object System.Drawing.Size(210, 35)  # Initial nur Header sichtbar
-    $container.BackColor = [System.Drawing.Color]::Transparent
+    $container.BackColor = $script:BgColor
     $container.Tag = $Tag
+    
+    # DoubleBuffered via Reflection – verhindert weißes Flackern bei Fokus-Wechsel
+    $null = [System.Windows.Forms.Control].GetProperty('DoubleBuffered',
+        [System.Reflection.BindingFlags]::Instance -bor [System.Reflection.BindingFlags]::NonPublic
+    ).SetValue($container, $true, $null)
     
     # Speichere ursprüngliche Y-Position als Property für OpenUpward-Panels
     if ($OpenUpward) {
@@ -2158,8 +2240,13 @@ function New-HorizontalCollapsiblePanel {
     $container = New-Object System.Windows.Forms.Panel
     $container.Location = New-Object System.Drawing.Point($XPosition, 5)
     $container.Size = New-Object System.Drawing.Size(155, 35)  # Höhe 35px für horizontal
-    $container.BackColor = [System.Drawing.Color]::Transparent
+    $container.BackColor = $script:BgColor
     $container.Tag = $Tag
+    
+    # DoubleBuffered via Reflection – verhindert weißes Flackern bei Fokus-Wechsel
+    $null = [System.Windows.Forms.Control].GetProperty('DoubleBuffered',
+        [System.Reflection.BindingFlags]::Instance -bor [System.Reflection.BindingFlags]::NonPublic
+    ).SetValue($container, $true, $null)
     
     # Header-Button
     $headerBtn = New-Object System.Windows.Forms.Button
@@ -2587,25 +2674,39 @@ $diskPanel = New-CollapsiblePanel -Title "Diagnose/Reparatur" -YPosition 75 -Tag
     $outputBox.AppendText("Verfügbare Tools:`r`n`r`n")
 
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Accent'
+    Add-OutputIcon -OutputBox $outputBox -IconCode 0xE74E
+    $outputBox.AppendText(" CHKDSK (FESTPLATTEN):`r`n")
+    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
+    $outputBox.AppendText("  • CHKDSK (Scan)        - Nur Überprüfung (ohne Reparatur)`r`n")
+    $outputBox.AppendText("  • CHKDSK /F            - Reparatur (erfordert Neustart beim Systemlaufwerk)`r`n")
+    $outputBox.AppendText("  • CHKDSK /R            - Erweiterte Reparatur + Bad-Sector-Suche`r`n`r`n")
+
+    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Accent'
+    Add-OutputIcon -OutputBox $outputBox -IconCode 0xE770
+    $outputBox.AppendText(" MEMORY DIAGNOSTIC (ARBEITSSPEICHER-TEST):`r`n")
+    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
+    $outputBox.AppendText("  • Memory Diagnostic    - Windows-Speichertest (mdsched.exe)`r`n")
+    $outputBox.AppendText("  • Prüft RAM auf defekte Zellen und Fehler`r`n`r`n")
+
+
+    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Accent'
     Add-OutputIcon -OutputBox $outputBox -IconCode 0xE721
     $outputBox.AppendText(" DISM (SYSTEM-IMAGE):`r`n")
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
     $outputBox.AppendText("  • DISM Check Health    - Schnelle Integritätsprüfung`r`n")
     $outputBox.AppendText("  • DISM Scan Health     - Detaillierte Analyse`r`n")
     $outputBox.AppendText("  • DISM Restore Health  - Automatische Reparatur`r`n`r`n")
-    
-    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Accent'
-    Add-OutputIcon -OutputBox $outputBox -IconCode 0xE74E
-    $outputBox.AppendText(" CHKDSK (FESTPLATTEN):`r`n")
-    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
-    $outputBox.AppendText("  • CHKDSK (Scan)        - Nur Überprüfung (ohne Reparatur)`r`n")
-    $outputBox.AppendText("  • CHKDSK /F            - Reparatur (erfordert Neustart)`r`n")
-    $outputBox.AppendText("  • CHKDSK /R            - Erweiterte Reparatur + Bad-Sector-Suche`r`n`r`n")
-    
+
+
+
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
     Add-OutputIcon -OutputBox $outputBox -IconCode 0xE7BA
-    $outputBox.AppendText("  HINWEIS: CHKDSK-Reparaturen erfordern oft einen Neustart.`r`n`r`n")
-    
+    $outputBox.AppendText("  HINWEIS: CHKDSK-Reparaturen erfordern oft einen Neustart.`r`n")
+    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
+    Add-OutputIcon -OutputBox $outputBox -IconCode 0xE7BA
+    $outputBox.AppendText("  HINWEIS: Memory Diagnostic erfordert zwingend einen Neustart`r`n")
+    $outputBox.AppendText("           – der Test läuft vor dem Windows-Start durch.`r`n`r`n")
+
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Muted'
     Add-OutputIcon -OutputBox $outputBox -IconCode 0xE946
     $outputBox.AppendText(" Tipp: Wählen Sie eine Kategorie oben aus, um die Tools anzuzeigen.`r`n")
@@ -2887,7 +2988,7 @@ $script:currentMainView = "systemView"
 $global:tblSystem = New-Object System.Windows.Forms.Panel
 $global:tblSystem.Location = New-Object System.Drawing.Point(0, 0)
 $global:tblSystem.Size = New-Object System.Drawing.Size(735, 230)  # Breite angepasst für breitere Button-Panels
-$global:tblSystem.BackColor = [System.Drawing.Color]::Transparent
+$global:tblSystem.BackColor = $script:BgColor
 $global:tblSystem.Visible = $false
 $mainContentPanel.Controls.Add($global:tblSystem)
 
@@ -2898,21 +2999,21 @@ $script:maintenanceControlsVisible = $false
 $tblDisk = New-Object System.Windows.Forms.Panel
 $tblDisk.Location = New-Object System.Drawing.Point(0, 0)
 $tblDisk.Size = New-Object System.Drawing.Size(735, 230)  # Breite angepasst für breitere Button-Panels
-$tblDisk.BackColor = [System.Drawing.Color]::Transparent
+$tblDisk.BackColor = $script:BgColor
 $tblDisk.Visible = $false
 $mainContentPanel.Controls.Add($tblDisk)
 
 $tblNetwork = New-Object System.Windows.Forms.Panel
 $tblNetwork.Location = New-Object System.Drawing.Point(0, 0)
 $tblNetwork.Size = New-Object System.Drawing.Size(735, 230)  # Breite angepasst für breitere Button-Panels
-$tblNetwork.BackColor = [System.Drawing.Color]::Transparent
+$tblNetwork.BackColor = $script:BgColor
 $tblNetwork.Visible = $false
 $mainContentPanel.Controls.Add($tblNetwork)
 
 $tblCleanup = New-Object System.Windows.Forms.Panel
 $tblCleanup.Location = New-Object System.Drawing.Point(0, 0)
 $tblCleanup.Size = New-Object System.Drawing.Size(735, 230)  # Breite angepasst für breitere Button-Panels
-$tblCleanup.BackColor = [System.Drawing.Color]::Transparent
+$tblCleanup.BackColor = $script:BgColor
 $tblCleanup.Visible = $false
 $mainContentPanel.Controls.Add($tblCleanup)
 
@@ -2920,7 +3021,7 @@ $mainContentPanel.Controls.Add($tblCleanup)
 $global:tblDependencies = New-Object System.Windows.Forms.Panel
 $global:tblDependencies.Location = New-Object System.Drawing.Point(0, 0)
 $global:tblDependencies.Size = New-Object System.Drawing.Size(735, 230)
-$global:tblDependencies.BackColor = [System.Drawing.Color]::Transparent
+$global:tblDependencies.BackColor = $script:BgColor
 $global:tblDependencies.Visible = $false
 $mainContentPanel.Controls.Add($global:tblDependencies)
 
@@ -2932,7 +3033,7 @@ $mainContentPanel.Controls.Add($global:tblDependencies)
 $global:tblSmartRepair = New-Object System.Windows.Forms.Panel
 $global:tblSmartRepair.Location = New-Object System.Drawing.Point(0, 0)
 $global:tblSmartRepair.Size = New-Object System.Drawing.Size(735, 38)
-$global:tblSmartRepair.BackColor = [System.Drawing.Color]::Transparent
+$global:tblSmartRepair.BackColor = $script:BgColor
 $global:tblSmartRepair.Visible = $false
 $mainContentPanel.Controls.Add($global:tblSmartRepair)
 
@@ -3265,13 +3366,6 @@ $script:cleanupTempControlsVisible = $false
 
 # tblCleanup wurde bereits weiter oben erstellt und zum mainContentPanel hinzugefügt
 
-# Erstelle ein Panel für die verschiedenen Ausgabebereiche - direkt im mainform
-$outputPanel = New-Object System.Windows.Forms.Panel
-$outputPanel.Location = New-Object System.Drawing.Point(225, 180)  # Button-Panels breiter gemacht
-$outputPanel.Size = New-Object System.Drawing.Size(765, 560)  # Breite für breitere Button-Panels reduziert
-$outputPanel.BackColor = [System.Drawing.Color]::FromArgb(30, 30, 30)  # Dunkles Grau wie Hauptfenster
-$mainform.Controls.Add($outputPanel)
-
 # PowerShell-Konsolenfenster-Steuerung mit P/Invoke (nach der Logo-Funktion, vor den Modul-Importen)
 if (-not ([System.Management.Automation.PSTypeName]'ConsoleHelper').Type) {
     Add-Type @"
@@ -3438,8 +3532,8 @@ function Switch-ConsoleVisibility {
 # Links: PowerShell-Toggle-Button
 $btnToggleConsole = New-Object System.Windows.Forms.Button
 $btnToggleConsole.Text = "◄"
-$btnToggleConsole.Size = New-Object System.Drawing.Size(45, 35)
-$btnToggleConsole.Location = New-Object System.Drawing.Point(20, 3)
+$btnToggleConsole.Size = New-Object System.Drawing.Size(45, 30)
+$btnToggleConsole.Location = New-Object System.Drawing.Point(20, 5)
 $btnToggleConsole.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 $btnToggleConsole.FlatAppearance.BorderSize = 0
 $btnToggleConsole.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
@@ -3516,8 +3610,8 @@ if ($tooltipObj) {
 # Mitte: CMD Admin-Button (ohne runde Ecken)
 $btnCMDQuick = New-Object System.Windows.Forms.Button
 $btnCMDQuick.Text = "⚡    CMD"
-$btnCMDQuick.Size = New-Object System.Drawing.Size(83, 35)
-$btnCMDQuick.Location = New-Object System.Drawing.Point(66, 3)
+$btnCMDQuick.Size = New-Object System.Drawing.Size(83, 30)
+$btnCMDQuick.Location = New-Object System.Drawing.Point(66, 5)
 $btnCMDQuick.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 $btnCMDQuick.FlatAppearance.BorderSize = 0
 $btnCMDQuick.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
@@ -3594,8 +3688,8 @@ if ($tooltipObj) {
 # Rechts: Ausgabe-Button mit Pfeil
 $btnOutput = New-Object System.Windows.Forms.Button
 $btnOutput.Text = "►"
-$btnOutput.Size = New-Object System.Drawing.Size(45, 35)
-$btnOutput.Location = New-Object System.Drawing.Point(150, 3)
+$btnOutput.Size = New-Object System.Drawing.Size(45, 30)
+$btnOutput.Location = New-Object System.Drawing.Point(150, 5)
 $btnOutput.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 $btnOutput.FlatAppearance.BorderSize = 0
 $btnOutput.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
@@ -3645,7 +3739,7 @@ if ($tooltipObj) {
 
 # Vertikaler Trenner rechts neben dem 3-in-1 Button
 $toggleSeparator = New-Object System.Windows.Forms.Label
-$toggleSeparator.Location = New-Object System.Drawing.Point(215, 8)
+$toggleSeparator.Location = New-Object System.Drawing.Point(208, 8)
 $toggleSeparator.Size = New-Object System.Drawing.Size(2, 28)
 $toggleSeparator.BackColor = [System.Drawing.Color]::FromArgb(120, 120, 120)
 $toggleSeparator.BorderStyle = [System.Windows.Forms.BorderStyle]::None
@@ -4845,7 +4939,7 @@ Update-PanelPositions -ParentPanel $mainButtonPanel
 #------------------------------------------------------------------------------------------------------------
 
 # Erstelle Collapsible Panel für Neustart im separaten restartButtonPanel (öffnet nach oben)
-$restartPanel = New-CollapsiblePanel -Title "Neustart" -YPosition 125 -Tag "restartPanel" -ParentPanel $restartButtonPanel -IconCode 0xE7E8 -OpenUpward -OnExpand {
+$restartPanel = New-CollapsiblePanel -Title "Neustart" -YPosition 115 -Tag "restartPanel" -ParentPanel $restartButtonPanel -IconCode 0xE7E8 -OpenUpward -OnExpand {
     # Alle View-Panels ausblenden beim Öffnen des Dropdown-Menüs
     if ($outputViewPanel) { $outputViewPanel.Visible = $false }
     if ($statusViewPanel) { $statusViewPanel.Visible = $false }
@@ -5104,44 +5198,6 @@ $restartButtonPanel.Controls.Add($restartPanel.Container)
 # Referenz für Event-Handler
 $btnRestart = $restartPanel.Header
 
-#------------------------------------------------------------------------------------------------------------
-# VIEW-PANELS FÜR AUSGABEN
-#------------------------------------------------------------------------------------------------------------
-
-# Hilfsvariable für aktive Ansicht
-$script:currentView = "outputView"
-
-# Erstelle Panels für jede Ausgabeansicht (verborgen)
-# Panel für die Standard-Ausgabe
-$outputViewPanel = New-Object System.Windows.Forms.Panel
-$outputViewPanel.Dock = [System.Windows.Forms.DockStyle]::Fill
-$outputViewPanel.Visible = $true
-$outputPanel.Controls.Add($outputViewPanel)
-
-# Panel für Status-Info
-$statusViewPanel = New-Object System.Windows.Forms.Panel
-$statusViewPanel.Dock = [System.Windows.Forms.DockStyle]::Fill
-$statusViewPanel.Visible = $false
-$outputPanel.Controls.Add($statusViewPanel)
-
-# Panel für Hardware-Info
-$hardwareViewPanel = New-Object System.Windows.Forms.Panel
-$hardwareViewPanel.Dock = [System.Windows.Forms.DockStyle]::Fill
-$hardwareViewPanel.Visible = $false
-$outputPanel.Controls.Add($hardwareViewPanel)
-
-# Panel für Tool-Info
-$toolInfoViewPanel = New-Object System.Windows.Forms.Panel
-$toolInfoViewPanel.Dock = [System.Windows.Forms.DockStyle]::Fill
-$toolInfoViewPanel.Visible = $false
-$outputPanel.Controls.Add($toolInfoViewPanel)
-
-# Panel für Tool-Downloads
-$downloadsViewPanel = New-Object System.Windows.Forms.Panel
-$downloadsViewPanel.Dock = [System.Windows.Forms.DockStyle]::Fill
-$downloadsViewPanel.Visible = $false
-$outputPanel.Controls.Add($downloadsViewPanel)
-
 # Variable für aktuelle Download-Kategorie (leer = keine Kategorie gewählt)
 $script:currentDownloadCategory = ""
 
@@ -5355,9 +5411,17 @@ if (-not (Get-Command -Name Initialize-ProgressComponents -ErrorAction SilentlyC
 }
 
 # Erstelle die TextProgressBar über das Modul (als global für Zugriff aus Modulen)
-$global:progressBar = New-TextProgressBar -X 225 -Y 755 -Width 735 -Height 30 -InitialText "Bereit" -InitialTextColor ([System.Drawing.Color]::White)
-$mainform.Controls.Add($global:progressBar)
+$global:progressBar = New-TextProgressBar -X 0 -Y 0 -Width $progressBarPanel.Width -Height $progressBarPanel.Height -InitialText "Bereit" -InitialTextColor ([System.Drawing.Color]::White)
+$global:progressBar.Dock = [System.Windows.Forms.DockStyle]::Fill
+$progressBarPanel.Controls.Add($global:progressBar)
 Initialize-ProgressComponents -ProgressBar $global:progressBar -StatusLabel $progressStatusLabel
+
+# Bei Form-Bewegung (Monitor-Wechsel) ProgressBar sofort neu zeichnen
+$mainform.Add_LocationChanged({
+        if ($null -ne $global:progressBar -and $global:progressBar.IsHandleCreated) {
+            $global:progressBar.Refresh()
+        }
+    })
 
 # Erstelle Output-Box für die Standard-Ausgabe
 $outputBox = New-Object System.Windows.Forms.RichTextBox
@@ -5367,7 +5431,8 @@ $outputBox.Multiline = $true
 $outputBox.ScrollBars = "Vertical"
 $outputBox.WordWrap = $true
 $outputBox.ReadOnly = $true
-$outputBox.BackColor = [System.Drawing.Color]::FromArgb(30, 30, 30)  # Dunkles Grau
+$outputBox.BorderStyle = [System.Windows.Forms.BorderStyle]::None   # Kein Rahmen
+$outputBox.BackColor = [System.Drawing.Color]::FromArgb(42, 42, 42)  # Wird von Initialize-TextStyle via config.json Background (#2A2A2A) gesetzt
 $outputBox.ForeColor = [System.Drawing.Color]::FromArgb(220, 220, 220)  # Helles Grau für Text
 
 # Event-Handler für automatisches Scrollen hinzufügen
@@ -5388,11 +5453,19 @@ function Set-OutputBoxInternalPadding {
     }
 }
 
-# Padding setzen sobald Handle bereit ist
-$outputBox.Add_HandleCreated({ Set-OutputBoxInternalPadding })
+# Padding + runde Ecken setzen sobald Handle bereit ist
+$outputBox.Add_HandleCreated({
+        Set-OutputBoxInternalPadding
+        $rgn = [RoundedCorners]::CreateRoundRectRgn(0, 0, $outputBox.Width, $outputBox.Height, 12, 12)
+        $outputBox.Region = [System.Drawing.Region]::FromHrgn($rgn)
+    })
 
-# Padding bei Größenänderung aktualisieren (Fenster-Resize)
-$outputBox.Add_SizeChanged({ Set-OutputBoxInternalPadding })
+# Padding + runde Ecken bei Größenänderung aktualisieren (Fenster-Resize)
+$outputBox.Add_SizeChanged({
+        Set-OutputBoxInternalPadding
+        $rgn = [RoundedCorners]::CreateRoundRectRgn(0, 0, $outputBox.Width, $outputBox.Height, 12, 12)
+        $outputBox.Region = [System.Drawing.Region]::FromHrgn($rgn)
+    })
 
 # Erstelle Output-Box für Hardware-Info
 $hardwareInfoBox = New-Object System.Windows.Forms.RichTextBox
@@ -6132,6 +6205,30 @@ $btnTempFiles.Add_Click({
         Update-AllButtonStatusIndicators
     })
 $tblCleanup.Controls.Add($btnTempFiles)
+
+# ===================================================================
+# RUNDE ECKEN FÜR ALLE FUNKTIONS-BUTTONS
+# ===================================================================
+$script:functionButtons = @(
+    $btnQuickMRT, $btnFullMRT, $btnWindowsDefender, $btnDefenderOffline,
+    $btnSFC, $btnMemoryDiag, $btnWinUpdate,
+    $btnCheckDISM, $btnScanDISM, $btnRestoreDISM, $btnCHKDSK,
+    $btnPingTest, $btnResetNetwork,
+    $btnDiskCleanup, $btnTempFiles
+)
+
+foreach ($btn in $script:functionButtons) {
+    if ($btn -ne $null) {
+        $btn.Add_HandleCreated({
+                try {
+                    $rgn = [RoundedCorners]::CreateRoundRectRgn(0, 0, $this.Width, $this.Height, 8, 8)
+                    if ($rgn -ne [IntPtr]::Zero) {
+                        $this.Region = [System.Drawing.Region]::FromHrgn($rgn)
+                    }
+                } catch {}
+            })
+    }
+}
 
 # ===================================================================
 # SCAN-HISTORIE-FUNKTIONEN (für Status-Indikatoren)
@@ -7415,6 +7512,35 @@ try {
 } catch {
     # Fehler beim Registry-Schreiben ignorieren (nicht kritisch)
 }
+
+# ===================================================================
+# GLOBALE BUTTON FLATAPPEARANCE-KORREKTUR
+# Setzt BorderColor aller Flat-Buttons auf ihre eigene BackColor,
+# um das weiße Aufblitzen beim Fokus-Wechsel zu verhindern.
+# WinForms nutzt sonst System-Farben als Standard-BorderColor.
+# ===================================================================
+function Fix-AllButtonFlatAppearance {
+    param([System.Windows.Forms.Control]$RootControl)
+    foreach ($child in $RootControl.Controls) {
+        if ($child -is [System.Windows.Forms.Button] -and
+            $child.FlatStyle -eq [System.Windows.Forms.FlatStyle]::Flat) {
+            # BorderColor = BackColor → verhindert weißen System-Rand bei Fokus-Wechsel
+            $child.FlatAppearance.BorderColor = $child.BackColor
+            # MouseDownBackColor nur setzen wenn noch leer (WinForms-Standard = Color.Empty)
+            if ($child.FlatAppearance.MouseDownBackColor.IsEmpty) {
+                $child.FlatAppearance.MouseDownBackColor = [System.Drawing.Color]::FromArgb(
+                    [Math]::Min(255, $child.BackColor.R + 20),
+                    [Math]::Min(255, $child.BackColor.G + 20),
+                    [Math]::Min(255, $child.BackColor.B + 20)
+                )
+            }
+        }
+        if ($child.Controls.Count -gt 0) {
+            Fix-AllButtonFlatAppearance -RootControl $child
+        }
+    }
+}
+Fix-AllButtonFlatAppearance -RootControl $mainform
 
 [void]$mainform.ShowDialog()
 

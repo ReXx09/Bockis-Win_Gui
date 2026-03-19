@@ -770,112 +770,339 @@ function Start-TempFilesCleanupAdvanced {
         Write-Host 
         Write-Host "  [i] Bitte waehlen Sie die zu bereinigenden Laufwerke und " -ForegroundColor yellow
         Write-Host "      Optionen im Dialog-Fenster aus..." -ForegroundColor yellow
-        # Erstellen des Cleanup-Formulars
-        $cleanupForm = New-Object System.Windows.Forms.Form
-        $cleanupForm.Text = "Erweiterte Systemreinigung"
-        $cleanupForm.Size = New-Object System.Drawing.Size(550, 750)
-        $cleanupForm.StartPosition = "Manual"
-        $cleanupForm.FormBorderStyle = "FixedDialog"
-        $cleanupForm.MaximizeBox = $false
-        $cleanupForm.MinimizeBox = $false
-        $cleanupForm.BackColor = [System.Drawing.Color]::WhiteSmoke
-        
-        # Position relativ zur Hauptform setzen
-        $mainFormLocation = $mainform.Location
-        $cleanupForm.Location = New-Object System.Drawing.Point(
-            ($mainFormLocation.X + $mainform.Width + 10),
-            $mainFormLocation.Y
-        )
 
-        # Erstellen eines Laufwerksauswahl-Dialogs
-        $driveGroupBox = New-Object System.Windows.Forms.GroupBox
-        $driveGroupBox.Text = "Zu säubernde Laufwerke"
-        $driveGroupBox.Location = New-Object System.Drawing.Point(20, 20)
-        $driveGroupBox.Size = New-Object System.Drawing.Size(500, 180)
-        $cleanupForm.Controls.Add($driveGroupBox)
+        # ── WPF-Dialog: Erweiterte Bereinigung ───────────────────────────────
+        Add-Type -AssemblyName PresentationFramework
+        Add-Type -AssemblyName PresentationCore
+        Add-Type -AssemblyName WindowsBase
+        [xml]$xamlCleanup = @'
+<Window
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="" Width="600" Height="740"
+    WindowStyle="None" AllowsTransparency="True" ResizeMode="NoResize"
+    WindowStartupLocation="Manual" Background="Transparent">
+  <Window.Resources>
+    <Style x:Key="BtnBase" TargetType="Button">
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="FontFamily" Value="Segoe UI"/>
+      <Setter Property="FontSize" Value="13"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="bd" CornerRadius="10"
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="bd" Property="Background"
+                        Value="{Binding RelativeSource={RelativeSource TemplatedParent}, Path=Tag}"/>
+              </Trigger>
+              <Trigger Property="IsPressed" Value="True">
+                <Setter TargetName="bd" Property="Opacity" Value="0.85"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style TargetType="CheckBox">
+      <Setter Property="Foreground" Value="#E0E0E0"/>
+      <Setter Property="FontFamily" Value="Segoe UI"/>
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="Margin" Value="0,3,0,0"/>
+      <Setter Property="VerticalContentAlignment" Value="Center"/>
+    </Style>
+    <Style TargetType="ScrollBar">
+      <Setter Property="Width" Value="6"/>
+      <Setter Property="Background" Value="Transparent"/>
+    </Style>
+  </Window.Resources>
 
-        # CheckedListBox für die Laufwerke
-        $drivesCheckedListBox = New-Object System.Windows.Forms.CheckedListBox
-        $drivesCheckedListBox.Location = New-Object System.Drawing.Point(20, 30)
-        $drivesCheckedListBox.Size = New-Object System.Drawing.Size(460, 120)
-        $drivesCheckedListBox.CheckOnClick = $true
-        $driveGroupBox.Controls.Add($drivesCheckedListBox)
+  <Border CornerRadius="12" Background="#1E1E1E" BorderBrush="#484848" BorderThickness="1">
+    <Border.Effect>
+      <DropShadowEffect BlurRadius="20" ShadowDepth="6" Opacity="0.6" Color="#000000"/>
+    </Border.Effect>
+    <Grid>
+      <Grid.RowDefinitions>
+        <RowDefinition Height="42"/>
+        <RowDefinition Height="2"/>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="155"/>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="210"/>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="90"/>
+        <RowDefinition Height="62"/>
+      </Grid.RowDefinitions>
 
-        # Variable zur Unterdrückung von Ereignissen initialisieren
-        $suppressEvents = $false
+      <!-- Header / Drag -->
+      <Border Grid.Row="0" Background="#262626" CornerRadius="12,12,0,0" x:Name="DragHeaderClean">
+        <Grid>
+          <TextBlock Text="  ⬡  Custom Cleanup  –  Erweiterte Bereinigung"
+                     Foreground="#00B464" FontSize="13" FontWeight="Bold"
+                     FontFamily="Segoe UI" VerticalAlignment="Center" Margin="8,0,0,0"/>
+          <Button x:Name="BtnCloseClean" Content="✕" HorizontalAlignment="Right"
+                  Width="42" Height="42" FontSize="14"
+                  Background="Transparent" Foreground="#888" BorderThickness="0"
+                  Cursor="Hand" Style="{x:Null}">
+            <Button.Template>
+              <ControlTemplate TargetType="Button">
+                <Border x:Name="cb" Background="Transparent" CornerRadius="0,12,0,0">
+                  <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+                <ControlTemplate.Triggers>
+                  <Trigger Property="IsMouseOver" Value="True">
+                    <Setter TargetName="cb" Property="Background" Value="#C42B1C"/>
+                    <Setter Property="Foreground" Value="White"/>
+                  </Trigger>
+                </ControlTemplate.Triggers>
+              </ControlTemplate>
+            </Button.Template>
+          </Button>
+        </Grid>
+      </Border>
 
-        # Verfügbare Laufwerke abrufen und zur Liste hinzufügen
+      <!-- Accent Linie -->
+      <Rectangle Grid.Row="1" Fill="#00B464"/>
+
+      <!-- Laufwerk-Label -->
+      <TextBlock Grid.Row="2" Text="Zu bereinigende Laufwerke auswählen:"
+                 Foreground="#909090" FontFamily="Segoe UI" FontSize="11"
+                 Margin="14,10,14,4"/>
+
+      <!-- Laufwerk-Tabelle (SharedSizeScope) -->
+      <ScrollViewer Grid.Row="3" Margin="12,0,12,0"
+                    VerticalScrollBarVisibility="Auto" Background="#2B2B2B">
+        <StackPanel x:Name="DrivePanelClean" Grid.IsSharedSizeScope="True" Margin="2,8,2,8">
+          <!-- Tabellen-Kopf -->
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition SharedSizeGroup="CColCB"    Width="Auto"/>
+              <ColumnDefinition SharedSizeGroup="CColDrive" Width="Auto" MinWidth="34"/>
+              <ColumnDefinition SharedSizeGroup="CColName"  Width="Auto" MinWidth="100"/>
+              <ColumnDefinition SharedSizeGroup="CColFree"  Width="Auto" MinWidth="110"/>
+              <ColumnDefinition SharedSizeGroup="CColTotal" Width="Auto" MinWidth="82"/>
+              <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="1" Text="LW"              Foreground="#585858" FontSize="10" FontFamily="Segoe UI" FontWeight="SemiBold" Margin="0,0,14,0"/>
+            <TextBlock Grid.Column="2" Text="Bezeichnung"     Foreground="#585858" FontSize="10" FontFamily="Segoe UI" FontWeight="SemiBold" Margin="0,0,14,0"/>
+            <TextBlock Grid.Column="3" Text="Freier Speicher" Foreground="#585858" FontSize="10" FontFamily="Segoe UI" FontWeight="SemiBold" Margin="0,0,14,0"/>
+            <TextBlock Grid.Column="4" Text="Gesamt"          Foreground="#585858" FontSize="10" FontFamily="Segoe UI" FontWeight="SemiBold"/>
+          </Grid>
+          <Rectangle Height="1" Fill="#363636" Margin="0,5,0,3"/>
+        </StackPanel>
+      </ScrollViewer>
+
+      <!-- Alle auswählen -->
+      <CheckBox Grid.Row="4" x:Name="ChkAllDrives" Content="Alle Laufwerke auswählen"
+                Margin="14,8,14,0"/>
+
+      <!-- Optionen-Label -->
+      <TextBlock Grid.Row="5" Text="Zu bereinigende Elemente:"
+                 Foreground="#909090" FontFamily="Segoe UI" FontSize="11"
+                 Margin="14,10,14,4"/>
+
+      <!-- Optionen-Liste -->
+      <ScrollViewer Grid.Row="6" Margin="12,0,12,0"
+                    VerticalScrollBarVisibility="Auto" Background="#2B2B2B">
+        <StackPanel x:Name="OptionsPanel" Margin="6,6,6,6"/>
+      </ScrollViewer>
+
+      <!-- Status-Label -->
+      <TextBlock Grid.Row="7" Text="Status:" Foreground="#909090"
+                 FontFamily="Segoe UI" FontSize="11" Margin="14,8,14,2"/>
+
+      <!-- Status-TextBox -->
+      <TextBox Grid.Row="8" x:Name="StatusBox" Margin="12,0,12,0"
+               IsReadOnly="True" TextWrapping="Wrap"
+               VerticalScrollBarVisibility="Auto"
+               Background="#2B2B2B" Foreground="#909090"
+               BorderBrush="#363636" BorderThickness="1"
+               FontFamily="Segoe UI" FontSize="11" Padding="6,4"/>
+
+      <!-- Buttons -->
+      <Grid Grid.Row="9" Margin="70,0,14,12">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="190"/>
+          <ColumnDefinition Width="12"/>
+          <ColumnDefinition Width="190"/>
+        </Grid.ColumnDefinitions>
+        <Button x:Name="BtnOkClean" Grid.Column="0"
+                Content="▶  Bereinigung starten" Height="32"
+                Background="#00B464" Foreground="#141414" Tag="#00D47A"
+                Style="{StaticResource BtnBase}"/>
+        <Button x:Name="BtnCancelClean" Grid.Column="2"
+                Content="Abbrechen" Height="32"
+                Background="#373737" Foreground="#E0E0E0" Tag="#484848"
+                Style="{StaticResource BtnBase}"/>
+      </Grid>
+    </Grid>
+  </Border>
+</Window>
+'@
+        $readerClean     = New-Object System.Xml.XmlNodeReader $xamlCleanup
+        $wpfCleanup      = [Windows.Markup.XamlReader]::Load($readerClean)
+
+        # Startposition: rechts neben der Hauptform
+        if ($null -ne $mainform) {
+            $wpfCleanup.Left = $mainform.Location.X + $mainform.Width + 10
+            $wpfCleanup.Top  = $mainform.Location.Y
+        }
+
+        # Controls holen
+        $drivePanelClean = $wpfCleanup.FindName("DrivePanelClean")
+        $chkAllDrives    = $wpfCleanup.FindName("ChkAllDrives")
+        $optionsPanel    = $wpfCleanup.FindName("OptionsPanel")
+        $statusBox       = $wpfCleanup.FindName("StatusBox")
+        $btnOkClean      = $wpfCleanup.FindName("BtnOkClean")
+        $btnCancelClean  = $wpfCleanup.FindName("BtnCancelClean")
+        $btnCloseClean   = $wpfCleanup.FindName("BtnCloseClean")
+        $dragHeaderClean = $wpfCleanup.FindName("DragHeaderClean")
+
+        # Auto-Scroll in StatusBox + Basis-Interaktion
+        $statusBox.Add_TextChanged({ $statusBox.ScrollToEnd() })
+        $dragHeaderClean.Add_MouseLeftButtonDown({ $wpfCleanup.DragMove() })
+        $btnCloseClean.Add_Click({ $wpfCleanup.Close() })
+        $btnCancelClean.Add_Click({ $wpfCleanup.Close() })
+
+        # ── Laufwerk-Tabelle befüllen ─────────────────────────────────────────
+        $driveCheckBoxes       = @{}
+        $bconv                 = [System.Windows.Media.BrushConverter]::new()
+        $script:_bulkDriveChanging = $false
+
         $drives = Get-PSDrive -PSProvider FileSystem
         foreach ($drive in $drives) {
             $driveInfo = Get-WmiObject -Class Win32_LogicalDisk -Filter "DeviceID='$($drive.Name):'" -ErrorAction SilentlyContinue
-            if ($driveInfo) {
-                $freeSpaceGB = [math]::Round($driveInfo.FreeSpace / 1GB, 2)
-                $totalSpaceGB = [math]::Round($driveInfo.Size / 1GB, 2)
-                $driveLabel = if ($driveInfo.VolumeName) { $driveInfo.VolumeName } else { "Lokales Laufwerk" }
-                $driveEntry = "$($drive.Name): - $driveLabel ($freeSpaceGB GB frei von $totalSpaceGB GB)"
-                $drivesCheckedListBox.Items.Add($driveEntry, $drive.Name -eq "C") | Out-Null
+            if (-not $driveInfo) { continue }
+
+            $freeGB   = [Math]::Round($driveInfo.FreeSpace / 1GB, 2)
+            $totalGB  = [Math]::Round($driveInfo.Size / 1GB, 2)
+            $usedPct  = [Math]::Round(100 - (($driveInfo.FreeSpace / $driveInfo.Size) * 100), 1)
+            $volName  = if ($driveInfo.VolumeName) { $driveInfo.VolumeName } else { "" }
+            $isSystem = ($drive.Name + ":") -eq $env:SystemDrive
+            $freeHex  = if ($usedPct -gt 90) { "#E05050" } elseif ($usedPct -gt 75) { "#D4A010" } else { "#00B464" }
+            $driveId  = $drive.Name + ":"
+
+            $row = New-Object System.Windows.Controls.Grid
+            $row.Margin = New-Object System.Windows.Thickness(0, 4, 0, 0)
+            foreach ($grp in @("CColCB","CColDrive","CColName","CColFree","CColTotal")) {
+                $cd = New-Object System.Windows.Controls.ColumnDefinition
+                $cd.SharedSizeGroup = $grp
+                $cd.Width = [System.Windows.GridLength]::Auto
+                $row.ColumnDefinitions.Add($cd)
             }
-        }
+            $cdStar = New-Object System.Windows.Controls.ColumnDefinition
+            $cdStar.Width = [System.Windows.GridLength]::new(1, [System.Windows.GridUnitType]::Star)
+            $row.ColumnDefinitions.Add($cdStar)
 
-        # "Alle auswählen" Checkbox für Laufwerke
-        $selectAllDrivesCheckbox = New-Object System.Windows.Forms.CheckBox
-        $selectAllDrivesCheckbox.Text = "Alle Laufwerke auswählen"
-        $selectAllDrivesCheckbox.Location = New-Object System.Drawing.Point(20, [int]155)
-        $selectAllDrivesCheckbox.Size = New-Object System.Drawing.Size(200, 20)
-        $selectAllDrivesCheckbox.Add_CheckedChanged({
-                $newState = $selectAllDrivesCheckbox.Checked
-                $suppressEvents = $true
-                
-                for ($i = 0; $i -lt $drivesCheckedListBox.Items.Count; $i++) {
-                    $drivesCheckedListBox.SetItemChecked($i, $newState)
-                }
-                
-                $suppressEvents = $false
-                Update-CleanupSizeEstimates
-            })
-        $driveGroupBox.Controls.Add($selectAllDrivesCheckbox)
+            $cb = New-Object System.Windows.Controls.CheckBox
+            $cb.VerticalAlignment = [System.Windows.VerticalAlignment]::Center
+            $cb.Margin    = New-Object System.Windows.Thickness(0,0,10,0)
+            $cb.IsChecked = $isSystem
+            [System.Windows.Controls.Grid]::SetColumn($cb, 0)
+            $row.Children.Add($cb)
 
-        # Event-Handler für CheckedListBox (Laufwerke) hinzufügen
-        $drivesCheckedListBox.Add_ItemCheck({
-                if (-not $suppressEvents) {
-                    # Verzögerung einbauen, da während ItemCheck der Status noch nicht vollständig geändert ist
-                    $form = $drivesCheckedListBox.FindForm()
-                    if ($form) {
-                        $form.BeginInvoke([System.Action] {
-                                # Prüfen, ob "Alle auswählen" Checkbox aktualisiert werden soll
-                                $allChecked = $true
-                                for ($i = 0; $i -lt $drivesCheckedListBox.Items.Count; $i++) {
-                                    if (-not $drivesCheckedListBox.GetItemChecked($i)) {
-                                        $allChecked = $false
-                                        break
-                                    }
-                                }
-                        
-                                # "Alle auswählen" Checkbox aktualisieren ohne Events auszulösen
-                                $suppressEvents = $true
-                                $selectAllDrivesCheckbox.Checked = $allChecked
-                                $suppressEvents = $false
-                        
-                                # Berechnung der Dateigröße aktualisieren
-                                Update-CleanupSizeEstimates
-                            })
+            $tbDrive = New-Object System.Windows.Controls.TextBlock
+            $tbDrive.Text       = $driveId
+            $tbDrive.Foreground = [System.Windows.Media.Brushes]::White
+            $tbDrive.FontFamily = New-Object System.Windows.Media.FontFamily("Segoe UI")
+            $tbDrive.FontSize   = 12
+            $tbDrive.FontWeight = [System.Windows.FontWeights]::SemiBold
+            $tbDrive.VerticalAlignment = [System.Windows.VerticalAlignment]::Center
+            $tbDrive.Margin = New-Object System.Windows.Thickness(0,0,14,0)
+            [System.Windows.Controls.Grid]::SetColumn($tbDrive, 1)
+            $row.Children.Add($tbDrive)
+
+            $tbName = New-Object System.Windows.Controls.TextBlock
+            $tbName.Text       = if ($volName) { "($volName)" } else { "" }
+            $tbName.Foreground = $bconv.ConvertFrom("#909090")
+            $tbName.FontFamily = New-Object System.Windows.Media.FontFamily("Segoe UI")
+            $tbName.FontSize   = 12
+            $tbName.VerticalAlignment = [System.Windows.VerticalAlignment]::Center
+            $tbName.Margin = New-Object System.Windows.Thickness(0,0,14,0)
+            [System.Windows.Controls.Grid]::SetColumn($tbName, 2)
+            $row.Children.Add($tbName)
+
+            $tbFree = New-Object System.Windows.Controls.TextBlock
+            $tbFree.Text       = "$freeGB GB frei"
+            $tbFree.Foreground = $bconv.ConvertFrom($freeHex)
+            $tbFree.FontFamily = New-Object System.Windows.Media.FontFamily("Segoe UI")
+            $tbFree.FontSize   = 12
+            $tbFree.VerticalAlignment = [System.Windows.VerticalAlignment]::Center
+            $tbFree.Margin = New-Object System.Windows.Thickness(0,0,14,0)
+            [System.Windows.Controls.Grid]::SetColumn($tbFree, 3)
+            $row.Children.Add($tbFree)
+
+            $tbTotal = New-Object System.Windows.Controls.TextBlock
+            $tbTotal.Text       = "von $totalGB GB"
+            $tbTotal.Foreground = $bconv.ConvertFrom("#707070")
+            $tbTotal.FontFamily = New-Object System.Windows.Media.FontFamily("Segoe UI")
+            $tbTotal.FontSize   = 12
+            $tbTotal.VerticalAlignment = [System.Windows.VerticalAlignment]::Center
+            [System.Windows.Controls.Grid]::SetColumn($tbTotal, 4)
+            $row.Children.Add($tbTotal)
+
+            if ($isSystem) {
+                $badge = New-Object System.Windows.Controls.Border
+                $badge.CornerRadius    = New-Object System.Windows.CornerRadius(3)
+                $badge.Background      = $bconv.ConvertFrom("#0A3322")
+                $badge.BorderBrush     = $bconv.ConvertFrom("#00B464")
+                $badge.BorderThickness = New-Object System.Windows.Thickness(1)
+                $badge.Margin          = New-Object System.Windows.Thickness(10,1,0,1)
+                $badge.Padding         = New-Object System.Windows.Thickness(6,1,6,1)
+                $badge.VerticalAlignment = [System.Windows.VerticalAlignment]::Center
+                $badgeText = New-Object System.Windows.Controls.TextBlock
+                $badgeText.Text       = "Systemlaufwerk"
+                $badgeText.Foreground = $bconv.ConvertFrom("#00B464")
+                $badgeText.FontSize   = 10
+                $badgeText.FontFamily = New-Object System.Windows.Media.FontFamily("Segoe UI")
+                $badge.Child = $badgeText
+                [System.Windows.Controls.Grid]::SetColumn($badge, 5)
+                $row.Children.Add($badge)
+            }
+
+            $drivePanelClean.Children.Add($row)
+            $driveCheckBoxes[$driveId] = $cb
+
+            $cb.Add_Checked({
+                if (-not $script:_bulkDriveChanging) {
+                    $allChecked = $true
+                    foreach ($c in $driveCheckBoxes.Values) {
+                        if ($c.IsChecked -ne $true) { $allChecked = $false; break }
+                    }
+                    if ($allChecked) {
+                        $script:_bulkDriveChanging = $true
+                        $chkAllDrives.IsChecked = $true
+                        $script:_bulkDriveChanging = $false
                     }
                 }
             })
+            $cb.Add_Unchecked({
+                if (-not $script:_bulkDriveChanging) {
+                    $script:_bulkDriveChanging = $true
+                    $chkAllDrives.IsChecked = $false
+                    $script:_bulkDriveChanging = $false
+                }
+            })
+        }
 
-        # Bereich für die Reinigungsoptionen
-        $optionsGroupBox = New-Object System.Windows.Forms.GroupBox
-        $optionsGroupBox.Text = "Zu bereinigende Elemente"
-        $optionsGroupBox.Location = New-Object System.Drawing.Point(20, 210)
-        $optionsGroupBox.Size = New-Object System.Drawing.Size(500, 320)
-        $cleanupForm.Controls.Add($optionsGroupBox)
-
-        # Panel mit Scrollbar für Checkboxen
-        $optionsPanel = New-Object System.Windows.Forms.Panel
-        $optionsPanel.Location = New-Object System.Drawing.Point(10, 25)
-        $optionsPanel.Size = New-Object System.Drawing.Size(480, 280)
-        $optionsPanel.AutoScroll = $true
-        $optionsGroupBox.Controls.Add($optionsPanel)
+        $chkAllDrives.Add_Checked({
+            $script:_bulkDriveChanging = $true
+            foreach ($cb in $driveCheckBoxes.Values) { $cb.IsChecked = $true }
+            $script:_bulkDriveChanging = $false
+        })
+        $chkAllDrives.Add_Unchecked({
+            $script:_bulkDriveChanging = $true
+            foreach ($cb in $driveCheckBoxes.Values) { $cb.IsChecked = $false }
+            $script:_bulkDriveChanging = $false
+        })
 
         # Tatsächliche Pfadmuster für die Reinigungsoptionen
         $cleanupOptions = @(
@@ -1022,86 +1249,55 @@ function Start-TempFilesCleanupAdvanced {
             }
         )
 
-        # Checkboxen für die Reinigungsoptionen erstellen
-        $yPosition = 10
+        # ── Optionen als WPF-Controls erstellen ──────────────────────────────
         $cleanupCheckboxes = @{}
-        $sizeLabels = @{}
+        $sizeLabels        = @{}
 
         foreach ($option in $cleanupOptions) {
-            # Checkbox erstellen
-            $checkbox = New-Object System.Windows.Forms.CheckBox
-            $checkbox.Text = $option.Text
-            $checkbox.Checked = $option.Default
-            $checkbox.Location = New-Object System.Drawing.Point(10, $yPosition)
-            $checkbox.Size = New-Object System.Drawing.Size(240, 24)
-            $checkbox.Tag = $option.Description
-            $cleanupCheckboxes[$option.Name] = $checkbox
+            $optRow = New-Object System.Windows.Controls.Grid
+            $optRow.Margin = New-Object System.Windows.Thickness(0, 3, 0, 0)
+            $cdCheck = New-Object System.Windows.Controls.ColumnDefinition
+            $cdCheck.Width = [System.Windows.GridLength]::new(1, [System.Windows.GridUnitType]::Star)
+            $optRow.ColumnDefinitions.Add($cdCheck)
+            $cdSize = New-Object System.Windows.Controls.ColumnDefinition
+            $cdSize.Width = [System.Windows.GridLength]::Auto
+            $optRow.ColumnDefinitions.Add($cdSize)
 
-            # Label für die Größenanzeige
-            $sizeLabel = New-Object System.Windows.Forms.Label
-            $sizeLabel.Text = "wird berechnet..."
-            $sizeLabel.Location = New-Object System.Drawing.Point(260, [int]($yPosition + 4))
-            $sizeLabel.Size = New-Object System.Drawing.Size(110, 20)
-            $sizeLabel.ForeColor = [System.Drawing.Color]::White
-            $sizeLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleRight
-            $sizeLabels[$option.Name] = $sizeLabel
+            $chkOpt = New-Object System.Windows.Controls.CheckBox
+            $chkOpt.Content   = $option.Text
+            $chkOpt.IsChecked = $option.Default
+            $chkOpt.ToolTip   = $option.Description
+            $chkOpt.VerticalContentAlignment = [System.Windows.VerticalAlignment]::Center
+            [System.Windows.Controls.Grid]::SetColumn($chkOpt, 0)
+            $optRow.Children.Add($chkOpt)
 
-            # Info-Symbol (i)
-            $infoIcon = New-Object System.Windows.Forms.Label
-            $infoIcon.Text = "i"
-            $infoIcon.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
-            $infoIcon.ForeColor = [System.Drawing.Color]::RoyalBlue
-            $infoIcon.Size = New-Object System.Drawing.Size(15, 15)
-            $infoIcon.Location = New-Object System.Drawing.Point(390, [int]($yPosition + 4))
-            $infoIcon.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
-            $infoIcon.Cursor = [System.Windows.Forms.Cursors]::Hand
-            $infoIcon.Tag = $option.Description
+            $tbSize = New-Object System.Windows.Controls.TextBlock
+            $tbSize.Text       = "–"
+            $tbSize.Foreground = $bconv.ConvertFrom("#707070")
+            $tbSize.FontFamily = New-Object System.Windows.Media.FontFamily("Segoe UI")
+            $tbSize.FontSize   = 11
+            $tbSize.VerticalAlignment = [System.Windows.VerticalAlignment]::Center
+            $tbSize.Margin = New-Object System.Windows.Thickness(12, 0, 4, 0)
+            [System.Windows.Controls.Grid]::SetColumn($tbSize, 1)
+            $optRow.Children.Add($tbSize)
 
-            # ToolTip für das Info-Symbol
-            # Verwende ein statisches Tooltip anstatt bei jedem Hover ein neues zu erstellen
-            if (-not $script:cleanupTooltip) {
-                $script:cleanupTooltip = New-Object System.Windows.Forms.ToolTip
-                $script:cleanupTooltip.ToolTipTitle = "Information"
-                $script:cleanupTooltip.UseFading = $true
-                $script:cleanupTooltip.UseAnimation = $true
-                $script:cleanupTooltip.IsBalloon = $true
-                $script:cleanupTooltip.InitialDelay = 300
-                $script:cleanupTooltip.AutoPopDelay = 5000
-            }
-            
-            # Setze Tooltip für das Info-Symbol
-            $script:cleanupTooltip.SetToolTip($infoIcon, $option.Description)
+            $optionsPanel.Children.Add($optRow)
+            $cleanupCheckboxes[$option.Name] = $chkOpt
+            $sizeLabels[$option.Name]        = $tbSize
 
-            $optionsPanel.Controls.Add($checkbox)
-            $optionsPanel.Controls.Add($sizeLabel)
-            $optionsPanel.Controls.Add($infoIcon)
-
-            # Event für Checkbox-Änderung
-            $checkbox.Add_CheckedChanged({
-                    if (-not $suppressEvents) {
-                        Update-CleanupSizeEstimates
-                    }
-                })
-
-            $yPosition += 30
+            $chkOpt.Add_Checked({ Update-CleanupSizeEstimates })
+            $chkOpt.Add_Unchecked({ Update-CleanupSizeEstimates })
         }
 
-        # Status-Bereich
-        $statusGroupBox = New-Object System.Windows.Forms.GroupBox
-        $statusGroupBox.Text = "Status"
-        $statusGroupBox.Location = New-Object System.Drawing.Point(20, 540)
-        $statusGroupBox.Size = New-Object System.Drawing.Size(500, 100)
-        $cleanupForm.Controls.Add($statusGroupBox)
-
-        # RichTextBox für Status-Anzeige
-        $statusBox = New-Object System.Windows.Forms.RichTextBox
-        $statusBox.Location = New-Object System.Drawing.Point(10, 20)
-        $statusBox.Size = New-Object System.Drawing.Size(480, 70)
-        $statusBox.ReadOnly = $true
-        $statusBox.BackColor = [System.Drawing.Color]::White
-        $statusBox.Font = New-Object System.Drawing.Font("Segoe UI", 8.5)
-        $statusBox.Add_TextChanged({ $this.SelectionStart = $this.TextLength; $this.ScrollToCaret() })
-        $statusGroupBox.Controls.Add($statusBox)
+        # ── Lokaler Adapter: Set-OutputSelectionStyle No-Op für WPF TextBox ─────
+        $script:_origSetOutputStyle = Get-Command Set-OutputSelectionStyle -ErrorAction SilentlyContinue
+        function Set-OutputSelectionStyle {
+            param([object]$OutputBox, [string]$Style = '')
+            if ($OutputBox -is [System.Windows.Controls.TextBox]) { return }
+            if ($script:_origSetOutputStyle) {
+                & $script:_origSetOutputStyle -OutputBox $OutputBox -Style $Style
+            }
+        }
 
         # Funktionen für echte Berechnungen und Bereinigungen
         # Funktion zum Berechnen der Größe von Dateien
@@ -1369,281 +1565,78 @@ function Start-TempFilesCleanupAdvanced {
                 [string]$DriveLetter,
                 [array]$Paths
             )
-            
-            $totalFreed = 0
-            $deletedCount = 0
-            $skippedCount = 0
-            $processedFiles = @{}  # Cache für bereits verarbeitete Dateien
-            
-            # Sicherstellen, dass der Laufwerksbuchstabe korrekt formatiert ist (C: nicht C:\)
-            if ($DriveLetter -match "^([A-Za-z]):.*$") {
-                $DriveLetter = $matches[1] + ":"
-            }
-            
-            # Prüfen, ob das Laufwerk verfügbar ist
+
+            $totalFreed    = 0
+            $deletedCount  = 0
+            $skippedCount  = 0
+
+            # Laufwerksbuchstaben normalisieren
+            if ($DriveLetter -match '^([A-Za-z]):') { $DriveLetter = $matches[1] + ':' }
+
             if (-not (Test-Path $DriveLetter)) {
-                Set-OutputSelectionStyle -OutputBox $statusBox -Style 'Warning'
-                $statusBox.AppendText("Warnung: Laufwerk $DriveLetter ist nicht verfügbar für Bereinigung`r`n")
+                $statusBox.AppendText("Warnung: Laufwerk $DriveLetter nicht verfügbar`r`n")
                 return @{ FreedSpace = 0; DeletedFiles = 0; SkippedFiles = 0 }
             }
-            
-            Set-OutputSelectionStyle -OutputBox $statusBox -Style 'Action'
+
             $statusBox.AppendText("Starte Bereinigung auf Laufwerk $DriveLetter...`r`n")
-            [System.Windows.Forms.Application]::DoEvents()
-            
+
             foreach ($path in $Paths) {
                 try {
-                    # Spezielle Behandlung für Papierkorb
+                    # ── Papierkorb ────────────────────────────────────
                     if ($path -eq '$Recycle.Bin') {
-                        $fullPath = "$DriveLetter\`$Recycle.Bin"
-                        
-                        if (Test-Path $fullPath) {
-                            $statusBox.AppendText("  Leere Papierkorb...`r`n")
-                            [System.Windows.Forms.Application]::DoEvents()
-                            
-                            # Verbesserte Papierkorb-Bereinigung
-                            try {
-                                # Erste Methode: Shell-Objekt verwenden
-                                $shell = New-Object -ComObject Shell.Application
-                                $recycleBin = $shell.Namespace(10) # 10 = Papierkorb
-                                $items = $recycleBin.Items()
-                                
-                                # Dateien vor dem Löschen zählen
-                                $itemCount = $items.Count
-                                if ($itemCount -gt 0) {
-                                    $statusBox.AppendText("    Gefunden: $itemCount Elemente im Papierkorb`r`n")
-                                    
-                                    # Größe schätzen (falls möglich)
-                                    $estimatedSize = 0
-                                    $actualCount = 0
-                                    foreach ($item in $items) {
-                                        try {
-                                            $itemSize = if ($item.Size -is [string] -and $item.Size -match '^\d+$') { 
-                                                [long]$item.Size 
-                                            } elseif ($item.Size -is [long]) { 
-                                                $item.Size 
-                                            } else { 
-                                                1024  # Standard-Schätzung
-                                            }
-                                            $estimatedSize += $itemSize
-                                            $actualCount++
-                                        } catch {
-                                            $estimatedSize += 1024  # Schätzung bei Fehlern
-                                            $actualCount++
-                                        }
-                                    }
-                                    
-                                    # Papierkorb leeren
-                                    try {
-                                        $recycleBin.InvokeVerb("Empty")
-                                        $totalFreed += $estimatedSize
-                                        $deletedCount += $actualCount
-                                        Set-OutputSelectionStyle -OutputBox $statusBox -Style 'Success'
-                                        $statusBox.AppendText("    Papierkorb erfolgreich geleert: $actualCount Elemente`r`n")
-                                    } catch {
-                                        Set-OutputSelectionStyle -OutputBox $statusBox -Style 'Warning'
-                                        $statusBox.AppendText("    Warnung: Papierkorb konnte nicht vollständig geleert werden`r`n")
-                                        $skippedCount += $actualCount
-                                    }
-                                } else {
-                                    $statusBox.AppendText("    Papierkorb ist bereits leer`r`n")
-                                }
-                            } catch {
-                                # Fallback: Manuelles Löschen mit verbesserter Fehlerbehandlung
-                                $statusBox.AppendText("    Fallback: Manueller Papierkorb-Cleanup...`r`n")
-                                
-                                $recycleBinFolders = Get-ChildItem -Path $fullPath -Directory -Force -ErrorAction SilentlyContinue
-                                foreach ($folder in $recycleBinFolders) {
-                                    try {
-                                        $files = Get-ChildItem -Path $folder.FullName -Recurse -Force -ErrorAction SilentlyContinue | 
-                                            Where-Object { -not $_.PSIsContainer }
-                                        
-                                        $batchSize = 100
-                                        $batches = [Math]::Ceiling($files.Count / $batchSize)
-                                        
-                                        for ($i = 0; $i -lt $batches; $i++) {
-                                            $startIdx = $i * $batchSize
-                                            $endIdx = [Math]::Min(($i + 1) * $batchSize - 1, $files.Count - 1)
-                                            $batch = $files[$startIdx..$endIdx]
-                                            
-                                            foreach ($file in $batch) {
-                                                try {
-                                                    $fileSize = $file.Length
-                                                    Remove-Item -Path $file.FullName -Force -ErrorAction Stop
-                                                    $deletedCount++
-                                                    $totalFreed += $fileSize
-                                                } catch {
-                                                    $skippedCount++
-                                                }
-                                            }
-                                            
-                                            # UI-Update bei großen Operationen
-                                            if ($i % 10 -eq 0 -and $batches -gt 10) {
-                                                $progress = [Math]::Round((($i + 1) / $batches) * 100)
-                                                $statusBox.AppendText("      Fortschritt: $progress%`r`n")
-                                                [System.Windows.Forms.Application]::DoEvents()
-                                            }
-                                        }
-                                    } catch {
-                                        Set-OutputSelectionStyle -OutputBox $statusBox -Style 'Warning'
-                                        $statusBox.AppendText("    Warnung: Ordner $($folder.Name) konnte nicht bereinigt werden`r`n")
-                                        $skippedCount++
-                                    }
-                                }
-                            }
-                        } else {
-                            $statusBox.AppendText("  Papierkorb nicht gefunden`r`n")
+                        $rbLetter = $DriveLetter.TrimEnd(':\') # z.B. 'C'
+                        $rbPath   = "$DriveLetter\`$Recycle.Bin"
+                        try {
+                            # Größe vorher ermitteln
+                            $rbFiles = Get-ChildItem -Path $rbPath -Recurse -Force -ErrorAction SilentlyContinue |
+                                       Where-Object { -not $_.PSIsContainer }
+                            $rbCount = if ($rbFiles) { @($rbFiles).Count } else { 0 }
+                            $rbSize  = if ($rbFiles) { ($rbFiles | Measure-Object -Property Length -Sum).Sum } else { 0 }
+
+                            Clear-RecycleBin -DriveLetter $rbLetter -Force -ErrorAction Stop
+                            $totalFreed   += if ($rbSize)  { $rbSize  } else { 0 }
+                            $deletedCount += $rbCount
+                            $statusBox.AppendText("  Papierkorb geleert: $rbCount Element(e)`r`n")
+                        } catch {
+                            $statusBox.AppendText("  Papierkorb leer oder kein Zugriff ($($_.Exception.Message))`r`n")
                         }
-                    } else {
-                        # Normale Pfad-Behandlung mit verbesserter Performance
-                        $fullPath = if ($path.StartsWith("\")) {
-                            "$DriveLetter$path"
-                        } else {
-                            "$DriveLetter\$path"
-                        }
-                        
-                        $statusBox.AppendText("  Bereinige Pfad: $fullPath`r`n")
-                        [System.Windows.Forms.Application]::DoEvents()
-                        
-                        # Cache-Check für bereits verarbeitete Pfade
-                        $cacheKey = "$DriveLetter$path"
-                        if ($processedFiles.ContainsKey($cacheKey)) {
-                            $cached = $processedFiles[$cacheKey]
-                            $statusBox.AppendText("    Verwendet Cache-Ergebnis: $($cached.DeletedFiles) Dateien`r`n")
-                            $totalFreed += $cached.FreedSpace
-                            $deletedCount += $cached.DeletedFiles
-                            $skippedCount += $cached.SkippedFiles
-                            continue
-                        }
-                        
-                        # Verbesserte Wildcard-Behandlung mit Smart-Batching
-                        $files = Get-FilesFromPath -Path $fullPath -Recursive $true -TimeoutSeconds 60
-                        
-                        if ($files -and $files.Count -gt 0) {
-                            $statusBox.AppendText("    Gefunden: $($files.Count) Dateien`r`n")
-                            
-                            $pathFreed = 0
-                            $pathDeleted = 0
-                            $pathSkipped = 0
-                            
-                            # Smart-Batching für große Dateimengen
-                            $batchSize = if ($files.Count -gt 1000) { 200 } else { 50 }
-                            $batches = [Math]::Ceiling($files.Count / $batchSize)
-                            
-                            for ($i = 0; $i -lt $batches; $i++) {
-                                $startIdx = $i * $batchSize
-                                $endIdx = [Math]::Min(($i + 1) * $batchSize - 1, $files.Count - 1)
-                                $batch = $files[$startIdx..$endIdx]
-                                
-                                # Parallele Löschung für bessere Performance bei großen Batches
-                                if ($batch.Count -gt 100) {
-                                    $scriptBlock = {
-                                        param($fileBatch)
-                                        $batchResult = @{
-                                            FreedSpace   = 0
-                                            DeletedFiles = 0
-                                            SkippedFiles = 0
-                                        }
-                                        
-                                        foreach ($file in $fileBatch) {
-                                            try {
-                                                $fileSize = $file.Length
-                                                Remove-Item -Path $file.FullName -Force -ErrorAction Stop
-                                                $batchResult.DeletedFiles++
-                                                $batchResult.FreedSpace += $fileSize
-                                            } catch {
-                                                $batchResult.SkippedFiles++
-                                            }
-                                        }
-                                        return $batchResult
-                                    }
-                                    
-                                    try {
-                                        $job = Start-Job -ScriptBlock $scriptBlock -ArgumentList @(, $batch)
-                                        $jobResult = Wait-Job -Job $job -Timeout 30 | Receive-Job
-                                        Remove-Job -Job $job -Force
-                                        
-                                        if ($jobResult) {
-                                            $pathFreed += $jobResult.FreedSpace
-                                            $pathDeleted += $jobResult.DeletedFiles
-                                            $pathSkipped += $jobResult.SkippedFiles
-                                        } else {
-                                            # Timeout - serielle Verarbeitung als Fallback
-                                            foreach ($file in $batch) {
-                                                try {
-                                                    $fileSize = $file.Length
-                                                    Remove-Item -Path $file.FullName -Force -ErrorAction Stop
-                                                    $pathDeleted++
-                                                    $pathFreed += $fileSize
-                                                } catch {
-                                                    $pathSkipped++
-                                                }
-                                            }
-                                        }
-                                    } catch {
-                                        # Fallback zur seriellen Verarbeitung
-                                        foreach ($file in $batch) {
-                                            try {
-                                                $fileSize = $file.Length
-                                                Remove-Item -Path $file.FullName -Force -ErrorAction Stop
-                                                $pathDeleted++
-                                                $pathFreed += $fileSize
-                                            } catch {
-                                                $pathSkipped++
-                                            }
-                                        }
-                                    }
-                                } else {
-                                    # Serielle Verarbeitung für kleinere Batches
-                                    foreach ($file in $batch) {
-                                        try {
-                                            $fileSize = $file.Length
-                                            Remove-Item -Path $file.FullName -Force -ErrorAction Stop
-                                            $pathDeleted++
-                                            $pathFreed += $fileSize
-                                        } catch {
-                                            $pathSkipped++
-                                        }
-                                    }
-                                }
-                                
-                                # Fortschritts-Update für UI
-                                if ($batches -gt 5 -and $i % 5 -eq 0) {
-                                    $progress = [Math]::Round((($i + 1) / $batches) * 100)
-                                    $statusBox.AppendText("      Batch-Fortschritt: $progress%`r`n")
-                                    [System.Windows.Forms.Application]::DoEvents()
-                                }
+                        continue
+                    }
+
+                    # ── Normaler Pfad ─────────────────────────────────
+                    $fullPath = if ($path.StartsWith('\')) { "$DriveLetter$path" } else { "$DriveLetter\$path" }
+
+                    # Prüfen ob Basispfad auf diesem Laufwerk existiert (schneller Skip)
+                    $basePart = ($fullPath -split '\*')[0].TrimEnd('\ ')
+                    if (-not (Test-Path $basePart -ErrorAction SilentlyContinue)) { continue }
+
+                    $files = Get-FilesFromPath -Path $fullPath -Recursive $true -TimeoutSeconds 60
+                    if (-not $files -or @($files).Count -eq 0) { continue }
+
+                    $fileArr = @($files)
+                    $statusBox.AppendText("  $($fileArr.Count) Dateien in $fullPath`r`n")
+
+                    foreach ($file in $fileArr) {
+                        try {
+                            $fileSize = $file.Length
+                            Remove-Item -LiteralPath $file.FullName -Force -ErrorAction Stop
+                            $deletedCount++
+                            $totalFreed += $fileSize
+                        } catch {
+                            # Nur echte Sperr-Fehler zählen (Datei wirklich in Verwendung)
+                            if ($_.Exception.Message -match 'Zugriff|Access|gesperrt|lock|being used|in use|process|von einem anderen') {
+                                $skippedCount++
                             }
-                            
-                            # Cache-Eintrag erstellen
-                            $processedFiles[$cacheKey] = @{
-                                FreedSpace   = $pathFreed
-                                DeletedFiles = $pathDeleted
-                                SkippedFiles = $pathSkipped
-                            }
-                            
-                            $totalFreed += $pathFreed
-                            $deletedCount += $pathDeleted
-                            $skippedCount += $pathSkipped
-                            
-                            Set-OutputSelectionStyle -OutputBox $statusBox -Style 'Success'
-                            $statusBox.AppendText("    Ergebnis: $pathDeleted gelöscht, $pathSkipped übersprungen`r`n")
-                        } else {
-                            $statusBox.AppendText("    Keine Dateien zum Löschen gefunden`r`n")
+                            # Andere Fehler (bereits weg, Rechte, etc.) kommentarlos ignorieren
                         }
                     }
                 } catch {
-                    # Fehler loggen
-                    Set-OutputSelectionStyle -OutputBox $statusBox -Style 'Muted'
-                    $statusBox.AppendText("Hinweis: Problem beim Zugriff auf $path.`r`n")
+                    $statusBox.AppendText("  Hinweis: $path übersprungen`r`n")
                 }
             }
-            
-            return @{
-                FreedSpace   = $totalFreed
-                DeletedFiles = $deletedCount
-                SkippedFiles = $skippedCount
-            }
+
+            $statusBox.AppendText("Laufwerk ${DriveLetter}: $deletedCount geloescht, $skippedCount gesperrt`r`n")
+            return @{ FreedSpace = $totalFreed; DeletedFiles = $deletedCount; SkippedFiles = $skippedCount }
         }
         # Funktion zum Updaten der Größenschätzungen
         function Update-CleanupSizeEstimates {
@@ -1660,27 +1653,19 @@ function Start-TempFilesCleanupAdvanced {
             
             # Ausgewählte Laufwerke auflisten
             $selectedDrives = @()
-            for ($i = 0; $i -lt $drivesCheckedListBox.Items.Count; $i++) {
-                if ($drivesCheckedListBox.GetItemChecked($i)) {
-                    # Verbessert: Extrahiere Laufwerksbuchstaben zuverlässiger
-                    $driveText = $drivesCheckedListBox.Items[$i].ToString()
-                    if ($driveText -match "^([A-Za-z]):") {
-                        $driveLetter = $matches[1] + ":"
-                        
-                        # Zusätzliche Laufwerks-Validierung
-                        if (Test-Path $driveLetter) {
-                            $driveInfo = Get-WmiObject -Class Win32_LogicalDisk -Filter "DeviceID='$driveLetter'"
-                            if ($driveInfo) {
-                                $selectedDrives += $driveLetter
-                                $freeSpaceGB = [Math]::Round($driveInfo.FreeSpace / 1GB, 2)
-                                $totalSpaceGB = [Math]::Round($driveInfo.Size / 1GB, 2)
-                                $statusBox.AppendText("Laufwerk $driveLetter`: ${freeSpaceGB}GB frei von ${totalSpaceGB}GB`r`n")
-                            }
-                        } else {
-                            Set-OutputSelectionStyle -OutputBox $statusBox -Style 'Warning'
-                            $statusBox.AppendText("Warnung: Laufwerk $driveLetter ist nicht verfügbar`r`n")
-                            Set-OutputSelectionStyle -OutputBox $statusBox -Style 'Action'
+            foreach ($driveKey in ($driveCheckBoxes.Keys | Sort-Object)) {
+                if ($driveCheckBoxes[$driveKey].IsChecked -eq $true) {
+                    $driveLetter = $driveKey
+                    if (Test-Path $driveLetter) {
+                        $driveInfo = Get-WmiObject -Class Win32_LogicalDisk -Filter "DeviceID='$driveLetter'"
+                        if ($driveInfo) {
+                            $selectedDrives += $driveLetter
+                            $freeSpaceGB  = [Math]::Round($driveInfo.FreeSpace / 1GB, 2)
+                            $totalSpaceGB = [Math]::Round($driveInfo.Size / 1GB, 2)
+                            $statusBox.AppendText("Laufwerk $driveLetter`: ${freeSpaceGB}GB frei von ${totalSpaceGB}GB`r`n")
                         }
+                    } else {
+                        $statusBox.AppendText("Warnung: Laufwerk $driveLetter ist nicht verfügbar`r`n")
                     }
                 }
             }
@@ -1691,8 +1676,8 @@ function Start-TempFilesCleanupAdvanced {
             # Wenn keine Laufwerke ausgewählt sind, alle Größen auf 0 setzen
             if ($selectedDrives.Count -eq 0) {
                 foreach ($optionKey in $cleanupCheckboxes.Keys) {
-                    $sizeLabels[$optionKey].Text = "0 Bytes"
-                    $sizeLabels[$optionKey].ForeColor = [System.Drawing.Color]::Gray
+                    $sizeLabels[$optionKey].Text       = "0 Bytes"
+                    $sizeLabels[$optionKey].Foreground = $bconv.ConvertFrom("#707070")
                 }
                 
                 Set-OutputSelectionStyle -OutputBox $statusBox -Style 'Error'
@@ -1701,7 +1686,7 @@ function Start-TempFilesCleanupAdvanced {
             }
             
             # Für jede Option die Dateigröße berechnen
-            $activeOptions = $cleanupOptions | Where-Object { $cleanupCheckboxes[$_.Name].Checked }
+            $activeOptions = $cleanupOptions | Where-Object { $cleanupCheckboxes[$_.Name].IsChecked -eq $true }
             
             # Wenn keine Optionen ausgewählt sind, alle Größen auf 0 setzen
             if ($activeOptions.Count -eq 0) {
@@ -1728,7 +1713,7 @@ function Start-TempFilesCleanupAdvanced {
             $completedOperations = 0
             
             # Größenberechnung im Hintergrund starten (ohne echtes PowerShell-Job wegen Einfachheit)
-            $cleanupForm.Cursor = [System.Windows.Forms.Cursors]::WaitCursor
+            $wpfCleanup.Cursor = [System.Windows.Input.Cursors]::Wait
             
             # Optimierte Berechnung mit Threading für bessere Performance
             $optionTimes = @{}
@@ -1744,8 +1729,8 @@ function Start-TempFilesCleanupAdvanced {
                 [System.Windows.Forms.Application]::DoEvents()
                 
                 # Größenschätzung für diese Option zurücksetzen
-                $sizeLabels[$option.Name].Text = "Berechne..."
-                $sizeLabels[$option.Name].ForeColor = [System.Drawing.Color]::Orange
+                $sizeLabels[$option.Name].Text       = "Berechne..."
+                $sizeLabels[$option.Name].Foreground = $bconv.ConvertFrom("#D4A010")
                 [System.Windows.Forms.Application]::DoEvents()
                 
                 # Parallele Verarbeitung für multiple Laufwerke
@@ -1890,12 +1875,10 @@ function Start-TempFilesCleanupAdvanced {
                 $sizeLabels[$option.Name].Text = $formattedSize
                 
                 if ($totalSize -gt 0) {
-                    $sizeLabels[$option.Name].ForeColor = [System.Drawing.Color]::LimeGreen
-                    Set-OutputSelectionStyle -OutputBox $statusBox -Style 'Success'
+                    $sizeLabels[$option.Name].Foreground = $bconv.ConvertFrom("#00B464")
                     $statusBox.AppendText("Ergebnis: $formattedSize ($totalFiles Dateien) [${optionDuration}s]`r`n`r`n")
                 } else {
-                    $sizeLabels[$option.Name].ForeColor = [System.Drawing.Color]::Gray
-                    Set-OutputSelectionStyle -OutputBox $statusBox -Style 'Muted'
+                    $sizeLabels[$option.Name].Foreground = $bconv.ConvertFrom("#707070")
                     $statusBox.AppendText("Ergebnis: Keine Dateien gefunden [${optionDuration}s]`r`n`r`n")
                 }
                 [System.Windows.Forms.Application]::DoEvents()
@@ -1936,45 +1919,35 @@ function Start-TempFilesCleanupAdvanced {
             $statusBox.AppendText("`r`nZeitstempel: $(Get-Date -Format 'dd.MM.yyyy HH:mm:ss')`r`n")
             [System.Windows.Forms.Application]::DoEvents()
             
-            $cleanupForm.Cursor = [System.Windows.Forms.Cursors]::Default
+            $wpfCleanup.Cursor = $null
         }
 
-        # OK-Button (Start Cleanup)
-        $okButton = New-Object System.Windows.Forms.Button
-        $okButton.Text = "Bereinigung starten"
-        $okButton.Location = New-Object System.Drawing.Point(125, 650)
-        $okButton.Size = New-Object System.Drawing.Size(140, 30)
-        $okButton.BackColor = [System.Drawing.Color]::LightGreen
-        $okButton.Add_Click({
+        # OK-Button (WPF)
+        $btnOkClean.Add_Click({
                 # Sicherstellen, dass mindestens ein Laufwerk und eine Option ausgewählt sind
                 $selectedDrives = @()
-                for ($i = 0; $i -lt $drivesCheckedListBox.Items.Count; $i++) {
-                    if ($drivesCheckedListBox.GetItemChecked($i)) {
-                        # Verbessert: Extrahiere Laufwerksbuchstaben zuverlässiger
-                        $driveText = $drivesCheckedListBox.Items[$i].ToString()
-                        if ($driveText -match "^([A-Za-z]):") {
-                            $driveLetter = $matches[1] + ":"
-                            $selectedDrives += $driveLetter
-                        }
+                foreach ($driveKey in ($driveCheckBoxes.Keys | Sort-Object)) {
+                    if ($driveCheckBoxes[$driveKey].IsChecked -eq $true) {
+                        $selectedDrives += $driveKey
                     }
                 }
-                
+
                 if ($selectedDrives.Count -eq 0) {
-                    [System.Windows.Forms.MessageBox]::Show(
+                    [System.Windows.MessageBox]::Show(
                         "Bitte wählen Sie mindestens ein Laufwerk aus.",
                         "Keine Laufwerke ausgewählt",
-                        [System.Windows.Forms.MessageBoxButtons]::OK,
-                        [System.Windows.Forms.MessageBoxIcon]::Warning)
+                        [System.Windows.MessageBoxButton]::OK,
+                        [System.Windows.MessageBoxImage]::Warning)
                     return
                 }
-                
-                $activeOptions = $cleanupOptions | Where-Object { $cleanupCheckboxes[$_.Name].Checked }
+
+                $activeOptions = $cleanupOptions | Where-Object { $cleanupCheckboxes[$_.Name].IsChecked -eq $true }
                 if ($activeOptions.Count -eq 0) {
-                    [System.Windows.Forms.MessageBox]::Show(
+                    [System.Windows.MessageBox]::Show(
                         "Bitte wählen Sie mindestens eine Bereinigungsoption aus.",
                         "Keine Optionen ausgewählt",
-                        [System.Windows.Forms.MessageBoxButtons]::OK,
-                        [System.Windows.Forms.MessageBoxIcon]::Warning)
+                        [System.Windows.MessageBoxButton]::OK,
+                        [System.Windows.MessageBoxImage]::Warning)
                     return
                 }
                 
@@ -2024,7 +1997,7 @@ function Start-TempFilesCleanupAdvanced {
                 $outputBox.AppendText("    Ausgewaehlte Optionen: " + $activeOptions.Count + "`r`n`r`n")
                 
                 # Cursor auf Wartemodus setzen
-                $cleanupForm.Cursor = [System.Windows.Forms.Cursors]::WaitCursor
+                $wpfCleanup.Cursor = [System.Windows.Input.Cursors]::Wait
                 
                 # Bereinigung durchführen
                 $totalFreed = 0
@@ -2144,31 +2117,19 @@ function Start-TempFilesCleanupAdvanced {
                 Update-CleanupSizeEstimates
                 
                 # Cursor zurücksetzen
-                $cleanupForm.Cursor = [System.Windows.Forms.Cursors]::Default
-                
-                # Dialog zum Schließen entfernt, um Benutzererfahrung zu optimieren
-                # Formular automatisch schließen
-                $cleanupForm.Close()
-            })
-        $cleanupForm.Controls.Add($okButton)
+                $wpfCleanup.Cursor = $null
 
-        # Cancel-Button
-        $cancelButton = New-Object System.Windows.Forms.Button
-        $cancelButton.Text = "Abbrechen"
-        $cancelButton.Location = New-Object System.Drawing.Point(275, 650)
-        $cancelButton.Size = New-Object System.Drawing.Size(140, 30)
-        $cancelButton.Add_Click({
-                $cleanupForm.Close()
+                # Dialog automatisch schließen
+                $wpfCleanup.Close()
             })
-        $cleanupForm.Controls.Add($cancelButton)
 
-        # Initiale Größenberechnung beim Laden des Formulars
-        $cleanupForm.Add_Shown({
+        # Initiale Größenberechnung nach dem Rendern
+        $wpfCleanup.Add_ContentRendered({
                 Update-CleanupSizeEstimates
             })
 
         # Dialog anzeigen
-        $cleanupForm.ShowDialog()
+        $wpfCleanup.ShowDialog() | Out-Null
     } catch {
         Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
         $outputBox.AppendText("Fehler in der erweiterten Systemreinigung: $($_.Exception.Message)`r`n")
@@ -2311,7 +2272,7 @@ function Get-FilesFromPath {
         [string]$Path,
         [bool]$Recursive = $true,
         [int]$MaxDepth = 10,
-        [string[]]$ExcludeExtensions = @('.lock', '.tmp'),
+        [string[]]$ExcludeExtensions = @('.lock'),  # .tmp NICHT ausschließen – sind primäre Zieldateien
         [int]$TimeoutSeconds = 30
     )
     

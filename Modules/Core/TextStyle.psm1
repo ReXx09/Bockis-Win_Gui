@@ -6,7 +6,7 @@ function Get-DefaultTextStyle {
     $default = @{
         Output = @{
             Colors = @{
-                Background = "#1E1E1E"
+                Background = "#2A2A2A"
                 Foreground = "#DCDCDC"
                 Banner     = "#9ACD32"
                 Success    = "#3DDC84"
