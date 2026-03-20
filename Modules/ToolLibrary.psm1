@@ -1517,6 +1517,34 @@ function Invoke-WingetWithLiveOutput {
     }
     Write-Host "Starte: winget $argumentString" -ForegroundColor Cyan
 
+    # P/Invoke-Helfer fuer Fensterpositionierung (einmalig laden)
+    if (-not ([System.Management.Automation.PSTypeName]'BockisWinHelper').Type) {
+        Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public class BockisWinHelper {
+    [DllImport("user32.dll", CharSet=CharSet.Auto)]
+    public static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
+    [DllImport("user32.dll")]
+    public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+}
+"@
+    }
+
+    # Monitor ermitteln, auf dem die GUI laeuft
+    $cmdTargetX = 80
+    $cmdTargetY = 80
+    try {
+        $guiWin = [System.Windows.Application]::Current.MainWindow
+        if ($guiWin) {
+            Add-Type -AssemblyName System.Windows.Forms -ErrorAction SilentlyContinue
+            $pt = New-Object System.Drawing.Point([int]($guiWin.Left + 50), [int]($guiWin.Top + 50))
+            $screen = [System.Windows.Forms.Screen]::FromPoint($pt)
+            $cmdTargetX = $screen.WorkingArea.X + 80
+            $cmdTargetY = $screen.WorkingArea.Y + 80
+        }
+    } catch { }
+
     try {
         # CMD-Fenster mit beschreibendem Titel öffnen — zeigt echten winget-Fortschritt (MB/MB etc.)
         # cmd /c schließt das Fenster automatisch wenn winget fertig ist
@@ -1536,10 +1564,21 @@ function Invoke-WingetWithLiveOutput {
 
         $lineProgress = $StartProgress
         $timedOut = $false
+        $windowMoved = $false
         $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
 
-        # Fortschrittsbalken läuft parallel — das CMD-Fenster zeigt den echten Fortschritt
+        # Fortschrittsbalken laeuft parallel — CMD-Fenster zeigt echten Fortschritt
         while (-not $process.HasExited) {
+            # CMD-Fenster auf den GUI-Monitor verschieben (sobald es erscheint)
+            if (-not $windowMoved) {
+                $hwnd = [BockisWinHelper]::FindWindow($null, $windowTitle)
+                if ($hwnd -ne [IntPtr]::Zero) {
+                    # SWP_NOZORDER=0x0004 | SWP_SHOWWINDOW=0x0040
+                    [BockisWinHelper]::SetWindowPos($hwnd, [IntPtr]::Zero, $cmdTargetX, $cmdTargetY, 950, 520, 0x0044) | Out-Null
+                    $windowMoved = $true
+                }
+            }
+
             if ($lineProgress -lt ($EndProgress - 1)) {
                 $lineProgress++
                 Update-ToolWorkflowProgress -ProgressBar $ProgressBar -StatusText "$OperationLabel läuft: $ToolName  (siehe CMD-Fenster)" -ProgressValue $lineProgress -TextColor ([System.Drawing.Color]::Yellow)
