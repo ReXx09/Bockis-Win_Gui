@@ -1518,13 +1518,17 @@ function Invoke-WingetWithLiveOutput {
     Write-Host "Starte: winget $argumentString" -ForegroundColor Cyan
 
     try {
+        # CMD-Fenster mit beschreibendem Titel öffnen — zeigt echten winget-Fortschritt (MB/MB etc.)
+        # cmd /c schließt das Fenster automatisch wenn winget fertig ist
+        $windowTitle = "Bockis System-Tool - ${OperationLabel}: $ToolName"
+        $cmdArgs = "/c `"title $windowTitle && winget $argumentString`""
+
         $psi = New-Object System.Diagnostics.ProcessStartInfo
-        $psi.FileName = "winget"
-        $psi.Arguments = $argumentString
-        $psi.UseShellExecute = $false
-        $psi.RedirectStandardOutput = $false
-        $psi.RedirectStandardError = $false
+        $psi.FileName = "cmd.exe"
+        $psi.Arguments = $cmdArgs
+        $psi.UseShellExecute = $true
         $psi.CreateNoWindow = $false
+        $psi.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Normal
 
         $process = New-Object System.Diagnostics.Process
         $process.StartInfo = $psi
@@ -1534,10 +1538,11 @@ function Invoke-WingetWithLiveOutput {
         $timedOut = $false
         $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
 
+        # Fortschrittsbalken läuft parallel — das CMD-Fenster zeigt den echten Fortschritt
         while (-not $process.HasExited) {
             if ($lineProgress -lt ($EndProgress - 1)) {
                 $lineProgress++
-                Update-ToolWorkflowProgress -ProgressBar $ProgressBar -StatusText "$OperationLabel läuft: $ToolName..." -ProgressValue $lineProgress -TextColor ([System.Drawing.Color]::Yellow)
+                Update-ToolWorkflowProgress -ProgressBar $ProgressBar -StatusText "$OperationLabel läuft: $ToolName  (siehe CMD-Fenster)" -ProgressValue $lineProgress -TextColor ([System.Drawing.Color]::Yellow)
             }
             Start-Sleep -Milliseconds 450
 
