@@ -1573,14 +1573,14 @@ public class BockisWinHelper {
     $cmdTargetX = 80
     $cmdTargetY = 80
     try {
-        $guiWin = [System.Windows.Application]::Current.MainWindow
-        if ($guiWin) {
-            $src = [System.Windows.PresentationSource]::FromVisual($guiWin)
-            if ($src -and $src.CompositionTarget) {
-                $m = $src.CompositionTarget.TransformToDevice
-                $cmdTargetX = [int]($guiWin.Left * $m.M11) + 80
-                $cmdTargetY = [int]($guiWin.Top  * $m.M22) + 80
-            }
+        # WinForms-Form: Left/Top sind echte physische Pixel — kein DPI-Overhead
+        $mf = $global:mainform
+        if (-not $mf -and [System.Windows.Forms.Application]::OpenForms.Count -gt 0) {
+            $mf = [System.Windows.Forms.Application]::OpenForms[0]
+        }
+        if ($mf) {
+            $cmdTargetX = $mf.Left + 80
+            $cmdTargetY = $mf.Top  + 80
         }
     } catch { }
 
