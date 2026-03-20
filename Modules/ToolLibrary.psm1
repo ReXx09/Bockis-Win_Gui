@@ -1547,24 +1547,31 @@ public class BockisWinHelper {
         IntPtr lpPA, IntPtr lpTA, bool bInherit, uint dwFlags,
         IntPtr lpEnv, string lpDir,
         ref STARTUPINFO si, out PROCESS_INFORMATION pi);
-    [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr h);
+    [DllImport("kernel32.dll")] public  static extern bool CloseHandle(IntPtr h);
+    [DllImport("kernel32.dll")] static extern uint WaitForSingleObject(IntPtr h, uint ms);
+    [DllImport("kernel32.dll")] static extern bool GetExitCodeProcess(IntPtr h, out uint code);
+    [DllImport("kernel32.dll")] static extern bool TerminateProcess(IntPtr h, uint code);
 
-    // dwFlags: STARTF_USESHOWWINDOW=1 | STARTF_USESIZE=2 | STARTF_USEPOSITION=4
-    public static int StartAt(string cmd, int x, int y, int w, int h, string title) {
+    const uint WAIT_OBJECT_0 = 0;
+
+    // Startet cmd an Zielposition; gibt offenen hProcess-Handle zurueck (Aufrufer ruft CloseHandle)
+    public static IntPtr StartAt(string cmd, int x, int y, int w, int h, string title) {
         var si = new STARTUPINFO();
         si.cb = Marshal.SizeOf(si);
         si.dwX = x; si.dwY = y; si.dwXSize = w; si.dwYSize = h;
         si.lpTitle = title;
-        si.dwFlags = 0x0007;   // USESHOWWINDOW | USESIZE | USEPOSITION
+        si.dwFlags = 0x0007;   // STARTF_USESHOWWINDOW | STARTF_USESIZE | STARTF_USEPOSITION
         si.wShowWindow = 1;    // SW_SHOWNORMAL
         PROCESS_INFORMATION pi;
         if (!CreateProcess(null, cmd, IntPtr.Zero, IntPtr.Zero, false,
                            0x00000010u, IntPtr.Zero, null, ref si, out pi))
             throw new Win32Exception(Marshal.GetLastWin32Error());
         CloseHandle(pi.hThread);
-        CloseHandle(pi.hProcess);
-        return pi.dwProcessId;
+        return pi.hProcess;    // Handle bleibt offen fuer ExitCode-Abfrage
     }
+    public static bool HasExited(IntPtr h) { return WaitForSingleObject(h, 0) == WAIT_OBJECT_0; }
+    public static int  GetExitCode(IntPtr h) { uint c; GetExitCodeProcess(h, out c); return (int)c; }
+    public static void Kill(IntPtr h)        { TerminateProcess(h, 1); }
 }
 "@
     }
@@ -1589,21 +1596,13 @@ public class BockisWinHelper {
         $windowTitle = "Bockis System-Tool - ${OperationLabel}: $ToolName"
         $cmdCommand  = "cmd.exe /c `"title $windowTitle && winget $argumentString`""
 
-        $cmdPid = [BockisWinHelper]::StartAt($cmdCommand, $cmdTargetX, $cmdTargetY, 960, 540, $windowTitle)
-
-        # Managed Process-Handle via PID (für HasExited / ExitCode / Kill)
-        $process = $null
-        $sw = [System.Diagnostics.Stopwatch]::StartNew()
-        while ($sw.Elapsed.TotalSeconds -lt 5) {
-            try { $process = [System.Diagnostics.Process]::GetProcessById($cmdPid); break }
-            catch { Start-Sleep -Milliseconds 100 }
-        }
+        $hProcess = [BockisWinHelper]::StartAt($cmdCommand, $cmdTargetX, $cmdTargetY, 960, 540, $windowTitle)
 
         $lineProgress = $StartProgress
         $timedOut = $false
         $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
 
-        while ($process -and -not $process.HasExited) {
+        while (-not [BockisWinHelper]::HasExited($hProcess)) {
             if ($lineProgress -lt ($EndProgress - 1)) {
                 $lineProgress++
                 Update-ToolWorkflowProgress -ProgressBar $ProgressBar -StatusText "$OperationLabel läuft: $ToolName  (siehe CMD-Fenster)" -ProgressValue $lineProgress -TextColor ([System.Drawing.Color]::Yellow)
@@ -1612,30 +1611,17 @@ public class BockisWinHelper {
 
             if ($stopwatch.Elapsed.TotalSeconds -ge $TimeoutSeconds) {
                 $timedOut = $true
-                try { $process.Kill() } catch { }
+                try { [BockisWinHelper]::Kill($hProcess) } catch { }
                 break
             }
         }
 
-        try { $process.WaitForExit(2000) | Out-Null } catch { }
-
-        $exitCodeRaw = $null
-        if ($process.HasExited -and -not $timedOut) {
-            try {
-                $exitCodeRaw = $process.ExitCode
-            } catch {
-                $exitCodeRaw = $null
-            }
-        }
-
+        # ExitCode direkt aus dem Kernel-Handle lesen — garantiert korrekt
         $exitCode = -1
-        if ($null -ne $exitCodeRaw -and -not [string]::IsNullOrWhiteSpace("$exitCodeRaw")) {
-            try {
-                $exitCode = [int]$exitCodeRaw
-            } catch {
-                $exitCode = -1
-            }
+        if (-not $timedOut) {
+            try { $exitCode = [BockisWinHelper]::GetExitCode($hProcess) } catch { }
         }
+        [BockisWinHelper]::CloseHandle($hProcess) | Out-Null
 
         $derivedSuccess = $false
         if (-not $timedOut -and $exitCode -eq -1 -and (Test-Path $wingetLogPath)) {
