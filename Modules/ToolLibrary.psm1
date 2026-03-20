@@ -1517,68 +1517,93 @@ function Invoke-WingetWithLiveOutput {
     }
     Write-Host "Starte: winget $argumentString" -ForegroundColor Cyan
 
-    # P/Invoke-Helfer fuer Fensterpositionierung (einmalig laden)
+    # P/Invoke: CreateProcess mit STARTUPINFO-Position (CMD startet direkt auf richtigem Monitor)
     if (-not ([System.Management.Automation.PSTypeName]'BockisWinHelper').Type) {
         Add-Type @"
 using System;
 using System.Runtime.InteropServices;
+using System.ComponentModel;
 public class BockisWinHelper {
-    [DllImport("user32.dll", CharSet=CharSet.Auto)]
-    public static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
-    [DllImport("user32.dll")]
-    public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+    [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Unicode)]
+    public struct STARTUPINFO {
+        public int    cb;
+        public string lpReserved;
+        public string lpDesktop;
+        public string lpTitle;
+        public int    dwX, dwY, dwXSize, dwYSize;
+        public int    dwXCountChars, dwYCountChars, dwFillAttribute;
+        public int    dwFlags;
+        public short  wShowWindow, cbReserved2;
+        public IntPtr lpReserved2, hStdInput, hStdOutput, hStdError;
+    }
+    [StructLayout(LayoutKind.Sequential)]
+    public struct PROCESS_INFORMATION {
+        public IntPtr hProcess, hThread;
+        public int    dwProcessId, dwThreadId;
+    }
+    [DllImport("kernel32.dll", SetLastError=true, CharSet=CharSet.Unicode)]
+    static extern bool CreateProcess(
+        string lpApp, string lpCmd,
+        IntPtr lpPA, IntPtr lpTA, bool bInherit, uint dwFlags,
+        IntPtr lpEnv, string lpDir,
+        ref STARTUPINFO si, out PROCESS_INFORMATION pi);
+    [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr h);
+
+    // dwFlags: STARTF_USESHOWWINDOW=1 | STARTF_USESIZE=2 | STARTF_USEPOSITION=4
+    public static int StartAt(string cmd, int x, int y, int w, int h, string title) {
+        var si = new STARTUPINFO();
+        si.cb = Marshal.SizeOf(si);
+        si.dwX = x; si.dwY = y; si.dwXSize = w; si.dwYSize = h;
+        si.lpTitle = title;
+        si.dwFlags = 0x0007;   // USESHOWWINDOW | USESIZE | USEPOSITION
+        si.wShowWindow = 1;    // SW_SHOWNORMAL
+        PROCESS_INFORMATION pi;
+        if (!CreateProcess(null, cmd, IntPtr.Zero, IntPtr.Zero, false,
+                           0x00000010u, IntPtr.Zero, null, ref si, out pi))
+            throw new Win32Exception(Marshal.GetLastWin32Error());
+        CloseHandle(pi.hThread);
+        CloseHandle(pi.hProcess);
+        return pi.dwProcessId;
+    }
 }
 "@
     }
 
-    # Monitor ermitteln, auf dem die GUI laeuft
+    # Zielkoordinaten: GUI-Monitor in physischen Pixeln (DPI-korrekt)
     $cmdTargetX = 80
     $cmdTargetY = 80
     try {
         $guiWin = [System.Windows.Application]::Current.MainWindow
         if ($guiWin) {
-            Add-Type -AssemblyName System.Windows.Forms -ErrorAction SilentlyContinue
-            $pt = New-Object System.Drawing.Point([int]($guiWin.Left + 50), [int]($guiWin.Top + 50))
-            $screen = [System.Windows.Forms.Screen]::FromPoint($pt)
-            $cmdTargetX = $screen.WorkingArea.X + 80
-            $cmdTargetY = $screen.WorkingArea.Y + 80
+            $src = [System.Windows.PresentationSource]::FromVisual($guiWin)
+            if ($src -and $src.CompositionTarget) {
+                $m = $src.CompositionTarget.TransformToDevice
+                $cmdTargetX = [int]($guiWin.Left * $m.M11) + 80
+                $cmdTargetY = [int]($guiWin.Top  * $m.M22) + 80
+            }
         }
     } catch { }
 
     try {
-        # CMD-Fenster mit beschreibendem Titel öffnen — zeigt echten winget-Fortschritt (MB/MB etc.)
-        # cmd /c schließt das Fenster automatisch wenn winget fertig ist
+        # CMD-Fenster startet sofort an der Zielposition (kein Flackern auf Monitor 1)
         $windowTitle = "Bockis System-Tool - ${OperationLabel}: $ToolName"
-        $cmdArgs = "/c `"title $windowTitle && winget $argumentString`""
+        $cmdCommand  = "cmd.exe /c `"title $windowTitle && winget $argumentString`""
 
-        $psi = New-Object System.Diagnostics.ProcessStartInfo
-        $psi.FileName = "cmd.exe"
-        $psi.Arguments = $cmdArgs
-        $psi.UseShellExecute = $true
-        $psi.CreateNoWindow = $false
-        $psi.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Normal
+        $cmdPid = [BockisWinHelper]::StartAt($cmdCommand, $cmdTargetX, $cmdTargetY, 960, 540, $windowTitle)
 
-        $process = New-Object System.Diagnostics.Process
-        $process.StartInfo = $psi
-        $null = $process.Start()
+        # Managed Process-Handle via PID (für HasExited / ExitCode / Kill)
+        $process = $null
+        $sw = [System.Diagnostics.Stopwatch]::StartNew()
+        while ($sw.Elapsed.TotalSeconds -lt 5) {
+            try { $process = [System.Diagnostics.Process]::GetProcessById($cmdPid); break }
+            catch { Start-Sleep -Milliseconds 100 }
+        }
 
         $lineProgress = $StartProgress
         $timedOut = $false
-        $windowMoved = $false
         $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
 
-        # Fortschrittsbalken laeuft parallel — CMD-Fenster zeigt echten Fortschritt
-        while (-not $process.HasExited) {
-            # CMD-Fenster auf den GUI-Monitor verschieben (sobald es erscheint)
-            if (-not $windowMoved) {
-                $hwnd = [BockisWinHelper]::FindWindow($null, $windowTitle)
-                if ($hwnd -ne [IntPtr]::Zero) {
-                    # SWP_NOZORDER=0x0004 | SWP_SHOWWINDOW=0x0040
-                    [BockisWinHelper]::SetWindowPos($hwnd, [IntPtr]::Zero, $cmdTargetX, $cmdTargetY, 950, 520, 0x0044) | Out-Null
-                    $windowMoved = $true
-                }
-            }
-
+        while ($process -and -not $process.HasExited) {
             if ($lineProgress -lt ($EndProgress - 1)) {
                 $lineProgress++
                 Update-ToolWorkflowProgress -ProgressBar $ProgressBar -StatusText "$OperationLabel läuft: $ToolName  (siehe CMD-Fenster)" -ProgressValue $lineProgress -TextColor ([System.Drawing.Color]::Yellow)
