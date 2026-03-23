@@ -779,7 +779,7 @@ function Start-TempFilesCleanupAdvanced {
 <Window
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Title="" Width="600" Height="740"
+    Title="" Width="510" Height="750"
     WindowStyle="None" AllowsTransparency="True" ResizeMode="NoResize"
     WindowStartupLocation="Manual" Background="Transparent">
   <Window.Resources>
@@ -830,16 +830,16 @@ function Start-TempFilesCleanupAdvanced {
     </Border.Effect>
     <Grid>
       <Grid.RowDefinitions>
-        <RowDefinition Height="42"/>
-        <RowDefinition Height="2"/>
-        <RowDefinition Height="Auto"/>
-        <RowDefinition Height="155"/>
-        <RowDefinition Height="Auto"/>
-        <RowDefinition Height="Auto"/>
-        <RowDefinition Height="210"/>
-        <RowDefinition Height="Auto"/>
-        <RowDefinition Height="90"/>
-        <RowDefinition Height="62"/>
+        <RowDefinition Height="42"/>    <!-- Row 0 : Header / Titelleiste          -->
+        <RowDefinition Height="2"/>     <!-- Row 1 : Grüne Akzentlinie             -->
+        <RowDefinition Height="Auto"/>  <!-- Row 2 : Label "Laufwerke auswählen"   -->
+        <RowDefinition Height="180"/>   <!-- Row 3 : Laufwerk-Box  (ScrollViewer)  -->
+        <RowDefinition Height="Auto"/>  <!-- Row 4 : Checkbox "Alle Laufwerke"     -->
+        <RowDefinition Height="Auto"/>  <!-- Row 5 : Label "Zu ber. Elemente"      -->
+        <RowDefinition Height="260"/>   <!-- Row 6 : Optionen-Box  (ScrollViewer)  -->
+        <RowDefinition Height="Auto"/>  <!-- Row 7 : Label "Status"                -->
+        <RowDefinition Height="90"/>    <!-- Row 8 : Status-TextBox                -->
+        <RowDefinition Height="62"/>    <!-- Row 9 : Buttons (OK / Abbrechen)      -->
       </Grid.RowDefinitions>
 
       <!-- Header / Drag -->
@@ -874,7 +874,7 @@ function Start-TempFilesCleanupAdvanced {
 
       <!-- Laufwerk-Label -->
       <TextBlock Grid.Row="2" Text="Zu bereinigende Laufwerke auswählen:"
-                 Foreground="#909090" FontFamily="Segoe UI" FontSize="11"
+                 Foreground="#909090" FontFamily="Segoe UI" FontSize="12"
                  Margin="14,10,14,4"/>
 
       <!-- Laufwerk-Tabelle (SharedSizeScope) -->
@@ -906,7 +906,7 @@ function Start-TempFilesCleanupAdvanced {
 
       <!-- Optionen-Label -->
       <TextBlock Grid.Row="5" Text="Zu bereinigende Elemente:"
-                 Foreground="#909090" FontFamily="Segoe UI" FontSize="11"
+                 Foreground="#909090" FontFamily="Segoe UI" FontSize="12"
                  Margin="14,10,14,4"/>
 
       <!-- Optionen-Liste -->
@@ -917,7 +917,7 @@ function Start-TempFilesCleanupAdvanced {
 
       <!-- Status-Label -->
       <TextBlock Grid.Row="7" Text="Status:" Foreground="#909090"
-                 FontFamily="Segoe UI" FontSize="11" Margin="14,8,14,2"/>
+                 FontFamily="Segoe UI" FontSize="12" Margin="14,8,14,2"/>
 
       <!-- Status-TextBox -->
       <TextBox Grid.Row="8" x:Name="StatusBox" Margin="12,0,12,0"
@@ -925,10 +925,10 @@ function Start-TempFilesCleanupAdvanced {
                VerticalScrollBarVisibility="Auto"
                Background="#2B2B2B" Foreground="#909090"
                BorderBrush="#363636" BorderThickness="1"
-               FontFamily="Segoe UI" FontSize="11" Padding="6,4"/>
+               FontFamily="Segoe UI" FontSize="12" Padding="6,4"/>
 
       <!-- Buttons -->
-      <Grid Grid.Row="9" Margin="70,0,14,12">
+      <Grid Grid.Row="9" Margin="60,0,14,12">
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="190"/>
           <ColumnDefinition Width="12"/>
@@ -947,23 +947,23 @@ function Start-TempFilesCleanupAdvanced {
   </Border>
 </Window>
 '@
-        $readerClean     = New-Object System.Xml.XmlNodeReader $xamlCleanup
-        $wpfCleanup      = [Windows.Markup.XamlReader]::Load($readerClean)
+        $readerClean = New-Object System.Xml.XmlNodeReader $xamlCleanup
+        $wpfCleanup = [Windows.Markup.XamlReader]::Load($readerClean)
 
         # Startposition: rechts neben der Hauptform
         if ($null -ne $mainform) {
             $wpfCleanup.Left = $mainform.Location.X + $mainform.Width + 10
-            $wpfCleanup.Top  = $mainform.Location.Y
+            $wpfCleanup.Top = $mainform.Location.Y
         }
 
         # Controls holen
         $drivePanelClean = $wpfCleanup.FindName("DrivePanelClean")
-        $chkAllDrives    = $wpfCleanup.FindName("ChkAllDrives")
-        $optionsPanel    = $wpfCleanup.FindName("OptionsPanel")
-        $statusBox       = $wpfCleanup.FindName("StatusBox")
-        $btnOkClean      = $wpfCleanup.FindName("BtnOkClean")
-        $btnCancelClean  = $wpfCleanup.FindName("BtnCancelClean")
-        $btnCloseClean   = $wpfCleanup.FindName("BtnCloseClean")
+        $chkAllDrives = $wpfCleanup.FindName("ChkAllDrives")
+        $optionsPanel = $wpfCleanup.FindName("OptionsPanel")
+        $statusBox = $wpfCleanup.FindName("StatusBox")
+        $btnOkClean = $wpfCleanup.FindName("BtnOkClean")
+        $btnCancelClean = $wpfCleanup.FindName("BtnCancelClean")
+        $btnCloseClean = $wpfCleanup.FindName("BtnCloseClean")
         $dragHeaderClean = $wpfCleanup.FindName("DragHeaderClean")
 
         # Auto-Scroll in StatusBox + Basis-Interaktion
@@ -973,8 +973,8 @@ function Start-TempFilesCleanupAdvanced {
         $btnCancelClean.Add_Click({ $wpfCleanup.Close() })
 
         # ── Laufwerk-Tabelle befüllen ─────────────────────────────────────────
-        $driveCheckBoxes       = @{}
-        $bconv                 = [System.Windows.Media.BrushConverter]::new()
+        $driveCheckBoxes = @{}
+        $bconv = [System.Windows.Media.BrushConverter]::new()
         $script:_bulkDriveChanging = $false
 
         $drives = Get-PSDrive -PSProvider FileSystem
@@ -982,17 +982,17 @@ function Start-TempFilesCleanupAdvanced {
             $driveInfo = Get-WmiObject -Class Win32_LogicalDisk -Filter "DeviceID='$($drive.Name):'" -ErrorAction SilentlyContinue
             if (-not $driveInfo) { continue }
 
-            $freeGB   = [Math]::Round($driveInfo.FreeSpace / 1GB, 2)
-            $totalGB  = [Math]::Round($driveInfo.Size / 1GB, 2)
-            $usedPct  = [Math]::Round(100 - (($driveInfo.FreeSpace / $driveInfo.Size) * 100), 1)
-            $volName  = if ($driveInfo.VolumeName) { $driveInfo.VolumeName } else { "" }
+            $freeGB = [Math]::Round($driveInfo.FreeSpace / 1GB, 2)
+            $totalGB = [Math]::Round($driveInfo.Size / 1GB, 2)
+            $usedPct = [Math]::Round(100 - (($driveInfo.FreeSpace / $driveInfo.Size) * 100), 1)
+            $volName = if ($driveInfo.VolumeName) { $driveInfo.VolumeName } else { "" }
             $isSystem = ($drive.Name + ":") -eq $env:SystemDrive
-            $freeHex  = if ($usedPct -gt 90) { "#E05050" } elseif ($usedPct -gt 75) { "#D4A010" } else { "#00B464" }
-            $driveId  = $drive.Name + ":"
+            $freeHex = if ($usedPct -gt 90) { "#E05050" } elseif ($usedPct -gt 75) { "#D4A010" } else { "#00B464" }
+            $driveId = $drive.Name + ":"
 
             $row = New-Object System.Windows.Controls.Grid
             $row.Margin = New-Object System.Windows.Thickness(0, 4, 0, 0)
-            foreach ($grp in @("CColCB","CColDrive","CColName","CColFree","CColTotal")) {
+            foreach ($grp in @("CColCB", "CColDrive", "CColName", "CColFree", "CColTotal")) {
                 $cd = New-Object System.Windows.Controls.ColumnDefinition
                 $cd.SharedSizeGroup = $grp
                 $cd.Width = [System.Windows.GridLength]::Auto
@@ -1004,64 +1004,64 @@ function Start-TempFilesCleanupAdvanced {
 
             $cb = New-Object System.Windows.Controls.CheckBox
             $cb.VerticalAlignment = [System.Windows.VerticalAlignment]::Center
-            $cb.Margin    = New-Object System.Windows.Thickness(0,0,10,0)
+            $cb.Margin = New-Object System.Windows.Thickness(0, 0, 10, 0)
             $cb.IsChecked = $isSystem
             [System.Windows.Controls.Grid]::SetColumn($cb, 0)
             $row.Children.Add($cb)
 
             $tbDrive = New-Object System.Windows.Controls.TextBlock
-            $tbDrive.Text       = $driveId
+            $tbDrive.Text = $driveId
             $tbDrive.Foreground = [System.Windows.Media.Brushes]::White
             $tbDrive.FontFamily = New-Object System.Windows.Media.FontFamily("Segoe UI")
-            $tbDrive.FontSize   = 12
+            $tbDrive.FontSize = 12
             $tbDrive.FontWeight = [System.Windows.FontWeights]::SemiBold
             $tbDrive.VerticalAlignment = [System.Windows.VerticalAlignment]::Center
-            $tbDrive.Margin = New-Object System.Windows.Thickness(0,0,14,0)
+            $tbDrive.Margin = New-Object System.Windows.Thickness(0, 0, 14, 0)
             [System.Windows.Controls.Grid]::SetColumn($tbDrive, 1)
             $row.Children.Add($tbDrive)
 
             $tbName = New-Object System.Windows.Controls.TextBlock
-            $tbName.Text       = if ($volName) { "($volName)" } else { "" }
+            $tbName.Text = if ($volName) { "($volName)" } else { "" }
             $tbName.Foreground = $bconv.ConvertFrom("#909090")
             $tbName.FontFamily = New-Object System.Windows.Media.FontFamily("Segoe UI")
-            $tbName.FontSize   = 12
+            $tbName.FontSize = 12
             $tbName.VerticalAlignment = [System.Windows.VerticalAlignment]::Center
-            $tbName.Margin = New-Object System.Windows.Thickness(0,0,14,0)
+            $tbName.Margin = New-Object System.Windows.Thickness(0, 0, 14, 0)
             [System.Windows.Controls.Grid]::SetColumn($tbName, 2)
             $row.Children.Add($tbName)
 
             $tbFree = New-Object System.Windows.Controls.TextBlock
-            $tbFree.Text       = "$freeGB GB frei"
+            $tbFree.Text = "$freeGB GB frei"
             $tbFree.Foreground = $bconv.ConvertFrom($freeHex)
             $tbFree.FontFamily = New-Object System.Windows.Media.FontFamily("Segoe UI")
-            $tbFree.FontSize   = 12
+            $tbFree.FontSize = 12
             $tbFree.VerticalAlignment = [System.Windows.VerticalAlignment]::Center
-            $tbFree.Margin = New-Object System.Windows.Thickness(0,0,14,0)
+            $tbFree.Margin = New-Object System.Windows.Thickness(0, 0, 14, 0)
             [System.Windows.Controls.Grid]::SetColumn($tbFree, 3)
             $row.Children.Add($tbFree)
 
             $tbTotal = New-Object System.Windows.Controls.TextBlock
-            $tbTotal.Text       = "von $totalGB GB"
+            $tbTotal.Text = "von $totalGB GB"
             $tbTotal.Foreground = $bconv.ConvertFrom("#707070")
             $tbTotal.FontFamily = New-Object System.Windows.Media.FontFamily("Segoe UI")
-            $tbTotal.FontSize   = 12
+            $tbTotal.FontSize = 12
             $tbTotal.VerticalAlignment = [System.Windows.VerticalAlignment]::Center
             [System.Windows.Controls.Grid]::SetColumn($tbTotal, 4)
             $row.Children.Add($tbTotal)
 
             if ($isSystem) {
                 $badge = New-Object System.Windows.Controls.Border
-                $badge.CornerRadius    = New-Object System.Windows.CornerRadius(3)
-                $badge.Background      = $bconv.ConvertFrom("#0A3322")
-                $badge.BorderBrush     = $bconv.ConvertFrom("#00B464")
+                $badge.CornerRadius = New-Object System.Windows.CornerRadius(3)
+                $badge.Background = $bconv.ConvertFrom("#0A3322")
+                $badge.BorderBrush = $bconv.ConvertFrom("#00B464")
                 $badge.BorderThickness = New-Object System.Windows.Thickness(1)
-                $badge.Margin          = New-Object System.Windows.Thickness(10,1,0,1)
-                $badge.Padding         = New-Object System.Windows.Thickness(6,1,6,1)
+                $badge.Margin = New-Object System.Windows.Thickness(10, 1, 0, 1)
+                $badge.Padding = New-Object System.Windows.Thickness(6, 1, 6, 1)
                 $badge.VerticalAlignment = [System.Windows.VerticalAlignment]::Center
                 $badgeText = New-Object System.Windows.Controls.TextBlock
-                $badgeText.Text       = "Systemlaufwerk"
+                $badgeText.Text = "Systemlaufwerk"
                 $badgeText.Foreground = $bconv.ConvertFrom("#00B464")
-                $badgeText.FontSize   = 10
+                $badgeText.FontSize = 10
                 $badgeText.FontFamily = New-Object System.Windows.Media.FontFamily("Segoe UI")
                 $badge.Child = $badgeText
                 [System.Windows.Controls.Grid]::SetColumn($badge, 5)
@@ -1072,37 +1072,37 @@ function Start-TempFilesCleanupAdvanced {
             $driveCheckBoxes[$driveId] = $cb
 
             $cb.Add_Checked({
-                if (-not $script:_bulkDriveChanging) {
-                    $allChecked = $true
-                    foreach ($c in $driveCheckBoxes.Values) {
-                        if ($c.IsChecked -ne $true) { $allChecked = $false; break }
+                    if (-not $script:_bulkDriveChanging) {
+                        $allChecked = $true
+                        foreach ($c in $driveCheckBoxes.Values) {
+                            if ($c.IsChecked -ne $true) { $allChecked = $false; break }
+                        }
+                        if ($allChecked) {
+                            $script:_bulkDriveChanging = $true
+                            $chkAllDrives.IsChecked = $true
+                            $script:_bulkDriveChanging = $false
+                        }
                     }
-                    if ($allChecked) {
+                })
+            $cb.Add_Unchecked({
+                    if (-not $script:_bulkDriveChanging) {
                         $script:_bulkDriveChanging = $true
-                        $chkAllDrives.IsChecked = $true
+                        $chkAllDrives.IsChecked = $false
                         $script:_bulkDriveChanging = $false
                     }
-                }
-            })
-            $cb.Add_Unchecked({
-                if (-not $script:_bulkDriveChanging) {
-                    $script:_bulkDriveChanging = $true
-                    $chkAllDrives.IsChecked = $false
-                    $script:_bulkDriveChanging = $false
-                }
-            })
+                })
         }
 
         $chkAllDrives.Add_Checked({
-            $script:_bulkDriveChanging = $true
-            foreach ($cb in $driveCheckBoxes.Values) { $cb.IsChecked = $true }
-            $script:_bulkDriveChanging = $false
-        })
+                $script:_bulkDriveChanging = $true
+                foreach ($cb in $driveCheckBoxes.Values) { $cb.IsChecked = $true }
+                $script:_bulkDriveChanging = $false
+            })
         $chkAllDrives.Add_Unchecked({
-            $script:_bulkDriveChanging = $true
-            foreach ($cb in $driveCheckBoxes.Values) { $cb.IsChecked = $false }
-            $script:_bulkDriveChanging = $false
-        })
+                $script:_bulkDriveChanging = $true
+                foreach ($cb in $driveCheckBoxes.Values) { $cb.IsChecked = $false }
+                $script:_bulkDriveChanging = $false
+            })
 
         # Tatsächliche Pfadmuster für die Reinigungsoptionen
         $cleanupOptions = @(
@@ -1251,7 +1251,7 @@ function Start-TempFilesCleanupAdvanced {
 
         # ── Optionen als WPF-Controls erstellen ──────────────────────────────
         $cleanupCheckboxes = @{}
-        $sizeLabels        = @{}
+        $sizeLabels = @{}
 
         foreach ($option in $cleanupOptions) {
             $optRow = New-Object System.Windows.Controls.Grid
@@ -1264,18 +1264,18 @@ function Start-TempFilesCleanupAdvanced {
             $optRow.ColumnDefinitions.Add($cdSize)
 
             $chkOpt = New-Object System.Windows.Controls.CheckBox
-            $chkOpt.Content   = $option.Text
+            $chkOpt.Content = $option.Text
             $chkOpt.IsChecked = $option.Default
-            $chkOpt.ToolTip   = $option.Description
+            $chkOpt.ToolTip = $option.Description
             $chkOpt.VerticalContentAlignment = [System.Windows.VerticalAlignment]::Center
             [System.Windows.Controls.Grid]::SetColumn($chkOpt, 0)
             $optRow.Children.Add($chkOpt)
 
             $tbSize = New-Object System.Windows.Controls.TextBlock
-            $tbSize.Text       = "–"
+            $tbSize.Text = "–"
             $tbSize.Foreground = $bconv.ConvertFrom("#707070")
             $tbSize.FontFamily = New-Object System.Windows.Media.FontFamily("Segoe UI")
-            $tbSize.FontSize   = 11
+            $tbSize.FontSize = 11
             $tbSize.VerticalAlignment = [System.Windows.VerticalAlignment]::Center
             $tbSize.Margin = New-Object System.Windows.Thickness(12, 0, 4, 0)
             [System.Windows.Controls.Grid]::SetColumn($tbSize, 1)
@@ -1283,7 +1283,7 @@ function Start-TempFilesCleanupAdvanced {
 
             $optionsPanel.Children.Add($optRow)
             $cleanupCheckboxes[$option.Name] = $chkOpt
-            $sizeLabels[$option.Name]        = $tbSize
+            $sizeLabels[$option.Name] = $tbSize
 
             $chkOpt.Add_Checked({ Update-CleanupSizeEstimates })
             $chkOpt.Add_Unchecked({ Update-CleanupSizeEstimates })
@@ -1566,9 +1566,9 @@ function Start-TempFilesCleanupAdvanced {
                 [array]$Paths
             )
 
-            $totalFreed    = 0
-            $deletedCount  = 0
-            $skippedCount  = 0
+            $totalFreed = 0
+            $deletedCount = 0
+            $skippedCount = 0
 
             # Laufwerksbuchstaben normalisieren
             if ($DriveLetter -match '^([A-Za-z]):') { $DriveLetter = $matches[1] + ':' }
@@ -1585,16 +1585,16 @@ function Start-TempFilesCleanupAdvanced {
                     # ── Papierkorb ────────────────────────────────────
                     if ($path -eq '$Recycle.Bin') {
                         $rbLetter = $DriveLetter.TrimEnd(':\') # z.B. 'C'
-                        $rbPath   = "$DriveLetter\`$Recycle.Bin"
+                        $rbPath = "$DriveLetter\`$Recycle.Bin"
                         try {
                             # Größe vorher ermitteln
                             $rbFiles = Get-ChildItem -Path $rbPath -Recurse -Force -ErrorAction SilentlyContinue |
-                                       Where-Object { -not $_.PSIsContainer }
+                                Where-Object { -not $_.PSIsContainer }
                             $rbCount = if ($rbFiles) { @($rbFiles).Count } else { 0 }
-                            $rbSize  = if ($rbFiles) { ($rbFiles | Measure-Object -Property Length -Sum).Sum } else { 0 }
+                            $rbSize = if ($rbFiles) { ($rbFiles | Measure-Object -Property Length -Sum).Sum } else { 0 }
 
                             Clear-RecycleBin -DriveLetter $rbLetter -Force -ErrorAction Stop
-                            $totalFreed   += if ($rbSize)  { $rbSize  } else { 0 }
+                            $totalFreed += if ($rbSize) { $rbSize } else { 0 }
                             $deletedCount += $rbCount
                             $statusBox.AppendText("  Papierkorb geleert: $rbCount Element(e)`r`n")
                         } catch {
@@ -1660,7 +1660,7 @@ function Start-TempFilesCleanupAdvanced {
                         $driveInfo = Get-WmiObject -Class Win32_LogicalDisk -Filter "DeviceID='$driveLetter'"
                         if ($driveInfo) {
                             $selectedDrives += $driveLetter
-                            $freeSpaceGB  = [Math]::Round($driveInfo.FreeSpace / 1GB, 2)
+                            $freeSpaceGB = [Math]::Round($driveInfo.FreeSpace / 1GB, 2)
                             $totalSpaceGB = [Math]::Round($driveInfo.Size / 1GB, 2)
                             $statusBox.AppendText("Laufwerk $driveLetter`: ${freeSpaceGB}GB frei von ${totalSpaceGB}GB`r`n")
                         }
@@ -1676,7 +1676,7 @@ function Start-TempFilesCleanupAdvanced {
             # Wenn keine Laufwerke ausgewählt sind, alle Größen auf 0 setzen
             if ($selectedDrives.Count -eq 0) {
                 foreach ($optionKey in $cleanupCheckboxes.Keys) {
-                    $sizeLabels[$optionKey].Text       = "0 Bytes"
+                    $sizeLabels[$optionKey].Text = "0 Bytes"
                     $sizeLabels[$optionKey].Foreground = $bconv.ConvertFrom("#707070")
                 }
                 
@@ -1729,7 +1729,7 @@ function Start-TempFilesCleanupAdvanced {
                 [System.Windows.Forms.Application]::DoEvents()
                 
                 # Größenschätzung für diese Option zurücksetzen
-                $sizeLabels[$option.Name].Text       = "Berechne..."
+                $sizeLabels[$option.Name].Text = "Berechne..."
                 $sizeLabels[$option.Name].Foreground = $bconv.ConvertFrom("#D4A010")
                 [System.Windows.Forms.Application]::DoEvents()
                 

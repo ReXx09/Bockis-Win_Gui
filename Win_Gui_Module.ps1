@@ -1,14 +1,27 @@
 ﻿# Win_Gui_Module.ps1 - Hauptskript für die PowerShell-GUI
 # Autor: Bocki
-# Version: 4.1.9
+# Version: 4.2.0
 
 # ===================================================================
 # VERSIONS-INFORMATION
 # ===================================================================
-$script:AppVersion = "4.1.9"
+$script:AppVersion = "4.2.0"
 $script:AppName = "Bockis System-Tool"
 $script:AppPublisher = "Bocki"
-$script:VersionDate = "2026-03-03"
+$script:VersionDate = "2026-03-23"
+
+# ===================================================================
+# ZONE.IDENTIFIER / MARK OF THE WEB ENTFERNEN
+# Wenn das Tool als ZIP von GitHub heruntergeladen und entpackt wurde,
+# blockt Windows alle Dateien mit ZoneId=3 (Internet-Zone).
+# .NET verweigert dann das Laden von DLLs (HRESULT 0x80131515).
+# Unblock-File entfernt den Zone.Identifier ADS-Stream.
+# ===================================================================
+try {
+    Get-ChildItem -Path $PSScriptRoot -Recurse -File -Include '*.dll', '*.ps1', '*.psm1', '*.psd1', '*.bat' -ErrorAction SilentlyContinue |
+        Unblock-File -ErrorAction SilentlyContinue
+} catch { <# Kein kritischer Fehler – weiter #> }
+
 # WinForms-Assemblies laden
 Add-Type -AssemblyName System.Drawing
 Add-Type -AssemblyName System.Windows.Forms
@@ -325,7 +338,7 @@ function Update-Settings {
         if ($settings) {
             $null = Initialize-TextStyle -Settings $settings -OutputBox $outputBox
             # BackColor nach Initialize-TextStyle explizit setzen – verhindert Override durch Config-Defaults
-            $outputBox.BackColor = [System.Drawing.Color]::FromArgb(42, 42, 42)
+            $outputBox.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 37)
         }
     }
 
@@ -5432,7 +5445,7 @@ $outputBox.ScrollBars = "Vertical"
 $outputBox.WordWrap = $true
 $outputBox.ReadOnly = $true
 $outputBox.BorderStyle = [System.Windows.Forms.BorderStyle]::None   # Kein Rahmen
-$outputBox.BackColor = [System.Drawing.Color]::FromArgb(42, 42, 42)  # Wird von Initialize-TextStyle via config.json Background (#2A2A2A) gesetzt
+$outputBox.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 37)  # Wird von Initialize-TextStyle via config.json Background (#252525) gesetzt
 $outputBox.ForeColor = [System.Drawing.Color]::FromArgb(220, 220, 220)  # Helles Grau für Text
 
 # Event-Handler für automatisches Scrollen hinzufügen

@@ -2,7 +2,7 @@
 # Erstellt einen GitHub Release mit automatischem ZIP-Upload
 
 param(
-    [string]$Version = "4.1.7",
+    [string]$Version = "4.2.0",
     [string]$RepoOwner = "ReXx09",
     [string]$RepoName = "Bockis-Win_Gui-DEV",
     [string]$Token = "",           # Leer lassen – wird aus Token-Datei gelesen

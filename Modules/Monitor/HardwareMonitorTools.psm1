@@ -89,8 +89,7 @@ function Open-DebugWindow {
                     Write-Host "Debug-Fenster ist bereits geöffnet" -ForegroundColor Yellow
                     return
                 }
-            }
-            catch {
+            } catch {
                 # Prozess-Objekt existiert nicht mehr, weiter mit neuem Fenster
                 Write-Verbose "Alter Prozess existiert nicht mehr, öffne neues Fenster"
                 $script:DebugWindowProcess = $null
@@ -128,12 +127,10 @@ function Open-DebugWindow {
         if ($script:DebugWindowProcess) {
             Write-Host "Debug-Fenster geöffnet (${Width}x${Height})" -ForegroundColor Green
             Start-Sleep -Milliseconds 500  # Kurze Pause, damit das Fenster Zeit hat zu öffnen
-        }
-        else {
+        } else {
             Write-Host "Fehler: Debug-Fenster konnte nicht geöffnet werden" -ForegroundColor Red
         }
-    }
-    catch {
+    } catch {
         Write-Host "Fehler beim Öffnen des Debug-Fensters: $_" -ForegroundColor Red
         $script:DebugWindowProcess = $null
         $script:DebugWindowPath = $null
@@ -142,43 +139,37 @@ function Open-DebugWindow {
 
 function Close-DebugWindow {
     try {
-        # Erst temporäre Datei löschen (damit Get-Content im Fenster beendet wird)
+        # Erst den Prozess beenden — sonst wirft Get-Content -Wait einen Fehler
+        # wenn die Log-Datei danach gelöscht wird
+        if ($script:DebugWindowProcess) {
+            try {
+                if (-not $script:DebugWindowProcess.HasExited) {
+                    # /F = Force, /T = Prozessbaum inkl. Kind-Prozess (powershell -Wait)
+                    $pid = $script:DebugWindowProcess.Id
+                    & taskkill /F /T /PID $pid 2>$null | Out-Null
+                    $script:DebugWindowProcess.WaitForExit(1000)
+                    Write-Host "Debug-Fenster geschlossen" -ForegroundColor Yellow
+                }
+            } catch {
+                Write-Verbose "Prozess konnte nicht beendet werden oder existiert bereits nicht mehr: $_"
+            } finally {
+                $script:DebugWindowProcess = $null
+            }
+        }
+        
+        # Dann temporäre Log-Datei löschen (Prozess ist jetzt bereits beendet)
         if ($script:DebugWindowPath) {
             try {
                 if (Test-Path $script:DebugWindowPath) {
                     Remove-Item $script:DebugWindowPath -Force -ErrorAction SilentlyContinue
                 }
-            }
-            catch {
+            } catch {
                 Write-Verbose "Konnte temporäre Debug-Datei nicht löschen: $_"
-            }
-            finally {
+            } finally {
                 $script:DebugWindowPath = $null
             }
         }
-        
-        # Kleine Pause, damit Get-Content den Fehler bemerkt
-        Start-Sleep -Milliseconds 200
-        
-        # Dann Prozess beenden
-        if ($script:DebugWindowProcess) {
-            try {
-                if (-not $script:DebugWindowProcess.HasExited) {
-                    $script:DebugWindowProcess.Kill()
-                    $script:DebugWindowProcess.WaitForExit(1000)  # Warte max. 1 Sekunde
-                    Write-Host "Debug-Fenster geschlossen" -ForegroundColor Yellow
-                }
-            }
-            catch {
-                # Prozess existiert nicht mehr oder kann nicht beendet werden
-                Write-Verbose "Prozess konnte nicht beendet werden oder existiert bereits nicht mehr: $_"
-            }
-            finally {
-                $script:DebugWindowProcess = $null
-            }
-        }
-    }
-    catch {
+    } catch {
         Write-Verbose "Fehler beim Schließen des Debug-Fensters: $_"
         $script:DebugWindowProcess = $null
         $script:DebugWindowPath = $null
@@ -217,8 +208,7 @@ function Write-DebugOutput {
             if ($script:DebugWindowPath -and (Test-Path $script:DebugWindowPath)) {
                 try {
                     Add-Content -Path $script:DebugWindowPath -Value $formattedMessage -ErrorAction Stop
-                }
-                catch {
+                } catch {
                     # Fallback auf Konsole, wenn Datei-Zugriff fehlschlägt
                     Write-Host "[$Component] $Message" -ForegroundColor $(
                         switch ($Component) {
@@ -274,8 +264,7 @@ function Write-HardwareInfo {
                 if ($script:DebugWindowPath -and (Test-Path $script:DebugWindowPath)) {
                     try {
                         Add-Content -Path $script:DebugWindowPath -Value $infoText -ErrorAction Stop
-                    }
-                    catch {
+                    } catch {
                         # Fallback auf Konsole
                         Write-Host "`n[CPU] === Hardware Information ===" -ForegroundColor Cyan
                         Write-Host "[CPU] Name: $($cpuWmi.Name)" -ForegroundColor Cyan
@@ -313,8 +302,7 @@ function Write-HardwareInfo {
                 if ($script:DebugWindowPath -and (Test-Path $script:DebugWindowPath)) {
                     try {
                         Add-Content -Path $script:DebugWindowPath -Value $infoText -ErrorAction Stop
-                    }
-                    catch {
+                    } catch {
                         # Fallback auf Konsole
                         Write-Host "`n[GPU] === Hardware Information ===" -ForegroundColor Green
                         foreach ($gpu in $gpuWmi) {
@@ -361,8 +349,7 @@ function Write-HardwareInfo {
                 if ($script:DebugWindowPath -and (Test-Path $script:DebugWindowPath)) {
                     try {
                         Add-Content -Path $script:DebugWindowPath -Value $infoText -ErrorAction Stop
-                    }
-                    catch {
+                    } catch {
                         # Fallback auf Konsole
                         Write-Host "`n[RAM] === Hardware Information ===" -ForegroundColor Yellow
                         Write-Host "[RAM] Anzahl RAM-Module: $($ramInfo.Count)" -ForegroundColor Yellow
@@ -424,8 +411,7 @@ function Write-SensorInfo {
     if ($script:DebugWindowPath -and (Test-Path $script:DebugWindowPath)) {
         try {
             Add-Content -Path $script:DebugWindowPath -Value $infoText -ErrorAction Stop
-        }
-        catch {
+        } catch {
             # Fallback auf Konsole, wenn Datei-Zugriff fehlschlägt
             Write-Host "[$Component] === Aktuelle Sensor-Werte ===" -ForegroundColor $color
             foreach ($key in $SensorData.Keys) {
@@ -517,14 +503,12 @@ function Set-HardwareDebugMode {
         
         if (-not $script:DebugWindowProcess) {
             $shouldOpenWindow = $true
-        }
-        else {
+        } else {
             try {
                 if ($script:DebugWindowProcess.HasExited) {
                     $shouldOpenWindow = $true
                 }
-            }
-            catch {
+            } catch {
                 # Prozess-Objekt existiert nicht mehr
                 $shouldOpenWindow = $true
             }
@@ -584,14 +568,12 @@ function Get-WarningColor {
         # Verwende benutzerdefinierten CPU-Schwellenwert aus Einstellungen
         $userThreshold = if ($script:cpuThreshold) { $script:cpuThreshold } else { 90 }
         $LoadThresholds = @(($userThreshold - 5), $userThreshold)
-    }
-    elseif ($Component -eq 'GPU') {
+    } elseif ($Component -eq 'GPU') {
         $TempThresholds = @(75, 90)
         # Verwende benutzerdefinierten GPU-Schwellenwert aus Einstellungen
         $userThreshold = if ($script:gpuThreshold) { $script:gpuThreshold } else { 85 }
         $LoadThresholds = @(($userThreshold - 5), $userThreshold)
-    }
-    elseif ($Component -eq 'RAM') {
+    } elseif ($Component -eq 'RAM') {
         $TempThresholds = @(60, 80)  # RAM hat in der Regel niedrigere Temperatur-Schwellenwerte
         # Verwende benutzerdefinierten RAM-Schwellenwert aus Einstellungen
         $userThreshold = if ($script:ramThreshold) { $script:ramThreshold } else { 85 }
@@ -606,16 +588,14 @@ function Get-WarningColor {
         } else {
             return $criticalColor
         }
-    }
-    elseif ($Temperature -ge $TempThresholds[0] -or $Load -ge $LoadThresholds[0]) {
+    } elseif ($Temperature -ge $TempThresholds[0] -or $Load -ge $LoadThresholds[0]) {
         # Warnbereich (gelb)
         if ($hardwareColors) {
             return $hardwareColors.$Component.Warning
         } else {
             return $warningColor
         }
-    }
-    else {
+    } else {
         # Normaler Bereich (grün)
         if ($hardwareColors) {
             return $hardwareColors.$Component.Light
@@ -684,8 +664,7 @@ function Initialize-LiveMonitoring {
                 # Zeige detaillierte Fehlermeldung vom DependencyChecker
                 if ($script:lastHardwareMonitorError) {
                     Write-Host $script:lastHardwareMonitorError -ForegroundColor Gray
-                }
-                else {
+                } else {
                     # Fallback für den Fall, dass keine detaillierte Meldung verfügbar ist
                     Write-Host "Hardware-Monitor konnte nicht initialisiert werden." -ForegroundColor Gray
                     Write-Host "Bitte prüfe:" -ForegroundColor Cyan
@@ -701,8 +680,7 @@ function Initialize-LiveMonitoring {
         }        # Tooltip für Hardware-Statistiken verwenden (globales ToolTip bevorzugen)
         if ($GlobalTooltip) {
             $script:tooltipControl = $GlobalTooltip
-        }
-        elseif (-not $script:tooltipControl) {
+        } elseif (-not $script:tooltipControl) {
             $script:tooltipControl = New-Object System.Windows.Forms.ToolTip
             $script:tooltipControl.AutoPopDelay = 15000  # 15 Sekunden anzeigen
             $script:tooltipControl.InitialDelay = 100    # Schnellere Verzögerung
@@ -758,7 +736,7 @@ function Initialize-LiveMonitoring {
         # Initialen GPU-Namen setzen
         try {
             $gpuControllers = Get-WmiObject -Namespace "root\CIMV2" -Class "Win32_VideoController" | 
-            Where-Object { $_.Name -match "NVIDIA|AMD|Radeon|GeForce|Intel.*Graphics" }
+                Where-Object { $_.Name -match "NVIDIA|AMD|Radeon|GeForce|Intel.*Graphics" }
             
             if ($gpuControllers -and $gbGPU) {
                 $gpuName = $gpuControllers[0].Name
@@ -768,8 +746,7 @@ function Initialize-LiveMonitoring {
                     $lblGPUTitle.Refresh()
                 }
             }
-        }
-        catch {
+        } catch {
             Write-Warning "Fehler beim initialen GPU-Namen-Setup: $_"
         }
 
@@ -809,13 +786,11 @@ function Initialize-LiveMonitoring {
                             if ($script:hardwareTimer) {
                                 $script:hardwareTimer.Interval = 5000
                             }
-                        }
-                        else {
+                        } else {
                             # Normalbetrieb: GPU und RAM abwechselnd für Performance
                             if ($script:updateCounter % 2 -eq 0 -and $gpuLabel -and $gbGPU) {
                                 Update-GpuInfo -GpuLabel $gpuLabel -Panel $gbGPU
-                            }
-                            elseif ($script:updateCounter % 2 -eq 1 -and $ramLabel -and $gbRAM) {
+                            } elseif ($script:updateCounter % 2 -eq 1 -and $ramLabel -and $gbRAM) {
                                 Update-RamInfo -RamLabel $ramLabel -Panel $gbRAM
                             }
                         }
@@ -825,18 +800,15 @@ function Initialize-LiveMonitoring {
                             $script:updateCounter = 0
                         }
                     }
-                }
-                catch {
+                } catch {
                     Write-Warning "Fehler beim Hardware-Update: $_"
-                }
-                finally {
+                } finally {
                     $script:isUpdating = $false
                 }
             })
 
         return $timer
-    }
-    catch {
+    } catch {
         Write-Warning "Fehler beim Initialisieren des Live-Monitorings: $_"
         return $null
     }
@@ -916,8 +888,7 @@ function Initialize-LibreHardwareMonitor {
         
         Write-Verbose "Hardware-Monitor erfolgreich initialisiert"
         return $script:computerObj
-    }
-    catch {
+    } catch {
         Write-Warning "Fehler beim Initialisieren: $_"
         
         # Bei Fehler: Deaktivieren
@@ -971,8 +942,7 @@ function Clear-HardwareMonitoring {
         if ($null -ne $script:computerObj) {
             try {
                 $script:computerObj.Close()
-            }
-            catch {
+            } catch {
                 Write-Warning "Fehler beim Schließen des Computer-Objekts: $_"
             }
             $script:computerObj = $null
@@ -989,8 +959,7 @@ function Clear-HardwareMonitoring {
         [System.GC]::WaitForPendingFinalizers()
         
         Write-Host "Hardware-Monitoring-Ressourcen freigegeben"
-    }
-    catch {
+    } catch {
         Write-Warning "Fehler beim Aufräumen der Hardware-Monitoring-Ressourcen: $_"
     }
 }
@@ -1084,8 +1053,7 @@ function Initialize-HardwareMonitoring {
                     if ($null -eq $script:computerObj) {
                         Write-Host "`n[ℹ] Hardware-Monitoring deaktiviert - LibreHardwareMonitor + PawnIO nicht verfügbar" -ForegroundColor Yellow
                         # Kein Fehler - einfach ohne Hardware-Monitor weitermachen
-                    }
-                    else {
+                    } else {
                         $script:useLibreHardware = $true
                     }
                     # Sleep nur bei visueller Konsolen-Ausgabe (für Progressbar-Animation)
@@ -1173,7 +1141,7 @@ function Initialize-HardwareMonitoring {
                             if ($globalDB -or $scriptDB) {
                                 Write-Host "`r`t├─ Datenbankverbindung erfolgreich initialisiert!" -ForegroundColor Green
                             }
-                              # Prüfe, ob die Einstellungen angewendet wurden
+                            # Prüfe, ob die Einstellungen angewendet wurden
                             $null = $globalSettings = $null -ne (Get-Variable -Name settings -Scope Global -ErrorAction SilentlyContinue)
                             $null = $scriptSettings = $null -ne (Get-Variable -Name settings -Scope Script -ErrorAction SilentlyContinue)
                             
@@ -1224,8 +1192,7 @@ function Initialize-HardwareMonitoring {
             
             Write-Warning "`r`t[i]Hardware-Timer konnte nicht initialisiert werden!" -ForegroundColor Red
             return $false
-        }
-        elseif (-not $timerStatus.Running) {
+        } elseif (-not $timerStatus.Running) {
             $null = Start-HardwareMonitoring
         }
     }
@@ -1264,20 +1231,32 @@ function Update-CpuInfo {
         }
         
         $tempSensor = $cpuName.Sensors | Where-Object { $_.SensorType -eq "Temperature" -and $_.Name -match "Core \(Tctl/Tdie\)|Core Average|Package" } | Select-Object -First 1
+        $coreMaxSensor = $cpuName.Sensors | Where-Object { $_.SensorType -eq "Temperature" -and $_.Name -eq "Core Max" } | Select-Object -First 1
+        $coreMinSensor = $cpuName.Sensors | Where-Object { $_.SensorType -eq "Temperature" -and $_.Name -eq "Core Min" } | Select-Object -First 1
         $loadSensor = $cpuName.Sensors | Where-Object { $_.SensorType -eq "Load" -and $_.Name -eq "CPU Total" } | Select-Object -First 1
         $powerSensor = $cpuName.Sensors | Where-Object { $_.SensorType -eq "Power" -and $_.Name -match "Package|CPU Package" } | Select-Object -First 1
+        $powerCoresSensor = $cpuName.Sensors | Where-Object { $_.SensorType -eq "Power" -and $_.Name -eq "CPU Cores" } | Select-Object -First 1
         $clockSensor = $cpuName.Sensors | Where-Object { $_.SensorType -eq "Clock" -and $_.Name -match "Core \(Average\)|Core #1" } | Select-Object -First 1
+        $vcoreSensor = $cpuName.Sensors | Where-Object { $_.SensorType -eq "Voltage" -and $_.Name -match "CPU Core Voltage|VID" } | Select-Object -First 1
         
-        $temp = if ($tempSensor) { [math]::Round($tempSensor.Value, 0) } else { $null }
-        $load = if ($loadSensor) { [math]::Round($loadSensor.Value, 0) } else { $null }
-        $power = if ($powerSensor) { [math]::Round($powerSensor.Value, 0) } else { $null }
-        $clock = if ($clockSensor) { [math]::Round($clockSensor.Value / 1000, 2) } else { $null }
+        $temp = if ($tempSensor) { [math]::Round($tempSensor.Value, 0) }            else { $null }
+        $coreMax = if ($coreMaxSensor) { [math]::Round($coreMaxSensor.Value, 0) }         else { $null }
+        $coreMin = if ($coreMinSensor) { [math]::Round($coreMinSensor.Value, 0) }         else { $null }
+        $load = if ($loadSensor) { [math]::Round($loadSensor.Value, 0) }             else { $null }
+        $power = if ($powerSensor) { [math]::Round($powerSensor.Value, 0) }            else { $null }
+        $powerCores = if ($powerCoresSensor) { [math]::Round($powerCoresSensor.Value, 0) }      else { $null }
+        $clock = if ($clockSensor) { [math]::Round($clockSensor.Value / 1000, 2) }    else { $null }
+        $vcore = if ($vcoreSensor) { [math]::Round($vcoreSensor.Value, 3) }           else { $null }
         
-        # Statistik-Daten aktualisieren
-        if ($temp) { Update-HardwareStats -Component 'CPU' -Property 'Temp' -Value $temp }
-        if ($load) { Update-HardwareStats -Component 'CPU' -Property 'Load' -Value $load }
-        if ($power) { Update-HardwareStats -Component 'CPU' -Property 'Power' -Value $power }
-        if ($clock) { Update-HardwareStats -Component 'CPU' -Property 'Clock' -Value $clock }
+        # Statistik-Daten aktualisieren (inkl. erweiterter CPU-Werte für Statistik-Popup)
+        if ($temp) { Update-HardwareStats -Component 'CPU' -Property 'Temp'       -Value $temp }
+        if ($coreMax) { Update-HardwareStats -Component 'CPU' -Property 'CoreMax'    -Value $coreMax }
+        if ($coreMin) { Update-HardwareStats -Component 'CPU' -Property 'CoreMin'    -Value $coreMin }
+        if ($load) { Update-HardwareStats -Component 'CPU' -Property 'Load'       -Value $load }
+        if ($power) { Update-HardwareStats -Component 'CPU' -Property 'Power'      -Value $power }
+        if ($powerCores) { Update-HardwareStats -Component 'CPU' -Property 'PowerCores' -Value $powerCores }
+        if ($clock) { Update-HardwareStats -Component 'CPU' -Property 'Clock'      -Value $clock }
+        if ($vcore) { Update-HardwareStats -Component 'CPU' -Property 'VCore'      -Value $vcore }
         
         # Debug-Ausgabe der Sensordaten nur wenn Debug aktiv
         if ($script:DebugModeCPU) {
@@ -1307,8 +1286,7 @@ function Update-CpuInfo {
         if ($script:DebugModeCPU) {
             Write-DebugOutput -Component 'CPU' -Message "T: $(if ($temp) { "$temp°C" } else { "N/A" }) | L: $(if ($load) { "$load%" } else { "N/A" }) | P: $(if ($power) { "$power W" } else { "N/A" }) | C: $(if ($clock) { "$clock GHz" } else { "N/A" })"
         }
-    }
-    catch {
+    } catch {
         Write-DebugOutput -Component 'CPU' -Message "Fehler: $_" -Force
     }
 }
@@ -1371,22 +1349,38 @@ function Update-GpuInfo {
         $load = $null
         $power = $null
         $clock = $null
+        $hotspot = $null
+        $memTemp = $null
+        $memLoad = $null
+        $memUsed = $null
+        $fanRpm = $null
         
         foreach ($gpu in $gpuHardware) {
             $gpu.Update()
                     
             foreach ($sensor in $gpu.Sensors) {
-                if ($sensor.SensorType -eq "Temperature" -and $sensor.Name -eq "GPU Core") {
-                    $temp = [Math]::Round($sensor.Value, 1)
-                }
-                elseif ($sensor.SensorType -eq "Load" -and $sensor.Name -eq "GPU Core") {
-                    $load = [Math]::Round($sensor.Value, 0)
-                }
-                elseif ($sensor.SensorType -eq "Power" -and $sensor.Name -eq "GPU Package") {
-                    $power = [Math]::Round($sensor.Value, 0)
-                }
-                elseif ($sensor.SensorType -eq "Clock" -and $sensor.Name -eq "GPU Core") {
-                    $clock = [Math]::Round($sensor.Value, 0)
+                switch ($sensor.SensorType) {
+                    "Temperature" {
+                        if ($sensor.Name -eq "GPU Core") { $temp = [Math]::Round($sensor.Value, 1) }
+                        elseif ($sensor.Name -match "GPU Hot ?Spot") { $hotspot = [Math]::Round($sensor.Value, 1) }
+                        elseif ($sensor.Name -match "GPU Memory Junction|GPU Memory$|GPU VRAM") { $memTemp = [Math]::Round($sensor.Value, 1) }
+                    }
+                    "Load" {
+                        if ($sensor.Name -eq "GPU Core") { $load = [Math]::Round($sensor.Value, 0) }
+                        elseif ($sensor.Name -match "GPU Memory Controller") { $memLoad = [Math]::Round($sensor.Value, 0) }
+                    }
+                    "Power" {
+                        if ($sensor.Name -eq "GPU Package") { $power = [Math]::Round($sensor.Value, 0) }
+                    }
+                    "Clock" {
+                        if ($sensor.Name -eq "GPU Core") { $clock = [Math]::Round($sensor.Value, 0) }
+                    }
+                    "SmallData" {
+                        if ($sensor.Name -match "GPU Memory Used") { $memUsed = [Math]::Round($sensor.Value / 1024, 1) }  # MB -> GB
+                    }
+                    "Fan" {
+                        if ($sensor.Name -match "GPU Fan 1|Fan 1") { $fanRpm = [Math]::Round($sensor.Value, 0) }
+                    }
                 }
             }
             
@@ -1394,11 +1388,18 @@ function Update-GpuInfo {
             break
         }
         
-        # Statistik-Daten aktualisieren
-        if ($temp) { Update-HardwareStats -Component 'GPU' -Property 'Temp' -Value $temp }
-        if ($load) { Update-HardwareStats -Component 'GPU' -Property 'Load' -Value $load }
-        if ($power) { Update-HardwareStats -Component 'GPU' -Property 'Power' -Value $power }
-        if ($clock) { Update-HardwareStats -Component 'GPU' -Property 'Clock' -Value $clock }
+        # Statistik-Daten aktualisieren (inkl. erweiterter GPU-Werte für Statistik-Popup)
+        # Clock: MHz -> GHz für konsistente Darstellung in der Statistik-Tabelle
+        $clockGhzStat = if ($clock) { [Math]::Round($clock / 1000, 2) } else { $null }
+        if ($temp) { Update-HardwareStats -Component 'GPU' -Property 'Temp'    -Value $temp }
+        if ($hotspot) { Update-HardwareStats -Component 'GPU' -Property 'HotSpot' -Value $hotspot }
+        if ($memTemp) { Update-HardwareStats -Component 'GPU' -Property 'MemTemp' -Value $memTemp }
+        if ($load) { Update-HardwareStats -Component 'GPU' -Property 'Load'    -Value $load }
+        if ($memLoad) { Update-HardwareStats -Component 'GPU' -Property 'MemLoad' -Value $memLoad }
+        if ($power) { Update-HardwareStats -Component 'GPU' -Property 'Power'   -Value $power }
+        if ($clockGhzStat) { Update-HardwareStats -Component 'GPU' -Property 'Clock'   -Value $clockGhzStat }
+        if ($memUsed) { Update-HardwareStats -Component 'GPU' -Property 'MemUsed' -Value $memUsed }
+        if ($fanRpm) { Update-HardwareStats -Component 'GPU' -Property 'Fan'     -Value $fanRpm }
         
         # Debug-Ausgabe der Sensordaten nur wenn Debug aktiv
         if ($script:DebugModeGPU) {
@@ -1424,14 +1425,12 @@ function Update-GpuInfo {
             if ($script:DebugModeGPU) {
                 Write-DebugOutput -Component 'GPU' -Message "T: $(if ($temp) { "$temp°C" } else { "N/A" }) | L: $(if ($load) { "$load%" } else { "N/A" }) | P: $(if ($power) { "$power W" } else { "N/A" }) | C: $(if ($clockGHz) { "$clockGHz GHz" } else { "N/A" })"
             }
-        }
-        else {
+        } else {
             Write-DebugOutput -Component 'GPU' -Message "Keine vollständigen GPU-Daten verfügbar" -Force
             $GpuLabel.Text = "GPU-Daten nicht verfügbar"
             $Panel.BackColor = [System.Drawing.Color]::LightGray
         }
-    }
-    catch {
+    } catch {
         # Fehlerbehandlung
         Write-DebugOutput -Component 'GPU' -Message "Fehler in Update-GpuInfo: $_" -Force
         $GpuLabel.Text = "Fehler: GPU-Daten können nicht abgerufen werden"
@@ -1499,8 +1498,7 @@ function Get-GPUUsage {
                     return $winUsage
                 }
             }
-        }
-        catch {
+        } catch {
             if ($script:DebugModeGPU) {
                 Write-DebugOutput -Component 'GPU' -Message "Fehler bei GPU-Counter: $_"
             }
@@ -1516,8 +1514,8 @@ function Get-GPUUsage {
         if (($now - $script:lastGpuCounterUpdate) -gt [TimeSpan]::FromSeconds(10)) {
             try {
                 $gpuWMI = Get-WmiObject -Class Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine | 
-                Where-Object { $_.Name -match "engtype_3D" } | 
-                Measure-Object -Property UtilizationPercentage -Average
+                    Where-Object { $_.Name -match "engtype_3D" } | 
+                        Measure-Object -Property UtilizationPercentage -Average
                 
                 if ($gpuWMI.Average) {
                     $wmiValue = [math]::Round($gpuWMI.Average, 1)
@@ -1525,8 +1523,7 @@ function Get-GPUUsage {
                     $script:lastGpuCounterValue = $wmiValue
                     return $wmiValue
                 }
-            }
-            catch {
+            } catch {
                 if ($script:DebugModeGPU) {
                     Write-DebugOutput -Component 'GPU' -Message "Fehler bei WMI-GPU: $_"
                 }
@@ -1535,8 +1532,7 @@ function Get-GPUUsage {
         
         # Wenn alles versagt, letzten Wert zurückgeben oder null
         return $script:lastGpuCounterValue
-    }
-    catch {
+    } catch {
         if ($script:DebugModeGPU) {
             Write-DebugOutput -Component 'GPU' -Message "Allgemeiner Fehler bei GPU-Auslastung: $_" -Force
         }
@@ -1581,20 +1577,19 @@ function Update-RamInfo {
                 # RAM-Temperatur nach Bedarf - weniger priorisiert
                 if ($script:updateCounter % 5 -eq 0) {
                     $ramTemp = Get-RamTemperature
-                }
-                else {
+                } else {
                     $ramTemp = $script:lastRamTemp  # Wiederverwendung des letzten Werts
                 }
 
                 # Werte für spätere Verwendung cachen
                 $script:ramCache = @{
                     TotalMemory    = $totalMemory
+                    FreeMemory     = $freeMemory
                     UsedMemory     = $usedMemory
                     UsedPercentage = $usedPercentage
                     RamTemp        = $ramTemp
                 }
-            }
-            else {
+            } else {
                 # Wenn WMI-Abfrage fehlschlägt, vorherige Werte verwenden
                 if (-not $script:ramCache) {
                     Write-DebugOutput -Component 'RAM' -Message "Keine RAM-Informationen verfügbar" -Force
@@ -1605,14 +1600,26 @@ function Update-RamInfo {
         
         # Cache-Werte abrufen
         $totalMemory = $script:ramCache.TotalMemory
+        $freeMemory = $script:ramCache.FreeMemory
         $usedMemory = $script:ramCache.UsedMemory
         $usedPercentage = $script:ramCache.UsedPercentage
         $ramTemp = $script:ramCache.RamTemp
         
-        # Statistik-Daten aktualisieren 
+        # Statistik-Daten aktualisieren (inkl. erweiterter RAM-Werte für Statistik-Popup)
         if ($ramTemp) { Update-HardwareStats -Component 'RAM' -Property 'Temp' -Value $ramTemp }
         if ($usedPercentage) { Update-HardwareStats -Component 'RAM' -Property 'Load' -Value $usedPercentage }
         if ($usedMemory) { Update-HardwareStats -Component 'RAM' -Property 'Used' -Value $usedMemory }
+        if ($freeMemory) { Update-HardwareStats -Component 'RAM' -Property 'Free' -Value $freeMemory }
+        # Einzel-DIMM-Temperaturen (falls von LHM geliefert)
+        if ($script:ramStats.SPD -and $script:ramStats.SPD.DimmSensors) {
+            foreach ($dimm in $script:ramStats.SPD.DimmSensors) {
+                # "DIMM #1" -> "DIMM1" als sauberer Property-Key
+                $dimmKey = $dimm.Name -replace '[^A-Za-z0-9]', ''
+                if ($dimm.Value -gt 0) {
+                    Update-HardwareStats -Component 'RAM' -Property $dimmKey -Value $dimm.Value
+                }
+            }
+        }
         
         # Debug-Ausgabe der Sensordaten nur wenn Debug aktiv
         if ($script:DebugModeRAM) {
@@ -1649,8 +1656,7 @@ function Update-RamInfo {
                 if ($script:ramStats.SPD -and $script:ramStats.SPD.Min -lt 999 -and $script:DebugModeRAM) {
                     $ramLabelText += " (Min: $([math]::Round($script:ramStats.SPD.Min, 0))°C, Avg: $([math]::Round($script:ramStats.SPD.Avg, 0))°C, Max: $([math]::Round($script:ramStats.SPD.Max, 0))°C)"
                 }
-            }
-            else {
+            } else {
                 $ramLabelText += " | N/A"
             }
             
@@ -1667,8 +1673,7 @@ function Update-RamInfo {
                 $RamLabel.Add_Click({
                         if ($script:ramStats.SPD -and $script:ramStats.SPD.FoundSensors) {
                             Show-RamSPDTempDetails -SPDData $script:ramStats.SPD
-                        }
-                        else {
+                        } else {
                             [System.Windows.Forms.MessageBox]::Show(
                                 "Keine SPD-Temperatursensoren gefunden. Aktiviere den Debug-Modus für mehr Informationen.",
                                 "RAM-Temperatursensoren",
@@ -1694,8 +1699,7 @@ function Update-RamInfo {
                 $Panel.Add_Click({
                         if ($script:ramStats.SPD -and $script:ramStats.SPD.FoundSensors) {
                             Show-RamSPDTempDetails -SPDData $script:ramStats.SPD
-                        }
-                        else {
+                        } else {
                             [System.Windows.Forms.MessageBox]::Show(
                                 "Keine SPD-Temperatursensoren gefunden. Aktiviere den Debug-Modus für mehr Informationen.",
                                 "RAM-Temperatursensoren",
@@ -1711,8 +1715,7 @@ function Update-RamInfo {
         if ($script:DebugModeRAM) {
             Write-DebugOutput -Component 'RAM' -Message "T: $(if ($ramTemp) { "$ramTemp°C" } else { "N/A" }) | L: $(if ($usedPercentage) { "$usedPercentage%" } else { "N/A" }) | V: $(if ($usedMemory) { "$usedMemory GB" } else { "N/A" }) | G: $(if ($totalMemory) { "$totalMemory GB" } else { "N/A" })"
         }
-    }
-    catch {
+    } catch {
         Write-DebugOutput -Component 'RAM' -Message "Fehler: $_" -Force
     }
 }
@@ -1819,6 +1822,7 @@ function Get-RamTemperature {
             
             # RAM-Temperatursensoren identifizieren
             $ramTempValues = @()
+            $dimmSensors = @()
             
             foreach ($memory in $memoryHardware) {
                 $memory.Update()  # Aktualisieren
@@ -1849,10 +1853,11 @@ function Get-RamTemperature {
                     }
                 }
                 
-                # Valide Temperaturwerte sammeln
+                # Valide Temperaturwerte sammeln (inkl. pro-DIMM-Detail für Popup)
                 foreach ($sensor in $ramTempSensors) {
                     if ($sensor.Value -gt 10 -and $sensor.Value -lt 100) {
                         $ramTempValues += $sensor.Value
+                        $dimmSensors += @{ Name = $sensor.Name; Value = [math]::Round($sensor.Value, 2) }
                     }
                 }
             }
@@ -1860,20 +1865,22 @@ function Get-RamTemperature {
             # Wenn RAM-Temperaturwerte gefunden wurden, verarbeiten und zurückgeben
             if ($ramTempValues.Count -gt 0) {
                 $ramTempData.FoundSensors = $true
-                $ramTempData.Source = "LibreHardwareMonitor (Memory)"
+                $ramTempData.Source = "LibreHardwareMonitor (DDR5)"
                 $ramTempData.Values = $ramTempValues
+                $ramTempData.DimmSensors = $dimmSensors
                 $ramTempData.Min = [math]::Round(($ramTempValues | Measure-Object -Minimum).Minimum, 1)
                 $ramTempData.Max = [math]::Round(($ramTempValues | Measure-Object -Maximum).Maximum, 1)
                 $ramTempData.Avg = [math]::Round(($ramTempValues | Measure-Object -Average).Average, 1)
                 $ramTempData.Current = $ramTempData.Max
                 
-                # RAM-Statistik speichern
+                # RAM-Statistik speichern — .LHM für interne Nutzung, .SPD aktiviert das Details-Popup
                 $script:ramStats.LHM = $ramTempData
+                $script:ramStats.SPD = $ramTempData
                 $script:lastRamTemp = $ramTempData.Current
                 $script:lastRamTempTime = $now
                 
                 if ($script:DebugModeRAM) {
-                    Write-DebugOutput -Component 'RAM' -Message "LibreHardwareMonitor (Memory): RAM-Temperatur = $($ramTempData.Current)°C" -Force
+                    Write-DebugOutput -Component 'RAM' -Message "LibreHardwareMonitor (DDR5): RAM-Temperatur = $($ramTempData.Current)°C ($($dimmSensors.Count) DIMMs)" -Force
                 }
                 
                 return $script:lastRamTemp
@@ -1968,8 +1975,7 @@ function Get-RamTemperature {
         }
         
         return $null
-    }
-    catch {
+    } catch {
         Write-DebugOutput -Component 'RAM' -Message "Fehler bei RAM-Temperatur: $_" -Force
         return $null
     }
@@ -2074,8 +2080,7 @@ function Invoke-LibreHardwareMonitorDriverActivation {
         Write-Host "  ℹ️  Bitte starten Sie Bockis System-Tool neu, damit der Hardware-Monitor funktioniert." -ForegroundColor Yellow
         
         return $true
-    }
-    catch {
+    } catch {
         Write-Warning "Fehler bei Treiber-Aktivierung: $_"
         Write-Host "  💡 Bitte starten Sie LibreHardwareMonitor.exe manuell einmal." -ForegroundColor Yellow
         return $false
@@ -2131,8 +2136,7 @@ function Update-HardwareStats {
             Count = 1
             Last  = $Value
         }
-    }
-    else {
+    } else {
         $entry = $stats[$Property]
         $entry.Min = [Math]::Min($entry.Min, $Value)
         $entry.Max = [Math]::Max($entry.Max, $Value)
@@ -2185,7 +2189,16 @@ function Show-HardwareStatsTable {
         'RAM' { $script:ramStats }
     }
 
-    if (-not $stats -or $stats.Count -eq 0) {
+    # Nur echte Statistik-Einträge berücksichtigen (HashtableS mit Min/Max/Sum/Count/Last)
+    # LastReset ist ein DateTime-Objekt und wird herausgefiltert
+    $statsFiltered = @{}
+    foreach ($k in $stats.Keys) {
+        if ($stats[$k] -is [hashtable] -and $stats[$k].ContainsKey('Min')) {
+            $statsFiltered[$k] = $stats[$k]
+        }
+    }
+
+    if (-not $statsFiltered -or $statsFiltered.Count -eq 0) {
         [System.Windows.Forms.MessageBox]::Show(
             "Keine Statistikdaten verfügbar.",
             "$Component Statistik",
@@ -2195,10 +2208,49 @@ function Show-HardwareStatsTable {
         return
     }
 
+    # Lesbare Anzeigenamen für Statistik-Eigenschaften
+    $displayNames = @{
+        'Temp'       = 'Temperatur (Max)'
+        'CoreMax'    = 'Core Max Temp'
+        'CoreMin'    = 'Core Min Temp'
+        'HotSpot'    = 'Hot Spot'
+        'MemTemp'    = 'VRAM Temp'
+        'Load'       = 'Auslastung'
+        'MemLoad'    = 'VRAM Last'
+        'Power'      = 'Leistung (Package)'
+        'PowerCores' = 'Leistung (Kerne)'
+        'Clock'      = 'Takt'
+        'VCore'      = 'Kernspannung'
+        'Used'       = 'Belegt'
+        'Free'       = 'Frei'
+        'MemUsed'    = 'VRAM genutzt'
+        'Fan'        = 'Lüfter (RPM)'
+    }
+
+    # Einzel-DIMM-Keys dynamisch als Anzeigenamen registrieren (DIMM1, DIMM3 usw.)
+    foreach ($k in $statsFiltered.Keys) {
+        if ($k -match '^DIMM(\d+)$' -and -not $displayNames.ContainsKey($k)) {
+            $displayNames[$k] = "DIMM #$($Matches[1]) Temp"
+        }
+    }
+
+    # Bevorzugte Anzeigereihenfolge — DIMM*-Keys werden dynamisch zwischen Temp und Load einsortiert
+    $dimmKeys = @($statsFiltered.Keys | Where-Object { $_ -match '^DIMM\d+$' } | Sort-Object)
+    $preferredOrder = @('Temp') + $dimmKeys + @(
+        'CoreMax', 'CoreMin', 'HotSpot', 'MemTemp',
+        'Load', 'MemLoad',
+        'Power', 'PowerCores', 'Clock', 'VCore',
+        'Used', 'Free', 'MemUsed',
+        'Fan'
+    )
+    $sortedKeys = @($preferredOrder | Where-Object { $statsFiltered.ContainsKey($_) })
+    $sortedKeys += @($statsFiltered.Keys | Where-Object { $_ -notin $preferredOrder } | Sort-Object)
+
     # Erstelle ein neues Formular für die tabellarische Anzeige
     $form = New-Object System.Windows.Forms.Form
     $form.Text = "$Component Statistik"
-    $form.Size = New-Object System.Drawing.Size(600, 410)
+    $formHeight = [Math]::Max(370, 130 + $sortedKeys.Count * 32 + 60)
+    $form.Size = New-Object System.Drawing.Size(600, $formHeight)
     $form.StartPosition = [System.Windows.Forms.FormStartPosition]::CenterScreen
     $form.BackColor = [System.Drawing.Color]::DarkSlateGray
     $form.ForeColor = [System.Drawing.Color]::White
@@ -2220,7 +2272,8 @@ function Show-HardwareStatsTable {
     # Erstelle DataGridView für tabellarische Darstellung
     $dataGridView = New-Object System.Windows.Forms.DataGridView
     $dataGridView.Location = New-Object System.Drawing.Point(10, 60)
-    $dataGridView.Size = New-Object System.Drawing.Size(560, 280)
+    $tableHeight = [Math]::Max(100, $sortedKeys.Count * 32 + 34)
+    $dataGridView.Size = New-Object System.Drawing.Size(560, $tableHeight)
     $dataGridView.BackgroundColor = [System.Drawing.Color]::DarkSlateGray
     $dataGridView.ForeColor = [System.Drawing.Color]::Black
     $dataGridView.GridColor = [System.Drawing.Color]::SlateGray
@@ -2250,86 +2303,90 @@ function Show-HardwareStatsTable {
     [void]$dataGridView.Columns.Add("Max", "Max")
     [void]$dataGridView.Columns.Add("Average", "Durchschnitt")
     
-    # Füge Daten hinzu
-    foreach ($key in $stats.Keys) {
-        $entry = $stats[$key]
+    # Schwellenwerte für Farbkodierung (warn, critical)
+    $ramDimmThresholds = @{}
+    foreach ($k in ($statsFiltered.Keys | Where-Object { $_ -match '^DIMM\d+$' })) {
+        $ramDimmThresholds[$k] = @(55, 75)   # DDR5: Orange ab 55°C, Rot ab 75°C
+    }
+    $tempThresholds = @{
+        # CPU
+        'CPU' = @{ 'Temp' = @(70, 85); 'CoreMax' = @(80, 95); 'CoreMin' = @(70, 85); 'Load' = @(80, 95) }
+        # GPU: VRAM-Temps haben höhere Schwellen
+        'GPU' = @{ 'Temp' = @(70, 85); 'HotSpot' = @(80, 95); 'MemTemp' = @(90, 102); 'Load' = @(80, 95); 'MemLoad' = @(80, 95) }
+        # RAM: inkl. Einzel-DIMM-Temps
+        'RAM' = @{ 'Temp' = @(55, 75); 'Load' = @(85, 95) } + $ramDimmThresholds
+    }
+
+    # Füge Daten hinzu (in bevorzugter Reihenfolge)
+    foreach ($key in $sortedKeys) {
+        $entry = $statsFiltered[$key]
         
-        # Bei Clock-Werten (GHz) 2 Dezimalstellen behalten, sonst ganze Zahlen
-        $avg = if ($entry.Count -gt 0) { 
-            if ($key -eq "Clock") {
-                [Math]::Round($entry.Sum / $entry.Count, 2)
-            }
-            else {
-                [Math]::Round($entry.Sum / $entry.Count, 0)
-            }
+        # Dezimalstellen: GHz, GB-Werte mit 1 Stelle; Temperaturen mit 1 Stelle; sonst ganzzahlig
+        $decimals = if ($key -match '^VCore$') { 3 }
+        elseif ($key -match '^(Clock|Used|Free|MemUsed)$') { 1 } 
+        elseif ($key -match '^DIMM\d+$') { 2 }
+        else { 0 }
+        $avg = if ($entry.Count -gt 0) { [Math]::Round($entry.Sum / $entry.Count, $decimals) } else { 'N/A' }
+        
+        # Einheit je nach Property
+        $unit = switch -Regex ($key) {
+            '^Temp$' { '°C' }
+            '^CoreMax$' { '°C' }
+            '^CoreMin$' { '°C' }
+            '^HotSpot$' { '°C' }
+            '^MemTemp$' { '°C' }
+            '^DIMM\d+$' { '°C' }
+            '^Load$' { '%' }
+            '^MemLoad$' { '%' }
+            '^Power$' { 'W' }
+            '^PowerCores$' { 'W' }
+            '^Clock$' { 'GHz' }
+            '^VCore$' { 'V' }
+            '^Used$' { 'GB' }
+            '^Free$' { 'GB' }
+            '^MemUsed$' { 'GB' }
+            '^Fan$' { 'RPM' }
+            default { '' }
         }
-        else { "N/A" }
-        
-        # Bestimme passende Einheit je nach Parameter
-        $unit = switch ($key) {
-            "Temp" { "°C" }
-            "Load" { "%" }
-            "Power" { "W" }
-            "Clock" { "GHz" }
-            "Used" { "GB" }
-            default { "" }
-        }
-        
-        # Füge Werte mit Einheiten hinzu
+
+        # Anzeigename aus Mapping (inkl. dynamisch registrierter DIMM-Names) oder Key selbst
+        $displayName = if ($displayNames.ContainsKey($key)) { $displayNames[$key] } else { $key }
+
+        # Werte formatieren
+        $fmtLast = [Math]::Round($entry.Last, $decimals)
+        $fmtMin = [Math]::Round($entry.Min, $decimals)
+        $fmtMax = [Math]::Round($entry.Max, $decimals)
+
         $rowIndex = $dataGridView.Rows.Add()
         $row = $dataGridView.Rows[$rowIndex]
-        $row.Cells["Parameter"].Value = $key
+        $row.Cells['Parameter'].Value = $displayName
+        $row.Cells['Current'].Value = "$fmtLast $unit"
+        $row.Cells['Min'].Value = "$fmtMin $unit"
+        $row.Cells['Max'].Value = "$fmtMax $unit"
+        $row.Cells['Average'].Value = "$avg $unit"
         
-        # Formatiere die Werte je nach Parametertyp (Clock mit Dezimalstellen, andere ohne)
-        if ($key -eq "Clock") {
-            $row.Cells["Current"].Value = "$($entry.Last) $unit"
-            $row.Cells["Min"].Value = "$($entry.Min) $unit"
-            $row.Cells["Max"].Value = "$($entry.Max) $unit"
-            $row.Cells["Average"].Value = "$avg $unit"
-        }
-        else {
-            $row.Cells["Current"].Value = "$([math]::Round($entry.Last, 0)) $unit"
-            $row.Cells["Min"].Value = "$([math]::Round($entry.Min, 0)) $unit"
-            $row.Cells["Max"].Value = "$([math]::Round($entry.Max, 0)) $unit"
-            $row.Cells["Average"].Value = "$avg $unit"
-        }
-        
-        # Farbkodierung für Zellen basierend auf Werten (nur für Temp und Load)
-        if ($key -eq "Temp" -or $key -eq "Load") {
-            $thresholds = if ($key -eq "Temp") {
-                switch ($Component) {
-                    'CPU' { @(70, 85) }
-                    'GPU' { @(70, 85) }
-                    'RAM' { @(60, 75) }
-                    default { @(70, 85) }
-                }
+        # Farbkodierung: Temp- und Last-Werte
+        $compThresholds = $tempThresholds[$Component]
+        if ($compThresholds -and $compThresholds.ContainsKey($key)) {
+            $thr = $compThresholds[$key]
+            # Aktuell-Spalte
+            if ($entry.Last -ge $thr[1]) {
+                $row.Cells['Current'].Style.BackColor = [System.Drawing.Color]::Red
+                $row.Cells['Current'].Style.ForeColor = [System.Drawing.Color]::White
+            } elseif ($entry.Last -ge $thr[0]) {
+                $row.Cells['Current'].Style.BackColor = [System.Drawing.Color]::Orange
+                $row.Cells['Current'].Style.ForeColor = [System.Drawing.Color]::Black
+            } else {
+                $row.Cells['Current'].Style.BackColor = [System.Drawing.Color]::LightGreen
+                $row.Cells['Current'].Style.ForeColor = [System.Drawing.Color]::Black
             }
-            else {
-                @(80, 95)  # Standard-Schwellenwerte für Auslastung
-            }
-            
-            # Aktueller Wert Farbkodierung
-            if ($entry.Last -ge $thresholds[1]) {
-                $row.Cells["Current"].Style.BackColor = [System.Drawing.Color]::Red  # Rot
-                $row.Cells["Current"].Style.ForeColor = [System.Drawing.Color]::White
-            }
-            elseif ($entry.Last -ge $thresholds[0]) {
-                $row.Cells["Current"].Style.BackColor = [System.Drawing.Color]::Orange  # Orange
-                $row.Cells["Current"].Style.ForeColor = [System.Drawing.Color]::Black
-            }
-            else {
-                $row.Cells["Current"].Style.BackColor = [System.Drawing.Color]::LightGreen  # Grün
-                $row.Cells["Current"].Style.ForeColor = [System.Drawing.Color]::Black
-            }
-            
-            # Max-Wert Farbkodierung
-            if ($entry.Max -ge $thresholds[1]) {
-                $row.Cells["Max"].Style.BackColor = [System.Drawing.Color]::Red  # Rot
-                $row.Cells["Max"].Style.ForeColor = [System.Drawing.Color]::White
-            }
-            elseif ($entry.Max -ge $thresholds[0]) {
-                $row.Cells["Max"].Style.BackColor = [System.Drawing.Color]::Orange  # Orange
-                $row.Cells["Max"].Style.ForeColor = [System.Drawing.Color]::Black
+            # Max-Spalte
+            if ($entry.Max -ge $thr[1]) {
+                $row.Cells['Max'].Style.BackColor = [System.Drawing.Color]::Red
+                $row.Cells['Max'].Style.ForeColor = [System.Drawing.Color]::White
+            } elseif ($entry.Max -ge $thr[0]) {
+                $row.Cells['Max'].Style.BackColor = [System.Drawing.Color]::Orange
+                $row.Cells['Max'].Style.ForeColor = [System.Drawing.Color]::Black
             }
         }
     }
@@ -2339,7 +2396,8 @@ function Show-HardwareStatsTable {
     # Schließen-Button
     $closeButton = New-Object System.Windows.Forms.Button
     $closeButton.Text = "Schließen"
-    $closeButton.Location = New-Object System.Drawing.Point(250, 340)
+    $btnY = $dataGridView.Location.Y + $dataGridView.Height + 20
+    $closeButton.Location = New-Object System.Drawing.Point(250, $btnY)
     $closeButton.Size = New-Object System.Drawing.Size(100, 30)
     $closeButton.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
     $closeButton.BackColor = [System.Drawing.Color]::DimGray
@@ -2370,10 +2428,14 @@ function Show-RamSPDTempDetails {
         return
     }
     
+    # DIMM-Anzahl für dynamische Fensterhöhe
+    $dimmCount = if ($SPDData.DimmSensors) { $SPDData.DimmSensors.Count } else { 0 }
+    $extraHeight = if ($dimmCount -gt 0) { 20 + 25 + ($dimmCount * 28) } else { 0 }
+    
     # Erstelle das Popup-Fenster
     $form = New-Object System.Windows.Forms.Form
-    $form.Text = "BANK 0/DDR5-A2"
-    $form.Size = New-Object System.Drawing.Size(350, 350)
+    $form.Text = "DDR5 RAM-Temperaturen"
+    $form.Size = New-Object System.Drawing.Size(360, (330 + $extraHeight))
     $form.StartPosition = [System.Windows.Forms.FormStartPosition]::CenterScreen
     $form.BackColor = [System.Drawing.Color]::DarkSlateGray
     $form.ForeColor = [System.Drawing.Color]::White
@@ -2382,20 +2444,20 @@ function Show-RamSPDTempDetails {
     $form.MinimizeBox = $false
     $form.TopMost = $true
     
-    # Icon für die Form (Speicher-Symbol)
+    # Titel
     $iconLabel = New-Object System.Windows.Forms.Label
-    $iconLabel.Text = "🧠 SPD Hub Temperature"
+    $iconLabel.Text = "🧠 DDR5 RAM-Temperaturen"
     $iconLabel.Location = New-Object System.Drawing.Point(20, 20)
-    $iconLabel.Size = New-Object System.Drawing.Size(300, 30)
+    $iconLabel.Size = New-Object System.Drawing.Size(310, 30)
     $iconLabel.Font = New-Object System.Drawing.Font("Segoe UI", 12, [System.Drawing.FontStyle]::Bold)
     $iconLabel.ForeColor = [System.Drawing.Color]::White
     $form.Controls.Add($iconLabel)
     
-    # Aktuelle Temperatur - großes Format
+    # Aktuelle Temperatur - großes Format (Maximum)
     $currentTempLabel = New-Object System.Windows.Forms.Label
     $currentTempLabel.Text = "$($SPDData.Current) °C"
     $currentTempLabel.Location = New-Object System.Drawing.Point(20, 60)
-    $currentTempLabel.Size = New-Object System.Drawing.Size(300, 50)
+    $currentTempLabel.Size = New-Object System.Drawing.Size(310, 50)
     $currentTempLabel.Font = New-Object System.Drawing.Font("Segoe UI", 24, [System.Drawing.FontStyle]::Bold)
     $currentTempLabel.ForeColor = [System.Drawing.Color]::White
     $currentTempLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
@@ -2404,90 +2466,115 @@ function Show-RamSPDTempDetails {
     # Separator
     $separator = New-Object System.Windows.Forms.Panel
     $separator.Location = New-Object System.Drawing.Point(20, 120)
-    $separator.Size = New-Object System.Drawing.Size(300, 2)
+    $separator.Size = New-Object System.Drawing.Size(310, 2)
     $separator.BackColor = [System.Drawing.Color]::SlateGray
     $form.Controls.Add($separator)
     
-    # Detail-Labels
+    # Detail-Labels (Min / Avg / Max)
     $labelY = 140
     
-    # Min Temperatur
-    $minTempLabel = New-Object System.Windows.Forms.Label
-    $minTempLabel.Text = "Min"
-    $minTempLabel.Location = New-Object System.Drawing.Point(20, $labelY)
-    $minTempLabel.Size = New-Object System.Drawing.Size(100, 30)
-    $minTempLabel.Font = New-Object System.Drawing.Font("Segoe UI", 12)
-    $minTempLabel.ForeColor = [System.Drawing.Color]::LightGray
-    $form.Controls.Add($minTempLabel)
-    
-    $minTempValueLabel = New-Object System.Windows.Forms.Label
-    $minTempValueLabel.Text = "$($SPDData.Min) °C"
-    $minTempValueLabel.Location = New-Object System.Drawing.Point(150, $labelY)
-    $minTempValueLabel.Size = New-Object System.Drawing.Size(170, 30)
-    $minTempValueLabel.Font = New-Object System.Drawing.Font("Segoe UI", 12, [System.Drawing.FontStyle]::Bold)
-    $minTempValueLabel.ForeColor = [System.Drawing.Color]::White
-    $minTempValueLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleRight
-    $form.Controls.Add($minTempValueLabel)
-    
-    $labelY += 40
-    
-    # Average Temperatur
-    $avgTempLabel = New-Object System.Windows.Forms.Label
-    $avgTempLabel.Text = "Average"
-    $avgTempLabel.Location = New-Object System.Drawing.Point(20, $labelY)
-    $avgTempLabel.Size = New-Object System.Drawing.Size(100, 30)
-    $avgTempLabel.Font = New-Object System.Drawing.Font("Segoe UI", 12)
-    $avgTempLabel.ForeColor = [System.Drawing.Color]::LightGray
-    $form.Controls.Add($avgTempLabel)
-    
-    $avgTempValueLabel = New-Object System.Windows.Forms.Label
-    $avgTempValueLabel.Text = "$($SPDData.Avg) °C"
-    $avgTempValueLabel.Location = New-Object System.Drawing.Point(150, $labelY)
-    $avgTempValueLabel.Size = New-Object System.Drawing.Size(170, 30)
-    $avgTempValueLabel.Font = New-Object System.Drawing.Font("Segoe UI", 12, [System.Drawing.FontStyle]::Bold)
-    $avgTempValueLabel.ForeColor = [System.Drawing.Color]::White
-    $avgTempValueLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleRight
-    $form.Controls.Add($avgTempValueLabel)
-    
-    $labelY += 40
-    
-    # Max Temperatur
-    $maxTempLabel = New-Object System.Windows.Forms.Label
-    $maxTempLabel.Text = "Max"
-    $maxTempLabel.Location = New-Object System.Drawing.Point(20, $labelY)
-    $maxTempLabel.Size = New-Object System.Drawing.Size(100, 30)
-    $maxTempLabel.Font = New-Object System.Drawing.Font("Segoe UI", 12)
-    $maxTempLabel.ForeColor = [System.Drawing.Color]::LightGray
-    $form.Controls.Add($maxTempLabel)
-    
-    $maxTempValueLabel = New-Object System.Windows.Forms.Label
-    $maxTempValueLabel.Text = "$($SPDData.Max) °C"
-    $maxTempValueLabel.Location = New-Object System.Drawing.Point(150, $labelY)
-    $maxTempValueLabel.Size = New-Object System.Drawing.Size(170, 30)
-    $maxTempValueLabel.Font = New-Object System.Drawing.Font("Segoe UI", 12, [System.Drawing.FontStyle]::Bold)
-    $maxTempValueLabel.ForeColor = [System.Drawing.Color]::White
-    $maxTempValueLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleRight
-    $form.Controls.Add($maxTempValueLabel)
-    
-    # Timer für automatische Aktualisierung
-    $timer = New-Object System.Windows.Forms.Timer
-    $timer.Interval = 1000  # Aktualisierung jede Sekunde
-    $timer.Add_Tick({
-            # RAM Temperatur aktualisieren
-            Get-RamTemperature | Out-Null
+    foreach ($row in @(
+            @{ Caption = "Min"; ValueRef = "Min" }
+            @{ Caption = "Average"; ValueRef = "Avg" }
+            @{ Caption = "Max"; ValueRef = "Max" }
+        )) {
+        $captionLbl = New-Object System.Windows.Forms.Label
+        $captionLbl.Text = $row.Caption
+        $captionLbl.Location = New-Object System.Drawing.Point(20, $labelY)
+        $captionLbl.Size = New-Object System.Drawing.Size(120, 28)
+        $captionLbl.Font = New-Object System.Drawing.Font("Segoe UI", 12)
+        $captionLbl.ForeColor = [System.Drawing.Color]::LightGray
+        $form.Controls.Add($captionLbl)
         
-            if ($script:ramStats.SPD -and $script:ramStats.SPD.Min -lt 999) {
-                $currentTempLabel.Text = "$($script:ramStats.SPD.Current) °C"
-                $minTempValueLabel.Text = "$($script:ramStats.SPD.Min) °C"
-                $avgTempValueLabel.Text = "$($script:ramStats.SPD.Avg) °C"
-                $maxTempValueLabel.Text = "$($script:ramStats.SPD.Max) °C"
+        $valueLbl = New-Object System.Windows.Forms.Label
+        $valueLbl.Text = "$($SPDData[$row.ValueRef]) °C"
+        $valueLbl.Location = New-Object System.Drawing.Point(160, $labelY)
+        $valueLbl.Size = New-Object System.Drawing.Size(170, 28)
+        $valueLbl.Font = New-Object System.Drawing.Font("Segoe UI", 12, [System.Drawing.FontStyle]::Bold)
+        $valueLbl.ForeColor = [System.Drawing.Color]::White
+        $valueLbl.TextAlign = [System.Drawing.ContentAlignment]::MiddleRight
+        $valueLbl.Tag = $row.ValueRef   # Kennung für Timer-Refresh
+        $form.Controls.Add($valueLbl)
+        
+        # Referenzen für Timer-Zugriff
+        switch ($row.ValueRef) {
+            "Min" { $minTempValueLabel = $valueLbl }
+            "Avg" { $avgTempValueLabel = $valueLbl }
+            "Max" { $maxTempValueLabel = $valueLbl }
+        }
+        
+        $labelY += 38
+    }
+    
+    # Pro-DIMM-Sektion (falls DimmSensors vorhanden)
+    $dimmValueLabels = @{}
+    if ($dimmCount -gt 0) {
+        # Trennlinie
+        $dimmSep = New-Object System.Windows.Forms.Panel
+        $dimmSep.Location = New-Object System.Drawing.Point(20, ($labelY + 4))
+        $dimmSep.Size = New-Object System.Drawing.Size(310, 1)
+        $dimmSep.BackColor = [System.Drawing.Color]::SlateGray
+        $form.Controls.Add($dimmSep)
+        $labelY += 20
+        
+        # "DIMM Details" Überschrift
+        $dimmTitle = New-Object System.Windows.Forms.Label
+        $dimmTitle.Text = "Einzel-DIMMs"
+        $dimmTitle.Location = New-Object System.Drawing.Point(20, $labelY)
+        $dimmTitle.Size = New-Object System.Drawing.Size(310, 22)
+        $dimmTitle.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Italic)
+        $dimmTitle.ForeColor = [System.Drawing.Color]::LightGray
+        $form.Controls.Add($dimmTitle)
+        $labelY += 25
+        
+        foreach ($dimm in $SPDData.DimmSensors) {
+            $dimmNameLbl = New-Object System.Windows.Forms.Label
+            $dimmNameLbl.Text = "$($dimm.Name):"
+            $dimmNameLbl.Location = New-Object System.Drawing.Point(20, $labelY)
+            $dimmNameLbl.Size = New-Object System.Drawing.Size(140, 25)
+            $dimmNameLbl.Font = New-Object System.Drawing.Font("Segoe UI", 10)
+            $dimmNameLbl.ForeColor = [System.Drawing.Color]::LightGray
+            $form.Controls.Add($dimmNameLbl)
+            
+            $dimmValLbl = New-Object System.Windows.Forms.Label
+            $dimmValLbl.Text = "$($dimm.Value) °C"
+            $dimmValLbl.Location = New-Object System.Drawing.Point(160, $labelY)
+            $dimmValLbl.Size = New-Object System.Drawing.Size(170, 25)
+            $dimmValLbl.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
+            $dimmValLbl.ForeColor = [System.Drawing.Color]::White
+            $dimmValLbl.TextAlign = [System.Drawing.ContentAlignment]::MiddleRight
+            $form.Controls.Add($dimmValLbl)
+            
+            $dimmValueLabels[$dimm.Name] = $dimmValLbl
+            $labelY += 28
+        }
+    }
+    
+    # Timer für automatische Aktualisierung (1 s)
+    $timer = New-Object System.Windows.Forms.Timer
+    $timer.Interval = 1000
+    $timer.Add_Tick({
+            Get-RamTemperature | Out-Null
+            $spd = $script:ramStats.SPD
+            if ($spd -and $null -ne $spd.Min) {
+                $currentTempLabel.Text = "$($spd.Current) °C"
+                $minTempValueLabel.Text = "$($spd.Min) °C"
+                $avgTempValueLabel.Text = "$($spd.Avg) °C"
+                $maxTempValueLabel.Text = "$($spd.Max) °C"
+                if ($spd.DimmSensors) {
+                    foreach ($dimm in $spd.DimmSensors) {
+                        if ($dimmValueLabels.ContainsKey($dimm.Name)) {
+                            $dimmValueLabels[$dimm.Name].Text = "$($dimm.Value) °C"
+                        }
+                    }
+                }
             }
         })
     
     # Close-Button
     $closeButton = New-Object System.Windows.Forms.Button
     $closeButton.Text = "Schließen"
-    $closeButton.Location = New-Object System.Drawing.Point(125, 260)
+    $closeButton.Location = New-Object System.Drawing.Point(125, ($labelY + 10))
     $closeButton.Size = New-Object System.Drawing.Size(100, 30)
     $closeButton.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
     $closeButton.BackColor = [System.Drawing.Color]::DimGray
@@ -2570,8 +2657,7 @@ function Initialize-SMBusAccess {
                 $script:smBusEnabled = $true
                 return $true
             }
-        }
-        catch {
+        } catch {
             # WMI-Zugriff fehlgeschlagen, weiter mit anderen Methoden
         }
         
@@ -2580,8 +2666,7 @@ function Initialize-SMBusAccess {
         $script:smBusLoaded = $true  # Markiere als versucht
         $script:smBusEnabled = $false
         return $false
-    }
-    catch {
+    } catch {
         Write-Warning "Fehler beim Initialisieren des SMBus-Zugriffs: $_"
         $script:smBusLoaded = $true  # Markiere als versucht
         $script:smBusEnabled = $false
@@ -2770,8 +2855,7 @@ function Get-RamTemperatureViaSMBus {
                                             return $rawTemp
                                         }
                                     }
-                                }
-                                catch {
+                                } catch {
                                     # Ignorieren und weiter probieren
                                 }
                             }
@@ -2779,8 +2863,7 @@ function Get-RamTemperatureViaSMBus {
                         
                         return $rawTemp
                     }
-                }
-                catch {
+                } catch {
                     # Spezifische Fehler für Debug protokollieren
                     if ($script:DebugModeRAM) {
                         $errorMsg = $_.Exception.Message
@@ -2810,8 +2893,7 @@ function Get-RamTemperatureViaSMBus {
                         return $raw16BitTemp
                     }
                     return 0
-                }
-                catch {
+                } catch {
                     return 0
                 }
             }
@@ -2850,8 +2932,7 @@ function Get-RamTemperatureViaSMBus {
                         return [math]::Round($temp, 1)  # Auf eine Nachkommastelle runden
                     }
                     return $null
-                }
-                catch {
+                } catch {
                     return $null
                 }
             }
@@ -2972,16 +3053,14 @@ function Get-RamTemperatureViaSMBus {
                                                 }
                                             }
                                         }
-                                    }
-                                    catch {
+                                    } catch {
                                         continue
                                     }
                                 }
                             }
                         }
                     }
-                }
-                catch {
+                } catch {
                     if ($script:DebugModeRAM) {
                         Write-DebugOutput -Component 'RAM' -Message "I2C-Zugriff fehlgeschlagen: $_" -Force
                     }
@@ -3028,14 +3107,12 @@ function Get-RamTemperatureViaSMBus {
                                     }
                                 }
                             }
-                        }
-                        catch {
+                        } catch {
                             continue  # Nächste Klasse versuchen
                         }
                     }
                 }
-            }
-            catch {
+            } catch {
                 if ($script:DebugModeRAM) {
                     Write-DebugOutput -Component 'RAM' -Message "WMI-Zugriff fehlgeschlagen: $_" -Force
                 }
@@ -3054,12 +3131,10 @@ function Get-RamTemperatureViaSMBus {
                 $maxSensor = $sensorDetails | Where-Object { $_.Value -eq $maxTemp } | Select-Object -First 1
                 if ($maxSensor) {
                     "$($maxSensor.Type) $($maxSensor.Address):$($maxSensor.Register)"
-                }
-                else {
+                } else {
                     "SMBus"
                 }
-            }
-            else {
+            } else {
                 "SMBus"
             }
             
@@ -3092,8 +3167,7 @@ function Get-RamTemperatureViaSMBus {
                     foreach ($sensor in $sensorDetails) {
                         $sensorInfo = if ($sensor.Type -match "I2C") {
                             "Bus=$($sensor.Bus), "
-                        }
-                        else { "" }
+                        } else { "" }
                         $sensorInfo += "Adresse=$($sensor.Address), Register=$($sensor.Register), Temp=$($sensor.Value)°C"
                         Write-DebugOutput -Component 'RAM' -Message "  $($sensor.Type): $sensorInfo" -Force
                     }
@@ -3109,8 +3183,7 @@ function Get-RamTemperatureViaSMBus {
             Write-DebugOutput -Component 'RAM' -Message "Keine RAM-Temperaturen über SMBus gefunden" -Force
         }
         return $null
-    }
-    catch {
+    } catch {
         if ($script:DebugModeRAM) {
             Write-DebugOutput -Component 'RAM' -Message "Fehler bei SMBus-Temperaturabfrage: $_" -Force
         }

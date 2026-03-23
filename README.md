@@ -390,7 +390,14 @@ Bei Problemen:
 
 ## 📋 Changelog
 
-### Version 4.1.7 (18. Februar 2026) - Aktuell
+### Version 4.2.0 (23. März 2026) - Aktuell
+- ✨ **Erweiterte Hardware-Statistiken**: CPU CoreMin, PowerCores (Kernleistung), VCore (Kernspannung)
+- 🔧 **CPU Stats**: Neue Sensoren CoreMin, PowerCores, VCore in der Statistik-Tabelle
+- 🐛 **Debug-Fenster Fix**: Prozessbaum-Beendigung per taskkill /T verhindert Dateifehler beim Schließen
+- 🌡️ **DDR5 RAM-Temperaturen**: Per-DIMM Temperaturen via LibreHardwareMonitor
+- 📊 **Statistik-Popup**: Vollständige Statistiktabelle für CPU, GPU und RAM mit Schwellenwert-Farbkodierung
+
+### Version 4.1.7 (18. Februar 2026)
 - ✨ **Automatisches DLL-Update**: Integrierte Update-Funktion in DependencyChecker
 - 🔍 **Versionserkennung**: Automatische Prüfung auf veraltete LibreHardwareMonitorLib.dll
 - � **DLL-Versionsabfragen**: Erweiterte Test-SystemDependencies mit 5 DLL-Checks

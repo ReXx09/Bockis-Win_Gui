@@ -149,7 +149,7 @@ function Start-CHKDSK {
 <Window
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Title="" Width="540" Height="620"
+    Title="" Width="510" Height="550"
     WindowStyle="None" AllowsTransparency="True" ResizeMode="NoResize"
     WindowStartupLocation="Manual"
     Background="Transparent">
@@ -391,13 +391,13 @@ function Start-CHKDSK {
     $driveCheckBoxes = @{}
     foreach ($drive in $drives) {
         $driveInfo = Get-WmiObject Win32_LogicalDisk -Filter "DeviceID='$drive'"
-        $volName  = if ($driveInfo.VolumeName) { $driveInfo.VolumeName } else { "" }
-        $free     = [Math]::Round($driveInfo.FreeSpace / 1GB, 2)
-        $total    = [Math]::Round($driveInfo.Size / 1GB, 2)
-        $usedPct  = [Math]::Round(100 - (($driveInfo.FreeSpace / $driveInfo.Size) * 100), 1)
+        $volName = if ($driveInfo.VolumeName) { $driveInfo.VolumeName } else { "" }
+        $free = [Math]::Round($driveInfo.FreeSpace / 1GB, 2)
+        $total = [Math]::Round($driveInfo.Size / 1GB, 2)
+        $usedPct = [Math]::Round(100 - (($driveInfo.FreeSpace / $driveInfo.Size) * 100), 1)
         $isSystem = $drive -eq $env:SystemDrive
-        $freeHex  = if ($usedPct -gt 90) { "#E05050" } elseif ($usedPct -gt 75) { "#D4A010" } else { "#00B464" }
-        $bconv    = [System.Windows.Media.BrushConverter]::new()
+        $freeHex = if ($usedPct -gt 90) { "#E05050" } elseif ($usedPct -gt 75) { "#D4A010" } else { "#00B464" }
+        $bconv = [System.Windows.Media.BrushConverter]::new()
 
         # ── Tabellen-Zeile ───────────────────────────────────────────
         $row = New-Object System.Windows.Controls.Grid
@@ -489,25 +489,25 @@ function Start-CHKDSK {
 
         # Rücksync: Einzel-CB → ChkAll aktualisieren
         $cb.Add_Checked({
-            if (-not $script:_bulkChanging) {
-                $allChecked = $true
-                foreach ($c in $driveCheckBoxes.Values) {
-                    if ($c.IsChecked -ne $true) { $allChecked = $false; break }
+                if (-not $script:_bulkChanging) {
+                    $allChecked = $true
+                    foreach ($c in $driveCheckBoxes.Values) {
+                        if ($c.IsChecked -ne $true) { $allChecked = $false; break }
+                    }
+                    if ($allChecked) {
+                        $script:_bulkChanging = $true
+                        $chkAll.IsChecked = $true
+                        $script:_bulkChanging = $false
+                    }
                 }
-                if ($allChecked) {
+            })
+        $cb.Add_Unchecked({
+                if (-not $script:_bulkChanging) {
                     $script:_bulkChanging = $true
-                    $chkAll.IsChecked = $true
+                    $chkAll.IsChecked = $false
                     $script:_bulkChanging = $false
                 }
-            }
-        })
-        $cb.Add_Unchecked({
-            if (-not $script:_bulkChanging) {
-                $script:_bulkChanging = $true
-                $chkAll.IsChecked = $false
-                $script:_bulkChanging = $false
-            }
-        })
+            })
     }
 
     # ── Events ───────────────────────────────────────────────────────
