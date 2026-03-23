@@ -1,0 +1,123 @@
+﻿{
+    "ShowSplash":  true,
+    "WindowWidth":  1000,
+    "EnableNotifications":  true,
+    "AdvancedCleanup":  false,
+    "GpuThreshold":  80,
+    "UpdateInterval":  1000,
+    "CheckUpdates":  true,
+    "LogLevel":  "Standard",
+    "WindowHeight":  800,
+    "ConfirmActions":  true,
+    "RamThreshold":  85,
+    "AutoSaveLogs":  false,
+    "ColorScheme":  {
+                        "Output":  {
+                                       "Styles":  {
+                                                      "BannerFrame":  {
+                                                                          "Font":  {
+                                                                                       "SizeDelta":  3,
+                                                                                       "Style":  "Bold"
+                                                                                   },
+                                                                          "ColorKey":  "Banner"
+                                                                      },
+                                                      "Muted":  {
+                                                                    "Font":  {
+                                                                                 "Style":  "Italic"
+                                                                             },
+                                                                    "ColorKey":  "Muted"
+                                                                },
+                                                      "Heading":  {
+                                                                      "Font":  {
+                                                                                   "SizeDelta":  1,
+                                                                                   "Style":  "Bold"
+                                                                               },
+                                                                      "ColorKey":  "Accent"
+                                                                  },
+                                                      "Info":  {
+                                                                   "ColorKey":  "Info"
+                                                               },
+                                                      "BodySmall":  {
+                                                                        "Font":  {
+                                                                                     "SizeDelta":  -2,
+                                                                                     "Style":  "Regular"
+                                                                                 },
+                                                                        "ColorKey":  "Foreground"
+                                                                    },
+                                                      "BannerTitle":  {
+                                                                          "Font":  {
+                                                                                       "SizeDelta":  3,
+                                                                                       "Style":  "Bold"
+                                                                                   },
+                                                                          "ColorKey":  "Banner"
+                                                                      },
+                                                      "Default":  {
+                                                                      "ColorKey":  "Foreground"
+                                                                  },
+                                                      "Warning":  {
+                                                                      "Font":  {
+                                                                                   "Style":  "Bold"
+                                                                               },
+                                                                      "ColorKey":  "Warning"
+                                                                  },
+                                                      "Accent":  {
+                                                                     "Font":  {
+                                                                                  "Style":  "Bold"
+                                                                              },
+                                                                     "ColorKey":  "Accent"
+                                                                 },
+                                                      "Error":  {
+                                                                    "Font":  {
+                                                                                 "Style":  "Bold"
+                                                                             },
+                                                                    "ColorKey":  "Error"
+                                                                },
+                                                      "Action":  {
+                                                                     "Font":  {
+                                                                                  "Style":  "Bold"
+                                                                              },
+                                                                     "ColorKey":  "Info"
+                                                                 },
+                                                      "Divider":  {
+                                                                      "ColorKey":  "Divider"
+                                                                  },
+                                                      "Success":  {
+                                                                      "Font":  {
+                                                                                   "Style":  "Bold"
+                                                                               },
+                                                                      "ColorKey":  "Success"
+                                                                  }
+                                                  },
+                                       "Colors":  {
+                                                      "Action":  "#DCDCDC",
+                                                      "Banner":  "#9ACD32",
+                                                      "Muted":  "#A6ADB4",
+                                                      "Divider":  "#6E6E6E",
+                                                      "Foreground":  "#DCDCDC",
+                                                      "Info":  "#64B5F6",
+                                                      "Background":  "#141414",
+                                                      "Warning":  "#FFB74D",
+                                                      "Accent":  "#00BCD4",
+                                                      "Error":  "#FF6B6B",
+                                                      "Success":  "#3DDC84",
+                                                      "Alert":  "#8B4513"
+                                                  }
+                                   },
+                        "Console":  {
+                                        "Colors":  {
+                                                       "Info":  "Cyan",
+                                                       "Accent":  "Magenta",
+                                                       "Default":  "Gray",
+                                                       "Error":  "Red",
+                                                       "Success":  "Green",
+                                                       "Warning":  "Yellow"
+                                                   }
+                                    }
+                    },
+    "CpuThreshold":  90,
+    "WindowTop":  320,
+    "WindowLeft":  1220,
+    "FontSize":  11,
+    "SaveWindowSize":  true,
+    "LogPath":  "C:\\Users\\ReXx\\Desktop\\VS-CODE-Repos\\Bockis-Win_Gui_DEV\\Data\\Logs"
+}
