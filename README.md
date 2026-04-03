@@ -518,8 +518,6 @@ A: Ja, über `ToolLibrary.psm1` können Sie die `$script:toolLibrary`-Hashtable 
 **Q: Wo finde ich die Logs?**  
 A: Logs werden in `%LOCALAPPDATA%\BockisSystemTool\Logs\` gespeichert.
 
-**Q: Funktioniert das Tool mit Nextcloud/OneDrive?**  
-A: Ja, das Tool hat spezielle Fehlerbehandlung für Cloud-Sync-Provider implementiert.
 
 ## 🙏 Danksagungen
 
@@ -529,14 +527,6 @@ A: Ja, das Tool hat spezielle Fehlerbehandlung für Cloud-Sync-Provider implemen
 - **Microsoft** - Winget Package Manager
 - **Alle Beta-Tester** - Wertvolles Feedback und Bug-Reports
 
-## 🤝 Mitwirken
-
-Beiträge sind willkommen! Bitte:
-1. Forken Sie das Repository
-2. Erstellen Sie einen Feature-Branch (`git checkout -b feature/AmazingFeature`)
-3. Committen Sie Ihre Änderungen (`git commit -m 'Add some AmazingFeature'`)
-4. Pushen Sie zum Branch (`git push origin feature/AmazingFeature`)
-5. Öffnen Sie einen Pull Request
 
 ---
 
