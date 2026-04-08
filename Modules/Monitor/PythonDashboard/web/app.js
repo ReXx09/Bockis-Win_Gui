@@ -6,7 +6,8 @@ const cpuPct = document.getElementById('cpuPct');
 const ramPct = document.getElementById('ramPct');
 const cpuMeta = document.getElementById('cpuMeta');
 const ramMeta = document.getElementById('ramMeta');
-const netTxt = document.getElementById('netTxt');
+const netTxtUp = document.getElementById('netTxtUp');
+const netTxtDown = document.getElementById('netTxtDown');
 const freqTxt = document.getElementById('freqTxt');
 const cpuBar = document.getElementById('cpuBar');
 const ramBar = document.getElementById('ramBar');
@@ -50,6 +51,7 @@ const LAYOUT_KEY = 'bockis_dashboard_layout_v3';
 const PAGE_KEY = 'bockis_dashboard_page_v1';
 const WIDGET_LABELS = {
   monitoring: 'Monitoring',
+  'data-traffic': 'Datenverkehr',
   disks: 'Festplatten',
   audio: 'Audio',
   processes: 'Prozesse',
@@ -354,7 +356,8 @@ async function loadMetrics() {
   ramPct.textContent = `${m.ram_pct}%`;
   cpuMeta.textContent = `${m.cpu_freq_mhz ? `${m.cpu_freq_mhz} MHz` : 'Freq n/a'} | ${m.cpu_temp_c != null ? `${m.cpu_temp_c} °C` : 'Temp n/a'}`;
   ramMeta.textContent = `${m.ram_used_gb} / ${m.ram_total_gb} GB | ${m.ram_temp_c != null ? `${m.ram_temp_c} °C` : 'Temp n/a'}`;
-  netTxt.textContent = `Up ${m.net_sent_mb} MB | Down ${m.net_recv_mb} MB`;
+  netTxtUp.textContent = `${m.net_sent_mb} MB`;
+  netTxtDown.textContent = `${m.net_recv_mb} MB`;
   cpuBar.style.width = `${Math.max(0, Math.min(100, m.cpu_pct))}%`;
   ramBar.style.width = `${Math.max(0, Math.min(100, m.ram_pct))}%`;
   uptime.textContent = `Uptime: ${formatUptime(m.uptime_s || 0)}`;

@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Bockis Python Dashboard</title>
-  <link rel="stylesheet" href="/web/style.css?v=20260408a" />
+  <link rel="stylesheet" href="/web/style.css?v=20260408b" />
 </head>
 <body>
   <header class="topbar">
@@ -66,10 +66,9 @@
                 <div class="bar"><div id="ramBar"></div></div>
               </div>
               <div class="metric">
-                <span>Netz</span>
-                <strong id="netUpTxt">Up -</strong>
-                <small id="netDownTxt">Down -</small>
-                <small id="freqTxt">-</small>
+                <span>Netz Live</span>
+                <strong id="freqTxt" style="font-size: 0.9em;">-</strong>
+                <small style="opacity: 0.6;">Echtzeit MB/s</small>
               </div>
             </div>
 
@@ -87,8 +86,22 @@
                 <canvas id="ramChart" height="70"></canvas>
               </div>
               <div class="chart-card">
-                <span>Netz Up/Down MB/s</span>
+                <span>Netz MB/s</span>
                 <canvas id="netChart" height="70"></canvas>
+              </div>
+            </div>
+          </section>
+
+          <section class="card" data-widget="data-traffic" data-default-size="1-3" draggable="true">
+            <div class="card-head"><h2>Gesamt Datenverkehr</h2><span class="drag-handle">⋮⋮</span></div>
+            <div class="traffic-stats">
+              <div class="traffic-item">
+                <span>Upload</span>
+                <strong id="netTxtUp">-</strong>
+              </div>
+              <div class="traffic-item">
+                <span>Download</span>
+                <strong id="netTxtDown">-</strong>
               </div>
             </div>
           </section>
@@ -189,6 +202,6 @@
     </section>
   </main>
 
-  <script src="/web/app.js?v=20260408a"></script>
+  <script src="/web/app.js?v=20260408b"></script>
 </body>
 </html>
