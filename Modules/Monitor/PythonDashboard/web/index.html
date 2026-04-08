@@ -26,6 +26,7 @@
 
       <div class="menu-nav" id="pageMenu">
         <button class="menu-nav-btn active" data-page-target="overview">Uebersicht</button>
+        <button class="menu-nav-btn" data-page-target="audio">Audio</button>
         <button class="menu-nav-btn" data-page-target="logs">Logs</button>
         <button class="menu-nav-btn" data-page-target="tools">Tools</button>
         <button class="menu-nav-btn" data-page-target="setup">Setup</button>
@@ -77,29 +78,6 @@
             <div id="disks" class="list"></div>
           </section>
 
-          <section class="card" data-widget="audio" data-default-size="1-3" draggable="true">
-            <div class="card-head"><h2>Audio</h2><span class="drag-handle">⋮⋮</span></div>
-            <div class="audio-main">
-              <div class="audio-row">
-                <strong id="audioLevel">-</strong>
-                <span id="audioMuted" class="muted">-</span>
-              </div>
-              <input type="range" id="audioSlider" min="0" max="100" value="0" />
-              <div class="row">
-                <button class="btn" id="audioMinus">-10</button>
-                <button class="btn" id="audioPlus">+10</button>
-                <button class="btn" id="audioMuteBtn">Mute</button>
-              </div>
-              <div class="row">
-                <button class="btn" data-media="prev">Prev</button>
-                <button class="btn" data-media="play_pause">Play/Pause</button>
-                <button class="btn" data-media="next">Next</button>
-                <button class="btn" data-media="stop">Stop</button>
-              </div>
-            </div>
-            <pre id="audioMsg" class="console small-console">Audio bereit.</pre>
-          </section>
-
           <section class="card" data-widget="processes" data-default-size="full" draggable="true">
             <div class="card-head"><h2>Top Prozesse</h2><span class="drag-handle">⋮⋮</span></div>
             <table>
@@ -107,6 +85,31 @@
               <tbody id="procRows"></tbody>
             </table>
           </section>
+        </section>
+      </section>
+
+      <section class="page" data-page="audio">
+        <section class="card">
+          <div class="card-head"><h2>Audio</h2></div>
+          <div class="audio-main">
+            <div class="audio-row">
+              <strong id="audioLevel">-</strong>
+              <span id="audioMuted" class="muted">-</span>
+            </div>
+            <input type="range" id="audioSlider" min="0" max="100" value="0" />
+            <div class="row">
+              <button class="btn" id="audioMinus">-10</button>
+              <button class="btn" id="audioPlus">+10</button>
+              <button class="btn" id="audioMuteBtn">Mute</button>
+            </div>
+            <div class="row">
+              <button class="btn" data-media="prev">Prev</button>
+              <button class="btn" data-media="play_pause">Play/Pause</button>
+              <button class="btn" data-media="next">Next</button>
+              <button class="btn" data-media="stop">Stop</button>
+            </div>
+          </div>
+          <pre id="audioMsg" class="console small-console">Audio bereit.</pre>
         </section>
       </section>
 
