@@ -835,7 +835,7 @@ $titleLabel.Add_MouseMove({
 
 # Python-Dashboard Status (FastAPI)
 $script:pythonDashboardProcess = $null
-$script:pythonDashboardPort = 8083
+$script:pythonDashboardPort = 9500
 
 function Get-PythonDashboardPidFromPort {
     param([int]$Port)
