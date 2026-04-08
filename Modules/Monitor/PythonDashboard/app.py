@@ -99,7 +99,7 @@ def _run_powershell(command: str, timeout: int = 20) -> tuple[int, str]:
     return proc.returncode, output.strip()
 
 
-def _detect_current_port(default_port: int = 8083) -> int:
+def _detect_current_port(default_port: int = 9500) -> int:
     env_port = os.environ.get("BOCKIS_DASHBOARD_PORT", "").strip()
     if env_port.isdigit():
         return int(env_port)
@@ -118,7 +118,7 @@ def _detect_current_port(default_port: int = 8083) -> int:
 
 def request_python_server_restart(delay_s: float = 1.0) -> tuple[bool, str]:
     try:
-        port = _detect_current_port(8083)
+        port = _detect_current_port(9500)
         python_cmd = sys.executable or "python"
         args = [python_cmd, "-m", "uvicorn", "app:app", "--host", "127.0.0.1", "--port", str(port)]
 
