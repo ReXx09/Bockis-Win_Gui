@@ -837,6 +837,35 @@ $titleLabel.Add_MouseMove({
 $script:pythonDashboardProcess = $null
 $script:pythonDashboardPort = 8083
 
+function Get-PythonDashboardPidFromPort {
+    param([int]$Port)
+
+    try {
+        $line = netstat -ano | Select-String "127\.0\.0\.1:$Port\s+0\.0\.0\.0:0" | Select-Object -First 1
+        if (-not $line) { return $null }
+        $parts = ($line.ToString() -split '\s+') | Where-Object { $_ -ne '' }
+        $pidValue = [int]$parts[-1]
+        if ($pidValue -gt 0) { return $pidValue }
+    }
+    catch { }
+
+    return $null
+}
+
+function Test-PythonDashboardApiCompatibility {
+    param([int]$Port)
+
+    try {
+        $schema = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/openapi.json" -Method Get -TimeoutSec 2
+        if (-not $schema -or -not $schema.paths) { return $false }
+        $pathNames = @($schema.paths.PSObject.Properties.Name)
+        return ($pathNames -contains '/api/gpu' -and $pathNames -contains '/api/audio')
+    }
+    catch {
+        return $false
+    }
+}
+
 function Ensure-PythonDashboardStartupRegistration {
     param([bool]$Enable)
 
@@ -863,8 +892,16 @@ function Ensure-PythonDashboardStartupRegistration {
 
 function Get-PythonDashboardStatus {
     $running = $false
-    if ($script:pythonDashboardProcess -and -not $script:pythonDashboardProcess.HasExited) {
-        $running = $true
+    try {
+        $health = Invoke-RestMethod -Uri "http://127.0.0.1:$($script:pythonDashboardPort)/api/health" -Method Get -TimeoutSec 1
+        if ($health -and $health.ok) {
+            $running = $true
+        }
+    }
+    catch {
+        if ($script:pythonDashboardProcess -and -not $script:pythonDashboardProcess.HasExited) {
+            $running = $true
+        }
     }
 
     return @{
@@ -877,7 +914,17 @@ function Get-PythonDashboardStatus {
 function Start-PythonDashboard {
     $status = Get-PythonDashboardStatus
     if ($status.Running) {
-        return @{ Success = $true; Url = $status.Url; Message = "Python-Dashboard laeuft bereits." }
+        if (Test-PythonDashboardApiCompatibility -Port $script:pythonDashboardPort) {
+            return @{ Success = $true; Url = $status.Url; Message = "Python-Dashboard laeuft bereits." }
+        }
+
+        # Legacy/inkompatible API-Version erkannt -> laufenden Prozess auf Port beenden und frisch starten
+        $oldPid = Get-PythonDashboardPidFromPort -Port $script:pythonDashboardPort
+        if ($oldPid) {
+            try { Stop-Process -Id $oldPid -Force -ErrorAction Stop } catch { }
+            Start-Sleep -Milliseconds 700
+        }
+        $script:pythonDashboardProcess = $null
     }
 
     $dashboardDir = Join-Path $PSScriptRoot "Modules\Monitor\PythonDashboard"
@@ -1005,6 +1052,12 @@ function Stop-PythonDashboard {
     if ($script:pythonDashboardProcess -and -not $script:pythonDashboardProcess.HasExited) {
         try { $script:pythonDashboardProcess.Kill() } catch { }
     }
+
+    $portPid = Get-PythonDashboardPidFromPort -Port $script:pythonDashboardPort
+    if ($portPid) {
+        try { Stop-Process -Id $portPid -Force -ErrorAction Stop } catch { }
+    }
+
     $script:pythonDashboardProcess = $null
 }
 
