@@ -450,15 +450,43 @@ def api_git_pull(payload: dict | None = None) -> dict:
     remote = (payload or {}).get("remote") or "origin"
     branch = (payload or {}).get("branch") or status.get("branch", "main")
 
+    before_rc, before_head = _run_git(["rev-parse", "HEAD"])
+    before_head = before_head.strip() if before_rc == 0 else ""
+
     rc, out = _run_git(["pull", "--ff-only", "--autostash", remote, branch])
     if rc == 0:
-        restarting, restart_info = request_python_server_restart()
+        after_rc, after_head = _run_git(["rev-parse", "HEAD"])
+        after_head = after_head.strip() if after_rc == 0 else ""
+        updated = bool(before_head and after_head and before_head != after_head)
+
+        pulled_commits = 0
+        if updated:
+            cnt_rc, cnt_out = _run_git(["rev-list", "--count", f"{before_head}..{after_head}"])
+            if cnt_rc == 0 and cnt_out.strip().isdigit():
+                pulled_commits = int(cnt_out.strip())
+
+        restarting = False
+        restart_info = ""
+        if updated:
+            restarting, restart_info = request_python_server_restart()
+
+        if updated:
+            msg = (
+                f"Pull erfolgreich: {pulled_commits} Commit(s) geladen. Python-Dashboard wird neu gestartet."
+                if restarting
+                else f"Pull erfolgreich: {pulled_commits} Commit(s) geladen. Auto-Neustart fehlgeschlagen."
+            )
+        else:
+            msg = "Keine neuen Updates gefunden (Already up to date)."
+
         return {
             "success": True,
-            "message": "Pull erfolgreich. Python-Dashboard wird neu gestartet." if restarting else "Pull erfolgreich. Auto-Neustart fehlgeschlagen.",
+            "message": msg,
             "output": out,
             "restarting": restarting,
             "restart_info": restart_info,
+            "updated": updated,
+            "pulled_commits": pulled_commits,
         }
 
     return {
