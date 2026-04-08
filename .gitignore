@@ -15,10 +15,18 @@ config.json
 # Logs and Runtime Data
 Logs/*.log
 Data/Logs/*.log
+Data/Logs/
 Data/Temp/*.log
 Data/Temp/*.json
 Data/Database/*.db
+Data/Database/
 Data/ToolDownloads/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
 
 # Temporary files
 *.tmp

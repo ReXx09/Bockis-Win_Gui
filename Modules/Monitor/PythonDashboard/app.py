@@ -400,15 +400,7 @@ def api_git_pull(payload: dict | None = None) -> dict:
     remote = (payload or {}).get("remote") or "origin"
     branch = (payload or {}).get("branch") or status.get("branch", "main")
 
-    rc, dirty = _run_git(["status", "--porcelain"])
-    if rc == 0 and dirty.strip():
-        return {
-            "success": False,
-            "message": "Lokale Aenderungen vorhanden. Bitte zuerst committen/stashen.",
-            "output": dirty,
-        }
-
-    rc, out = _run_git(["pull", "--ff-only", remote, branch])
+    rc, out = _run_git(["pull", "--ff-only", "--autostash", remote, branch])
     return {
         "success": rc == 0,
         "message": "Pull erfolgreich" if rc == 0 else "Pull fehlgeschlagen",
