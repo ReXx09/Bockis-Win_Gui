@@ -6,7 +6,8 @@ const cpuPct = document.getElementById('cpuPct');
 const ramPct = document.getElementById('ramPct');
 const cpuMeta = document.getElementById('cpuMeta');
 const ramMeta = document.getElementById('ramMeta');
-const netTxt = document.getElementById('netTxt');
+const netUpTxt = document.getElementById('netUpTxt');
+const netDownTxt = document.getElementById('netDownTxt');
 const freqTxt = document.getElementById('freqTxt');
 const cpuBar = document.getElementById('cpuBar');
 const ramBar = document.getElementById('ramBar');
@@ -62,7 +63,8 @@ const monitorHistory = {
   cpu: [],
   gpu: [],
   ram: [],
-  net: [],
+  netUp: [],
+  netDown: [],
 };
 let lastNetSample = null;
 
@@ -124,8 +126,42 @@ function renderMonitorCharts() {
   drawSparkline(cpuChart, monitorHistory.cpu, 100, '#49a9ff', 'rgba(73,169,255,0.16)');
   drawSparkline(gpuChart, monitorHistory.gpu, 100, '#41d88f', 'rgba(65,216,143,0.16)');
   drawSparkline(ramChart, monitorHistory.ram, 100, '#8ea7ff', 'rgba(142,167,255,0.16)');
-  const netMax = Math.max(1, ...monitorHistory.net);
-  drawSparkline(netChart, monitorHistory.net, netMax, '#ffb25a', 'rgba(255,178,90,0.16)');
+
+  const up = monitorHistory.netUp;
+  const down = monitorHistory.netDown;
+  const maxNet = Math.max(1, ...up, ...down);
+  if (netChart && up.length > 0 && down.length > 0) {
+    const w = Math.max(120, netChart.clientWidth || 120);
+    const h = netChart.height || 70;
+    if (netChart.width !== w) netChart.width = w;
+    const ctx = netChart.getContext('2d');
+    if (ctx) {
+      ctx.clearRect(0, 0, w, h);
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = 'rgba(141,163,199,0.22)';
+      ctx.beginPath();
+      ctx.moveTo(0, h - 1);
+      ctx.lineTo(w, h - 1);
+      ctx.stroke();
+
+      const drawLine = (values, color) => {
+        const step = values.length > 1 ? w / (values.length - 1) : w;
+        ctx.beginPath();
+        values.forEach((v, i) => {
+          const x = i * step;
+          const y = h - Math.max(0, Math.min(1, v / maxNet)) * (h - 4) - 2;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.7;
+        ctx.stroke();
+      };
+
+      drawLine(up, '#4fe3a1');
+      drawLine(down, '#ffb25a');
+    }
+  }
 }
 
 async function jsonFetch(url, opt = {}) {
@@ -354,7 +390,8 @@ async function loadMetrics() {
   ramPct.textContent = `${m.ram_pct}%`;
   cpuMeta.textContent = `${m.cpu_freq_mhz ? `${m.cpu_freq_mhz} MHz` : 'Freq n/a'} | ${m.cpu_temp_c != null ? `${m.cpu_temp_c} °C` : 'Temp n/a'}`;
   ramMeta.textContent = `${m.ram_used_gb} / ${m.ram_total_gb} GB | ${m.ram_temp_c != null ? `${m.ram_temp_c} °C` : 'Temp n/a'}`;
-  netTxt.textContent = `Up ${m.net_sent_mb} MB | Down ${m.net_recv_mb} MB`;
+  netUpTxt.textContent = `Up ${m.net_sent_mb} MB`;
+  netDownTxt.textContent = `Down ${m.net_recv_mb} MB`;
   freqTxt.textContent = m.cpu_freq_mhz ? `${m.cpu_freq_mhz} MHz` : '-';
   cpuBar.style.width = `${Math.max(0, Math.min(100, m.cpu_pct))}%`;
   ramBar.style.width = `${Math.max(0, Math.min(100, m.ram_pct))}%`;
@@ -384,15 +421,20 @@ async function loadMetrics() {
   }
 
   const now = Date.now();
-  const netTotal = (m.net_sent_mb || 0) + (m.net_recv_mb || 0);
-  let netRate = 0;
+  const netSentTotal = m.net_sent_mb || 0;
+  const netRecvTotal = m.net_recv_mb || 0;
+  let upRate = 0;
+  let downRate = 0;
   if (lastNetSample && now > lastNetSample.ts) {
     const dt = (now - lastNetSample.ts) / 1000;
-    const delta = Math.max(0, netTotal - lastNetSample.total);
-    netRate = dt > 0 ? delta / dt : 0;
+    const upDelta = Math.max(0, netSentTotal - lastNetSample.sent);
+    const downDelta = Math.max(0, netRecvTotal - lastNetSample.recv);
+    upRate = dt > 0 ? upDelta / dt : 0;
+    downRate = dt > 0 ? downDelta / dt : 0;
   }
-  lastNetSample = { ts: now, total: netTotal };
-  pushHistory('net', netRate);
+  lastNetSample = { ts: now, sent: netSentTotal, recv: netRecvTotal };
+  pushHistory('netUp', upRate);
+  pushHistory('netDown', downRate);
   renderMonitorCharts();
 
   disks.innerHTML = d
