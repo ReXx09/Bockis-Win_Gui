@@ -5,6 +5,18 @@
   var activeLog = null;
   var pollTimer = null;
 
+  function setTxt(id, value) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = value == null || value === '' ? '-' : String(value);
+  }
+
+  function setGitMessage(msg) {
+    var el = document.getElementById('gitMsg');
+    if (!el) return;
+    el.textContent = msg || '';
+  }
+
   function setActivePane(pane) {
     var labels = {
       overview: 'Live-Ausgabe und Systemstatus',
@@ -196,9 +208,69 @@
     }
   }
 
+  function refreshGitStatus() {
+    fetch('/api/git/status')
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        setTxt('gitBranch', d.branch || '-');
+        setTxt('gitUpstream', d.upstream || '-');
+        setTxt('gitAheadBehind', (d.ahead || 0) + ' / ' + (d.behind || 0));
+        setTxt('gitDirty', d.dirty || 0);
+
+        var remoteInput = document.getElementById('gitRemote');
+        if (remoteInput && d.remote) {
+          remoteInput.value = d.remote;
+        }
+
+        var branchInput = document.getElementById('gitTargetBranch');
+        if (branchInput && d.branch && (!branchInput.value || branchInput.value === 'main')) {
+          branchInput.value = d.branch;
+        }
+
+        if (d.message) {
+          setGitMessage(d.message);
+        } else if (d.available) {
+          setGitMessage('Git-Repository erkannt. Push bereit.');
+        } else {
+          setGitMessage('Git nicht verfügbar.');
+        }
+      })
+      .catch(function () {
+        setGitMessage('Git-Status konnte nicht geladen werden.');
+      });
+  }
+
+  function pushGitNow() {
+    var remote = (document.getElementById('gitRemote') || {}).value || 'origin';
+    var branch = (document.getElementById('gitTargetBranch') || {}).value || 'main';
+
+    if (!confirm('Git Push ausführen nach ' + remote + '/' + branch + '?')) {
+      return;
+    }
+
+    setGitMessage('Git Push läuft...');
+
+    fetch('/api/git/push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ remote: remote, branch: branch })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        var txt = (d.message || 'Unbekannte Antwort') + (d.output ? '\n\n' + d.output : '');
+        setGitMessage(txt);
+        refreshGitStatus();
+      })
+      .catch(function () {
+        setGitMessage('Git Push fehlgeschlagen (Netzwerk/Serverfehler).');
+      });
+  }
+
   window.clearLive = clearLive;
   window.reloadLog = reloadLog;
   window.setActivePane = setActivePane;
+  window.refreshGitStatus = refreshGitStatus;
+  window.pushGitNow = pushGitNow;
 
   function init() {
     var host = document.getElementById('hostInfo');
@@ -206,10 +278,12 @@
 
     loadFiles();
     loadStatus();
+    refreshGitStatus();
     poll();
 
     setInterval(loadFiles, 15000);
     setInterval(loadStatus, 10000);
+    setInterval(refreshGitStatus, 20000);
 
     setActivePane(localStorage.getItem('wingui-active-pane') || 'overview');
   }

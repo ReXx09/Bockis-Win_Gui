@@ -46,6 +46,7 @@ function Start-WebDashboard {
         Port         = $Port
         LogPath      = $LogPath
       WebRoot      = (Join-Path $PSScriptRoot "web")
+            RepoRoot     = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
         OutputBuffer = $global:WebOutputBuffer   # Referenz auf den gemeinsamen Buffer
         Html         = $html
       Script       = $js
@@ -81,6 +82,19 @@ function Start-WebDashboard {
                 if (-not $path) { $path = '/' }
 
                 try {
+                    function Invoke-Git {
+                        param(
+                            [hashtable]$ServerState,
+                            [string[]]$GitArgs
+                        )
+
+                        $resultLines = @(& git -C $ServerState.RepoRoot @GitArgs 2>&1)
+                        return [pscustomobject]@{
+                            ExitCode = $LASTEXITCODE
+                            Output   = ($resultLines -join "`n")
+                        }
+                    }
+
                     if ($path -eq '/' -or $path -eq '') {
                       # Dashboard HTML (externes File bevorzugt, fallback eingebettet)
                       $htmlPath = Join-Path $s.WebRoot "dashboard.html"
@@ -177,6 +191,131 @@ function Start-WebDashboard {
                         $res.ContentType     = "application/json; charset=utf-8"
                         $res.ContentLength64 = $bytes.Length
                         $res.OutputStream.Write($bytes, 0, $bytes.Length)
+                    }
+                    elseif ($path -eq '/api/git/status') {
+                        $statusPayload = @{ 
+                            available = $false
+                            repoPath = $s.RepoRoot
+                            branch = ""
+                            upstream = ""
+                            ahead = 0
+                            behind = 0
+                            dirty = 0
+                            remote = ""
+                            message = ""
+                        }
+
+                        if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+                            $statusPayload.message = "Git ist nicht installiert oder nicht im PATH verfügbar."
+                        } else {
+                            $insideRepo = Invoke-Git -ServerState $s -GitArgs @('rev-parse', '--is-inside-work-tree')
+                            if ($insideRepo.ExitCode -ne 0 -or -not ($insideRepo.Output -match 'true')) {
+                                $statusPayload.message = "Aktueller Pfad ist kein Git-Repository."
+                            } else {
+                                $statusPayload.available = $true
+
+                                $branchInfo = Invoke-Git -ServerState $s -GitArgs @('rev-parse', '--abbrev-ref', 'HEAD')
+                                if ($branchInfo.ExitCode -eq 0) {
+                                    $statusPayload.branch = ($branchInfo.Output -split "`n")[0].Trim()
+                                }
+
+                                $remoteInfo = Invoke-Git -ServerState $s -GitArgs @('remote')
+                                if ($remoteInfo.ExitCode -eq 0 -and $remoteInfo.Output.Trim()) {
+                                    $statusPayload.remote = (($remoteInfo.Output -split "`n")[0]).Trim()
+                                }
+
+                                $dirtyInfo = Invoke-Git -ServerState $s -GitArgs @('status', '--porcelain')
+                                if ($dirtyInfo.ExitCode -eq 0 -and $dirtyInfo.Output.Trim()) {
+                                    $statusPayload.dirty = (@($dirtyInfo.Output -split "`n" | Where-Object { $_.Trim() })).Count
+                                }
+
+                                $upstreamInfo = Invoke-Git -ServerState $s -GitArgs @('rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}')
+                                if ($upstreamInfo.ExitCode -eq 0 -and $upstreamInfo.Output.Trim()) {
+                                    $statusPayload.upstream = ($upstreamInfo.Output -split "`n")[0].Trim()
+                                    $aheadBehind = Invoke-Git -ServerState $s -GitArgs @('rev-list', '--left-right', '--count', 'HEAD...@{u}')
+                                    if ($aheadBehind.ExitCode -eq 0 -and $aheadBehind.Output.Trim()) {
+                                        $counts = (($aheadBehind.Output -split "`n")[0].Trim() -split "\s+")
+                                        if ($counts.Count -ge 2) {
+                                            $statusPayload.behind = [int]$counts[0]
+                                            $statusPayload.ahead = [int]$counts[1]
+                                        }
+                                    }
+                                } else {
+                                    $statusPayload.message = "Kein Upstream konfiguriert (Push trotzdem mit Remote/Branch möglich)."
+                                }
+                            }
+                        }
+
+                        $json  = ConvertTo-Json $statusPayload -Depth 4 -Compress
+                        $bytes = [System.Text.Encoding]::UTF8.GetBytes($json)
+                        $res.ContentType     = "application/json; charset=utf-8"
+                        $res.ContentLength64 = $bytes.Length
+                        $res.OutputStream.Write($bytes, 0, $bytes.Length)
+                    }
+                    elseif ($path -eq '/api/git/push') {
+                        if ($req.HttpMethod -ne 'POST') {
+                            $res.StatusCode = 405
+                            $json = '{"success":false,"message":"Nur POST erlaubt"}'
+                            $bytes = [System.Text.Encoding]::UTF8.GetBytes($json)
+                            $res.ContentType     = "application/json; charset=utf-8"
+                            $res.ContentLength64 = $bytes.Length
+                            $res.OutputStream.Write($bytes, 0, $bytes.Length)
+                        } else {
+                            $result = @{ success = $false; message = ""; output = "" }
+
+                            if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+                                $result.message = "Git ist nicht installiert oder nicht im PATH verfügbar."
+                            } else {
+                                $insideRepo = Invoke-Git -ServerState $s -GitArgs @('rev-parse', '--is-inside-work-tree')
+                                if ($insideRepo.ExitCode -ne 0 -or -not ($insideRepo.Output -match 'true')) {
+                                    $result.message = "Aktueller Pfad ist kein Git-Repository."
+                                } else {
+                                    $remote = 'origin'
+                                    $branch = ''
+
+                                    try {
+                                        $reader = New-Object System.IO.StreamReader($req.InputStream, $req.ContentEncoding)
+                                        $body = $reader.ReadToEnd()
+                                        $reader.Close()
+
+                                        if ($body -and $body.Trim()) {
+                                            $payload = $body | ConvertFrom-Json -ErrorAction Stop
+                                            if ($payload.remote) { $remote = [string]$payload.remote }
+                                            if ($payload.branch) { $branch = [string]$payload.branch }
+                                        }
+                                    } catch {
+                                        # Fallback auf Defaults
+                                    }
+
+                                    if (-not $branch) {
+                                        $branchInfo = Invoke-Git -ServerState $s -GitArgs @('rev-parse', '--abbrev-ref', 'HEAD')
+                                        if ($branchInfo.ExitCode -eq 0 -and $branchInfo.Output.Trim()) {
+                                            $branch = ($branchInfo.Output -split "`n")[0].Trim()
+                                        }
+                                    }
+
+                                    if (-not $branch) {
+                                        $result.message = "Konnte Ziel-Branch nicht ermitteln."
+                                    } else {
+                                        $pushResult = Invoke-Git -ServerState $s -GitArgs @('push', $remote, ("HEAD:{0}" -f $branch))
+                                        if ($pushResult.ExitCode -eq 0) {
+                                            $result.success = $true
+                                            $result.message = "Push erfolgreich nach $remote/$branch"
+                                            $result.output = $pushResult.Output
+                                        } else {
+                                            $result.message = "Push fehlgeschlagen."
+                                            $result.output = $pushResult.Output
+                                        }
+                                    }
+                                }
+                            }
+
+                            $json  = ConvertTo-Json $result -Depth 4 -Compress
+                            $bytes = [System.Text.Encoding]::UTF8.GetBytes($json)
+                            $res.ContentType     = "application/json; charset=utf-8"
+                            $res.ContentLength64 = $bytes.Length
+                            $res.OutputStream.Write($bytes, 0, $bytes.Length)
+                        }
                     }
                     else {
                         $res.StatusCode = 404

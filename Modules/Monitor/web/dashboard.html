@@ -144,6 +144,29 @@ body {
 .row:last-child { border-bottom: 0; }
 .row-label { color: var(--muted); font-size: 12px; }
 .row-value { font-family: Consolas, monospace; font-size: 12px; }
+.input {
+  border: 1px solid var(--border);
+  background: #0f141b;
+  color: var(--text);
+  border-radius: 6px;
+  padding: 6px 8px;
+  width: 100%;
+  font-size: 12px;
+}
+.actions { display: flex; gap: 8px; margin-top: 10px; }
+.mono {
+  font-family: Consolas, monospace;
+  background: #010409;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+  margin-top: 8px;
+  font-size: 12px;
+  max-height: 140px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
 .badge {
   display: inline-block;
   font-size: 11px;
@@ -204,6 +227,27 @@ body {
       <div class="row"><span class="row-label">Host</span><span class="row-value" id="hostInfo"></span></div>
       <div class="row"><span class="row-label">Port</span><span class="row-value" id="portInfo">-</span></div>
       <div class="row"><span class="row-label">Aktive Log-Datei</span><span class="row-value" id="activeLogLabel">-</span></div>
+    </div>
+
+    <div class="card span-4" data-pane="overview">
+      <div class="card-h"><div class="card-title">Git Push</div></div>
+      <div class="row"><span class="row-label">Branch</span><span class="row-value" id="gitBranch">-</span></div>
+      <div class="row"><span class="row-label">Upstream</span><span class="row-value" id="gitUpstream">-</span></div>
+      <div class="row"><span class="row-label">Ahead / Behind</span><span class="row-value" id="gitAheadBehind">-</span></div>
+      <div class="row"><span class="row-label">Lokale Änderungen</span><span class="row-value" id="gitDirty">-</span></div>
+      <div style="margin-top:10px;">
+        <div class="row-label" style="margin-bottom:4px;">Remote</div>
+        <input class="input" id="gitRemote" value="origin" />
+      </div>
+      <div style="margin-top:8px;">
+        <div class="row-label" style="margin-bottom:4px;">Ziel-Branch</div>
+        <input class="input" id="gitTargetBranch" value="main" />
+      </div>
+      <div class="actions">
+        <button class="btn" onclick="refreshGitStatus()">Git Status</button>
+        <button class="btn" onclick="pushGitNow()">Git Push</button>
+      </div>
+      <div id="gitMsg" class="mono">Warte auf Git-Status...</div>
     </div>
 
     <div class="card span-12" data-pane="logs">
