@@ -11,29 +11,63 @@ $Global:SystemToolConfig.Tools["WindowsUpdate"] = @{
 
 # Hilfsfunktion zur Interpretation von Update-Fehlercodes
 function Get-UpdateErrorDescription {
-    param([int]$HResult)
+    param([long]$HResult)
+    
+    $hexCode = ([uint32]($HResult -band 0xFFFFFFFF)).ToString('X8')
     
     $errorDescriptions = @{
-        0x80070020 = "Datei wird verwendet (ein Neustart könnte helfen)"
-        0x80070005 = "Zugriff verweigert (Admin-Rechte erforderlich)"
-        0x8007000E = "Nicht genügend Arbeitsspeicher"
-        0x80070057 = "Ungültiger Parameter"
-        0x8024000B = "Update wurde bereits heruntergeladen"
-        0x80240022 = "Update nicht mehr verfügbar"
-        0x8024001E = "Vorgang wurde beendet"
-        0x80244019 = "Download-Größe überschreitet Maximum"
-        0x80244022 = "Download fehlgeschlagen (Netzwerkproblem)"
-        0x80070002 = "Datei nicht gefunden"
-        0x80070003 = "Pfad nicht gefunden"
-        0x8007000D = "Beschädigte Daten"
-        0x80070643 = "Installation fehlgeschlagen (allgemeiner Fehler)"
-        0x800F0922 = "Nicht genügend Speicherplatz"
+        '80070020' = "Datei wird verwendet (ein Neustart könnte helfen)"
+        '80070005' = "Zugriff verweigert (Admin-Rechte erforderlich)"
+        '8007000E' = "Nicht genügend Arbeitsspeicher"
+        '80070057' = "Ungültiger Parameter"
+        '8024000B' = "Update wurde bereits heruntergeladen"
+        '80240022' = "Update nicht mehr verfügbar"
+        '8024001E' = "Vorgang wurde beendet"
+        '80244019' = "Download-Größe überschreitet Maximum"
+        '80244022' = "Download fehlgeschlagen (Netzwerkproblem)"
+        '80070002' = "Datei nicht gefunden"
+        '80070003' = "Pfad nicht gefunden"
+        '8007000D' = "Beschädigte Daten"
+        '80070643' = "Installation fehlgeschlagen (allgemeiner Fehler)"
+        '800F0922' = "Nicht genügend Speicherplatz"
+        '80246007' = "Download fehlgeschlagen (BITS/Windows Update Download Manager Problem)"
+        '80240034' = "Update-Download fehlgeschlagen"
+        '8024A105' = "Windows Update Dienst ist beschäftigt (erneut versuchen)"
     }
     
-    if ($errorDescriptions.ContainsKey($HResult)) {
-        return $errorDescriptions[$HResult]
+    if ($errorDescriptions.ContainsKey($hexCode)) {
+        return $errorDescriptions[$hexCode]
     }
     return "Unbekannter Fehler"
+}
+
+function Ensure-WindowsUpdateServices {
+    param(
+        [System.Windows.Forms.RichTextBox]$outputBox = $null
+    )
+
+    $serviceNames = @('wuauserv', 'bits')
+    foreach ($serviceName in $serviceNames) {
+        try {
+            $service = Get-Service -Name $serviceName -ErrorAction Stop
+            if ($service.Status -ne 'Running') {
+                Start-Service -Name $serviceName -ErrorAction Stop
+                if ($outputBox) {
+                    Write-ToolLog -ToolName "WindowsUpdate" `
+                        -Message "Dienst '$serviceName' wurde gestartet." `
+                        -OutputBox $outputBox `
+                        -Style 'Info' -NoTimestamp
+                }
+            }
+        } catch {
+            if ($outputBox) {
+                Write-ToolLog -ToolName "WindowsUpdate" `
+                    -Message "Dienst '$serviceName' konnte nicht gestartet werden: $($_.Exception.Message)" `
+                    -OutputBox $outputBox `
+                    -Style 'Warning' -NoTimestamp
+            }
+        }
+    }
 }
 
 # Function to start Windows Update and show status
@@ -424,6 +458,8 @@ function Install-AvailableWindowsUpdates {
         }
         
         try {
+            Ensure-WindowsUpdateServices -outputBox $outputBox
+
             $updateSession = New-Object -ComObject Microsoft.Update.Session
             $updateSearcher = $updateSession.CreateUpdateSearcher()
             
@@ -450,8 +486,67 @@ function Install-AvailableWindowsUpdates {
                     $outputBox.AppendText("- " + $update.Title + "  `r`n")
                 }
                 
+                # Updates zuerst explizit herunterladen, um Download-Fehler klar auszugeben
+                $downloader = $updateSession.CreateUpdateDownloader()
+                $downloader.Updates = $updatesToInstall
+                $downloadResult = $downloader.Download()
+
+                $downloadedUpdates = New-Object -ComObject Microsoft.Update.UpdateColl
+                $downloadFailedCount = 0
+                $downloadManagerFailureDetected = $false
+
+                for ($i = 0; $i -lt $updatesToInstall.Count; $i++) {
+                    $update = $updatesToInstall.Item($i)
+
+                    if ($update.IsDownloaded) {
+                        $downloadedUpdates.Add($update) | Out-Null
+                        continue
+                    }
+
+                    $downloadFailedCount++
+                    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
+                    $outputBox.AppendText("  ✗ Download fehlgeschlagen: $($update.Title)`r`n")
+
+                    try {
+                        $downloadItemResult = $downloadResult.GetUpdateResult($i)
+                        if ($downloadItemResult -and $downloadItemResult.HResult) {
+                            $hresult = $downloadItemResult.HResult
+                            $hresultHex = ([uint32]($hresult -band 0xFFFFFFFF)).ToString('X8')
+                            $errorDesc = Get-UpdateErrorDescription -HResult $hresult
+                            $outputBox.AppendText("    Fehlercode: 0x$hresultHex - $errorDesc`r`n")
+                            if ($hresultHex -eq '80246007') {
+                                $downloadManagerFailureDetected = $true
+                            }
+                        }
+                    } catch {
+                        # Download-Result ist nicht bei jedem Update verfügbar
+                    }
+                }
+
+                if ($downloadedUpdates.Count -eq 0) {
+                    if ($progressBar) {
+                        $progressBar.Value = 100
+                        $progressBar.CustomText = "Keine Updates konnten heruntergeladen werden"
+                        $progressBar.TextColor = [System.Drawing.Color]::Red
+                    }
+
+                    if ($downloadManagerFailureDetected) {
+                        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
+                        $outputBox.AppendText("`r`nHinweis: Download-Fehler 0x80246007 erkannt. Bitte BITS/Windows Update-Dienst neu starten oder Update-Problembehandlung ausführen.`r`n")
+                    }
+
+                    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
+                    $outputBox.AppendText("`r`nEs konnte kein Update installiert werden, da alle Downloads fehlgeschlagen sind.`r`n")
+                    return
+                }
+
+                if ($downloadFailedCount -gt 0) {
+                    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
+                    $outputBox.AppendText("`r`n$downloadFailedCount Update(s) konnten nicht heruntergeladen werden und werden übersprungen.`r`n")
+                }
+
                 $installer = $updateSession.CreateUpdateInstaller()
-                $installer.Updates = $updatesToInstall
+                $installer.Updates = $downloadedUpdates
                 
                 # Fortschrittsanzeige aktualisieren
                 if ($progressBar) {
@@ -467,9 +562,9 @@ function Install-AvailableWindowsUpdates {
                 $pendingCount = 0
                 
                 # Detaillierte Analyse der Update-Ergebnisse
-                for ($i = 0; $i -lt $updatesToInstall.Count; $i++) {
+                for ($i = 0; $i -lt $downloadedUpdates.Count; $i++) {
                     $updateResult = $result.GetUpdateResult($i)
-                    $update = $updatesToInstall.Item($i)
+                    $update = $downloadedUpdates.Item($i)
                     
                     switch ($updateResult.ResultCode) {
                         2 { 
@@ -575,6 +670,10 @@ function Install-AvailableWindowsUpdates {
                         $outputBox.AppendText("  • Windows Update Dienst hat Probleme`r`n")
                         Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
                         $outputBox.AppendText("`r`nEmpfehlung: Führen Sie DISM-Tools aus oder starten Sie neu und versuchen Sie es erneut.`r`n")
+                        if ($downloadManagerFailureDetected) {
+                            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
+                            $outputBox.AppendText("Hinweis zu 0x80246007: Starten Sie die Dienste 'BITS' und 'Windows Update' neu oder nutzen Sie die Windows-Update-Problembehandlung.`r`n")
+                        }
                     } else {
                         $outputBox.AppendText("`r`nDie Update-Installation war nicht vollständig erfolgreich.`r`n")
                     }

@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bockis Python Dashboard</title>
+  <link rel="stylesheet" href="/web/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>Bockis Python Dashboard</h1>
+      <p id="sysInfo">Verbinde...</p>
+    </div>
+    <div class="status-wrap">
+      <span id="uptime">Uptime: -</span>
+      <span id="state" class="pill off">offline</span>
+      <button id="restartBtn" class="btn warn">Neustart GUI</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="card">
+      <h2>Monitoring</h2>
+      <div class="grid-3" id="metricsGrid">
+        <div class="metric">
+          <span>CPU</span>
+          <strong id="cpuPct">-</strong>
+          <div class="bar"><div id="cpuBar"></div></div>
+        </div>
+        <div class="metric">
+          <span>RAM</span>
+          <strong id="ramPct">-</strong>
+          <div class="bar"><div id="ramBar"></div></div>
+        </div>
+        <div class="metric">
+          <span>Netz</span>
+          <strong id="netTxt">-</strong>
+          <small id="freqTxt">-</small>
+        </div>
+      </div>
+      <div id="disks" class="list"></div>
+    </section>
+
+    <section class="card">
+      <h2>Git Pull</h2>
+      <div class="kv">
+        <div>Branch</div><div id="gitBranch">-</div>
+        <div>Upstream</div><div id="gitUpstream">-</div>
+        <div>Ahead/Behind</div><div id="gitAB">-</div>
+        <div>Lokale Aenderungen</div><div id="gitDirty">-</div>
+      </div>
+      <div class="row">
+        <input id="gitRemote" value="origin" />
+        <input id="gitTarget" value="main" />
+      </div>
+      <div class="row">
+        <button id="gitStatusBtn" class="btn">Status</button>
+        <button id="gitPullBtn" class="btn">Pull</button>
+      </div>
+      <pre id="gitMsg" class="console">Warte auf Git-Status...</pre>
+    </section>
+
+    <section class="card">
+      <h2>Logs</h2>
+      <div class="row">
+        <select id="logSelect"></select>
+        <button id="reloadLogBtn" class="btn">Laden</button>
+      </div>
+      <pre id="logContent" class="console">Keine Log-Datei geladen.</pre>
+    </section>
+
+    <section class="card">
+      <h2>Tools</h2>
+      <div id="toolList" class="tool-grid"></div>
+      <pre id="toolMsg" class="console">Bereit.</pre>
+    </section>
+
+    <section class="card span-2">
+      <h2>Top Prozesse</h2>
+      <table>
+        <thead><tr><th>Name</th><th>PID</th><th>CPU%</th><th>RAM MB</th></tr></thead>
+        <tbody id="procRows"></tbody>
+      </table>
+    </section>
+  </main>
+
+  <script src="/web/app.js"></script>
+</body>
+</html>

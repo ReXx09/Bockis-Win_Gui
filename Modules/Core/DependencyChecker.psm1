@@ -1056,7 +1056,7 @@ function Get-GuiReleaseDependencyStatus {
         [string]$RepoName = "Bockis-Win_Gui-DEV",
 
         [Parameter(Mandatory = $false)]
-        [string]$GitHubToken = "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"
+        [string]$GitHubToken = $env:GITHUB_TOKEN
     )
 
     $status = @{

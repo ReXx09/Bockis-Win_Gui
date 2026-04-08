@@ -1,3 +1,8 @@
+# Secrets - NIEMALS committen!
+.env
+.env.local
+.env.*.local
+
 # Proprietary libraries - DO NOT COMMIT
 Lib/iCUESDK.x64_2019.dll
 Lib/HidSharp.dll

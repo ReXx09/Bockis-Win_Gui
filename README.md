@@ -1,14 +1,13 @@
-﻿# Bocki's Windows Tool-Kit v4.2
+﻿# Bockis System-Tool v4.2.0
 
-Ein professionelles PowerShell-basiertes Systemwartungs-Tool mit moderner grafischer Benutzeroberfläche, WPF-Integration und umfassenden Diagnose-Funktionen für Windows-Systeme.
+Ein professionelles PowerShell-basiertes Systemwartungs-Tool mit moderner grafischer Benutzeroberfläche, WPF-Integration und umfassenden Diagnose- und Reparaturfunktionen für Windows 10/11.
 
 [![PowerShell](https://img.shields.io/badge/PowerShell-5.1+-blue.svg)](https://github.com/PowerShell/PowerShell)
 [![Windows](https://img.shields.io/badge/Windows-10%2F11-blue.svg)](https://www.microsoft.com/windows)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE.txt)
+[![GitHub Sponsors](https://img.shields.io/github/sponsors/ReXx09?label=Sponsor&logo=GitHub)](https://github.com/sponsors/ReXx09)
 
 ## 🔑 Hauptfunktionen
-
-Das Bockis System-Tool bietet eine umfassende Sammlung von Windows-Systemtools in einer benutzerfreundlichen grafischen Oberfläche:
 
 ### 🛡️ System & Sicherheit
 - **MRT Quick Scan**: Schnelle Malware-Erkennung mit Microsoft Malicious Software Removal Tool
@@ -17,6 +16,13 @@ Das Bockis System-Tool bietet eine umfassende Sammlung von Windows-Systemtools i
 - **Defender Offline-Scan**: Bootfähiger Malware-Scan vor dem Windows-Start
 - **SFC Check**: System File Checker zur Reparatur beschädigter Windows-Dateien
 - **Windows Update**: Automatische Suche und Installation verfügbarer System-Updates
+
+### 🔧 SmartRepair (NEU in v4.2.0)
+Vollautomatisches Reparaturmodul — führt alle Schritte in der sinnvollsten Reihenfolge aus:
+- **SFC Auto-Repair**: Systemdateiprüfung mit automatischer Korrektur
+- **DISM RestoreHealth**: Online-Image-Reparatur via Windows Update
+- **CHKDSK Online-Scan**: Dateisystemprüfung ohne Neustart
+- Neustart-Aufforderung erscheint erst am Ende (wenn wirklich nötig)
 
 ### 💽 Diagnose & Reparatur
 - **Memory Diagnostic**: Überprüfung des Arbeitsspeichers auf Hardware-Fehler
@@ -43,13 +49,13 @@ Das Bockis System-Tool bietet eine umfassende Sammlung von Windows-Systemtools i
   - Mainboard-Sensoren und Lüftergeschwindigkeiten
 - **Hardware-Info-Boxen**: Detaillierte Echtzeit-Informationen:
   - Prozessor-Spezifikationen (Kerne, Takt, Cache, Architektur)
-  - Arbeitsspeicher-Module, Kapazität und Auslastung
+  - Arbeitsspeicher-Module, Kapazität und Auslastung (DDR5 per-DIMM Temperaturen)
   - Grafikkarten-Details und Video-RAM
   - Festplatten-Status und Speicherplatz
   - Netzwerkadapter und IP-Konfiguration
   - Betriebssystem-Details und Uptime
 - **Hardware-History-Datenbank**: Automatische Protokollierung aller Sensor-Werte
-- **Debug-Modi**: Erweiterte Diagnose-Informationen für CPU/GPU/RAM
+- **Statistik-Popup**: Vollständige Tabelle für CPU/GPU/RAM mit Schwellenwert-Farbkodierung
 
 ### 🔽 Tool-Downloads & Winget-Integration
 - **50+ vordefinierte Tools**: Kategorisiert nach System/Browser/Gaming/Dev/Multimedia
@@ -65,8 +71,6 @@ Das Bockis System-Tool bietet eine umfassende Sammlung von Windows-Systemtools i
   - Office (LibreOffice, Apache OpenOffice)
   - Entwicklung (VS Code, Git, Python, Node.js, Docker)
   - Cloud Storage (Nextcloud Desktop, Dropbox, Google Drive)
-- **WPF-ScrollViewer**: Moderne Kachel-Darstellung mit Smooth Scrolling
-- **Installation per Klick**: Direkte Installation via Winget
 
 ### 🗄️ Erweiterte Funktionen
 - **SQLite-Datenbank-Integration**: Automatische Protokollierung aller Tool-Ausführungen
@@ -75,22 +79,17 @@ Das Bockis System-Tool bietet eine umfassende Sammlung von Windows-Systemtools i
   - SystemSnapshots-Tabelle: Periodische System-Zustandsaufnahmen
 - **Status-Indikatoren**: Visuelle Anzeige des letzten Ausführungsstatus für jeden Button
 - **Scan-Historie**: Zeitstempel und Verlaufsverfolgung aller durchgeführten Systemscans
-- **Erweiterte Benutzeroberfläche**: 
-  - **Collapsible Panels**: Aufklappbare Navigations-Menüs (System/Diagnose/Netzwerk/Bereinigung)
-  - **WPF-Integration**: Moderne UI-Komponenten (ScrollViewer, WrapPanel)
-  - **Custom Title Bar**: Borderless Window mit Drag-Support
-  - **Dunkles Theme**: Moderne UI ähnlich UniGetUI
-  - **Tooltips**: Kontextuelle Hilfe für alle Buttons
-  - **F12-Shortcut**: PowerShell-Konsole ein-/ausblenden
-  - **Automatisches Fenster-Management**: Position und Größe werden gespeichert
+- **Collapsible Panels**: Aufklappbare Navigations-Menüs (System/Diagnose/Netzwerk/Bereinigung)
+- **Custom Title Bar**: Borderless Window mit Drag-Support
+- **F12-Shortcut**: PowerShell-Konsole ein-/ausblenden
+- **Automatisches Fenster-Management**: Position und Größe werden gespeichert
 - **Modulares Logging-System**: Zentrale Logs in `%LOCALAPPDATA%\BockisSystemTool\Logs`
 - **Cloud-Sync-kompatibel**: Intelligente Fehlerbehandlung für Nextcloud/OneDrive
 - **Einstellungs-Persistenz**: JSON-basierte Konfiguration mit ColorScheme-Support
-- **UI-Skalierung**: Anpassbare Skalierung für verschiedene Bildschirmauflösungen
 
 ## ⚙️ Systemvoraussetzungen
 
-- Windows 10/11
+- Windows 10/11 (64-Bit)
 - PowerShell 5.1 oder höher
 - Administratorrechte
 - Mindestens 4 GB RAM
@@ -98,247 +97,126 @@ Das Bockis System-Tool bietet eine umfassende Sammlung von Windows-Systemtools i
 
 ## 📥 Installation
 
-### Methode 1: Installer (Empfohlen)
-1. Laden Sie `BockisSystemTool-Setup.exe` herunter
-2. Führen Sie den Installer mit Administratorrechten aus
-3. Starten Sie das Tool über das Startmenü oder Desktop-Verknüpfung
+### Portable (empfohlen)
+1. Neueste Version von [Releases](https://github.com/ReXx09/Bockis-Win_Gui/releases) herunterladen
+2. ZIP in ein Verzeichnis entpacken
+3. `Bockis System-Tool starten.bat` als Administrator ausführen
 
-### Methode 2: Portable/ZIP
-1. Laden Sie das Tool als ZIP herunter
-2. Entpacken Sie die ZIP-Datei in ein Verzeichnis Ihrer Wahl
-3. Starten Sie `Win_Gui_Module.ps1` mit Administratorrechten:
-
+oder direkt:
 ```powershell
 powershell.exe -ExecutionPolicy Bypass -File "Win_Gui_Module.ps1"
 ```
 
-### ⚠️ Windows Defender Warnung (ältere Versionen)
+### ⚠️ Windows Defender Warnung (LibreHardwareMonitor-Treiber)
 
-**Problem (nur LibreHWM < v0.9.4):** Ältere Versionen nutzen WinRing0-Treiber, der von Defender als "VulnerableDriver" markiert wird.
+**Problem (nur LibreHWM < v0.9.4):** Ältere Versionen nutzen den WinRing0-Treiber, der von Defender als "VulnerableDriver" markiert wird.
 
 **Lösung:** LibreHardwareMonitor **v0.9.4+** nutzt den modernen **PawnIO-Treiber**, der **keine Defender-Warnungen** mehr verursacht.
 
-**Update empfohlen:**
 ```powershell
 winget upgrade LibreHardwareMonitor.LibreHardwareMonitor
 ```
 
-**Falls du Version < 0.9.4 verwendest:** Der alte WinRing0-Treiber ist ein Fehlalarm (False Positive) und wird für Low-Level-Hardware-Zugriff benötigt.
+Falls dennoch eine Warnung erscheint (manuell):
+1. **Windows-Sicherheit** → **Viren- & Bedrohungsschutz** → **Einstellungen verwalten**
+2. **Ausschlüsse** → **Ausschlüsse hinzufügen oder entfernen**
+3. **Ordner hinzufügen** → Installationsordner auswählen
 
-#### 🚀 Automatische Lösung (empfohlen)
-
-**Doppelklick auf:** `Defender-Ausnahme hinzufügen.bat` im Installationsordner
-
-oder
-
-**PowerShell als Administrator:**
-```powershell
-.\Tools\Add-DefenderExclusion-Admin.ps1
-```
-
-Das Skript fügt automatisch die Defender-Ausnahme hinzu und erklärt alle Schritte.
-
-#### 🛠️ Manuelle Lösung
-
-Falls die automatische Lösung nicht funktioniert:
-1. **Windows-Sicherheit** öffnen (Windows-Taste + "Windows-Sicherheit")
-2. **Viren- & Bedrohungsschutz** → **Einstellungen verwalten**
-3. **Ausschlüsse** → **Ausschlüsse hinzufügen oder entfernen**
-4. **Ordner hinzufügen** → Installationsordner auswählen (z.B. `C:\Program Files\Bockis-Win_Gui`)
-5. **Tool neu starten**
-
-Falls LibreHardwareMonitor bereits blockiert wurde:
-- **Windows-Sicherheit** → **Schutzverlauf**
-- Suchen Sie nach "**WinRing0**", "**PawnIO**" oder "**LibreHardwareMonitor**"
-- Klicken Sie auf **"Wiederherstellen"** oder **"Zulassen"**
-
-**Hinweis:** Ab Version 0.9.4 verwendet LibreHWM den moderneren **PawnIO-Treiber**, der weniger Defender-Probleme verursacht.
-
-#### ℹ️ Wichtige Hinweise
-
-- ✅ **Sicherheit:** Ihr System bleibt vollständig geschützt - Windows Defender bleibt aktiv!
-- ✅ **Open-Source:** LibreHardwareMonitor ist ein vertrauenswürdiges Open-Source-Projekt ([GitHub](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor))
-- ✅ **Weit verbreitet:** Wird von tausenden Projekten weltweit genutzt (MSI Afterburner, HWiNFO64, etc.)
-- ℹ️ **Fallback:** Ohne Defender-Ausnahme läuft das Tool mit WMI-Monitoring (eingeschränkte Funktionen)
+> **Hinweis:** LibreHardwareMonitor ist ein vertrauenswürdiges Open-Source-Projekt ([GitHub](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor)) und wird von tausenden Projekten weltweit genutzt.
 
 ## 📂 Verzeichnisstruktur
 
 ```
-Bockis-Win_Gui-v4.0/
-├── Win_Gui_Module.ps1           # Hauptskript (4485 Zeilen)
-├── Defender-Ausnahme hinzufügen.bat  # 🆕 Automatische Defender-Fix
-```
-├── config.json                  # Benutzer-Einstellungen
-├── README.md                    # Diese Datei
+Bockis-Win_Gui/
+├── Win_Gui_Module.ps1               # Hauptskript (~15.000 LOC)
+├── Bockis System-Tool starten.bat   # Startskript (als Administrator)
+├── Create-GitHubRelease.ps1         # Release-Automatisierung
+├── RELEASE_NOTES.md                 # Aktuelle Release Notes
+├── config.json                      # Benutzer-Einstellungen (nicht im Repo)
+├── README.md
 ├── LICENSE.txt
 ├── THIRD-PARTY-LICENSES.md
-├── installer.iss                # Inno Setup Installer
+├── installer.iss                    # Inno Setup Installer
 │
-├── Modules/                     # PowerShell-Module (~15.000 LOC)
-│   ├── Core/                    # Kern-Funktionalität
-│   │   ├── Core.psm1           # Basis-Funktionen, Symbol-System
-│   │   ├── UI.psm1             # UI-Hilfsfunktionen
-│   │   ├── Settings.psm1       # Einstellungs-Verwaltung (1584 LOC)
-│   │   ├── TextStyle.psm1      # Farb-/Style-System
-│   │   ├── LogManager.psm1     # Zentrales Logging mit Cloud-Sync-Support
-│   │   └── ProgressBarTools.psm1
+├── Modules/                         # PowerShell-Module
+│   ├── Core/                        # Kern-Funktionalität
+│   │   ├── Core.psm1               # Basis-Funktionen
+│   │   ├── UI.psm1                 # UI-Hilfsfunktionen
+│   │   ├── Settings.psm1           # Einstellungs-Verwaltung
+│   │   ├── TextStyle.psm1          # Farb-/Style-System
+│   │   ├── LogManager.psm1         # Zentrales Logging
+│   │   ├── ProgressBarTools.psm1   # Fortschrittsanzeige
+│   │   └── DependencyChecker.psm1  # DLL-Versions- und Update-Prüfung
 │   │
-│   ├── Tools/                   # Diagnose-/Reparatur-Tools
-│   │   ├── SystemTools.psm1    # MRT, SFC, Memory Diagnostic (1916 LOC)
-│   │   ├── DISM-Tools.psm1     # DISM Check/Scan/Repair
-│   │   ├── CHKDSKTools.psm1    # Festplatten-Checks
-│   │   ├── NetworkTools.psm1   # Netzwerk-Diagnose/-Reparatur
-│   │   ├── CleanupTools.psm1   # System-Bereinigung
-│   │   ├── DefenderTools.psm1  # Windows Defender Integration
-│   │   └── WindowsUpdateTools.psm1  # Update-Management (643 LOC)
+│   ├── Tools/                       # Diagnose-/Reparatur-Tools
+│   │   ├── SystemTools.psm1        # MRT, SFC, Memory Diagnostic
+│   │   ├── SmartRepair.psm1        # Intelligente Auto-Reparatur (NEU)
+│   │   ├── DISM-Tools.psm1         # DISM Check/Scan/Repair
+│   │   ├── CHKDSKTools.psm1        # Festplatten-Checks
+│   │   ├── NetworkTools.psm1       # Netzwerk-Diagnose/-Reparatur
+│   │   ├── CleanupTools.psm1       # System-Bereinigung
+│   │   ├── DefenderTools.psm1      # Windows Defender Integration
+│   │   └── WindowsUpdateTools.psm1 # Update-Management
 │   │
-│   ├── Monitor/                 # Hardware-Überwachung
+│   ├── Monitor/                     # Hardware-Überwachung
 │   │   └── HardwareMonitorTools.psm1  # LibreHardwareMonitor-Integration
 │   │
-│   ├── ToolLibrary.psm1        # Tool-Download-Verwaltung (1287 LOC)
-│   ├── ToolCache.psm1          # Winget-Cache-System (454 LOC)
-│   ├── DatabaseManager.psm1    # SQLite-Integration (236 LOC)
-│   └── SystemInfo.psm1         # Systeminformationen
+│   ├── ToolLibrary.psm1            # 50+ vordefinierte Tools
+│   ├── ToolCache.psm1              # Winget-Cache-System
+│   ├── DatabaseManager.psm1        # SQLite-Integration
+│   ├── SystemInfo.psm1             # Systeminformationen
+│   └── UpdateManager.psm1          # GitHub-Release-Update-Check
 │
-├── Lib/                         # Native Bibliotheken
-│   ├── System.Data.SQLite.dll  # SQLite für .NET
-│   ├── LibreHardwareMonitorLib.dll  # Hardware-Monitoring (nutzt PawnIO ab v0.9.4)
-│   ├── SQLite.cs               # SQLite-Wrapper
-│   └── SQLiteAsync.cs          # Async SQLite-Operationen
+├── Lib/                             # Native Bibliotheken
+│   ├── System.Data.SQLite.dll      # SQLite für .NET
+│   ├── LibreHardwareMonitorLib.dll # Hardware-Monitoring (PawnIO ab v0.9.4)
+│   ├── BlackSharp.Core.dll
+│   ├── DiskInfoToolkit.dll
+│   ├── RAMSPDToolkit-NDD.dll
+│   ├── SQLite.cs
+│   └── SQLiteAsync.cs
 │
-├── Logs/                        # Tool-Ausführungs-Logs
-│   └── winget-validation-*.json
-│
-├── Tools/                       # Utility-Scripts
-│   ├── FarbpaletteViewer.ps1   # ColorScheme-Viewer
-│   └── Validate-WingetIds.ps1  # Winget-ID-Validator
-│
-└── _Archive/                    # Alte/Deprecated Dateien
-    ├── HardwareInfo.psm1       # DEPRECATED
-    ├── ColorScheme.psm1        # DEPRECATED
-    ├── UI.psm1.bak
-    └── README.md
+└── Data/                            # Laufzeitdaten (nicht im Repo)
+    ├── Database/system_data.db     # SQLite-Datenbank
+    ├── Logs/                       # Tool-Ausführungs-Logs
+    └── Temp/                       # Temporäre Dateien
 ```
 
 **Statistiken:**
 - **Gesamt-LOC**: ~15.000 Zeilen Code
-- **Module**: 20 aktive PowerShell-Module
-- **Funktionen**: 80+ exportierte Funktionen
-- **Tool-Definitionen**: 50+ vordefinierte Tools
+- **Aktive Module**: 18 PowerShell-Module
+- **Exportierte Funktionen**: 80+
+- **Vordefinierte Tools**: 50+
 
 ## 🚀 Benutzeranleitung
 
 ### Erster Start
-1. **Automatische Rechte-Prüfung**: Das Tool prüft beim Start automatisch, ob Administratorrechte vorhanden sind
+1. **Automatische Rechte-Prüfung**: Das Tool prüft beim Start automatisch Administratorrechte
 2. **Modul-Loading**: Alle erforderlichen Module werden mit Fortschrittsanzeige geladen
-3. **Hardware-Initialisierung**: Die Echtzeit-Hardware-Überwachung startet automatisch
-4. **GUI-Anzeige**: Die grafische Benutzeroberfläche öffnet sich mit allen verfügbaren Tools
+3. **Dependency-Check**: DLL-Versionen (LibreHWM, SQLite) werden geprüft
+4. **Hardware-Initialisierung**: Die Echtzeit-Hardware-Überwachung startet automatisch
+5. **GUI-Anzeige**: Die grafische Benutzeroberfläche öffnet sich
 
 ### Navigation
-- **Tab-System**: Die Hauptfunktionen sind in 4 kategorisierte Tabs unterteilt
-- **Info-Buttons**: Jeder Tab hat einen Info-Button (ⓘ) mit detaillierten Erklärungen
-- **Status-Indikatoren**: Kleine farbige Punkte zeigen den letzten Ausführungsstatus jedes Tools
-- **Ausgabe-Bereich**: Der untere Bereich zeigt Live-Ausgaben und System-Informationen
-
-### Tool-Ausführung
-1. **Tool auswählen**: Klicken Sie auf den gewünschten Button
-2. **Automatischer Tab-Wechsel**: Die GUI wechselt automatisch zum Ausgabe-Tab
-3. **Live-Verfolgung**: Verfolgen Sie den Fortschritt in Echtzeit
-4. **Status-Updates**: Die Fortschrittsleiste zeigt den aktuellen Status
-5. **Ergebnis-Anzeige**: Detaillierte Ergebnisse werden in der Ausgabe angezeigt
+- **Collapsible Panels**: Aufklappbare Menüs links (System / Diagnose / Netzwerk / Bereinigung)
+- **Info-Buttons**: ⓘ-Buttons mit detaillierten Erklärungen zu jedem Tool
+- **Status-Indikatoren**: Farbige Punkte zeigen den letzten Ausführungsstatus
+- **Ausgabe-Bereich**: Farbcodierte Live-Ausgabe aller Tool-Aktionen
 
 ### Hardware-Monitoring
-- **CPU**: Zeigt Auslastung, Temperatur und Taktfrequenz
-- **RAM**: Zeigt Speichernutzung und verfügbaren Speicher
-- **GPU**: Zeigt Grafikkarten-Auslastung und Temperatur
-- **Tooltips**: Bewegen Sie die Maus über die Hardware-Boxen für Details
+- **CPU**: Auslastung, Temperatur, Taktfrequenz (CoreMin, PowerCores, VCore)
+- **RAM**: Speichernutzung, freier Speicher, DDR5 DIMM-Temperaturen
+- **GPU**: Grafikkarten-Auslastung, Temperatur, VRAM
+- **Statistik-Popup**: Klick auf Hardware-Box → vollständige Sensor-Tabelle
 
-### Erweiterte Funktionen
-- **Scan-Historie**: Tooltips auf Status-Indikatoren zeigen Zeitstempel des letzten Scans
-- **Datenbank**: Alle Aktivitäten werden automatisch protokolliert
-- **Einstellungen**: Werden automatisch gespeichert und beim nächsten Start geladen
-- **Fenster-Management**: Position und Größe werden automatisch gespeichert
+### Keyboard-Shortcuts
+| Shortcut | Funktion |
+|----------|----------|
+| `F12` | PowerShell-Konsole ein-/ausblenden |
 
-## 🎯 Funktionsübersicht
+## 🎨 ColorScheme-System
 
-### System & Sicherheit
-- **Malware-Erkennung und -Entfernung**: MRT Quick/Full Scans
-- **Windows Defender Integration**: Vollständige Antivirus-Kontrolle
-- **Offline-Sicherheitsscans**: Bootfähige Malware-Erkennung
-- **Systemdatei-Überprüfung**: SFC-basierte Integritätsprüfung
-- **Automatische Update-Verwaltung**: Windows Update mit Fortschrittsanzeige
-
-### Diagnose & Reparatur
-- **Hardware-Diagnose**: Memory Diagnostic für RAM-Tests
-- **Festplatten-Management**: CHKDSK mit Laufwerksauswahl
-- **Windows-Image-Reparatur**: Komplette DISM-Suite
-- **Systemdatei-Wiederherstellung**: Automatische Reparatur beschädigter Dateien
-
-### Netzwerk-Tools
-- **Umfassende Verbindungstests**: Multi-Server Ping-Tests
-- **Netzwerk-Troubleshooting**: Adapter-Reset und Konfiguration
-- **Verbindungsdiagnose**: Detaillierte Netzwerkanalyse
-
-### Bereinigung & Optimierung
-- **Intelligente Systemreinigung**: Windows Disk Cleanup Integration
-- **Erweiterte Bereinigung**: Custom-Cleanup mit anpassbaren Optionen
-- **Speicherplatz-Optimierung**: Freigabe ungenutzten Speichers
-
-## 🎨 Benutzeroberfläche
-
-### Design-Highlights
-- **Modernes Dunkles Theme**: Ähnlich UniGetUI mit anpassbaren ColorSchemes
-- **Borderless Window**: Custom Title Bar mit Drag-Support
-- **Collapsible Navigation**: Aufklappbare Menü-Panels für kompakte Darstellung
-- **WPF-Integration**: Moderne ScrollViewer und WrapPanel-Komponenten
-- **Responsive Layout**: Automatische Anpassung an verschiedene Bildschirmgrößen
-- **UI-Skalierung**: Konfigurierbare Skalierung (0.8x - 1.5x)
-
-### Layout-Struktur
-```
-┌─────────────────────────────────────────────────────────┐
-│ [Bocki's System-Tool 4.0]       [Console ►] [━] [□] [X] │ ← Custom Title Bar
-├────────────┬────────────────────────────────────────────┤
-│            │                                             │
-│ ▼ System   │  ┌──────────────────────────────────────┐  │
-│   • Sicher │  │ [Output RichTextBox]                 │  │
-│   • Wartung│  │ Farbcodierte Ausgabe mit Symbolen    │  │
-│            │  │ [√] [X] [!] [►] [+]                  │  │
-│ ▼ Diagnose │  └──────────────────────────────────────┘  │
-│   • DISM   │                                             │
-│   • CHKDSK │  ┌─────┬─────┬─────┐                      │
-│            │  │ CPU │ GPU │ RAM │  Hardware-Monitor     │
-│ ▼ Netzwerk │  │ 45% │ 32% │ 8GB │  (Live-Update)        │
-│   • Diagn. │  └─────┴─────┴─────┘                      │
-│   • Repair │                                             │
-│            │  ┌───────────────────────────────────────┐ │
-│ ▼ Bereinig │  │ [Button Grid 3x3]                    │ │
-│   • System │  │ [MRT] [SFC] [Defender]               │ │
-│            │  │ [DISM] [CHKDSK] [WinUpdate]          │ │
-│ ▼ Tools ▼  │  └───────────────────────────────────────┘ │
-│   • Alle   │                                             │
-│   • System │  ┌─ Tool-Downloads ────────────────────┐  │
-│   • Browser│  │ [Search: _______]                   │  │
-│   • Gaming │  │ ┌───────┬───────┬───────┐           │  │
-│   • Dev    │  │ │ ╬ CPU-Z│ ╬ 7Zip│ ╬ VLC │ (WPF)    │  │
-│   • Office │  │ │Install │Install │Inst. │ Kacheln  │  │
-└────────────┴──│ └───────┴───────┴───────┘           │  │
-               │ Smooth Scrolling mit WPF              │  │
-               └───────────────────────────────────────┘  │
-                                                           │
-└──────────────────────────────────────────────────────────┘
-```
-
-### Interaktive Elemente
-- **Status-Indikatoren**: Farbige Punkte (Grün/Rot/Gelb) für Tool-Status
-- **Tooltips**: Kontext-Hilfe mit Zeitstempel der letzten Ausführung
-- **Hover-Effekte**: Buttons ändern Farbe bei Maus-Over
-- **Progress-Bar**: Integrierte Fortschrittsanzeige für langläufige Operationen
-- **Rich-Text-Output**: Farbcodierte Ausgabe mit verschiedenen Styles
-- **Keyboard-Shortcuts**: F12 für Console-Toggle
-
-### ColorScheme-System
-Das Tool unterstützt benutzerdefinierte Farbschemata via `config.json`:
+Benutzerdefinierte Farbschemata werden in `config.json` gespeichert:
 ```json
 {
   "ColorScheme": {
@@ -355,193 +233,97 @@ Das Tool unterstützt benutzerdefinierte Farbschemata via `config.json`:
 }
 ```
 
-## ⚠️ Wichtige Hinweise & Sicherheit
+## ⚠️ Wichtige Hinweise
 
-### Vor der Nutzung
-- **Administratorrechte erforderlich**: Das Tool benötigt zwingend erhöhte Rechte für Systemoperationen
-- **Systemwiederherstellungspunkt erstellen**: Wird vor kritischen Operationen automatisch erstellt
-- **Offene Dokumente speichern**: Einige Tools erfordern möglicherweise einen Neustart
-- **Antivirus-Software**: Temporäre Deaktivierung kann bei einigen Scans erforderlich sein
-
-### Während der Nutzung
-- **Tools nicht gleichzeitig ausführen**: Vermeiden Sie parallele System-Scans
-- **Internetverbindung**: Erforderlich für Windows Update und Malware-Definitionen
-- **Ausreichend Speicherplatz**: Mindestens 1 GB frei für temporäre Dateien
-- **Geduld bei längeren Scans**: Vollständige Scans können mehrere Stunden dauern
-
-### Nach der Nutzung
-- **Log-Dateien prüfen**: Überprüfen Sie die Scan-Ergebnisse im `Logs/`-Verzeichnis
-- **System-Neustart**: Bei DISM-Reparaturen oder Memory Diagnostic empfohlen
-- **Backup aktualisieren**: Nach wichtigen Systemreparaturen
-
-### Automatische Sicherheitsfeatures
-- **Vollständige Protokollierung**: Alle Aktivitäten werden in SQLite-Datenbank gespeichert
-- **Fehler-Recovery**: Automatische Wiederherstellung bei unterbrochenen Operationen
-- **Status-Tracking**: Nachverfolgung aller durchgeführten Scans und Reparaturen
-- **Sichere Beendigung**: Kontrolliertes Schließen aller Prozesse und Verbindungen
-
-## 🛠️ Fehlerbehebung
-
-Bei Problemen:
-1. Stellen Sie sicher, dass Sie Administratorrechte haben
-2. Überprüfen Sie die PowerShell-Version
-3. Prüfen Sie die Ereignisanzeige auf Fehler
-4. Kontaktieren Sie den Support
+- **Administratorrechte erforderlich** für alle Systemoperationen
+- **Tools nicht gleichzeitig ausführen** — parallele System-Scans vermeiden
+- **Internetverbindung** für Windows Update, SmartRepair (DISM RestoreHealth) und Tool-Downloads
+- **Neustart nach DISM / Memory Diagnostic** empfohlen
+- **Log-Dateien** unter `%LOCALAPPDATA%\BockisSystemTool\Logs\` prüfen
 
 ## 📋 Changelog
 
-### Version 4.2.0 (23. März 2026) - Aktuell
-- ✨ **Erweiterte Hardware-Statistiken**: CPU CoreMin, PowerCores (Kernleistung), VCore (Kernspannung)
-- 🔧 **CPU Stats**: Neue Sensoren CoreMin, PowerCores, VCore in der Statistik-Tabelle
-- 🐛 **Debug-Fenster Fix**: Prozessbaum-Beendigung per taskkill /T verhindert Dateifehler beim Schließen
-- 🌡️ **DDR5 RAM-Temperaturen**: Per-DIMM Temperaturen via LibreHardwareMonitor
-- 📊 **Statistik-Popup**: Vollständige Statistiktabelle für CPU, GPU und RAM mit Schwellenwert-Farbkodierung
+### Version 4.2.0 (8. April 2026) — Aktuell
+- ✨ **SmartRepair**: Neues intelligentes Auto-Reparaturmodul (SFC → DISM → CHKDSK in optimaler Reihenfolge)
+- 🔐 **Security**: Hardcodierter GitHub-Token vollständig entfernt — Token-Verwaltung via `.env`-Datei
+- 🔗 **Update-Link**: Wird nun auf das öffentliche Release-Repo umgeleitet
+- 🤝 **GitHub Sponsors**: FUNDING.yml und Sponsors-Badge hinzugefügt
+- 🚀 **Release-Automatisierung**: `Create-GitHubRelease.ps1` für automatisierte GitHub Releases
+- 🧹 **Cleanup**: Veraltete Lib-Dateien und Hilfsdateien entfernt
+- 📝 **UpdateManager**: Textausgabe verbessert, Code-Formatierung vereinheitlicht
+
+### Version 4.1.9 (17. März 2026)
+- 📝 **Textausgabe**: Verbesserungen der farbcodierten Ausgabe
+- 🔧 **Anpassungen**: Allgemeine Code-Optimierungen
 
 ### Version 4.1.7 (18. Februar 2026)
 - ✨ **Automatisches DLL-Update**: Integrierte Update-Funktion in DependencyChecker
 - 🔍 **Versionserkennung**: Automatische Prüfung auf veraltete LibreHardwareMonitorLib.dll
-- � **DLL-Versionsabfragen**: Erweiterte Test-SystemDependencies mit 5 DLL-Checks
-  - LibreHardwareMonitorLib.dll >= 0.9.5 (PawnIO-Kompatibilität) - ERFORDERLICH
-  - BlackSharp.Core.dll - ERFORDERLICH
-  - HidSharp.dll - OPTIONAL (nur für spezielle HID-Geräte)
-  - RAMSPDToolkit-NDD.dll, DiskInfoToolkit.dll - OPTIONAL
-- 👍 **Benutzerfreundlich**: Interaktiver Dialog mit Erklärung (Winring0 vs PawnIO)
 - 📦 **NuGet-Integration**: Direkter Download von v0.9.5 bei Bedarf
-- 💾 **Smart-Caching**: Nutzt Temp-Cache für schnellere Updates
 - 🛡️ **Sicher**: Automatisches Backup vor DLL-Ersetzung
-- 📝 **Dokumentation**: README-DLL-VERSION-CHECKS.md für DLL-Versionsabfragen
 
-### Version 4.1.1 (20. Januar 2026)
-- 🔧 **LibreHardwareMonitor Auto-Installation**: WinGet-Integration im Installer
+### Version 4.2.0-pre / 4.1.8 (23. März 2026)
+- ✨ **CPU Stats**: CoreMin, PowerCores, VCore in der Statistik-Tabelle
+- 🌡️ **DDR5 RAM-Temperaturen**: Per-DIMM Temperaturen via LibreHardwareMonitor
+- 📊 **Statistik-Popup**: Schwellenwert-basierte Farbkodierung für CPU/GPU/RAM
+- 🐛 **Debug-Fenster Fix**: Prozessbaum-Beendigung per `taskkill /T`
+
+### Version 4.1.1 – 4.1.6 (Januar – Februar 2026)
+- 🔧 **LibreHardwareMonitor Auto-Installation**: WinGet-Integration
 - 🛡️ **PawnIO-Treiber**: Moderne Ring-0-Treiber-Unterstützung (v0.9.4+)
 - 🔄 **Fallback-System**: Performance Counter-basierte Sensoren ohne LibreHWM
-- 📦 **Installer-Verbesserungen**: Automatische Abhängigkeitsprüfung
 - 🔐 **Code-Signierung**: Self-Signed Zertifikat mit 5 Jahren Gültigkeit
+- 🎯 **Icons**: Segoe MDL2 Assets Icons für alle Buttons
 
-### Version 4.0 (28. November 2025)
-- 🚀 **WPF-Integration**: Moderne UI-Komponenten (ScrollViewer, WrapPanel) für Tool-Downloads
+### Version 4.0 (November 2025)
+- 🚀 **WPF-Integration**: ScrollViewer und WrapPanel für Tool-Downloads
 - 🔽 **Tool-Download-System**: 50+ vordefinierte Tools mit Winget-Integration
-- 🎯 **Intelligenter Cache**: ToolCache-System reduziert Winget-Aufrufe (5-15 Min)
-- 📦 **Collapsible Panels**: Aufklappbare Navigation für kompakte Darstellung
+- 🎯 **Intelligenter Cache**: ToolCache-System reduziert Winget-Aufrufe
+- 📦 **Collapsible Panels**: Aufklappbare Navigation
 - 🎨 **Borderless Window**: Custom Title Bar mit Drag-Support
-- 🖱️ **Tool-Kacheln**: WPF-basierte Kachel-Darstellung mit Installations-Status
-- 🔍 **Such-Funktion**: Filter für Tools nach Name, Kategorie oder Tags
 - 🗄️ **HardwareHistory-Datenbank**: Automatische Speicherung aller Sensor-Werte
-- 🐛 **Cloud-Sync-Kompatibilität**: Intelligente Fehlerbehandlung für Nextcloud/OneDrive
-- ⚡ **Performance**: Lazy-Loading für Tool-Downloads, optimierte Module-Imports
-- 📊 **Debug-Modi**: Erweiterte Hardware-Diagnose für CPU/GPU/RAM
-- ⌨️ **F12-Shortcut**: PowerShell-Konsole ein-/ausblenden während der Laufzeit
-- 🎛️ **UI-Skalierung**: Anpassbare Skalierung für verschiedene Bildschirmauflösungen
-- 📝 **Modulares Logging**: Zentrale Logs in `%LOCALAPPDATA%\BockisSystemTool\Logs`
-- 🔧 **Code-Refactoring**: Aufgeräumte Module-Struktur, 20 aktive Module
 
-### Version 3.1
-- 🎨 **Komplette UI-Überarbeitung**: Moderne, kategorisierte Tab-Navigation
-- 📊 **Erweiterte Hardware-Überwachung**: Echtzeit-Monitoring von CPU, GPU, RAM
-- 🗄️ **SQLite-Datenbank-Integration**: Vollständige Protokollierung aller Aktivitäten
-- 🎯 **Status-Indikatoren**: Visuelle Anzeige des letzten Tool-Status mit Tooltips
-- 🔧 **DISM-Tool-Suite**: Komplette Windows-Image-Reparatur-Funktionalität
-- 🛡️ **Windows Defender Integration**: Direktzugriff auf alle Defender-Funktionen
-- 🌐 **Erweiterte Netzwerk-Tools**: Umfassende Ping-Tests und Adapter-Reset
-- 🧹 **Custom-Cleanup**: Anpassbare Systemreinigung mit erweiterten Optionen
-- ⚡ **Performance-Optimierungen**: Verbesserte Modul-Ladezeiten
-- 🔐 **Verbesserte Sicherheit**: Automatische Rechte-Prüfung und sichere Beendigung
+## 👥 Support & Mitwirkung
 
-### Version 3.0
-- 🆕 **Neue grafische Benutzeroberfläche**: Vollständiger Rewrite der GUI
-- 📱 **Hardware-Monitor hinzugefügt**: Erste Version der Hardware-Überwachung
-- 🔧 **Verbesserte Systemdiagnose**: Erweiterte DISM- und CHKDSK-Integration
-- 🌙 **Dark Mode implementiert**: Erste Implementierung verschiedener Themes
-
-### Version 2.x
-- 🏗️ **Modulare Architektur**: Aufbau der PowerShell-Modul-Struktur
-- 🛠️ **Grundlegende System-Tools**: Implementierung der Core-Funktionalitäten
-
-## 👥 Support
-
-Bei Fragen oder Problemen:
-- Erstellen Sie ein Issue
-- Kontaktieren Sie den Support
-- Konsultieren Sie die Dokumentation
+- **Issues**: [github.com/ReXx09/Bockis-Win_Gui/issues](https://github.com/ReXx09/Bockis-Win_Gui/issues)
+- **Sponsor**: [github.com/sponsors/ReXx09](https://github.com/sponsors/ReXx09)
 
 ## 📄 Lizenz
 
 Dieses Tool ist unter der MIT-Lizenz veröffentlicht. Siehe [LICENSE.txt](LICENSE.txt) für Details.
+Drittanbieter-Lizenzen: [THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md)
 
-### Drittanbieter-Lizenzen
-Dieses Projekt verwendet verschiedene Drittanbieter-Bibliotheken. Details siehe [THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md).
-
-**Wichtiger Hinweis:** Einige optionale Funktionen benötigen proprietäre Software:
-- Corsair iCUE SDK (für Corsair-Hardware)
-- HidSharp (für HID-Geräte)
-
-Diese müssen separat installiert werden und sind nicht im Repository enthalten.
-
-## 🔧 Technische Details
-
-### Architektur
-- **Hauptskript**: `Win_Gui_Module.ps1` (4485 Zeilen)
-- **Module**: 20 aktive PowerShell-Module (~15.000 LOC)
-- **UI-Framework**: Windows Forms + WPF-Integration
-- **Datenbank**: SQLite 3 via System.Data.SQLite.dll
-- **Hardware-Monitoring**: LibreHardwareMonitor
-- **Package-Manager**: Winget-Integration
-
-### Performance-Optimierungen
-- **Cache-System**: MemoryCache für Winget-Abfragen (5-15 Min TTL)
-- **Lazy-Loading**: Tool-Downloads werden nur bei Bedarf geladen
-- **Timer-basiert**: Hardware-Updates erfolgen asynchron (1s Intervall)
-- **Assembly-Caching**: Einmalige Assembly-Ladung beim Start
-- **Retry-Mechanismus**: Exponential backoff bei Datei-Zugriffs-Konflikten
-
-### Bekannte Einschränkungen
-- Einige Tools erfordern Neustart (Memory Diagnostic, CHKDSK)
-- Hardware-Monitoring benötigt Kernel-Treiber (PawnIO ab v0.9.4, WinRing0 bei älteren Versionen)
-- Winget muss installiert sein für Tool-Download-Feature
-- Windows Defender kann ältere LibreHWM-Versionen (< 0.9.4) als "VulnerableDriver" melden (Update auf v0.9.4+ empfohlen)
 
 ## 🔍 FAQ
 
-**Q: Warum meldet Windows Defender das Tool als Malware?**  
-A: Dies ist ein Fehlalarm (False Positive). Das Tool verwendet Windows-APIs zur Fenstersteuerung, die manchmal von Malware missbraucht werden. Der Code ist vollständig transparent und Open Source.
+**Q: Warum meldet Windows Defender das Tool als Malware?**
 
-**Q: Benötige ich Administratorrechte?**  
-A: Ja, die meisten System-Diagnose- und Reparatur-Tools erfordern erhöhte Rechte. Das Tool fordert diese automatisch beim Start an.
+A: Der Defender erkennt den Kernel-Treiber von LibreHardwareMonitor bei Versionen < v0.9.4 (WinRing0) als "VulnerableDriver" - dies ist ein bekannter False Positive. Ab v0.9.4 wird der modernere **PawnIO-Treiber** verwendet, der keine Warnungen mehr auslöst. Update empfohlen: `winget upgrade LibreHardwareMonitor.LibreHardwareMonitor`
 
-**Q: Werden meine Daten gesammelt?**  
-A: Nein. Alle Daten werden lokal in SQLite-Datenbank gespeichert. Es erfolgt keine Datenübertragung ins Internet (außer für Windows Update und Tool-Downloads).
+**Q: Benötige ich Administratorrechte?**
 
-**Q: Kann ich eigene Tools hinzufügen?**  
-A: Ja, über `ToolLibrary.psm1` können Sie die `$script:toolLibrary`-Hashtable erweitern.
+A: Ja, alle System-Diagnose- und Reparatur-Tools erfordern erhöhte Rechte. Das Tool fordert diese automatisch beim Start an.
 
-**Q: Wo finde ich die Logs?**  
-A: Logs werden in `%LOCALAPPDATA%\BockisSystemTool\Logs\` gespeichert.
+**Q: Werden meine Daten gesammelt?**
 
-**Q: Funktioniert das Tool mit Nextcloud/OneDrive?**  
+A: Nein. Alle Daten werden lokal in einer SQLite-Datenbank gespeichert. Der UpdateManager prüft anonym auf neue Versionen via GitHub API. Keine weiteren Datenübertragungen.
+
+**Q: Kann ich eigene Tools hinzufügen?**
+
+A: Ja, über `ToolLibrary.psm1` kann die `$script:toolLibrary`-Hashtable erweitert werden. Details in den Modul-Kommentaren.
+
+**Q: Wo finde ich die Logs?**
+
+A: Im `Data\Logs\`-Unterordner des Installationsverzeichnisses (z.B. `C:\Program Files\Bockis-Win_Gui\Data\Logs\`).
+
+**Q: Funktioniert das Tool mit Nextcloud/OneDrive?**
+
 A: Ja, das Tool hat spezielle Fehlerbehandlung für Cloud-Sync-Provider implementiert.
 
-## 🙏 Danksagungen
 
-- **LibreHardwareMonitor** - Exzellente Hardware-Monitoring-Bibliothek
-- **SQLite-NET** - Robuste Datenbank-Integration
-- **PowerShell-Community** - Unzählige hilfreiche Ressourcen
-- **Microsoft** - Winget Package Manager
-- **Alle Beta-Tester** - Wertvolles Feedback und Bug-Reports
-
-## 🤝 Mitwirken
-
-Beiträge sind willkommen! Bitte:
-1. Forken Sie das Repository
-2. Erstellen Sie einen Feature-Branch (`git checkout -b feature/AmazingFeature`)
-3. Committen Sie Ihre Änderungen (`git commit -m 'Add some AmazingFeature'`)
-4. Pushen Sie zum Branch (`git push origin feature/AmazingFeature`)
-5. Öffnen Sie einen Pull Request
 
 ---
 
-**Entwickelt mit ❤️ von Bocki**  
-*Version 4.0 - November 2025*
 
 
-
-
+**Entwickelt von Bocki | v4.2.0 | April 2026**
