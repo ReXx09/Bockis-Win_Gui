@@ -1131,13 +1131,11 @@ $script:pythonDashboardButton.FlatAppearance.BorderColor       = [System.Drawing
 $script:pythonDashboardButton.FlatAppearance.MouseDownBackColor = [System.Drawing.Color]::FromArgb(40, 110, 40)
 $script:pythonDashboardButton.BackColor = [System.Drawing.Color]::DarkSlateGray
 $script:pythonDashboardButton.ForeColor = [System.Drawing.Color]::White
+$script:pythonDashboardButtonBusy = $false
 $script:pythonDashboardButton.Add_Click({
-    $st = Get-PythonDashboardStatus
-    if ($st.Running) {
-        Stop-PythonDashboard
-        $script:pythonDashboardButton.BackColor = [System.Drawing.Color]::DarkSlateGray
-        $script:pythonDashboardButton.ForeColor = [System.Drawing.Color]::White
-    } else {
+    if ($script:pythonDashboardButtonBusy) { return }
+    $script:pythonDashboardButtonBusy = $true
+    try {
         $result = Start-PythonDashboard
         if ($result.Success) {
             $script:pythonDashboardButton.BackColor = [System.Drawing.Color]::FromArgb(25, 90, 25)
@@ -1151,6 +1149,9 @@ $script:pythonDashboardButton.Add_Click({
                 [System.Windows.Forms.MessageBoxIcon]::Warning
             )
         }
+    }
+    finally {
+        $script:pythonDashboardButtonBusy = $false
     }
 })
 $script:pythonDashboardButton.Add_MouseEnter({
