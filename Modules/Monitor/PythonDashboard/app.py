@@ -9,6 +9,7 @@ import time
 import ctypes
 import sys
 import threading
+from contextlib import contextmanager
 from pathlib import Path
 
 import psutil
@@ -52,6 +53,25 @@ def _ensure_audio_backend() -> bool:
         return True
     except Exception:
         return False
+
+
+@contextmanager
+def _audio_com_context():
+    initialized = False
+    try:
+        ctypes.windll.ole32.CoInitialize(None)
+        initialized = True
+    except Exception:
+        initialized = False
+
+    try:
+        yield
+    finally:
+        if initialized:
+            try:
+                ctypes.windll.ole32.CoUninitialize()
+            except Exception:
+                pass
 
 APP_DIR = Path(__file__).resolve().parent
 WEB_DIR = APP_DIR / "web"
@@ -391,6 +411,10 @@ def _audio_obj():
         return None
     try:
         dev = AudioUtilities.GetSpeakers()
+        endpoint = getattr(dev, "EndpointVolume", None)
+        if endpoint is not None:
+            return endpoint
+
         iface = dev.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
         return cast(iface, POINTER(IAudioEndpointVolume))
     except Exception:
@@ -398,14 +422,15 @@ def _audio_obj():
 
 
 def get_audio_status() -> dict:
-    vol = _audio_obj()
-    if not vol:
-        return {"available": False, "level": 0, "muted": False}
-    try:
-        level = int(round(vol.GetMasterVolumeLevelScalar() * 100))
-        return {"available": True, "level": max(0, min(100, level)), "muted": bool(vol.GetMute())}
-    except Exception:
-        return {"available": False, "level": 0, "muted": False}
+    with _audio_com_context():
+        vol = _audio_obj()
+        if not vol:
+            return {"available": False, "level": 0, "muted": False}
+        try:
+            level = int(round(vol.GetMasterVolumeLevelScalar() * 100))
+            return {"available": True, "level": max(0, min(100, level)), "muted": bool(vol.GetMute())}
+        except Exception:
+            return {"available": False, "level": 0, "muted": False}
 
 
 def get_audio_devices() -> dict:
@@ -415,26 +440,27 @@ def get_audio_devices() -> dict:
     devices: list[dict] = []
     active_output = None
 
-    try:
-        active = AudioUtilities.GetSpeakers()
-        active_output = getattr(active, "FriendlyName", None)
-    except Exception:
-        active_output = None
+    with _audio_com_context():
+        try:
+            active = AudioUtilities.GetSpeakers()
+            active_output = getattr(active, "FriendlyName", None)
+        except Exception:
+            active_output = None
 
-    try:
-        all_devices = AudioUtilities.GetAllDevices()
-        for d in all_devices:
-            name = getattr(d, "FriendlyName", None) or getattr(d, "DeviceFriendlyName", None) or "Unknown"
-            dev_id = getattr(d, "id", None) or getattr(d, "Id", None) or name
-            devices.append(
-                {
-                    "id": str(dev_id),
-                    "name": str(name),
-                    "is_active_output": bool(active_output and str(name) == str(active_output)),
-                }
-            )
-    except Exception:
-        pass
+        try:
+            all_devices = AudioUtilities.GetAllDevices()
+            for d in all_devices:
+                name = getattr(d, "FriendlyName", None) or getattr(d, "DeviceFriendlyName", None) or "Unknown"
+                dev_id = getattr(d, "id", None) or getattr(d, "Id", None) or name
+                devices.append(
+                    {
+                        "id": str(dev_id),
+                        "name": str(name),
+                        "is_active_output": bool(active_output and str(name) == str(active_output)),
+                    }
+                )
+        except Exception:
+            pass
 
     return {"available": True, "active_output": active_output, "devices": devices}
 
@@ -453,24 +479,25 @@ def get_audio_sessions() -> dict:
         return {"available": False, "sessions": []}
 
     result: list[dict] = []
-    for sess in _iter_audio_sessions():
-        try:
-            pid = int(getattr(sess, "ProcessId", 0) or 0)
-            proc = getattr(sess, "Process", None)
-            app = proc.name() if proc else "System Sounds"
-            vol_obj = sess.SimpleAudioVolume
-            vol = int(round(vol_obj.GetMasterVolume() * 100))
-            muted = bool(vol_obj.GetMute())
-            result.append(
-                {
-                    "pid": pid,
-                    "app": app,
-                    "volume": max(0, min(100, vol)),
-                    "muted": muted,
-                }
-            )
-        except Exception:
-            continue
+    with _audio_com_context():
+        for sess in _iter_audio_sessions():
+            try:
+                pid = int(getattr(sess, "ProcessId", 0) or 0)
+                proc = getattr(sess, "Process", None)
+                app = proc.name() if proc else "System Sounds"
+                vol_obj = sess.SimpleAudioVolume
+                vol = int(round(vol_obj.GetMasterVolume() * 100))
+                muted = bool(vol_obj.GetMute())
+                result.append(
+                    {
+                        "pid": pid,
+                        "app": app,
+                        "volume": max(0, min(100, vol)),
+                        "muted": muted,
+                    }
+                )
+            except Exception:
+                continue
 
     result = sorted(result, key=lambda x: (x["app"].lower(), x["pid"]))
     return {"available": True, "sessions": result}
@@ -482,15 +509,16 @@ def set_audio_session_volume(pid: int, level: int) -> bool:
 
     target = max(0.0, min(1.0, level / 100.0))
     changed = False
-    for sess in _iter_audio_sessions():
-        try:
-            session_pid = int(getattr(sess, "ProcessId", 0) or 0)
-            if session_pid != pid:
+    with _audio_com_context():
+        for sess in _iter_audio_sessions():
+            try:
+                session_pid = int(getattr(sess, "ProcessId", 0) or 0)
+                if session_pid != pid:
+                    continue
+                sess.SimpleAudioVolume.SetMasterVolume(target, None)
+                changed = True
+            except Exception:
                 continue
-            sess.SimpleAudioVolume.SetMasterVolume(target, None)
-            changed = True
-        except Exception:
-            continue
     return changed
 
 
@@ -499,38 +527,41 @@ def set_audio_session_mute(pid: int, muted: bool) -> bool:
         return False
 
     changed = False
-    for sess in _iter_audio_sessions():
-        try:
-            session_pid = int(getattr(sess, "ProcessId", 0) or 0)
-            if session_pid != pid:
+    with _audio_com_context():
+        for sess in _iter_audio_sessions():
+            try:
+                session_pid = int(getattr(sess, "ProcessId", 0) or 0)
+                if session_pid != pid:
+                    continue
+                sess.SimpleAudioVolume.SetMute(1 if muted else 0, None)
+                changed = True
+            except Exception:
                 continue
-            sess.SimpleAudioVolume.SetMute(1 if muted else 0, None)
-            changed = True
-        except Exception:
-            continue
     return changed
 
 
 def set_audio_volume(level: int) -> bool:
-    vol = _audio_obj()
-    if not vol:
-        return False
-    try:
-        vol.SetMasterVolumeLevelScalar(max(0.0, min(1.0, level / 100.0)), None)
-        return True
-    except Exception:
-        return False
+    with _audio_com_context():
+        vol = _audio_obj()
+        if not vol:
+            return False
+        try:
+            vol.SetMasterVolumeLevelScalar(max(0.0, min(1.0, level / 100.0)), None)
+            return True
+        except Exception:
+            return False
 
 
 def set_audio_mute(muted: bool) -> bool:
-    vol = _audio_obj()
-    if not vol:
-        return False
-    try:
-        vol.SetMute(1 if muted else 0, None)
-        return True
-    except Exception:
-        return False
+    with _audio_com_context():
+        vol = _audio_obj()
+        if not vol:
+            return False
+        try:
+            vol.SetMute(1 if muted else 0, None)
+            return True
+        except Exception:
+            return False
 
 
 def send_media_key(action: str) -> bool:
