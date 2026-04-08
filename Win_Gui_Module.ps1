@@ -462,7 +462,6 @@ $moduleOrder = @(
     'Core\ProgressBarTools        ', # ProgressBar-Funktionalitäten
     'Core\DependencyChecker       ', # Abhängigkeiten prüfen
     'Monitor\HardwareMonitorTools ', # Hardware-Monitor-Tools
-    'Monitor\WebDashboard          ', # Web-Dashboard (localhost Log-Viewer)
     'SystemInfo                   ', # System-Informationen
     'Tools\SystemTools            ', # System-Tools
     'Tools\DISM-Tools             ', # Festplatten-Tools
@@ -891,52 +890,6 @@ $infoButton.Add_Click({
 $infoButton.Add_MouseEnter({ $this.BackColor = [System.Drawing.Color]::SlateGray })
 $infoButton.Add_MouseLeave({ $this.BackColor = [System.Drawing.Color]::DarkSlateGray })
 [void]$titleBar.Controls.Add($infoButton)
-
-# Web-Dashboard Toggle-Button
-$script:webDashboardButton = New-Object System.Windows.Forms.Button
-$script:webDashboardButton.Text      = [char]0xE62F  # Segoe MDL2 Assets: Welt/Globe
-$script:webDashboardButton.Font      = New-Object System.Drawing.Font("Segoe MDL2 Assets", 10)
-$script:webDashboardButton.Size      = New-Object System.Drawing.Size(30, 30)
-$script:webDashboardButton.Location  = New-Object System.Drawing.Point(850, 0)
-$script:webDashboardButton.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
-$script:webDashboardButton.FlatAppearance.BorderSize        = 0
-$script:webDashboardButton.FlatAppearance.BorderColor       = [System.Drawing.Color]::DarkSlateGray
-$script:webDashboardButton.FlatAppearance.MouseDownBackColor = [System.Drawing.Color]::FromArgb(40, 110, 40)
-$script:webDashboardButton.BackColor = [System.Drawing.Color]::DarkSlateGray
-$script:webDashboardButton.ForeColor = [System.Drawing.Color]::White
-$script:webDashboardButton.Add_Click({
-    $wbStatus = Get-WebDashboardStatus -ErrorAction SilentlyContinue
-    if ($wbStatus -and $wbStatus.Running) {
-        Stop-WebDashboard
-        $script:webDashboardButton.BackColor = [System.Drawing.Color]::DarkSlateGray
-        $script:webDashboardButton.ForeColor = [System.Drawing.Color]::White
-    } else {
-        $wbResult = Start-WebDashboard -LogPath (Join-Path $PSScriptRoot "Data\Logs")
-        if ($wbResult.Success) {
-            $script:webDashboardButton.BackColor = [System.Drawing.Color]::FromArgb(25, 90, 25)
-            $script:webDashboardButton.ForeColor = [System.Drawing.Color]::FromArgb(61, 220, 132)
-            Start-Process $wbResult.Url
-        } else {
-            [System.Windows.Forms.MessageBox]::Show(
-                "Web-Dashboard konnte nicht gestartet werden:`n$($wbResult.Message)",
-                "Web-Dashboard Fehler",
-                [System.Windows.Forms.MessageBoxButtons]::OK,
-                [System.Windows.Forms.MessageBoxIcon]::Warning
-            )
-        }
-    }
-})
-$script:webDashboardButton.Add_MouseEnter({
-    $wbSt = Get-WebDashboardStatus -ErrorAction SilentlyContinue
-    if ($wbSt -and $wbSt.Running) { $this.BackColor = [System.Drawing.Color]::FromArgb(35, 110, 35) }
-    else { $this.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43) }
-})
-$script:webDashboardButton.Add_MouseLeave({
-    $wbSt = Get-WebDashboardStatus -ErrorAction SilentlyContinue
-    if ($wbSt -and $wbSt.Running) { $this.BackColor = [System.Drawing.Color]::FromArgb(25, 90, 25) }
-    else { $this.BackColor = [System.Drawing.Color]::DarkSlateGray }
-})
-[void]$titleBar.Controls.Add($script:webDashboardButton)
 
 # Einstellungen-Button
 $settingsButton = New-Object System.Windows.Forms.Button
@@ -1372,9 +1325,6 @@ function Close-FormSafely {
         $script:isClosing = $true
         Write-Host "Close-FormSafely: Schließvorgang wird gestartet..."
         Update-LogFile -Message "Close-FormSafely: Schließvorgang gestartet"
-
-        # Web-Dashboard stoppen (falls aktiv)
-        try { Stop-WebDashboard } catch { }
 
         # Hardware-Monitoring stoppen
         if ($null -ne $script:hardwareTimer) {
@@ -6873,19 +6823,6 @@ $timer.Add_Tick({
         $statusLabel.Text = "Status: Bereit | " + (Get-Date -Format "dd.MM.yyyy HH:mm")
     })
 $timer.Start()
-
-# Timer: prüft alle 3 Sekunden ob ein Dashboard-Neustart angefordert wurde (Flag-Datei aus /api/restart)
-$script:restartCheckTimer = New-Object System.Windows.Forms.Timer
-$script:restartCheckTimer.Interval = 3000
-$script:restartCheckTimer.Add_Tick({
-    $flagPath = [System.IO.Path]::Combine($env:TEMP, 'bockis_restart.flag')
-    if ([System.IO.File]::Exists($flagPath)) {
-        try { [System.IO.File]::Delete($flagPath) } catch { }
-        $script:restartCheckTimer.Stop()
-        $mainform.Close()
-    }
-})
-$script:restartCheckTimer.Start()
 
 $toolInfoBox.Text = "Tool-Informationen werden geladen...`r`n"
 $toolInfoBox.Dock = [System.Windows.Forms.DockStyle]::Fill
