@@ -314,7 +314,7 @@ A: Ja, über `ToolLibrary.psm1` kann die `$script:toolLibrary`-Hashtable erweite
 
 **Q: Wo finde ich die Logs?**
 
-A: Unter `%LOCALAPPDATA%\BockisSystemTool\Logs\`
+A: Im `Data\Logs\`-Unterordner des Installationsverzeichnisses (z.B. `C:\Program Files\Bockis-Win_Gui\Data\Logs\`).
 
 **Q: Funktioniert das Tool mit Nextcloud/OneDrive?**
 
