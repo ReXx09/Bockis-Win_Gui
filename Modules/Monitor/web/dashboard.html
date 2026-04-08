@@ -230,7 +230,7 @@ body {
     </div>
 
     <div class="card span-4" data-pane="overview">
-      <div class="card-h"><div class="card-title">Git Push</div></div>
+      <div class="card-h"><div class="card-title">Git Pull</div></div>
       <div class="row"><span class="row-label">Branch</span><span class="row-value" id="gitBranch">-</span></div>
       <div class="row"><span class="row-label">Upstream</span><span class="row-value" id="gitUpstream">-</span></div>
       <div class="row"><span class="row-label">Ahead / Behind</span><span class="row-value" id="gitAheadBehind">-</span></div>
@@ -245,7 +245,7 @@ body {
       </div>
       <div class="actions">
         <button class="btn" onclick="refreshGitStatus()">Git Status</button>
-        <button class="btn" onclick="pushGitNow()">Git Push</button>
+        <button class="btn" onclick="pullGitNow()">Git Pull</button>
       </div>
       <div id="gitMsg" class="mono">Warte auf Git-Status...</div>
     </div>

@@ -241,7 +241,7 @@ function Start-WebDashboard {
                                         }
                                     }
                                 } else {
-                                    $statusPayload.message = "Kein Upstream konfiguriert (Push trotzdem mit Remote/Branch möglich)."
+                                    $statusPayload.message = "Kein Upstream konfiguriert (Pull trotzdem mit Remote/Branch möglich)."
                                 }
                             }
                         }
@@ -252,7 +252,7 @@ function Start-WebDashboard {
                         $res.ContentLength64 = $bytes.Length
                         $res.OutputStream.Write($bytes, 0, $bytes.Length)
                     }
-                    elseif ($path -eq '/api/git/push') {
+                    elseif ($path -eq '/api/git/pull') {
                         if ($req.HttpMethod -ne 'POST') {
                             $res.StatusCode = 405
                             $json = '{"success":false,"message":"Nur POST erlaubt"}'
@@ -297,14 +297,20 @@ function Start-WebDashboard {
                                     if (-not $branch) {
                                         $result.message = "Konnte Ziel-Branch nicht ermitteln."
                                     } else {
-                                        $pushResult = Invoke-Git -ServerState $s -GitArgs @('push', $remote, ("HEAD:{0}" -f $branch))
-                                        if ($pushResult.ExitCode -eq 0) {
-                                            $result.success = $true
-                                            $result.message = "Push erfolgreich nach $remote/$branch"
-                                            $result.output = $pushResult.Output
+                                        $dirtyInfo = Invoke-Git -ServerState $s -GitArgs @('status', '--porcelain')
+                                        if ($dirtyInfo.ExitCode -eq 0 -and $dirtyInfo.Output.Trim()) {
+                                            $result.message = "Lokale Änderungen vorhanden. Bitte zuerst committen/stashen, dann Pull erneut ausführen."
+                                            $result.output = $dirtyInfo.Output
                                         } else {
-                                            $result.message = "Push fehlgeschlagen."
-                                            $result.output = $pushResult.Output
+                                            $pullResult = Invoke-Git -ServerState $s -GitArgs @('pull', '--ff-only', $remote, $branch)
+                                            if ($pullResult.ExitCode -eq 0) {
+                                                $result.success = $true
+                                                $result.message = "Pull erfolgreich von $remote/$branch"
+                                                $result.output = $pullResult.Output
+                                            } else {
+                                                $result.message = "Pull fehlgeschlagen."
+                                                $result.output = $pullResult.Output
+                                            }
                                         }
                                     }
                                 }

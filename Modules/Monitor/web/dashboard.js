@@ -230,7 +230,7 @@
         if (d.message) {
           setGitMessage(d.message);
         } else if (d.available) {
-          setGitMessage('Git-Repository erkannt. Push bereit.');
+          setGitMessage('Git-Repository erkannt. Pull bereit.');
         } else {
           setGitMessage('Git nicht verfügbar.');
         }
@@ -240,17 +240,17 @@
       });
   }
 
-  function pushGitNow() {
+  function pullGitNow() {
     var remote = (document.getElementById('gitRemote') || {}).value || 'origin';
     var branch = (document.getElementById('gitTargetBranch') || {}).value || 'main';
 
-    if (!confirm('Git Push ausführen nach ' + remote + '/' + branch + '?')) {
+    if (!confirm('Git Pull ausführen von ' + remote + '/' + branch + '?')) {
       return;
     }
 
-    setGitMessage('Git Push läuft...');
+    setGitMessage('Git Pull läuft...');
 
-    fetch('/api/git/push', {
+    fetch('/api/git/pull', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ remote: remote, branch: branch })
@@ -262,7 +262,7 @@
         refreshGitStatus();
       })
       .catch(function () {
-        setGitMessage('Git Push fehlgeschlagen (Netzwerk/Serverfehler).');
+        setGitMessage('Git Pull fehlgeschlagen (Netzwerk/Serverfehler).');
       });
   }
 
@@ -270,7 +270,7 @@
   window.reloadLog = reloadLog;
   window.setActivePane = setActivePane;
   window.refreshGitStatus = refreshGitStatus;
-  window.pushGitNow = pushGitNow;
+  window.pullGitNow = pullGitNow;
 
   function init() {
     var host = document.getElementById('hostInfo');
