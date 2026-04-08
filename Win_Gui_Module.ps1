@@ -6874,6 +6874,19 @@ $timer.Add_Tick({
     })
 $timer.Start()
 
+# Timer: prüft alle 3 Sekunden ob ein Dashboard-Neustart angefordert wurde (Flag-Datei aus /api/restart)
+$script:restartCheckTimer = New-Object System.Windows.Forms.Timer
+$script:restartCheckTimer.Interval = 3000
+$script:restartCheckTimer.Add_Tick({
+    $flagPath = [System.IO.Path]::Combine($env:TEMP, 'bockis_restart.flag')
+    if ([System.IO.File]::Exists($flagPath)) {
+        try { [System.IO.File]::Delete($flagPath) } catch { }
+        $script:restartCheckTimer.Stop()
+        $mainform.Close()
+    }
+})
+$script:restartCheckTimer.Start()
+
 $toolInfoBox.Text = "Tool-Informationen werden geladen...`r`n"
 $toolInfoBox.Dock = [System.Windows.Forms.DockStyle]::Fill
 

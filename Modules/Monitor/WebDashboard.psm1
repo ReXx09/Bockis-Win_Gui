@@ -323,6 +323,30 @@ function Start-WebDashboard {
                             $res.OutputStream.Write($bytes, 0, $bytes.Length)
                         }
                     }
+                    elseif ($path -eq '/api/restart') {
+                        if ($req.HttpMethod -ne 'POST') {
+                            $res.StatusCode = 405
+                            $json = '{"success":false,"message":"Nur POST erlaubt"}'
+                            $bytes = [System.Text.Encoding]::UTF8.GetBytes($json)
+                            $res.ContentType     = "application/json; charset=utf-8"
+                            $res.ContentLength64 = $bytes.Length
+                            $res.OutputStream.Write($bytes, 0, $bytes.Length)
+                        } else {
+                            # Flag-Datei anlegen – Haupt-UI prueft diese per Timer
+                            $flagPath = [System.IO.Path]::Combine($env:TEMP, 'bockis_restart.flag')
+                            try { [System.IO.File]::WriteAllText($flagPath, 'restart') } catch { }
+                            # Neue Instanz starten (3s Verzoegerung damit GUI sauber schliesst)
+                            $scriptPath = [System.IO.Path]::Combine($s.RepoRoot, 'Win_Gui_Module.ps1')
+                            if ([System.IO.File]::Exists($scriptPath)) {
+                                Start-Process powershell.exe -ArgumentList "-ExecutionPolicy Bypass -File `"$scriptPath`"" -WindowStyle Normal
+                            }
+                            $json  = '{"success":true,"message":"Neustart wird ausgefuehrt. Fenster schliesst sich..."}'
+                            $bytes = [System.Text.Encoding]::UTF8.GetBytes($json)
+                            $res.ContentType     = "application/json; charset=utf-8"
+                            $res.ContentLength64 = $bytes.Length
+                            $res.OutputStream.Write($bytes, 0, $bytes.Length)
+                        }
+                    }
                     else {
                         $res.StatusCode = 404
                         $bytes = [System.Text.Encoding]::UTF8.GetBytes("404 Not Found")

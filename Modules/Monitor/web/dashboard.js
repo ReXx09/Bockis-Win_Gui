@@ -260,10 +260,25 @@
         var txt = (d.message || 'Unbekannte Antwort') + (d.output ? '\n\n' + d.output : '');
         setGitMessage(txt);
         refreshGitStatus();
+        if (d.success) {
+          var rb = document.getElementById('restartBtn');
+          if (rb) rb.style.display = '';
+        }
       })
       .catch(function () {
         setGitMessage('Git Pull fehlgeschlagen (Netzwerk/Serverfehler).');
       });
+  }
+
+  function restartApp() {
+    if (!confirm('Bockis System-Tool neu starten?\nDas Fenster wird geschlossen und eine neue Instanz gestartet.')) return;
+    var rb = document.getElementById('restartBtn');
+    if (rb) rb.disabled = true;
+    setGitMessage('Neustart laeuft...');
+    fetch('/api/restart', { method: 'POST' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) { setGitMessage(d.message || 'Neustart gesendet.'); })
+      .catch(function () { setGitMessage('Restart-Anfrage fehlgeschlagen.'); });
   }
 
   window.clearLive = clearLive;
