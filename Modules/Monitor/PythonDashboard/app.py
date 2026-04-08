@@ -148,25 +148,54 @@ def request_python_server_restart(delay_s: float = 1.0) -> tuple[bool, str]:
 
 
 def _get_cpu_temp_c() -> float | None:
+    # psutil does not expose sensors on many Windows installs/builds.
+    # Keep psutil as primary source when available, then fall back to PowerShell.
     try:
-        temps = psutil.sensors_temperatures()
-        if not temps:
-            return None
+        sensor_reader = getattr(psutil, "sensors_temperatures", None)
+        if callable(sensor_reader):
+            temps = sensor_reader()
+            if temps:
+                preferred_keys = ("coretemp", "k10temp", "cpu_thermal", "acpitz")
+                for key in preferred_keys:
+                    entries = temps.get(key)
+                    if entries:
+                        values = [e.current for e in entries if getattr(e, "current", None) is not None]
+                        if values:
+                            return round(sum(values) / len(values), 1)
 
-        preferred_keys = ("coretemp", "k10temp", "cpu_thermal", "acpitz")
-        for key in preferred_keys:
-            entries = temps.get(key)
-            if entries:
-                values = [e.current for e in entries if getattr(e, "current", None) is not None]
-                if values:
-                    return round(sum(values) / len(values), 1)
-
-        for entries in temps.values():
-            values = [e.current for e in entries if getattr(e, "current", None) is not None]
-            if values:
-                return round(sum(values) / len(values), 1)
+                for entries in temps.values():
+                    values = [e.current for e in entries if getattr(e, "current", None) is not None]
+                    if values:
+                        return round(sum(values) / len(values), 1)
     except Exception:
-        return None
+        pass
+
+    # Windows fallback chain:
+    # 1) LibreHardwareMonitor WMI namespace
+    # 2) OpenHardwareMonitor WMI namespace
+    # 3) ACPI thermal zone (often generic/mainboard, but better than nothing)
+    ps_cmd = (
+        "$ErrorActionPreference='SilentlyContinue';"
+        "$vals=@();"
+        "$vals += (Get-CimInstance -Namespace root/LibreHardwareMonitor -ClassName Sensor |"
+        " Where-Object { $_.SensorType -eq 'Temperature' -and ($_.Name -match 'CPU|Tdie|Package') } |"
+        " Select-Object -ExpandProperty Value);"
+        "$vals += (Get-CimInstance -Namespace root/OpenHardwareMonitor -ClassName Sensor |"
+        " Where-Object { $_.SensorType -eq 'Temperature' -and ($_.Name -match 'CPU|Tdie|Package') } |"
+        " Select-Object -ExpandProperty Value);"
+        "if(-not $vals -or $vals.Count -eq 0){"
+        " $vals += (Get-CimInstance -ClassName MSAcpi_ThermalZoneTemperature -Namespace root/wmi |"
+        "  ForEach-Object { ([double]$_.CurrentTemperature / 10.0) - 273.15 });"
+        "}"
+        "$vals = $vals | Where-Object { $_ -ne $null -and $_ -gt 0 -and $_ -lt 140 };"
+        "if($vals -and $vals.Count -gt 0){ [math]::Round((($vals | Measure-Object -Average).Average),1) }"
+    )
+    rc, out = _run_powershell(ps_cmd, timeout=8)
+    if rc == 0 and out.strip():
+        try:
+            return float(out.strip().splitlines()[-1])
+        except Exception:
+            return None
 
     return None
 
