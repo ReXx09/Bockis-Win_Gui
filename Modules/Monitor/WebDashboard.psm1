@@ -74,11 +74,7 @@ function Start-WebDashboard {
 
         while ($s.Running) {
             try {
-                $task = $listener.GetContextAsync()
-                if (-not $task.Wait(800)) { continue }
-                if (-not $s.Running) { break }
-
-                $ctx  = $task.Result
+                $ctx  = $listener.GetContext()
                 $req  = $ctx.Request
                 $res  = $ctx.Response
                 $path = $req.Url.LocalPath.TrimEnd('/')
@@ -123,10 +119,10 @@ function Start-WebDashboard {
 
                         if ($s.OutputBuffer) {
                             $all      = $s.OutputBuffer.ToArray()
-                            $filtered = @($all | Where-Object { $null -ne $_ -and $_.ts -gt $since })
+                            $filtered = @($all | Where-Object { $null -ne $_ -and $null -ne $_.ts -and [long]$_.ts -gt $since })
                             if ($filtered.Count -gt 0) {
                                 $resultEntries = $filtered
-                                $lastTs        = ($filtered | Measure-Object -Property ts -Maximum).Maximum
+                                $lastTs        = [long]$filtered[-1].ts
                             }
                         }
 
@@ -198,7 +194,7 @@ function Start-WebDashboard {
             }
             catch {
                 if (-not $s.Running) { break }
-                Start-Sleep -Milliseconds 100
+                # Listener-Fehler nicht hart eskalieren; Schleife bleibt aktiv.
             }
         }
 
