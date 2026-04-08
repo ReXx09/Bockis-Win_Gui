@@ -43,7 +43,7 @@
     <section class="pages">
       <section class="page active" data-page="overview">
         <section class="layout" id="dashboardGrid">
-          <section class="card" data-widget="monitoring" draggable="true">
+          <section class="card" data-widget="monitoring" data-default-size="2-3" draggable="true">
             <div class="card-head"><h2>Monitoring</h2><span class="drag-handle">⋮⋮</span></div>
             <div class="grid-3" id="metricsGrid">
               <div class="metric">
@@ -65,12 +65,12 @@
             <div id="gpuList" class="gpu-list"></div>
           </section>
 
-          <section class="card" data-widget="disks" draggable="true">
+          <section class="card" data-widget="disks" data-default-size="1-3" draggable="true">
             <div class="card-head"><h2>Festplatten</h2><span class="drag-handle">⋮⋮</span></div>
             <div id="disks" class="list"></div>
           </section>
 
-          <section class="card" data-widget="audio" draggable="true">
+          <section class="card" data-widget="audio" data-default-size="1-3" draggable="true">
             <div class="card-head"><h2>Audio</h2><span class="drag-handle">⋮⋮</span></div>
             <div class="audio-main">
               <div class="audio-row">
@@ -93,7 +93,7 @@
             <pre id="audioMsg" class="console small-console">Audio bereit.</pre>
           </section>
 
-          <section class="card span-2" data-widget="processes" draggable="true">
+          <section class="card" data-widget="processes" data-default-size="full" draggable="true">
             <div class="card-head"><h2>Top Prozesse</h2><span class="drag-handle">⋮⋮</span></div>
             <table>
               <thead><tr><th>Name</th><th>PID</th><th>CPU%</th><th>RAM MB</th></tr></thead>

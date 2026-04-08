@@ -34,7 +34,7 @@ const dashboardGrid = document.getElementById('dashboardGrid');
 const widgetMenu = document.getElementById('widgetMenu');
 const layoutMsg = document.getElementById('layoutMsg');
 
-const LAYOUT_KEY = 'bockis_dashboard_layout_v2';
+const LAYOUT_KEY = 'bockis_dashboard_layout_v3';
 const PAGE_KEY = 'bockis_dashboard_page_v1';
 const WIDGET_LABELS = {
   monitoring: 'Monitoring',
@@ -42,6 +42,7 @@ const WIDGET_LABELS = {
   audio: 'Audio',
   processes: 'Prozesse',
 };
+const SIZE_PRESETS = ['1-3', '1-2', '2-3', 'full', 'min'];
 
 let draggedCard = null;
 
@@ -78,10 +79,25 @@ function readLayout() {
 function collectLayout() {
   const order = getCards().map((card) => card.dataset.widget);
   const visible = {};
+  const sizes = {};
   getCards().forEach((card) => {
     visible[card.dataset.widget] = card.style.display !== 'none';
+    sizes[card.dataset.widget] = card.dataset.size || card.dataset.defaultSize || '1-3';
   });
-  return { order, visible };
+  return { order, visible, sizes };
+}
+
+function setCardSize(card, size, save = true) {
+  const target = SIZE_PRESETS.includes(size) ? size : (card.dataset.defaultSize || '1-3');
+  SIZE_PRESETS.forEach((s) => card.classList.remove(`tile-size-${s}`));
+  card.classList.add(`tile-size-${target}`);
+  card.dataset.size = target;
+
+  card.querySelectorAll('.size-btn').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.size === target);
+  });
+
+  if (save) saveLayout(false);
 }
 
 function saveLayout(notify = true) {
@@ -113,6 +129,55 @@ function applyLayout(layout) {
       }
     });
   }
+
+  getCards().forEach((card) => {
+    const w = card.dataset.widget;
+    const size = layout.sizes && layout.sizes[w] ? layout.sizes[w] : (card.dataset.defaultSize || '1-3');
+    setCardSize(card, size, false);
+  });
+}
+
+function wireSizeControls() {
+  getCards().forEach((card) => {
+    const head = card.querySelector('.card-head');
+    if (!head || head.querySelector('.size-controls')) return;
+
+    const drag = head.querySelector('.drag-handle');
+    const actions = document.createElement('div');
+    actions.className = 'card-head-actions';
+
+    const controls = document.createElement('div');
+    controls.className = 'size-controls';
+
+    const specs = [
+      { key: '1-3', label: '1/3' },
+      { key: '1-2', label: '1/2' },
+      { key: '2-3', label: '2/3' },
+      { key: 'full', label: 'voll' },
+      { key: 'min', label: 'min' },
+    ];
+
+    specs.forEach((spec) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'size-btn';
+      btn.textContent = spec.label;
+      btn.dataset.size = spec.key;
+      btn.title = `Kachelgroesse ${spec.label}`;
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setCardSize(card, spec.key, true);
+      });
+      controls.appendChild(btn);
+    });
+
+    actions.appendChild(controls);
+    if (drag) actions.appendChild(drag);
+    head.appendChild(actions);
+
+    setCardSize(card, card.dataset.size || card.dataset.defaultSize || '1-3', false);
+  });
 }
 
 function renderWidgetMenu() {
@@ -423,6 +488,7 @@ async function init() {
   logSelect.onchange = () => openLog(logSelect.value);
 
   wirePageMenu();
+  wireSizeControls();
   applyLayout(readLayout());
   renderWidgetMenu();
   wireDragDrop();
