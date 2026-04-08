@@ -8,12 +8,14 @@
   --warn: #ffb020;
   --danger: #ff6b6b;
   --accent: #4aa3ff;
+  --grad-from: #14315a;
+  --grad-to: #071220;
 }
 
 * { box-sizing: border-box; }
 body {
   margin: 0;
-  background: radial-gradient(circle at top right, #14315a, #071220 40%);
+  background: radial-gradient(circle at top right, var(--grad-from), var(--grad-to) 40%);
   color: var(--text);
   font-family: "Segoe UI", Tahoma, sans-serif;
 }
@@ -78,7 +80,7 @@ body {
 
 .sidebar {
   border: 1px solid var(--line);
-  background: linear-gradient(180deg, rgba(20, 33, 55, 0.85), rgba(12, 23, 40, 0.95));
+  background: var(--card);
   border-radius: 12px;
   padding: 12px;
   position: sticky;
@@ -120,7 +122,7 @@ body {
 
 .menu-nav-btn {
   border: 1px solid var(--line);
-  background: #10213a;
+  background: var(--bg);
   color: var(--text);
   border-radius: 8px;
   padding: 8px 10px;
@@ -129,8 +131,8 @@ body {
 }
 
 .menu-nav-btn.active {
-  border-color: #56b1ff;
-  background: #17355f;
+  border-color: var(--accent);
+  background: var(--card);
 }
 
 .menu-item {
@@ -140,7 +142,7 @@ body {
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 8px;
-  background: #0b1628;
+  background: var(--bg);
 }
 
 .menu-item input[type='checkbox'] {
@@ -154,7 +156,7 @@ body {
 
 .card {
   border: 1px solid var(--line);
-  background: linear-gradient(180deg, rgba(20, 33, 55, 0.85), rgba(12, 23, 40, 0.95));
+  background: var(--card);
   border-radius: 12px;
   padding: 12px;
   transition: border-color 0.2s ease, transform 0.15s ease;
@@ -166,7 +168,7 @@ body {
 }
 
 .card.drag-over {
-  border-color: #60b7ff;
+  border-color: var(--accent);
 }
 
 .card-head {
@@ -206,12 +208,12 @@ body {
 
 .size-btn:hover {
   color: var(--text);
-  background: rgba(74, 163, 255, 0.12);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
 .size-btn.active {
   color: var(--text);
-  background: rgba(74, 163, 255, 0.24);
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
 }
 
 .drag-handle {
@@ -603,4 +605,87 @@ th { color: var(--muted); }
   .span-2 {
     grid-column: span 1;
   }
+}
+
+/* ─── Theme UI ─── */
+.theme-section-label {
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 12px 0 8px;
+  font-weight: 500;
+}
+
+.theme-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.theme-preset-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.88rem;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.theme-preset-btn:hover { border-color: var(--accent); }
+
+.theme-preset-btn.active {
+  border-color: var(--accent);
+  background: var(--card);
+}
+
+.theme-swatch {
+  display: flex;
+  width: 28px;
+  height: 18px;
+  border-radius: 4px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.theme-swatch span {
+  flex: 1;
+  display: block;
+}
+
+.theme-custom-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.theme-custom-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.theme-custom-grid input[type='color'] {
+  width: 100%;
+  height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 2px;
+  background: var(--card);
+  cursor: pointer;
+}
+
+.setup-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }

@@ -60,6 +60,21 @@ const WIDGET_LABELS = {
   processes: 'Prozesse',
 };
 const SIZE_PRESETS = ['1-3', '1-2', '2-3', 'full', 'min'];
+const THEME_KEY = 'bockis_theme_v1';
+const THEMES = [
+  { id: 'ozean',     label: 'Ozean',     s1: '#4aa3ff', s2: '#14315a',
+    vars: { '--accent': '#4aa3ff', '--bg': '#071220', '--card': '#0f1b2e', '--line': '#223554', '--muted': '#8da3c7', '--grad-from': '#14315a', '--grad-to': '#071220' } },
+  { id: 'bernstein', label: 'Bernstein', s1: '#ffb020', s2: '#3d2600',
+    vars: { '--accent': '#ffb020', '--bg': '#100a00', '--card': '#1c1400', '--line': '#3a2800', '--muted': '#a07838', '--grad-from': '#3d2600', '--grad-to': '#100a00' } },
+  { id: 'smaragd',   label: 'Smaragd',   s1: '#3ecf8e', s2: '#0d3d22',
+    vars: { '--accent': '#3ecf8e', '--bg': '#061a0f', '--card': '#0b2418', '--line': '#133d28', '--muted': '#5a9c7a', '--grad-from': '#0d3d22', '--grad-to': '#061a0f' } },
+  { id: 'violett',   label: 'Violett',   s1: '#a78bfa', s2: '#2d1b6e',
+    vars: { '--accent': '#a78bfa', '--bg': '#0d0520', '--card': '#160b35', '--line': '#2d1b5a', '--muted': '#7c6cb0', '--grad-from': '#2d1b6e', '--grad-to': '#0d0520' } },
+  { id: 'rubin',     label: 'Rubin',     s1: '#ff6b6b', s2: '#3d1515',
+    vars: { '--accent': '#ff6b6b', '--bg': '#1a0808', '--card': '#2a1010', '--line': '#3d1515', '--muted': '#a06060', '--grad-from': '#3d1515', '--grad-to': '#1a0808' } },
+  { id: 'titan',     label: 'Titan',     s1: '#94a3b8', s2: '#1e2a3a',
+    vars: { '--accent': '#94a3b8', '--bg': '#0a0e14', '--card': '#101620', '--line': '#1e2a3a', '--muted': '#607080', '--grad-from': '#1e2a3a', '--grad-to': '#0a0e14' } },
+];
 
 let draggedCard = null;
 const HISTORY_LEN = 45;
@@ -675,6 +690,102 @@ function wireAudioControls() {
   });
 }
 
+function buildCustomVars(accent, gradFrom, bg) {
+  function brighten(hex, amount) {
+    const r = Math.min(255, parseInt(hex.slice(1, 3), 16) + amount);
+    const g = Math.min(255, parseInt(hex.slice(3, 5), 16) + amount);
+    const b = Math.min(255, parseInt(hex.slice(5, 7), 16) + amount);
+    return '#' + [r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('');
+  }
+  return {
+    '--accent':    accent,
+    '--bg':        bg,
+    '--card':      brighten(bg, 8),
+    '--line':      brighten(bg, 30),
+    '--muted':     brighten(bg, 100),
+    '--grad-from': gradFrom,
+    '--grad-to':   bg,
+  };
+}
+
+function applyTheme(vars) {
+  const root = document.documentElement;
+  for (const [prop, val] of Object.entries(vars)) {
+    root.style.setProperty(prop, val);
+  }
+}
+
+function saveTheme(id, vars) {
+  localStorage.setItem(THEME_KEY, JSON.stringify({ id, vars }));
+}
+
+function loadAndApplyTheme() {
+  try {
+    const raw = localStorage.getItem(THEME_KEY);
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    if (data && data.vars) {
+      applyTheme(data.vars);
+      document.querySelectorAll('.theme-preset-btn').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.theme === data.id);
+      });
+      if (data.id === 'custom') {
+        const accEl = document.getElementById('customAccent');
+        const gfEl  = document.getElementById('customGradFrom');
+        const bgEl  = document.getElementById('customBg');
+        if (accEl) accEl.value = data.vars['--accent']    || '#4aa3ff';
+        if (gfEl)  gfEl.value  = data.vars['--grad-from'] || '#14315a';
+        if (bgEl)  bgEl.value  = data.vars['--bg']        || '#071220';
+      }
+    }
+  } catch { /* ignore */ }
+}
+
+function wireThemeControls() {
+  const presetContainer = document.getElementById('themePresets');
+  THEMES.forEach((theme) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'theme-preset-btn';
+    btn.dataset.theme = theme.id;
+    btn.innerHTML = `<span class="theme-swatch"><span style="background:${theme.s2}"></span><span style="background:${theme.s1};opacity:0.75"></span></span><span>${theme.label}</span>`;
+    btn.addEventListener('click', () => {
+      applyTheme(theme.vars);
+      saveTheme(theme.id, theme.vars);
+      document.querySelectorAll('.theme-preset-btn').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+    presetContainer.appendChild(btn);
+  });
+
+  document.getElementById('applyCustomThemeBtn').addEventListener('click', () => {
+    const acc  = document.getElementById('customAccent').value;
+    const gf   = document.getElementById('customGradFrom').value;
+    const bg   = document.getElementById('customBg').value;
+    const vars = buildCustomVars(acc, gf, bg);
+    applyTheme(vars);
+    saveTheme('custom', vars);
+    document.querySelectorAll('.theme-preset-btn').forEach((b) => b.classList.remove('active'));
+  });
+
+  document.getElementById('resetThemeBtn').addEventListener('click', () => {
+    localStorage.removeItem(THEME_KEY);
+    const t = THEMES.find((t) => t.id === 'ozean');
+    applyTheme(t.vars);
+    document.querySelectorAll('.theme-preset-btn').forEach((b) => {
+      b.classList.toggle('active', b.dataset.theme === 'ozean');
+    });
+    const accEl = document.getElementById('customAccent');
+    const gfEl  = document.getElementById('customGradFrom');
+    const bgEl  = document.getElementById('customBg');
+    if (accEl) accEl.value = '#4aa3ff';
+    if (gfEl)  gfEl.value  = '#14315a';
+    if (bgEl)  bgEl.value  = '#071220';
+  });
+
+  loadAndApplyTheme();
+}
+
 async function init() {
   document.getElementById('gitStatusBtn').onclick = refreshGit;
   document.getElementById('gitPullBtn').onclick = pullGit;
@@ -690,6 +801,7 @@ async function init() {
   renderWidgetMenu();
   wireDragDrop();
   wireAudioControls();
+  wireThemeControls();
 
   try {
     await loadSystem();

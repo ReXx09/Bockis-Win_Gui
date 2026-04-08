@@ -4,7 +4,10 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Bockis Python Dashboard</title>
-  <link rel="stylesheet" href="/web/style.css?v=20260408c" />
+  <link rel="stylesheet" href="/web/style.css?v=20260408d" />
+  <script>
+    (function(){try{var t=localStorage.getItem('bockis_theme_v1');if(t){var d=JSON.parse(t);if(d&&d.vars){var r=document.documentElement;Object.keys(d.vars).forEach(function(k){r.style.setProperty(k,d.vars[k]);});}}}catch(e){}}());
+  </script>
 </head>
 <body>
   <header class="topbar">
@@ -181,6 +184,31 @@
       </section>
 
       <section class="page" data-page="setup">
+        <div class="setup-stack">
+        <section class="card">
+          <div class="card-head"><h2>Erscheinungsbild</h2></div>
+          <h4 class="theme-section-label">Presets</h4>
+          <div class="theme-presets" id="themePresets"></div>
+          <h4 class="theme-section-label">Eigene Farben</h4>
+          <div class="theme-custom-grid">
+            <label>
+              <span>Akzentfarbe</span>
+              <input type="color" id="customAccent" value="#4aa3ff" />
+            </label>
+            <label>
+              <span>Hintergrund-Glow</span>
+              <input type="color" id="customGradFrom" value="#14315a" />
+            </label>
+            <label>
+              <span>Dunkle Basis</span>
+              <input type="color" id="customBg" value="#071220" />
+            </label>
+          </div>
+          <div class="row">
+            <button id="applyCustomThemeBtn" class="btn">Anwenden</button>
+            <button id="resetThemeBtn" class="btn">Zuruecksetzen</button>
+          </div>
+        </section>
         <section class="card">
           <div class="card-head"><h2>Git / Setup</h2></div>
           <div class="kv">
@@ -199,10 +227,11 @@
           </div>
           <pre id="gitMsg" class="console">Warte auf Git-Status...</pre>
         </section>
+        </div>
       </section>
     </section>
   </main>
 
-  <script src="/web/app.js?v=20260408c"></script>
+  <script src="/web/app.js?v=20260408d"></script>
 </body>
 </html>
