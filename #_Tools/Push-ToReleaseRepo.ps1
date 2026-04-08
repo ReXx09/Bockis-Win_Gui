@@ -23,23 +23,24 @@
 #>
 
 param (
-    [string]$Tag            = "",
-    [switch]$CreateRelease  = $false,
-    [string]$ReleaseNotes   = ""
+    [string]$Tag = "",
+    [switch]$CreateRelease = $false,
+    [string]$ReleaseNotes = ""
 )
 
 # ─── Konfiguration ────────────────────────────────────────────────────────────
-$DevRepoPath     = Split-Path -Parent $PSScriptRoot
-$TempClonePath   = "$env:TEMP\Bockis-Release-Sync"
-$ReleaseRepoUrl  = "https://github.com/ReXx09/Bockis-Win_Gui.git"
-$ReleaseRepoApi  = "https://api.github.com/repos/ReXx09/Bockis-Win_Gui"
-$TokenFile       = "C:\Users\ReXx\Desktop\VS-CODE-Repos\Github---- Update-Token.txt"
+$DevRepoPath = Split-Path -Parent $PSScriptRoot
+$TempClonePath = "$env:TEMP\Bockis-Release-Sync"
+$ReleaseRepoUrl = "https://github.com/ReXx09/Bockis-Win_Gui.git"
+$ReleaseRepoApi = "https://api.github.com/repos/ReXx09/Bockis-Win_Gui"
+$TokenFile = "C:\Users\ReXx\Desktop\VS-CODE-Repos\Github---- Update-Token.txt"
 
 # Relevante Dateien und Ordner
 $FoldersToCopy = @("Modules", "Lib", "Data")
-$FilesToCopy   = @(
+$FilesToCopy = @(
     "Win_Gui_Module.ps1",
     "installer.iss",
+    "config.json",
     "settings.json",
     "LICENSE.txt",
     "README.md",
@@ -50,7 +51,7 @@ $ExtensionsToCopy = @("*.ico", "*.bmp", "*.jpg", "*.png")
 
 # ─── Hilfsfunktionen ──────────────────────────────────────────────────────────
 function Write-Step { param($Text) Write-Host "`n[ ] $Text" -ForegroundColor Cyan }
-function Write-OK   { param($Text) Write-Host "[+] $Text" -ForegroundColor Green }
+function Write-OK { param($Text) Write-Host "[+] $Text" -ForegroundColor Green }
 function Write-Fail { param($Text) Write-Host "[!] $Text" -ForegroundColor Red }
 
 # ─── Token lesen ──────────────────────────────────────────────────────────────
@@ -58,11 +59,11 @@ if (-not (Test-Path $TokenFile)) {
     Write-Fail "Token-Datei nicht gefunden: $TokenFile"
     exit 1
 }
-$Token = (Get-Content $TokenFile | Where-Object { $_ -match "ghp_" }).Trim()
+$Token = (Get-Content $TokenFile | Where-Object { $_ -match "ghp_|github_pat_" } | Select-Object -First 1).Trim()
 if (-not $Token) { Write-Fail "Kein GitHub-Token gefunden!"; exit 1 }
 
-$AuthUrl  = "https://$Token@github.com/ReXx09/Bockis-Win_Gui.git"
-$Headers  = @{
+$AuthUrl = "https://$Token@github.com/ReXx09/Bockis-Win_Gui.git"
+$Headers = @{
     "Authorization"        = "Bearer $Token"
     "Accept"               = "application/vnd.github+json"
     "X-GitHub-Api-Version" = "2022-11-28"
@@ -106,7 +107,7 @@ Write-OK "Release-Repo geklont"
 # ─── Alten Inhalt löschen (außer .git) ───────────────────────────────────────
 Get-ChildItem $TempClonePath -Force |
     Where-Object { $_.Name -ne ".git" } |
-    Remove-Item -Recurse -Force
+        Remove-Item -Recurse -Force
 
 # ─── Dateien kopieren ─────────────────────────────────────────────────────────
 Write-Step "Relevante Dateien kopieren..."
@@ -166,11 +167,11 @@ if ($CreateRelease) {
     Write-Step "GitHub-Release erstellen..."
 
     if (-not $ReleaseNotes) {
-        $ReleaseNotes = "Vollstaendige Release Notes: https://github.com/ReXx09/Bockis-Win_Gui_DEV/releases/tag/$Tag"
+        $ReleaseNotes = "Vollstaendige Release Notes: https://github.com/ReXx09/Bockis-Win_Gui/releases/tag/$Tag"
     }
 
     $nl = "`n"
-    $body  = "## $([char]::ConvertFromUtf32(0x1F389)) $Tag$nl$nl"
+    $body = "## $([char]::ConvertFromUtf32(0x1F389)) $Tag$nl$nl"
     $body += $ReleaseNotes
 
     $releaseBody = [PSCustomObject]@{
@@ -184,8 +185,57 @@ if ($CreateRelease) {
     try {
         $resp = Invoke-RestMethod -Uri "$ReleaseRepoApi/releases" -Method Post -Headers $Headers -Body $releaseBody -ContentType "application/json"
         Write-OK "Release erstellt: $($resp.html_url)"
+
+        # ─── ZIP erstellen und als Asset hochladen ────────────────────────────
+        Write-Step "ZIP-Paket erstellen und hochladen..."
+
+        $zipName = "Bockis-System-Tool-$Tag.zip"
+        $zipPath = Join-Path ([System.IO.Path]::GetTempPath()) $zipName
+        $buildPath = Join-Path ([System.IO.Path]::GetTempPath()) "Bockis-Release-Build"
+
+        if (Test-Path $buildPath) { Remove-Item $buildPath -Recurse -Force }
+        New-Item -ItemType Directory -Path $buildPath -Force | Out-Null
+
+        # Gleiche Dateien wie beim Push kopieren
+        foreach ($folder in $FoldersToCopy) {
+            $src = Join-Path $TempClonePath $folder
+            if (Test-Path $src) {
+                Copy-Item $src (Join-Path $buildPath $folder) -Recurse -Force
+            }
+        }
+        foreach ($file in $FilesToCopy) {
+            $src = Join-Path $TempClonePath $file
+            if (Test-Path $src) { Copy-Item $src (Join-Path $buildPath $file) -Force }
+        }
+        foreach ($ext in $ExtensionsToCopy) {
+            Get-ChildItem $TempClonePath -Filter $ext -File | ForEach-Object {
+                Copy-Item $_.FullName (Join-Path $buildPath $_.Name) -Force
+            }
+        }
+
+        if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
+        Compress-Archive -Path "$buildPath\*" -DestinationPath $zipPath -Force
+        Remove-Item $buildPath -Recurse -Force
+
+        $zipSize = [math]::Round((Get-Item $zipPath).Length / 1MB, 1)
+        Write-OK "ZIP erstellt: $zipName ($zipSize MB)"
+
+        # Upload-URL aus dem Release holen
+        $uploadUrl = $resp.upload_url -replace '\{\?name,label\}', ''
+        $uploadHeaders = @{
+            "Authorization"        = "Bearer $Token"
+            "Content-Type"         = "application/zip"
+            "X-GitHub-Api-Version" = "2022-11-28"
+        }
+        $uploadUri = "$uploadUrl`?name=$zipName"
+
+        $uploadResp = Invoke-RestMethod -Uri $uploadUri -Method Post -Headers $uploadHeaders -InFile $zipPath
+        Write-OK "Asset hochgeladen: $($uploadResp.browser_download_url)"
+
+        Remove-Item $zipPath -Force
+
     } catch {
-        Write-Fail "Release konnte nicht erstellt werden: $_"
+        Write-Fail "Release/Upload fehlgeschlagen: $_"
     }
 }
 
