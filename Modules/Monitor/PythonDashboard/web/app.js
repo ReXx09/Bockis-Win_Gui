@@ -188,12 +188,19 @@ async function loadSystem() {
 }
 
 async function loadMetrics() {
-  const [m, d, p, gpus] = await Promise.all([
+  const [m, d, p] = await Promise.all([
     jsonFetch('/api/metrics'),
     jsonFetch('/api/disks'),
     jsonFetch('/api/processes?top=10'),
-    jsonFetch('/api/gpu'),
   ]);
+
+  // GPU separat – Fehler crasht nicht den Rest des Dashboards
+  let gpus = [];
+  try {
+    gpus = await jsonFetch('/api/gpu');
+  } catch {
+    if (gpuList) gpuList.innerHTML = '<div class="gpu-empty">GPU-Daten nicht verfuegbar (Server-Neustart noetig?)</div>';
+  }
 
   cpuPct.textContent = `${m.cpu_pct}%`;
   ramPct.textContent = `${m.ram_pct}%`;
