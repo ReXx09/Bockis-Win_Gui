@@ -342,6 +342,109 @@ def get_audio_status() -> dict:
         return {"available": False, "level": 0, "muted": False}
 
 
+def get_audio_devices() -> dict:
+    if not AUDIO_AVAILABLE:
+        return {"available": False, "active_output": None, "devices": []}
+
+    devices: list[dict] = []
+    active_output = None
+
+    try:
+        active = AudioUtilities.GetSpeakers()
+        active_output = getattr(active, "FriendlyName", None)
+    except Exception:
+        active_output = None
+
+    try:
+        all_devices = AudioUtilities.GetAllDevices()
+        for d in all_devices:
+            name = getattr(d, "FriendlyName", None) or getattr(d, "DeviceFriendlyName", None) or "Unknown"
+            dev_id = getattr(d, "id", None) or getattr(d, "Id", None) or name
+            devices.append(
+                {
+                    "id": str(dev_id),
+                    "name": str(name),
+                    "is_active_output": bool(active_output and str(name) == str(active_output)),
+                }
+            )
+    except Exception:
+        pass
+
+    return {"available": True, "active_output": active_output, "devices": devices}
+
+
+def _iter_audio_sessions() -> list:
+    if not AUDIO_AVAILABLE:
+        return []
+    try:
+        return list(AudioUtilities.GetAllSessions())
+    except Exception:
+        return []
+
+
+def get_audio_sessions() -> dict:
+    if not AUDIO_AVAILABLE:
+        return {"available": False, "sessions": []}
+
+    result: list[dict] = []
+    for sess in _iter_audio_sessions():
+        try:
+            pid = int(getattr(sess, "ProcessId", 0) or 0)
+            proc = getattr(sess, "Process", None)
+            app = proc.name() if proc else "System Sounds"
+            vol_obj = sess.SimpleAudioVolume
+            vol = int(round(vol_obj.GetMasterVolume() * 100))
+            muted = bool(vol_obj.GetMute())
+            result.append(
+                {
+                    "pid": pid,
+                    "app": app,
+                    "volume": max(0, min(100, vol)),
+                    "muted": muted,
+                }
+            )
+        except Exception:
+            continue
+
+    result = sorted(result, key=lambda x: (x["app"].lower(), x["pid"]))
+    return {"available": True, "sessions": result}
+
+
+def set_audio_session_volume(pid: int, level: int) -> bool:
+    if not AUDIO_AVAILABLE:
+        return False
+
+    target = max(0.0, min(1.0, level / 100.0))
+    changed = False
+    for sess in _iter_audio_sessions():
+        try:
+            session_pid = int(getattr(sess, "ProcessId", 0) or 0)
+            if session_pid != pid:
+                continue
+            sess.SimpleAudioVolume.SetMasterVolume(target, None)
+            changed = True
+        except Exception:
+            continue
+    return changed
+
+
+def set_audio_session_mute(pid: int, muted: bool) -> bool:
+    if not AUDIO_AVAILABLE:
+        return False
+
+    changed = False
+    for sess in _iter_audio_sessions():
+        try:
+            session_pid = int(getattr(sess, "ProcessId", 0) or 0)
+            if session_pid != pid:
+                continue
+            sess.SimpleAudioVolume.SetMute(1 if muted else 0, None)
+            changed = True
+        except Exception:
+            continue
+    return changed
+
+
 def set_audio_volume(level: int) -> bool:
     vol = _audio_obj()
     if not vol:
@@ -441,6 +544,31 @@ def api_audio_mute(state: int) -> dict:
 def api_audio_media(action: str) -> dict:
     ok = send_media_key(action)
     return {"success": ok, "action": action}
+
+
+@app.get("/api/audio/devices")
+def api_audio_devices() -> dict:
+    devices = get_audio_devices()
+    devices["routing_supported"] = False
+    devices["routing_message"] = "App-zu-Device-Zuweisung ist in dieser Version noch nicht direkt verfuegbar."
+    return devices
+
+
+@app.get("/api/audio/sessions")
+def api_audio_sessions() -> dict:
+    return get_audio_sessions()
+
+
+@app.post("/api/audio/session/{pid}/volume/{level}")
+def api_audio_session_volume(pid: int, level: int) -> dict:
+    ok = set_audio_session_volume(pid, level)
+    return {"success": ok, "pid": pid, "level": max(0, min(100, level))}
+
+
+@app.post("/api/audio/session/{pid}/mute/{state}")
+def api_audio_session_mute(pid: int, state: int) -> dict:
+    ok = set_audio_session_mute(pid, bool(state))
+    return {"success": ok, "pid": pid, "muted": bool(state)}
 
 
 @app.get("/api/logs")

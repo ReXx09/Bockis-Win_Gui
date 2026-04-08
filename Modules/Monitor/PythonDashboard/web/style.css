@@ -371,6 +371,64 @@ input, select {
   gap: 8px;
 }
 
+.audio-config-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(260px, 1fr));
+  gap: 10px;
+}
+
+.audio-config-card {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px;
+  background: rgba(9, 17, 31, 0.45);
+}
+
+.audio-config-card h3 {
+  margin: 0 0 8px;
+  font-size: 0.9rem;
+  color: var(--accent);
+}
+
+.audio-device-list,
+.audio-session-list {
+  display: grid;
+  gap: 8px;
+}
+
+.audio-device-item,
+.audio-session-item {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px;
+  background: #0b1628;
+}
+
+.audio-device-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.audio-device-item.active {
+  border-color: var(--accent);
+}
+
+.audio-session-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.audio-empty {
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  padding: 8px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
 .audio-row {
   display: flex;
   gap: 10px;
@@ -474,6 +532,10 @@ th { color: var(--muted); }
 
   .grid-4 {
     grid-template-columns: repeat(2, minmax(100px, 1fr));
+  }
+
+  .audio-config-grid {
+    grid-template-columns: 1fr;
   }
 
   .tile-size-1-3,

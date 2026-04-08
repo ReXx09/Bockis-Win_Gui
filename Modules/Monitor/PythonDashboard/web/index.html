@@ -108,6 +108,20 @@
               <button class="btn" data-media="next">Next</button>
               <button class="btn" data-media="stop">Stop</button>
             </div>
+
+            <div class="audio-config-grid">
+              <section class="audio-config-card">
+                <h3>Audiogeraete</h3>
+                <p id="audioDeviceInfo" class="muted">Lade Geraete...</p>
+                <div id="audioDevices" class="audio-device-list"></div>
+              </section>
+
+              <section class="audio-config-card">
+                <h3>Programm-Audio</h3>
+                <p class="muted">Lautstaerke und Mute pro laufendem Programm.</p>
+                <div id="audioSessions" class="audio-session-list"></div>
+              </section>
+            </div>
           </div>
           <pre id="audioMsg" class="console small-console">Audio bereit.</pre>
         </section>

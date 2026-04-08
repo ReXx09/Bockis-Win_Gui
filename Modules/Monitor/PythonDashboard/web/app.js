@@ -34,6 +34,9 @@ const audioLevel = document.getElementById('audioLevel');
 const audioMuted = document.getElementById('audioMuted');
 const audioSlider = document.getElementById('audioSlider');
 const audioMsg = document.getElementById('audioMsg');
+const audioDeviceInfo = document.getElementById('audioDeviceInfo');
+const audioDevices = document.getElementById('audioDevices');
+const audioSessions = document.getElementById('audioSessions');
 
 const dashboardGrid = document.getElementById('dashboardGrid');
 const widgetMenu = document.getElementById('widgetMenu');
@@ -412,13 +415,89 @@ async function refreshAudio() {
       audioLevel.textContent = 'N/A';
       audioMuted.textContent = 'Audio nicht verfuegbar';
       audioMsg.textContent = 'pycaw/comtypes fehlen oder Audio-Endpoint nicht verfuegbar.';
+      if (audioDeviceInfo) audioDeviceInfo.textContent = 'Keine Audio-API verfuegbar.';
+      if (audioDevices) audioDevices.innerHTML = '<div class="audio-empty">Keine Geraete verfuegbar.</div>';
+      if (audioSessions) audioSessions.innerHTML = '<div class="audio-empty">Keine Programm-Sessions verfuegbar.</div>';
       return;
     }
     audioLevel.textContent = `${d.level}%`;
     audioMuted.textContent = d.muted ? 'Stumm' : 'Aktiv';
     audioSlider.value = d.level;
+    await Promise.all([loadAudioDevices(), loadAudioSessions()]);
   } catch (err) {
     audioMsg.textContent = `Audio-Status Fehler: ${err.message}`;
+  }
+}
+
+async function loadAudioDevices() {
+  try {
+    const d = await jsonFetch('/api/audio/devices');
+    if (!d.available) {
+      audioDeviceInfo.textContent = 'Audio-Geraeteliste nicht verfuegbar.';
+      audioDevices.innerHTML = '<div class="audio-empty">Keine Geraete verfuegbar.</div>';
+      return;
+    }
+
+    audioDeviceInfo.textContent = `Aktives Ausgabegeraet: ${d.active_output || 'Unbekannt'}${d.routing_message ? ` | ${d.routing_message}` : ''}`;
+    audioDevices.innerHTML = d.devices.length
+      ? d.devices.map((dev) => `<div class="audio-device-item${dev.is_active_output ? ' active' : ''}"><span>${dev.name}</span>${dev.is_active_output ? '<strong>Aktiv</strong>' : ''}</div>`).join('')
+      : '<div class="audio-empty">Keine Audio-Geraete gefunden.</div>';
+  } catch (err) {
+    audioDeviceInfo.textContent = `Geraete-Fehler: ${err.message}`;
+    audioDevices.innerHTML = '<div class="audio-empty">Geraete konnten nicht geladen werden.</div>';
+  }
+}
+
+async function loadAudioSessions() {
+  try {
+    const d = await jsonFetch('/api/audio/sessions');
+    if (!d.available) {
+      audioSessions.innerHTML = '<div class="audio-empty">Programm-Sessions nicht verfuegbar.</div>';
+      return;
+    }
+
+    audioSessions.innerHTML = d.sessions.length
+      ? d.sessions.map((s) => `
+        <div class="audio-session-item" data-pid="${s.pid}">
+          <div class="audio-session-head">
+            <span>${s.app}</span>
+            <span class="muted">PID ${s.pid} | ${s.volume}% ${s.muted ? '| Stumm' : ''}</span>
+          </div>
+          <div class="row">
+            <input type="range" min="0" max="100" value="${s.volume}" data-session-volume="${s.pid}" />
+            <button class="btn" data-session-mute="${s.pid}" data-state="${s.muted ? 0 : 1}">${s.muted ? 'Unmute' : 'Mute'}</button>
+          </div>
+        </div>
+      `).join('')
+      : '<div class="audio-empty">Keine aktiven Audio-Programme gefunden.</div>';
+
+    audioSessions.querySelectorAll('[data-session-volume]').forEach((slider) => {
+      slider.addEventListener('change', async () => {
+        const pid = parseInt(slider.dataset.sessionVolume, 10);
+        const level = parseInt(slider.value, 10) || 0;
+        try {
+          await jsonFetch(`/api/audio/session/${pid}/volume/${Math.max(0, Math.min(100, level))}`, { method: 'POST' });
+          await loadAudioSessions();
+        } catch (err) {
+          audioMsg.textContent = `Session-Volume Fehler: ${err.message}`;
+        }
+      });
+    });
+
+    audioSessions.querySelectorAll('[data-session-mute]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const pid = parseInt(btn.dataset.sessionMute, 10);
+        const state = parseInt(btn.dataset.state, 10) || 0;
+        try {
+          await jsonFetch(`/api/audio/session/${pid}/mute/${state}`, { method: 'POST' });
+          await loadAudioSessions();
+        } catch (err) {
+          audioMsg.textContent = `Session-Mute Fehler: ${err.message}`;
+        }
+      });
+    });
+  } catch (err) {
+    audioSessions.innerHTML = `<div class="audio-empty">Session-Fehler: ${err.message}</div>`;
   }
 }
 
