@@ -24,7 +24,34 @@ try:
 
     AUDIO_AVAILABLE = True
 except Exception:
+    POINTER = None
+    cast = None
+    CLSCTX_ALL = None
+    AudioUtilities = None
+    IAudioEndpointVolume = None
     AUDIO_AVAILABLE = False
+
+
+def _ensure_audio_backend() -> bool:
+    global AUDIO_AVAILABLE, POINTER, cast, CLSCTX_ALL, AudioUtilities, IAudioEndpointVolume
+
+    if AUDIO_AVAILABLE:
+        return True
+
+    try:
+        from ctypes import POINTER as _POINTER, cast as _cast
+        from comtypes import CLSCTX_ALL as _CLSCTX_ALL
+        from pycaw.pycaw import AudioUtilities as _AudioUtilities, IAudioEndpointVolume as _IAudioEndpointVolume
+
+        POINTER = _POINTER
+        cast = _cast
+        CLSCTX_ALL = _CLSCTX_ALL
+        AudioUtilities = _AudioUtilities
+        IAudioEndpointVolume = _IAudioEndpointVolume
+        AUDIO_AVAILABLE = True
+        return True
+    except Exception:
+        return False
 
 APP_DIR = Path(__file__).resolve().parent
 WEB_DIR = APP_DIR / "web"
@@ -321,7 +348,7 @@ MEDIA_KEY_MAP: dict[str, int] = {
 
 
 def _audio_obj():
-    if not AUDIO_AVAILABLE:
+    if not _ensure_audio_backend():
         return None
     try:
         dev = AudioUtilities.GetSpeakers()
@@ -343,7 +370,7 @@ def get_audio_status() -> dict:
 
 
 def get_audio_devices() -> dict:
-    if not AUDIO_AVAILABLE:
+    if not _ensure_audio_backend():
         return {"available": False, "active_output": None, "devices": []}
 
     devices: list[dict] = []
@@ -374,7 +401,7 @@ def get_audio_devices() -> dict:
 
 
 def _iter_audio_sessions() -> list:
-    if not AUDIO_AVAILABLE:
+    if not _ensure_audio_backend():
         return []
     try:
         return list(AudioUtilities.GetAllSessions())
@@ -383,7 +410,7 @@ def _iter_audio_sessions() -> list:
 
 
 def get_audio_sessions() -> dict:
-    if not AUDIO_AVAILABLE:
+    if not _ensure_audio_backend():
         return {"available": False, "sessions": []}
 
     result: list[dict] = []
@@ -411,7 +438,7 @@ def get_audio_sessions() -> dict:
 
 
 def set_audio_session_volume(pid: int, level: int) -> bool:
-    if not AUDIO_AVAILABLE:
+    if not _ensure_audio_backend():
         return False
 
     target = max(0.0, min(1.0, level / 100.0))
@@ -429,7 +456,7 @@ def set_audio_session_volume(pid: int, level: int) -> bool:
 
 
 def set_audio_session_mute(pid: int, muted: bool) -> bool:
-    if not AUDIO_AVAILABLE:
+    if not _ensure_audio_backend():
         return False
 
     changed = False
