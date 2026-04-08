@@ -20,6 +20,25 @@ function Start-WebDashboard {
         $LogPath = Join-Path $PSScriptRoot "..\..\Data\Logs"
     }
 
+    $activePorts = @{}
+    try {
+        [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().GetActiveTcpListeners() |
+            ForEach-Object { $activePorts[$_.Port] = $true }
+    } catch { }
+
+    $selectedPort = $null
+    foreach ($candidate in $Port..($Port + 10)) {
+        if (-not $activePorts.ContainsKey($candidate)) {
+            $selectedPort = $candidate
+            break
+        }
+    }
+    if (-not $selectedPort) {
+        return @{ Success = $false; Message = "Kein freier Port im Bereich $Port-$($Port + 10) gefunden." }
+    }
+
+    $Port = $selectedPort
+
     $html  = Get-DashboardHtml
     $js    = Get-DashboardScript
     $state = [hashtable]::Synchronized(@{
@@ -30,6 +49,7 @@ function Start-WebDashboard {
         OutputBuffer = $global:WebOutputBuffer   # Referenz auf den gemeinsamen Buffer
         Html         = $html
       Script       = $js
+    StartupError = $null
         Listener     = $null
         PS           = $null
         RS           = $null
@@ -47,6 +67,7 @@ function Start-WebDashboard {
             $listener.Start()
         } catch {
             $s.Running = $false
+            $s.StartupError = $_.Exception.Message
             return
         }
         $s.Listener = $listener
@@ -200,6 +221,14 @@ function Start-WebDashboard {
 
     Start-Sleep -Milliseconds 400
 
+    if (-not $state.Running -or -not $state.Listener) {
+        $err = if ($state.StartupError) { $state.StartupError } else { "Unbekannter Fehler beim Start des Web-Dashboards." }
+        try { $state.PS.Dispose() } catch { }
+        try { $state.RS.Close(); $state.RS.Dispose() } catch { }
+        $script:State = $null
+        return @{ Success = $false; Message = "Start fehlgeschlagen: $err" }
+    }
+
     return @{ Success = $true; Url = "http://127.0.0.1:$Port"; Port = $Port }
 }
 
@@ -234,7 +263,15 @@ function Get-DashboardHtml {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Bockis System-Tool - Dashboard</title>
 </head>
-<body>
+<body style="font-family:Segoe UI,Tahoma,sans-serif;background:#0d1117;color:#e6edf3;padding:24px;line-height:1.5">
+<h2 style="margin:0 0 12px 0">Web-Dashboard Fallback</h2>
+<p style="margin:0 0 8px 0">Die externen Dateien konnten nicht geladen werden.</p>
+<p style="margin:0 0 12px 0">Erwartet:</p>
+<ul style="margin:0 0 16px 20px">
+    <li>Modules/Monitor/web/dashboard.html</li>
+    <li>Modules/Monitor/web/dashboard.js</li>
+</ul>
+<p style="margin:0">Wenn diese Dateien vorhanden sind, Browser einmal neu laden.</p>
 <script src="/assets/dashboard.js"></script>
 </body>
 </html>
