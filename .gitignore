@@ -1,0 +1,40 @@
+# Secrets - NIEMALS committen!
+.env
+.env.local
+.env.*.local
+
+# Proprietary libraries - DO NOT COMMIT
+Lib/iCUESDK.x64_2019.dll
+Lib/HidSharp.dll
+
+# User-specific files
+config.json
+*.user
+*.suo
+
+# Logs and Runtime Data
+Logs/*.log
+Data/Logs/*.log
+Data/Temp/*.log
+Data/Temp/*.json
+Data/Database/*.db
+Data/ToolDownloads/
+
+# Temporary files
+*.tmp
+*.temp
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# VS Code
+.vscode/settings.json
+.vscode/launch.json
+.vscode/tasks.json
+
+# Build outputs
+bin/
+obj/
+*.exe
