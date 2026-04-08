@@ -46,7 +46,7 @@
         <section class="layout" id="dashboardGrid">
           <section class="card" data-widget="monitoring" data-default-size="2-3" draggable="true">
             <div class="card-head"><h2>Monitoring</h2><span class="drag-handle">⋮⋮</span></div>
-            <div class="grid-4" id="metricsGrid">
+            <div class="grid-3" id="metricsGrid">
               <div class="metric">
                 <span>CPU</span>
                 <strong id="cpuPct">-</strong>
@@ -67,7 +67,7 @@
               </div>
             </div>
 
-            <div class="monitor-charts" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+            <div class="monitor-charts grid-3">
               <div class="chart-card">
                 <span>CPU Verlauf</span>
                 <canvas id="cpuChart" height="70"></canvas>
@@ -83,29 +83,27 @@
             </div>
           </section>
 
-          <section class="card" data-widget="upload" data-default-size="1-3" draggable="true">
+          <section class="card" data-widget="net-upload" data-default-size="1-3" draggable="true">
             <div class="card-head"><h2>Upload</h2><span class="drag-handle">⋮⋮</span></div>
-            <div class="metric">
-              <span>Gesamt</span>
-              <strong id="netTxtUp">-</strong>
-              <small id="upRate">-</small>
+            <div class="net-rate-tile">
+              <strong id="upRateTxt" class="net-rate-value">-</strong>
+              <span class="net-rate-unit">MB/s aktuell</span>
+              <small id="netTotalUpTxt" class="net-rate-total">Gesamt: - MB</small>
             </div>
             <div class="chart-card" style="margin-top: 10px;">
-              <span>Upload Verlauf</span>
-              <canvas id="upChart" height="70"></canvas>
+              <canvas id="netUpChart" height="70"></canvas>
             </div>
           </section>
 
-          <section class="card" data-widget="download" data-default-size="1-3" draggable="true">
+          <section class="card" data-widget="net-download" data-default-size="1-3" draggable="true">
             <div class="card-head"><h2>Download</h2><span class="drag-handle">⋮⋮</span></div>
-            <div class="metric">
-              <span>Gesamt</span>
-              <strong id="netTxtDown">-</strong>
-              <small id="downRate">-</small>
+            <div class="net-rate-tile">
+              <strong id="downRateTxt" class="net-rate-value">-</strong>
+              <span class="net-rate-unit">MB/s aktuell</span>
+              <small id="netTotalDownTxt" class="net-rate-total">Gesamt: - MB</small>
             </div>
             <div class="chart-card" style="margin-top: 10px;">
-              <span>Download Verlauf</span>
-              <canvas id="downChart" height="70"></canvas>
+              <canvas id="netDownChart" height="70"></canvas>
             </div>
           </section>
 

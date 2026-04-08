@@ -328,6 +328,32 @@ body {
   transition: width 0.35s ease;
 }
 
+.net-rate-tile {
+  text-align: center;
+  padding: 8px 4px;
+}
+
+.net-rate-value {
+  display: block;
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.net-rate-unit {
+  display: block;
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin: 4px 0 6px;
+}
+
+.net-rate-total {
+  display: block;
+  color: var(--muted);
+  font-size: 0.82rem;
+  min-height: 18px;
+}
+
 .kv {
   display: grid;
   grid-template-columns: 1fr 1fr;

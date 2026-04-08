@@ -6,10 +6,12 @@ const cpuPct = document.getElementById('cpuPct');
 const ramPct = document.getElementById('ramPct');
 const cpuMeta = document.getElementById('cpuMeta');
 const ramMeta = document.getElementById('ramMeta');
-const netTxtUp = document.getElementById('netTxtUp');
-const netTxtDown = document.getElementById('netTxtDown');
-const upRate = document.getElementById('upRate');
-const downRate = document.getElementById('downRate');
+const upRateTxt = document.getElementById('upRateTxt');
+const downRateTxt = document.getElementById('downRateTxt');
+const netTotalUpTxt = document.getElementById('netTotalUpTxt');
+const netTotalDownTxt = document.getElementById('netTotalDownTxt');
+const netUpChart = document.getElementById('netUpChart');
+const netDownChart = document.getElementById('netDownChart');
 const cpuBar = document.getElementById('cpuBar');
 const ramBar = document.getElementById('ramBar');
 const gpuName = document.getElementById('gpuName');
@@ -19,8 +21,6 @@ const gpuBar = document.getElementById('gpuBar');
 const cpuChart = document.getElementById('cpuChart');
 const gpuChart = document.getElementById('gpuChart');
 const ramChart = document.getElementById('ramChart');
-const upChart = document.getElementById('upChart');
-const downChart = document.getElementById('downChart');
 const disks = document.getElementById('disks');
 const procRows = document.getElementById('procRows');
 
@@ -49,12 +49,12 @@ const dashboardGrid = document.getElementById('dashboardGrid');
 const widgetMenu = document.getElementById('widgetMenu');
 const layoutMsg = document.getElementById('layoutMsg');
 
-const LAYOUT_KEY = 'bockis_dashboard_layout_v3';
+const LAYOUT_KEY = 'bockis_dashboard_layout_v4';
 const PAGE_KEY = 'bockis_dashboard_page_v1';
 const WIDGET_LABELS = {
   monitoring: 'Monitoring',
-  upload: 'Upload',
-  download: 'Download',
+  'net-upload': 'Upload',
+  'net-download': 'Download',
   disks: 'Festplatten',
   audio: 'Audio',
   processes: 'Prozesse',
@@ -67,8 +67,8 @@ const monitorHistory = {
   cpu: [],
   gpu: [],
   ram: [],
-  upload: [],
-  download: [],
+  netUp: [],
+  netDown: [],
 };
 let lastNetSample = null;
 
@@ -130,10 +130,10 @@ function renderMonitorCharts() {
   drawSparkline(cpuChart, monitorHistory.cpu, 100, '#49a9ff', 'rgba(73,169,255,0.16)');
   drawSparkline(gpuChart, monitorHistory.gpu, 100, '#41d88f', 'rgba(65,216,143,0.16)');
   drawSparkline(ramChart, monitorHistory.ram, 100, '#8ea7ff', 'rgba(142,167,255,0.16)');
-  const upMax = Math.max(1, ...monitorHistory.upload);
-  const downMax = Math.max(1, ...monitorHistory.download);
-  drawSparkline(upChart, monitorHistory.upload, upMax, '#ff6b6b', 'rgba(255,107,107,0.16)');
-  drawSparkline(downChart, monitorHistory.download, downMax, '#51cf66', 'rgba(81,207,102,0.16)');
+  const upMax = Math.max(1, ...monitorHistory.netUp);
+  const downMax = Math.max(1, ...monitorHistory.netDown);
+  drawSparkline(netUpChart, monitorHistory.netUp, upMax, '#f97316', 'rgba(249,115,22,0.16)');
+  drawSparkline(netDownChart, monitorHistory.netDown, downMax, '#22d3ee', 'rgba(34,211,238,0.16)');
 }
 
 async function jsonFetch(url, opt = {}) {
@@ -362,8 +362,8 @@ async function loadMetrics() {
   ramPct.textContent = `${m.ram_pct}%`;
   cpuMeta.textContent = `${m.cpu_freq_mhz ? `${m.cpu_freq_mhz} MHz` : 'Freq n/a'} | ${m.cpu_temp_c != null ? `${m.cpu_temp_c} °C` : 'Temp n/a'}`;
   ramMeta.textContent = `${m.ram_used_gb} / ${m.ram_total_gb} GB | ${m.ram_temp_c != null ? `${m.ram_temp_c} °C` : 'Temp n/a'}`;
-  netTxtUp.textContent = `${m.net_sent_mb} MB`;
-  netTxtDown.textContent = `${m.net_recv_mb} MB`;
+  netTotalUpTxt.textContent = `Gesamt: ${m.net_sent_mb} MB`;
+  netTotalDownTxt.textContent = `Gesamt: ${m.net_recv_mb} MB`;
   cpuBar.style.width = `${Math.max(0, Math.min(100, m.cpu_pct))}%`;
   ramBar.style.width = `${Math.max(0, Math.min(100, m.ram_pct))}%`;
   uptime.textContent = `Uptime: ${formatUptime(m.uptime_s || 0)}`;
@@ -394,22 +394,25 @@ async function loadMetrics() {
   const now = Date.now();
   const sentTotal = m.net_sent_mb || 0;
   const recvTotal = m.net_recv_mb || 0;
-  let upRateVal = 0;
-  let downRateVal = 0;
+  const netTotal = sentTotal + recvTotal;
+  let upRate = 0;
+  let downRate = 0;
+  let netRate = 0;
 
   if (lastNetSample && now > lastNetSample.ts) {
     const dt = (now - lastNetSample.ts) / 1000;
     const sentDelta = Math.max(0, sentTotal - lastNetSample.sent);
     const recvDelta = Math.max(0, recvTotal - lastNetSample.recv);
-    upRateVal = dt > 0 ? sentDelta / dt : 0;
-    downRateVal = dt > 0 ? recvDelta / dt : 0;
+    upRate = dt > 0 ? sentDelta / dt : 0;
+    downRate = dt > 0 ? recvDelta / dt : 0;
+    netRate = upRate + downRate;
   }
 
-  upRate.textContent = `${upRateVal.toFixed(2)} MB/s`;
-  downRate.textContent = `${downRateVal.toFixed(2)} MB/s`;
-  lastNetSample = { ts: now, sent: sentTotal, recv: recvTotal };
-  pushHistory('upload', upRateVal);
-  pushHistory('download', downRateVal);
+  upRateTxt.textContent = `${upRate.toFixed(2)}`;
+  downRateTxt.textContent = `${downRate.toFixed(2)}`;
+  lastNetSample = { ts: now, total: netTotal, sent: sentTotal, recv: recvTotal };
+  pushHistory('netUp', upRate);
+  pushHistory('netDown', downRate);
   renderMonitorCharts();
 
   disks.innerHTML = d
