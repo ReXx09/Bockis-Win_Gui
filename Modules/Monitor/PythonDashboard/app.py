@@ -108,6 +108,62 @@ def get_disks() -> list[dict]:
     return disks
 
 
+def get_gpu_metrics() -> list[dict]:
+    """Returns GPU info via nvidia-smi (NVIDIA) or WMI fallback (AMD/Intel)."""
+    gpus: list[dict] = []
+
+    # --- NVIDIA via nvidia-smi ---
+    try:
+        proc = subprocess.run(
+            ["nvidia-smi", "--query-gpu=index,name,utilization.gpu,memory.used,memory.total,temperature.gpu",
+             "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if proc.returncode == 0:
+            for line in proc.stdout.strip().splitlines():
+                parts = [p.strip() for p in line.split(",")]
+                if len(parts) >= 6:
+                    gpus.append({
+                        "index": int(parts[0]),
+                        "name": parts[1],
+                        "usage_pct": int(parts[2]) if parts[2].lstrip('-').isdigit() else None,
+                        "vram_used_mb": int(parts[3]) if parts[3].lstrip('-').isdigit() else None,
+                        "vram_total_mb": int(parts[4]) if parts[4].lstrip('-').isdigit() else None,
+                        "temp_c": int(parts[5]) if parts[5].lstrip('-').isdigit() else None,
+                        "source": "nvidia-smi",
+                    })
+    except Exception:
+        pass
+
+    # --- WMI fallback for AMD/Intel (name + VRAM only) ---
+    if not gpus:
+        rc, out = _run_powershell(
+            "$gpus = Get-CimInstance Win32_VideoController | "
+            "Where-Object { $_.AdapterRAM -gt 0 } | "
+            "Select-Object @{n='Name';e={$_.Name}},@{n='VRAM_MB';e={[int]($_.AdapterRAM/1MB)}}; "
+            "$gpus | ConvertTo-Json -Compress"
+        )
+        if rc == 0 and out.strip():
+            try:
+                data = json.loads(out.strip())
+                if isinstance(data, dict):
+                    data = [data]
+                for i, g in enumerate(data):
+                    gpus.append({
+                        "index": i,
+                        "name": g.get("Name", "Unknown GPU"),
+                        "usage_pct": None,
+                        "vram_used_mb": None,
+                        "vram_total_mb": g.get("VRAM_MB"),
+                        "temp_c": None,
+                        "source": "wmi",
+                    })
+            except Exception:
+                pass
+
+    return gpus
+
+
 def get_processes(top: int = 10) -> list[dict]:
     items: list[dict] = []
     for proc in psutil.process_iter(["pid", "name", "cpu_percent", "memory_info"]):
@@ -263,6 +319,11 @@ def system_info() -> dict:
         "cpu": platform.processor() or "Unknown",
         "python": platform.python_version(),
     }
+
+
+@app.get("/api/gpu")
+def api_gpu() -> list[dict]:
+    return get_gpu_metrics()
 
 
 @app.get("/api/metrics")

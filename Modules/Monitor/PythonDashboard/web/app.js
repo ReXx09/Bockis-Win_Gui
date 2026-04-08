@@ -9,6 +9,7 @@ const freqTxt = document.getElementById('freqTxt');
 const cpuBar = document.getElementById('cpuBar');
 const ramBar = document.getElementById('ramBar');
 const disks = document.getElementById('disks');
+const gpuList = document.getElementById('gpuList');
 const procRows = document.getElementById('procRows');
 
 const gitBranch = document.getElementById('gitBranch');
@@ -187,9 +188,12 @@ async function loadSystem() {
 }
 
 async function loadMetrics() {
-  const m = await jsonFetch('/api/metrics');
-  const d = await jsonFetch('/api/disks');
-  const p = await jsonFetch('/api/processes?top=10');
+  const [m, d, p, gpus] = await Promise.all([
+    jsonFetch('/api/metrics'),
+    jsonFetch('/api/disks'),
+    jsonFetch('/api/processes?top=10'),
+    jsonFetch('/api/gpu'),
+  ]);
 
   cpuPct.textContent = `${m.cpu_pct}%`;
   ramPct.textContent = `${m.ram_pct}%`;
@@ -198,6 +202,24 @@ async function loadMetrics() {
   cpuBar.style.width = `${Math.max(0, Math.min(100, m.cpu_pct))}%`;
   ramBar.style.width = `${Math.max(0, Math.min(100, m.ram_pct))}%`;
   uptime.textContent = `Uptime: ${formatUptime(m.uptime_s || 0)}`;
+
+  // GPU
+  gpuList.innerHTML = gpus.length
+    ? gpus.map((g) => {
+        const usageBar = g.usage_pct != null
+          ? `<div class="bar"><div style="width:${g.usage_pct}%"></div></div>`
+          : `<div class="bar-na">Auslastung: n/a</div>`;
+        const vram = (g.vram_used_mb != null && g.vram_total_mb != null)
+          ? `VRAM ${g.vram_used_mb} / ${g.vram_total_mb} MB`
+          : g.vram_total_mb != null ? `VRAM ${g.vram_total_mb} MB` : '';
+        const temp = g.temp_c != null ? ` &nbsp;|&nbsp; ${g.temp_c} °C` : '';
+        return `<div class="gpu-item">
+          <div class="gpu-header"><strong>${g.name}</strong><span class="gpu-detail">${vram}${temp}</span></div>
+          <div class="gpu-usage">${g.usage_pct != null ? g.usage_pct + '%' : 'n/a'}&nbsp;<span class="gpu-src">${g.source}</span></div>
+          ${usageBar}
+        </div>`;
+      }).join('')
+    : '<div class="gpu-empty">Keine GPU-Daten verfuegbar</div>';
 
   disks.innerHTML = d
     .map((x) => `<div class="disk"><div><strong>${x.device}</strong> (${x.fstype})</div><div>${x.used_gb} / ${x.total_gb} GB (${x.percent}%)</div><div class="bar"><div style="width:${x.percent}%"></div></div></div>`)
