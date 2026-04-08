@@ -355,7 +355,7 @@ async function loadMetrics() {
     jsonFetch('/api/processes?top=10'),
   ]);
 
-  // GPU separat – Fehler crasht nicht den Rest des Dashboards
+  // GPU separat - Fehler crasht nicht den Rest des Dashboards
   let gpus = [];
   try {
     gpus = await jsonFetch('/api/gpu');
