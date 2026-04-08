@@ -38,6 +38,7 @@ const LAYOUT_KEY = 'bockis_dashboard_layout_v2';
 const PAGE_KEY = 'bockis_dashboard_page_v1';
 const WIDGET_LABELS = {
   monitoring: 'Monitoring',
+  disks: 'Festplatten',
   audio: 'Audio',
   processes: 'Prozesse',
 };
