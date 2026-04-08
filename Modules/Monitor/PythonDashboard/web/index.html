@@ -67,7 +67,7 @@
               </div>
             </div>
 
-            <div class="monitor-charts grid-4">
+            <div class="monitor-charts" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
               <div class="chart-card">
                 <span>CPU Verlauf</span>
                 <canvas id="cpuChart" height="70"></canvas>
@@ -83,33 +83,30 @@
             </div>
           </section>
 
-          <section class="card" data-widget="upload-live" data-default-size="1-3" draggable="true">
-            <div class="card-head"><h2>Upload (Live)</h2><span class="drag-handle">⋮⋮</span></div>
-            <div class="metric" style="border: none; padding: 0;">
-              <strong id="upRateTxt" style="font-size: 1.4rem;">-</strong>
-              <small style="opacity: 0.7; margin-top: 4px;">MB/s</small>
+          <section class="card" data-widget="upload" data-default-size="1-3" draggable="true">
+            <div class="card-head"><h2>Upload</h2><span class="drag-handle">⋮⋮</span></div>
+            <div class="metric">
+              <span>Gesamt</span>
+              <strong id="netTxtUp">-</strong>
+              <small id="upRate">-</small>
             </div>
-            <div class="chart-card" style="margin-top: 12px;">
+            <div class="chart-card" style="margin-top: 10px;">
               <span>Upload Verlauf</span>
               <canvas id="upChart" height="70"></canvas>
             </div>
           </section>
 
-          <section class="card" data-widget="download-live" data-default-size="1-3" draggable="true">
-            <div class="card-head"><h2>Download (Live)</h2><span class="drag-handle">⋮⋮</span></div>
-            <div class="metric" style="border: none; padding: 0;">
-              <strong id="downRateTxt" style="font-size: 1.4rem;">-</strong>
-              <small style="opacity: 0.7; margin-top: 4px;">MB/s</small>
+          <section class="card" data-widget="download" data-default-size="1-3" draggable="true">
+            <div class="card-head"><h2>Download</h2><span class="drag-handle">⋮⋮</span></div>
+            <div class="metric">
+              <span>Gesamt</span>
+              <strong id="netTxtDown">-</strong>
+              <small id="downRate">-</small>
             </div>
-            <div class="chart-card" style="margin-top: 12px;">
+            <div class="chart-card" style="margin-top: 10px;">
               <span>Download Verlauf</span>
               <canvas id="downChart" height="70"></canvas>
             </div>
-          </section>
-
-          <section class="card" data-widget="data-traffic" data-default-size="1-3" draggable="true">
-            <div class="card-head"><h2>Netz</h2><span class="drag-handle">⋮⋮</span></div>
-            <canvas id="netChart" height="70"></canvas>
           </section>
 
           <section class="card" data-widget="disks" data-default-size="1-3" draggable="true">

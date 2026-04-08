@@ -328,42 +328,6 @@ body {
   transition: width 0.35s ease;
 }
 
-.traffic-stats {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  padding: 10px 0;
-}
-
-.traffic-item {
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 12px;
-  text-align: center;
-}
-
-.traffic-item span {
-  display: block;
-  color: var(--muted);
-  font-size: 0.8rem;
-  margin-bottom: 6px;
-}
-
-.traffic-item strong {
-  display: block;
-  font-size: 1.2rem;
-  color: var(--text);
-}
-
-/* Upload & Download Live Kacheln */
-#upRateTxt {
-  color: #00d4ff;
-}
-
-#downRateTxt {
-  color: #ff6b6b;
-}
-
 .kv {
   display: grid;
   grid-template-columns: 1fr 1fr;

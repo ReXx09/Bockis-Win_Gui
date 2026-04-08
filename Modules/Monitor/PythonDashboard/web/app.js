@@ -8,8 +8,8 @@ const cpuMeta = document.getElementById('cpuMeta');
 const ramMeta = document.getElementById('ramMeta');
 const netTxtUp = document.getElementById('netTxtUp');
 const netTxtDown = document.getElementById('netTxtDown');
-const upRateTxt = document.getElementById('upRateTxt');
-const downRateTxt = document.getElementById('downRateTxt');
+const upRate = document.getElementById('upRate');
+const downRate = document.getElementById('downRate');
 const cpuBar = document.getElementById('cpuBar');
 const ramBar = document.getElementById('ramBar');
 const gpuName = document.getElementById('gpuName');
@@ -19,7 +19,6 @@ const gpuBar = document.getElementById('gpuBar');
 const cpuChart = document.getElementById('cpuChart');
 const gpuChart = document.getElementById('gpuChart');
 const ramChart = document.getElementById('ramChart');
-const netChart = document.getElementById('netChart');
 const upChart = document.getElementById('upChart');
 const downChart = document.getElementById('downChart');
 const disks = document.getElementById('disks');
@@ -54,9 +53,8 @@ const LAYOUT_KEY = 'bockis_dashboard_layout_v3';
 const PAGE_KEY = 'bockis_dashboard_page_v1';
 const WIDGET_LABELS = {
   monitoring: 'Monitoring',
-  'upload-live': 'Upload (Live)',
-  'download-live': 'Download (Live)',
-  'data-traffic': 'Datenverkehr',
+  upload: 'Upload',
+  download: 'Download',
   disks: 'Festplatten',
   audio: 'Audio',
   processes: 'Prozesse',
@@ -69,9 +67,8 @@ const monitorHistory = {
   cpu: [],
   gpu: [],
   ram: [],
-  net: [],
-  upRate: [],
-  downRate: [],
+  upload: [],
+  download: [],
 };
 let lastNetSample = null;
 
@@ -133,12 +130,10 @@ function renderMonitorCharts() {
   drawSparkline(cpuChart, monitorHistory.cpu, 100, '#49a9ff', 'rgba(73,169,255,0.16)');
   drawSparkline(gpuChart, monitorHistory.gpu, 100, '#41d88f', 'rgba(65,216,143,0.16)');
   drawSparkline(ramChart, monitorHistory.ram, 100, '#8ea7ff', 'rgba(142,167,255,0.16)');
-  const netMax = Math.max(1, ...monitorHistory.net);
-  drawSparkline(netChart, monitorHistory.net, netMax, '#ffb25a', 'rgba(255,178,90,0.16)');
-  const upMax = Math.max(1, ...monitorHistory.upRate);
-  drawSparkline(upChart, monitorHistory.upRate, upMax, '#00d4ff', 'rgba(0,212,255,0.16)');
-  const downMax = Math.max(1, ...monitorHistory.downRate);
-  drawSparkline(downChart, monitorHistory.downRate, downMax, '#ff6b6b', 'rgba(255,107,107,0.16)');
+  const upMax = Math.max(1, ...monitorHistory.upload);
+  const downMax = Math.max(1, ...monitorHistory.download);
+  drawSparkline(upChart, monitorHistory.upload, upMax, '#ff6b6b', 'rgba(255,107,107,0.16)');
+  drawSparkline(downChart, monitorHistory.download, downMax, '#51cf66', 'rgba(81,207,102,0.16)');
 }
 
 async function jsonFetch(url, opt = {}) {
@@ -355,7 +350,7 @@ async function loadMetrics() {
     jsonFetch('/api/processes?top=10'),
   ]);
 
-  // GPU separat - Fehler crasht nicht den Rest des Dashboards
+  // GPU separat – Fehler crasht nicht den Rest des Dashboards
   let gpus = [];
   try {
     gpus = await jsonFetch('/api/gpu');
@@ -399,26 +394,22 @@ async function loadMetrics() {
   const now = Date.now();
   const sentTotal = m.net_sent_mb || 0;
   const recvTotal = m.net_recv_mb || 0;
-  const netTotal = sentTotal + recvTotal;
-  let upRate = 0;
-  let downRate = 0;
-  let netRate = 0;
+  let upRateVal = 0;
+  let downRateVal = 0;
 
   if (lastNetSample && now > lastNetSample.ts) {
     const dt = (now - lastNetSample.ts) / 1000;
     const sentDelta = Math.max(0, sentTotal - lastNetSample.sent);
     const recvDelta = Math.max(0, recvTotal - lastNetSample.recv);
-    upRate = dt > 0 ? sentDelta / dt : 0;
-    downRate = dt > 0 ? recvDelta / dt : 0;
-    netRate = upRate + downRate;
+    upRateVal = dt > 0 ? sentDelta / dt : 0;
+    downRateVal = dt > 0 ? recvDelta / dt : 0;
   }
 
-  upRateTxt.textContent = `${upRate.toFixed(2)}`;
-  downRateTxt.textContent = `${downRate.toFixed(2)}`;
-  lastNetSample = { ts: now, total: netTotal, sent: sentTotal, recv: recvTotal };
-  pushHistory('net', netRate);
-  pushHistory('upRate', upRate);
-  pushHistory('downRate', downRate);
+  upRate.textContent = `${upRateVal.toFixed(2)} MB/s`;
+  downRate.textContent = `${downRateVal.toFixed(2)} MB/s`;
+  lastNetSample = { ts: now, sent: sentTotal, recv: recvTotal };
+  pushHistory('upload', upRateVal);
+  pushHistory('download', downRateVal);
   renderMonitorCharts();
 
   disks.innerHTML = d
