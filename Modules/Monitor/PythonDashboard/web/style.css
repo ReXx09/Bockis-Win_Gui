@@ -355,6 +355,15 @@ body {
   color: var(--text);
 }
 
+/* Upload & Download Live Kacheln */
+#upRateTxt {
+  color: #00d4ff;
+}
+
+#downRateTxt {
+  color: #ff6b6b;
+}
+
 .kv {
   display: grid;
   grid-template-columns: 1fr 1fr;

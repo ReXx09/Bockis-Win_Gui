@@ -8,7 +8,8 @@ const cpuMeta = document.getElementById('cpuMeta');
 const ramMeta = document.getElementById('ramMeta');
 const netTxtUp = document.getElementById('netTxtUp');
 const netTxtDown = document.getElementById('netTxtDown');
-const freqTxt = document.getElementById('freqTxt');
+const upRateTxt = document.getElementById('upRateTxt');
+const downRateTxt = document.getElementById('downRateTxt');
 const cpuBar = document.getElementById('cpuBar');
 const ramBar = document.getElementById('ramBar');
 const gpuName = document.getElementById('gpuName');
@@ -19,6 +20,8 @@ const cpuChart = document.getElementById('cpuChart');
 const gpuChart = document.getElementById('gpuChart');
 const ramChart = document.getElementById('ramChart');
 const netChart = document.getElementById('netChart');
+const upChart = document.getElementById('upChart');
+const downChart = document.getElementById('downChart');
 const disks = document.getElementById('disks');
 const procRows = document.getElementById('procRows');
 
@@ -51,6 +54,8 @@ const LAYOUT_KEY = 'bockis_dashboard_layout_v3';
 const PAGE_KEY = 'bockis_dashboard_page_v1';
 const WIDGET_LABELS = {
   monitoring: 'Monitoring',
+  'upload-live': 'Upload (Live)',
+  'download-live': 'Download (Live)',
   'data-traffic': 'Datenverkehr',
   disks: 'Festplatten',
   audio: 'Audio',
@@ -65,6 +70,8 @@ const monitorHistory = {
   gpu: [],
   ram: [],
   net: [],
+  upRate: [],
+  downRate: [],
 };
 let lastNetSample = null;
 
@@ -128,6 +135,10 @@ function renderMonitorCharts() {
   drawSparkline(ramChart, monitorHistory.ram, 100, '#8ea7ff', 'rgba(142,167,255,0.16)');
   const netMax = Math.max(1, ...monitorHistory.net);
   drawSparkline(netChart, monitorHistory.net, netMax, '#ffb25a', 'rgba(255,178,90,0.16)');
+  const upMax = Math.max(1, ...monitorHistory.upRate);
+  drawSparkline(upChart, monitorHistory.upRate, upMax, '#00d4ff', 'rgba(0,212,255,0.16)');
+  const downMax = Math.max(1, ...monitorHistory.downRate);
+  drawSparkline(downChart, monitorHistory.downRate, downMax, '#ff6b6b', 'rgba(255,107,107,0.16)');
 }
 
 async function jsonFetch(url, opt = {}) {
@@ -402,9 +413,12 @@ async function loadMetrics() {
     netRate = upRate + downRate;
   }
 
-  freqTxt.textContent = `Aktuell Up ${upRate.toFixed(2)} MB/s | Down ${downRate.toFixed(2)} MB/s`;
+  upRateTxt.textContent = `${upRate.toFixed(2)}`;
+  downRateTxt.textContent = `${downRate.toFixed(2)}`;
   lastNetSample = { ts: now, total: netTotal, sent: sentTotal, recv: recvTotal };
   pushHistory('net', netRate);
+  pushHistory('upRate', upRate);
+  pushHistory('downRate', downRate);
   renderMonitorCharts();
 
   disks.innerHTML = d
