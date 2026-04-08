@@ -837,6 +837,30 @@ $titleLabel.Add_MouseMove({
 $script:pythonDashboardProcess = $null
 $script:pythonDashboardPort = 8083
 
+function Ensure-PythonDashboardStartupRegistration {
+    param([bool]$Enable)
+
+    $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+    $valueName = 'BockisPythonDashboard'
+    $runnerPath = Join-Path $PSScriptRoot 'Modules\Monitor\PythonDashboard\Start-PythonDashboardBackground.ps1'
+
+    if ($Enable) {
+        if (-not (Test-Path $runnerPath)) {
+            throw "Startup-Skript nicht gefunden: $runnerPath"
+        }
+
+        $command = "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$runnerPath`""
+        New-Item -Path $runKey -Force | Out-Null
+        New-ItemProperty -Path $runKey -Name $valueName -Value $command -PropertyType String -Force | Out-Null
+    }
+    else {
+        try {
+            Remove-ItemProperty -Path $runKey -Name $valueName -ErrorAction SilentlyContinue
+        }
+        catch { }
+    }
+}
+
 function Get-PythonDashboardStatus {
     $running = $false
     if ($script:pythonDashboardProcess -and -not $script:pythonDashboardProcess.HasExited) {
@@ -886,6 +910,13 @@ function Start-PythonDashboard {
             $verArgs = @($cand.Prefix + @("--version"))
             $verOut = (& $cand.Cmd @verArgs 2>&1 | Out-String).Trim()
             if ($LASTEXITCODE -eq 0 -and $verOut -match "Python") {
+                if ($verOut -match "Python\s+(\d+)\.(\d+)") {
+                    $major = [int]$matches[1]
+                    $minor = [int]$matches[2]
+                    if ($major -lt 3 -or ($major -eq 3 -and $minor -lt 10)) {
+                        continue
+                    }
+                }
                 $pythonCmd = [string]$cand.Cmd
                 $pythonPrefixArgs = @($cand.Prefix)
                 break
@@ -894,7 +925,7 @@ function Start-PythonDashboard {
     }
 
     if (-not $pythonCmd) {
-        return @{ Success = $false; Message = "Kein gueltiger Python-Interpreter gefunden.`nInstalliere Python von python.org (Option 'Add Python to PATH') oder aktiviere den py-Launcher.`nHinweis: Der Windows Store Alias reicht nicht aus." }
+        return @{ Success = $false; Message = "Kein gueltiger Python-Interpreter gefunden.`nInstalliere Python von python.org (Option 'Add Python to PATH') oder aktiviere den py-Launcher.`nHinweis: Der Windows Store Alias reicht nicht aus. Python 3.14 wird unterstuetzt." }
     }
 
     try {
@@ -7264,6 +7295,26 @@ $mainform.Add_Shown({
         # 1. Einstellungen laden (5%)
         Update-InitProgress -Value 5 -Text "Lade Einstellungen..."
         $null = Update-Settings
+
+        # Optional: Python-Dashboard beim Bockis-Start automatisch im Hintergrund starten
+        try {
+            $currentSettings = Get-SystemToolSettings
+            if ($currentSettings -and [bool]$currentSettings.AutoStartPythonDashboardOnAppStart) {
+                $pyStartResult = Start-PythonDashboard
+                if ($pyStartResult.Success) {
+                    if ($script:pythonDashboardButton) {
+                        $script:pythonDashboardButton.BackColor = [System.Drawing.Color]::FromArgb(25, 90, 25)
+                        $script:pythonDashboardButton.ForeColor = [System.Drawing.Color]::FromArgb(61, 220, 132)
+                    }
+                }
+                else {
+                    Write-Verbose "Python-Dashboard Auto-Start fehlgeschlagen: $($pyStartResult.Message)"
+                }
+            }
+        }
+        catch {
+            Write-Verbose "Python-Dashboard Auto-Start konnte nicht ausgefuehrt werden: $_"
+        }
         
         # 2. Log-Verzeichnis initialisieren (10%)
         Update-InitProgress -Value 10 -Text "Initialisiere Log-System..."

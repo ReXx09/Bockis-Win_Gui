@@ -215,6 +215,8 @@ function Initialize-SystemToolSettings {
         AdvancedCleanup     = $false
         CheckUpdates        = $true
         ShowSplash          = $true
+        AutoStartPythonDashboardOnAppStart = $false
+        AutoStartPythonDashboardOnWindowsLogin = $false
         ColorScheme         = Get-DefaultColorScheme
     }
     
@@ -270,6 +272,16 @@ function Import-SystemToolSettings {
             
             # Sicherstellen, dass das neue Farbschema vorhanden ist
             if (Set-ColorSchemeDefaults -Settings $settingsHashtable) {
+                $needsSave = $true
+            }
+
+            # Neue Python-Dashboard-Optionen mit Defaultwerten auffuellen
+            if (-not $settingsHashtable.ContainsKey("AutoStartPythonDashboardOnAppStart")) {
+                $settingsHashtable["AutoStartPythonDashboardOnAppStart"] = $false
+                $needsSave = $true
+            }
+            if (-not $settingsHashtable.ContainsKey("AutoStartPythonDashboardOnWindowsLogin")) {
+                $settingsHashtable["AutoStartPythonDashboardOnWindowsLogin"] = $false
                 $needsSave = $true
             }
             
@@ -1358,6 +1370,24 @@ function Show-SettingsDialog {
     $chkShowSplash.ForeColor = $textColor
     $chkShowSplash.Checked = $script:settings.ShowSplash  # Aktuelle Einstellung laden
     $tabBehavior.Controls.Add($chkShowSplash)
+
+    # Python-Dashboard beim Bockis-Start automatisch starten
+    $chkAutoStartPyDashboard = New-Object System.Windows.Forms.CheckBox
+    $chkAutoStartPyDashboard.Text = "Python-Dashboard bei Bockis-Start automatisch starten"
+    $chkAutoStartPyDashboard.Location = New-Object System.Drawing.Point(15, 180)
+    $chkAutoStartPyDashboard.Size = New-Object System.Drawing.Size(520, 25)
+    $chkAutoStartPyDashboard.ForeColor = $textColor
+    $chkAutoStartPyDashboard.Checked = [bool]$script:settings.AutoStartPythonDashboardOnAppStart
+    $tabBehavior.Controls.Add($chkAutoStartPyDashboard)
+
+    # Python-Dashboard beim Windows-Login im Hintergrund starten
+    $chkPyDashboardWindowsLogin = New-Object System.Windows.Forms.CheckBox
+    $chkPyDashboardWindowsLogin.Text = "Python-Dashboard beim Windows-Login im Hintergrund starten"
+    $chkPyDashboardWindowsLogin.Location = New-Object System.Drawing.Point(15, 215)
+    $chkPyDashboardWindowsLogin.Size = New-Object System.Drawing.Size(520, 25)
+    $chkPyDashboardWindowsLogin.ForeColor = $textColor
+    $chkPyDashboardWindowsLogin.Checked = [bool]$script:settings.AutoStartPythonDashboardOnWindowsLogin
+    $tabBehavior.Controls.Add($chkPyDashboardWindowsLogin)
     
     # Tab 5: System-Einstellungen
     $tabSystem_Settings = New-Object System.Windows.Forms.TabPage
@@ -1688,6 +1718,18 @@ function Show-SettingsDialog {
                 AdvancedCleanup     = $chkAdvancedCleanup.Checked
                 CheckUpdates        = $chkCheckUpdates.Checked
                 ShowSplash          = $chkShowSplash.Checked
+                AutoStartPythonDashboardOnAppStart = $chkAutoStartPyDashboard.Checked
+                AutoStartPythonDashboardOnWindowsLogin = $chkPyDashboardWindowsLogin.Checked
+            }
+
+            # Optional: Registry-Autostart fuer Python-Dashboard sofort umsetzen
+            if (Get-Command -Name Ensure-PythonDashboardStartupRegistration -ErrorAction SilentlyContinue) {
+                try {
+                    Ensure-PythonDashboardStartupRegistration -Enable:$chkPyDashboardWindowsLogin.Checked | Out-Null
+                }
+                catch {
+                    Write-Verbose "Python-Dashboard Startup-Registrierung konnte nicht aktualisiert werden: $_"
+                }
             }
             
             # Symbol-Farben in ColorScheme speichern
@@ -1779,6 +1821,8 @@ function Show-SettingsDialog {
             $OutputBox.AppendText("- RAM-Warnschwelle: $($script:settings.RamThreshold)%`r`n")
             $OutputBox.AppendText("- GPU-Warnschwelle: $($script:settings.GpuThreshold)%`r`n")
             $OutputBox.AppendText("- Log-Level: $($script:settings.LogLevel)`r`n")
+            $OutputBox.AppendText("- Python-Dashboard Auto-Start (App): $($script:settings.AutoStartPythonDashboardOnAppStart)`r`n")
+            $OutputBox.AppendText("- Python-Dashboard Auto-Start (Windows): $($script:settings.AutoStartPythonDashboardOnWindowsLogin)`r`n")
             
             # Zeige Farb-Änderungen an
             $colorCount = if ($script:settings.ColorScheme.Output.Colors) { $script:settings.ColorScheme.Output.Colors.Count } else { 0 }
