@@ -6,6 +6,7 @@ import platform
 import subprocess
 import tempfile
 import time
+import ctypes
 from pathlib import Path
 
 import psutil
@@ -13,6 +14,15 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+
+try:
+    from ctypes import POINTER, cast
+    from comtypes import CLSCTX_ALL
+    from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+
+    AUDIO_AVAILABLE = True
+except Exception:
+    AUDIO_AVAILABLE = False
 
 APP_DIR = Path(__file__).resolve().parent
 WEB_DIR = APP_DIR / "web"
@@ -166,6 +176,74 @@ TOOL_COMMANDS: dict[str, str] = {
     "disk_cleanup": "Start-Process 'cleanmgr.exe'",
 }
 
+MEDIA_KEY_MAP: dict[str, int] = {
+    "play_pause": 0xB3,
+    "next": 0xB0,
+    "prev": 0xB1,
+    "stop": 0xB2,
+    "vol_up": 0xAF,
+    "vol_down": 0xAE,
+    "mute": 0xAD,
+}
+
+
+def _audio_obj():
+    if not AUDIO_AVAILABLE:
+        return None
+    try:
+        dev = AudioUtilities.GetSpeakers()
+        iface = dev.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+        return cast(iface, POINTER(IAudioEndpointVolume))
+    except Exception:
+        return None
+
+
+def get_audio_status() -> dict:
+    vol = _audio_obj()
+    if not vol:
+        return {"available": False, "level": 0, "muted": False}
+    try:
+        level = int(round(vol.GetMasterVolumeLevelScalar() * 100))
+        return {"available": True, "level": max(0, min(100, level)), "muted": bool(vol.GetMute())}
+    except Exception:
+        return {"available": False, "level": 0, "muted": False}
+
+
+def set_audio_volume(level: int) -> bool:
+    vol = _audio_obj()
+    if not vol:
+        return False
+    try:
+        vol.SetMasterVolumeLevelScalar(max(0.0, min(1.0, level / 100.0)), None)
+        return True
+    except Exception:
+        return False
+
+
+def set_audio_mute(muted: bool) -> bool:
+    vol = _audio_obj()
+    if not vol:
+        return False
+    try:
+        vol.SetMute(1 if muted else 0, None)
+        return True
+    except Exception:
+        return False
+
+
+def send_media_key(action: str) -> bool:
+    vk = MEDIA_KEY_MAP.get(action)
+    if not vk:
+        return False
+    keyup = 0x0002
+    ext = 0x0001
+    try:
+        ctypes.windll.user32.keybd_event(vk, 0, ext, 0)
+        ctypes.windll.user32.keybd_event(vk, 0, ext | keyup, 0)
+        return True
+    except Exception:
+        return False
+
 
 @app.get("/")
 def index() -> FileResponse:
@@ -200,6 +278,31 @@ def api_disks() -> list[dict]:
 @app.get("/api/processes")
 def api_processes(top: int = 10) -> list[dict]:
     return get_processes(top)
+
+
+@app.get("/api/audio")
+def api_audio() -> dict:
+    return get_audio_status()
+
+
+@app.post("/api/audio/volume/{level}")
+def api_audio_volume(level: int) -> dict:
+    ok = set_audio_volume(level)
+    st = get_audio_status()
+    return {"success": ok, "status": st}
+
+
+@app.post("/api/audio/mute/{state}")
+def api_audio_mute(state: int) -> dict:
+    ok = set_audio_mute(bool(state))
+    st = get_audio_status()
+    return {"success": ok, "status": st}
+
+
+@app.post("/api/audio/media/{action}")
+def api_audio_media(action: str) -> dict:
+    ok = send_media_key(action)
+    return {"success": ok, "action": action}
 
 
 @app.get("/api/logs")
