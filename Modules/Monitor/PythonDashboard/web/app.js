@@ -207,6 +207,8 @@ async function loadMetrics() {
     .join('');
 }
 
+let lastPullTime = 0;
+
 async function refreshGit() {
   try {
     const d = await jsonFetch('/api/git/status');
@@ -219,7 +221,10 @@ async function refreshGit() {
     gitAB.textContent = `${d.ahead} / ${d.behind}`;
     gitDirty.textContent = `${d.dirty_count}`;
     if (d.branch && gitTarget.value === 'main') gitTarget.value = d.branch;
-    gitMsg.textContent = 'Git bereit.';
+    // Pull-Ergebnis nicht ueberschreiben wenn es juenger als 60 Sekunden ist
+    if (Date.now() - lastPullTime > 60000) {
+      gitMsg.textContent = 'Git bereit.';
+    }
   } catch (err) {
     gitMsg.textContent = `Git-Status fehlgeschlagen: ${err.message}`;
   }
@@ -234,8 +239,10 @@ async function pullGit() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ remote: gitRemote.value, branch: gitTarget.value }),
     });
-    gitMsg.textContent = `${d.message || ''}\n\n${d.output || ''}`.trim();
-    await refreshGit();
+    const pullResult = `[Pull-Ergebnis ${new Date().toLocaleTimeString()}]\n${d.message || ''}\n${d.output || ''}`.trim();
+    lastPullTime = Date.now();
+    await refreshGit();           // aktualisiert Ahead/Behind/Branch-Felder
+    gitMsg.textContent = pullResult; // Pull-Ausgabe danach wieder herstellen
   } catch (err) {
     gitMsg.textContent = `Git Pull Fehler: ${err.message}`;
   }
