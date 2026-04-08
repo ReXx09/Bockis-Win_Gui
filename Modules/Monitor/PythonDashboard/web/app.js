@@ -268,7 +268,14 @@ async function pullGit() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ remote: gitRemote.value, branch: gitTarget.value }),
     });
-    const pullResult = `[Pull-Ergebnis ${new Date().toLocaleTimeString()}]\n${d.message || ''}\n${d.output || ''}`.trim();
+    let pullResult = `[Pull-Ergebnis ${new Date().toLocaleTimeString()}]\n${d.message || ''}\n${d.output || ''}`.trim();
+    if (d.restart_info) {
+      pullResult += `\n${d.restart_info}`;
+    }
+    if (d.restarting) {
+      pullResult += '\nServer-Neustart laeuft. Seite wird in 4 Sekunden aktualisiert...';
+      setTimeout(() => window.location.reload(), 4000);
+    }
     lastPullTime = Date.now();
     await refreshGit();           // aktualisiert Ahead/Behind/Branch-Felder
     gitMsg.textContent = pullResult; // Pull-Ausgabe danach wieder herstellen

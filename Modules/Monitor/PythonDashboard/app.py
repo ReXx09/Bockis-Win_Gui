@@ -7,6 +7,8 @@ import subprocess
 import tempfile
 import time
 import ctypes
+import sys
+import threading
 from pathlib import Path
 
 import psutil
@@ -68,6 +70,54 @@ def _run_powershell(command: str, timeout: int = 20) -> tuple[int, str]:
     )
     output = (proc.stdout or "") + ("\n" + proc.stderr if proc.stderr else "")
     return proc.returncode, output.strip()
+
+
+def _detect_current_port(default_port: int = 8083) -> int:
+    env_port = os.environ.get("BOCKIS_DASHBOARD_PORT", "").strip()
+    if env_port.isdigit():
+        return int(env_port)
+
+    argv = sys.argv or []
+    for i, arg in enumerate(argv):
+        if arg == "--port" and i + 1 < len(argv) and str(argv[i + 1]).isdigit():
+            return int(argv[i + 1])
+        if arg.startswith("--port="):
+            val = arg.split("=", 1)[1].strip()
+            if val.isdigit():
+                return int(val)
+
+    return default_port
+
+
+def request_python_server_restart(delay_s: float = 1.0) -> tuple[bool, str]:
+    try:
+        port = _detect_current_port(8083)
+        python_cmd = sys.executable or "python"
+        args = [python_cmd, "-m", "uvicorn", "app:app", "--host", "127.0.0.1", "--port", str(port)]
+
+        creation_flags = 0
+        creation_flags |= getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+        creation_flags |= getattr(subprocess, "DETACHED_PROCESS", 0)
+        creation_flags |= getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
+        def _restart_and_exit() -> None:
+            try:
+                subprocess.Popen(
+                    args,
+                    cwd=str(APP_DIR),
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    creationflags=creation_flags,
+                )
+            finally:
+                os._exit(0)
+
+        timer = threading.Timer(delay_s, _restart_and_exit)
+        timer.daemon = True
+        timer.start()
+        return True, f"Restart auf Port {port} geplant"
+    except Exception as exc:
+        return False, str(exc)
 
 
 def get_metrics() -> dict:
@@ -401,10 +451,21 @@ def api_git_pull(payload: dict | None = None) -> dict:
     branch = (payload or {}).get("branch") or status.get("branch", "main")
 
     rc, out = _run_git(["pull", "--ff-only", "--autostash", remote, branch])
+    if rc == 0:
+        restarting, restart_info = request_python_server_restart()
+        return {
+            "success": True,
+            "message": "Pull erfolgreich. Python-Dashboard wird neu gestartet." if restarting else "Pull erfolgreich. Auto-Neustart fehlgeschlagen.",
+            "output": out,
+            "restarting": restarting,
+            "restart_info": restart_info,
+        }
+
     return {
-        "success": rc == 0,
-        "message": "Pull erfolgreich" if rc == 0 else "Pull fehlgeschlagen",
+        "success": False,
+        "message": "Pull fehlgeschlagen",
         "output": out,
+        "restarting": False,
     }
 
 
