@@ -120,16 +120,43 @@ def request_python_server_restart(delay_s: float = 1.0) -> tuple[bool, str]:
         return False, str(exc)
 
 
+def _get_cpu_temp_c() -> float | None:
+    try:
+        temps = psutil.sensors_temperatures()
+        if not temps:
+            return None
+
+        preferred_keys = ("coretemp", "k10temp", "cpu_thermal", "acpitz")
+        for key in preferred_keys:
+            entries = temps.get(key)
+            if entries:
+                values = [e.current for e in entries if getattr(e, "current", None) is not None]
+                if values:
+                    return round(sum(values) / len(values), 1)
+
+        for entries in temps.values():
+            values = [e.current for e in entries if getattr(e, "current", None) is not None]
+            if values:
+                return round(sum(values) / len(values), 1)
+    except Exception:
+        return None
+
+    return None
+
+
 def get_metrics() -> dict:
     net = psutil.net_io_counters()
     mem = psutil.virtual_memory()
     freq = psutil.cpu_freq()
+    cpu_temp = _get_cpu_temp_c()
     return {
         "cpu_pct": round(psutil.cpu_percent(interval=0.2), 1),
         "cpu_freq_mhz": round(freq.current, 1) if freq else None,
+        "cpu_temp_c": cpu_temp,
         "ram_pct": round(mem.percent, 1),
         "ram_used_gb": round(mem.used / 1e9, 2),
         "ram_total_gb": round(mem.total / 1e9, 2),
+        "ram_temp_c": None,
         "net_sent_mb": round(net.bytes_sent / 1e6, 1),
         "net_recv_mb": round(net.bytes_recv / 1e6, 1),
         "uptime_s": int(time.time() - psutil.boot_time()),

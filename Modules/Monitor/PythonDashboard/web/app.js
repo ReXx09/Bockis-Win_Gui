@@ -4,12 +4,17 @@ const uptime = document.getElementById('uptime');
 
 const cpuPct = document.getElementById('cpuPct');
 const ramPct = document.getElementById('ramPct');
+const cpuMeta = document.getElementById('cpuMeta');
+const ramMeta = document.getElementById('ramMeta');
 const netTxt = document.getElementById('netTxt');
 const freqTxt = document.getElementById('freqTxt');
 const cpuBar = document.getElementById('cpuBar');
 const ramBar = document.getElementById('ramBar');
+const gpuName = document.getElementById('gpuName');
+const gpuPct = document.getElementById('gpuPct');
+const gpuMeta = document.getElementById('gpuMeta');
+const gpuBar = document.getElementById('gpuBar');
 const disks = document.getElementById('disks');
-const gpuList = document.getElementById('gpuList');
 const procRows = document.getElementById('procRows');
 
 const gitBranch = document.getElementById('gitBranch');
@@ -265,34 +270,36 @@ async function loadMetrics() {
   try {
     gpus = await jsonFetch('/api/gpu');
   } catch {
-    if (gpuList) gpuList.innerHTML = '<div class="gpu-empty">GPU-Daten nicht verfuegbar (Server-Neustart noetig?)</div>';
+    gpus = [];
   }
 
   cpuPct.textContent = `${m.cpu_pct}%`;
   ramPct.textContent = `${m.ram_pct}%`;
+  cpuMeta.textContent = `${m.cpu_freq_mhz ? `${m.cpu_freq_mhz} MHz` : 'Freq n/a'} | ${m.cpu_temp_c != null ? `${m.cpu_temp_c} °C` : 'Temp n/a'}`;
+  ramMeta.textContent = `${m.ram_used_gb} / ${m.ram_total_gb} GB | ${m.ram_temp_c != null ? `${m.ram_temp_c} °C` : 'Temp n/a'}`;
   netTxt.textContent = `Up ${m.net_sent_mb} MB | Down ${m.net_recv_mb} MB`;
   freqTxt.textContent = m.cpu_freq_mhz ? `${m.cpu_freq_mhz} MHz` : '-';
   cpuBar.style.width = `${Math.max(0, Math.min(100, m.cpu_pct))}%`;
   ramBar.style.width = `${Math.max(0, Math.min(100, m.ram_pct))}%`;
   uptime.textContent = `Uptime: ${formatUptime(m.uptime_s || 0)}`;
 
-  // GPU
-  gpuList.innerHTML = gpus.length
-    ? gpus.map((g) => {
-        const usageBar = g.usage_pct != null
-          ? `<div class="bar"><div style="width:${g.usage_pct}%"></div></div>`
-          : `<div class="bar-na">Auslastung: n/a</div>`;
-        const vram = (g.vram_used_mb != null && g.vram_total_mb != null)
-          ? `VRAM ${g.vram_used_mb} / ${g.vram_total_mb} MB`
-          : g.vram_total_mb != null ? `VRAM ${g.vram_total_mb} MB` : '';
-        const temp = g.temp_c != null ? ` &nbsp;|&nbsp; ${g.temp_c} °C` : '';
-        return `<div class="gpu-item">
-          <div class="gpu-header"><strong>${g.name}</strong><span class="gpu-detail">${vram}${temp}</span></div>
-          <div class="gpu-usage">${g.usage_pct != null ? g.usage_pct + '%' : 'n/a'}&nbsp;<span class="gpu-src">${g.source}</span></div>
-          ${usageBar}
-        </div>`;
-      }).join('')
-    : '<div class="gpu-empty">Keine GPU-Daten verfuegbar</div>';
+  // GPU als gleiches Metrik-Format wie CPU/RAM
+  const mainGpu = gpus.length ? gpus[0] : null;
+  if (mainGpu) {
+    const pct = mainGpu.usage_pct != null ? mainGpu.usage_pct : 0;
+    gpuName.textContent = gpus.length > 1 ? `${mainGpu.name} (+${gpus.length - 1})` : mainGpu.name;
+    gpuPct.textContent = mainGpu.usage_pct != null ? `${mainGpu.usage_pct}%` : 'n/a';
+    const vram = (mainGpu.vram_used_mb != null && mainGpu.vram_total_mb != null)
+      ? `VRAM ${mainGpu.vram_used_mb}/${mainGpu.vram_total_mb} MB`
+      : (mainGpu.vram_total_mb != null ? `VRAM ${mainGpu.vram_total_mb} MB` : 'VRAM n/a');
+    gpuMeta.textContent = `${vram} | ${mainGpu.temp_c != null ? `${mainGpu.temp_c} °C` : 'Temp n/a'}`;
+    gpuBar.style.width = `${Math.max(0, Math.min(100, pct))}%`;
+  } else {
+    gpuName.textContent = 'GPU';
+    gpuPct.textContent = 'n/a';
+    gpuMeta.textContent = 'Keine GPU-Daten';
+    gpuBar.style.width = '0%';
+  }
 
   disks.innerHTML = d
     .map((x) => `<div class="disk"><div><strong>${x.device}</strong> (${x.fstype})</div><div>${x.used_gb} / ${x.total_gb} GB (${x.percent}%)</div><div class="bar"><div style="width:${x.percent}%"></div></div></div>`)

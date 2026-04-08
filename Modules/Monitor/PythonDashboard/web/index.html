@@ -45,15 +45,17 @@
         <section class="layout" id="dashboardGrid">
           <section class="card" data-widget="monitoring" data-default-size="2-3" draggable="true">
             <div class="card-head"><h2>Monitoring</h2><span class="drag-handle">⋮⋮</span></div>
-            <div class="grid-3" id="metricsGrid">
+            <div class="grid-4" id="metricsGrid">
               <div class="metric">
                 <span>CPU</span>
                 <strong id="cpuPct">-</strong>
+                <small id="cpuMeta">-</small>
                 <div class="bar"><div id="cpuBar"></div></div>
               </div>
               <div class="metric">
                 <span>RAM</span>
                 <strong id="ramPct">-</strong>
+                <small id="ramMeta">-</small>
                 <div class="bar"><div id="ramBar"></div></div>
               </div>
               <div class="metric">
@@ -61,8 +63,13 @@
                 <strong id="netTxt">-</strong>
                 <small id="freqTxt">-</small>
               </div>
+              <div class="metric">
+                <span id="gpuName">GPU</span>
+                <strong id="gpuPct">-</strong>
+                <small id="gpuMeta">-</small>
+                <div class="bar"><div id="gpuBar"></div></div>
+              </div>
             </div>
-            <div id="gpuList" class="gpu-list"></div>
           </section>
 
           <section class="card" data-widget="disks" data-default-size="1-3" draggable="true">

@@ -258,6 +258,12 @@ body {
   gap: 10px;
 }
 
+.grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(120px, 1fr));
+  gap: 10px;
+}
+
 .metric {
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -274,6 +280,14 @@ body {
   display: block;
   font-size: 1.4rem;
   margin: 4px 0;
+}
+
+.metric small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.86rem;
+  margin-bottom: 8px;
+  min-height: 18px;
 }
 
 .bar {
@@ -456,6 +470,10 @@ th { color: var(--muted); }
 
   .layout {
     grid-template-columns: 1fr;
+  }
+
+  .grid-4 {
+    grid-template-columns: repeat(2, minmax(100px, 1fr));
   }
 
   .tile-size-1-3,
