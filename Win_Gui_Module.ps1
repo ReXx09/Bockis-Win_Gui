@@ -6059,7 +6059,7 @@ $btnWinUpdate.Add_Click({
             Write-ToolLog -ToolName "WindowsUpdate" `
                 -Message "Fehler beim Starten oder Installieren von Windows Update: $_" `
                 -OutputBox $outputBox `
-                -Color ([System.Drawing.Color]::Red)
+                -Style 'Error'
 
             # Bei Fehler: ProgressBar rot einfärben
             Update-ProgressStatus -StatusText "Fehler bei Windows Update" -ProgressValue 100 -TextColor ([System.Drawing.Color]::Red)
@@ -6070,14 +6070,13 @@ $btnWinUpdate.Add_Click({
                 Write-ToolLog -ToolName "WindowsUpdate" `
                     -Message "Windows Update Dienst Status: $($wuauserv.Status)" `
                     -OutputBox $outputBox `
-                    -Color ([System.Drawing.Color]::Yellow)
+                    -Style 'Warning'
             } catch {
                 Write-ToolLog -ToolName "WindowsUpdate" `
                     -Message "Konnte den Status des Windows Update Dienstes nicht abrufen: $_" `
                     -OutputBox $outputBox `
-                    -Color ([System.Drawing.Color]::Red)
+                    -Style 'Error'
             }
-            -Color ([System.Drawing.Color]::Red)
             Update-ProgressStatus -StatusText "Fehler" -ProgressValue 0 -TextColor ([System.Drawing.Color]::Red)
         }
     })
