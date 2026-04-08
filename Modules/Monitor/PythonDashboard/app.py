@@ -487,6 +487,8 @@ def api_git_pull(payload: dict | None = None) -> dict:
             "restart_info": restart_info,
             "updated": updated,
             "pulled_commits": pulled_commits,
+            "before_head": before_head,
+            "after_head": after_head,
         }
 
     return {
@@ -494,6 +496,7 @@ def api_git_pull(payload: dict | None = None) -> dict:
         "message": "Pull fehlgeschlagen",
         "output": out,
         "restarting": False,
+        "before_head": before_head,
     }
 
 

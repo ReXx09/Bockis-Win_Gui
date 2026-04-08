@@ -269,7 +269,10 @@ async function pullGit() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ remote: gitRemote.value, branch: gitTarget.value }),
     });
-    let pullResult = `[Pull-Ergebnis ${new Date().toLocaleTimeString()}]\n${d.message || ''}\n${d.output || ''}`.trim();
+    const beforeShort = d.before_head ? String(d.before_head).slice(0, 8) : '-';
+    const afterShort = d.after_head ? String(d.after_head).slice(0, 8) : beforeShort;
+    const deltaLine = `Commit: ${beforeShort} -> ${afterShort} | Geladen: ${d.pulled_commits ?? 0}`;
+    let pullResult = `[Pull-Ergebnis ${new Date().toLocaleTimeString()}]\n${d.message || ''}\n${deltaLine}\n${d.output || ''}`.trim();
     if (d.restart_info) {
       pullResult += `\n${d.restart_info}`;
     }
