@@ -175,27 +175,37 @@ def _get_cpu_temp_c() -> float | None:
     # 2) OpenHardwareMonitor WMI namespace
     # 3) ACPI thermal zone (often generic/mainboard, but better than nothing)
     ps_cmd = (
-        "$ErrorActionPreference='SilentlyContinue';"
         "$vals=@();"
-        "$vals += (Get-CimInstance -Namespace root/LibreHardwareMonitor -ClassName Sensor |"
-        " Where-Object { $_.SensorType -eq 'Temperature' -and ($_.Name -match 'CPU|Tdie|Package') } |"
-        " Select-Object -ExpandProperty Value);"
-        "$vals += (Get-CimInstance -Namespace root/OpenHardwareMonitor -ClassName Sensor |"
-        " Where-Object { $_.SensorType -eq 'Temperature' -and ($_.Name -match 'CPU|Tdie|Package') } |"
-        " Select-Object -ExpandProperty Value);"
+        "function Add-Temps($items){ if($items){ $script:vals += $items } };"
+        "try {"
+        "  Add-Temps (Get-CimInstance -Namespace root/LibreHardwareMonitor -ClassName Sensor -ErrorAction Stop |"
+        "    Where-Object { $_.SensorType -eq 'Temperature' -and ($_.Name -match 'CPU|Tdie|Package') } |"
+        "    Select-Object -ExpandProperty Value)"
+        "} catch {}"
+        "try {"
+        "  Add-Temps (Get-CimInstance -Namespace root/OpenHardwareMonitor -ClassName Sensor -ErrorAction Stop |"
+        "    Where-Object { $_.SensorType -eq 'Temperature' -and ($_.Name -match 'CPU|Tdie|Package') } |"
+        "    Select-Object -ExpandProperty Value)"
+        "} catch {}"
         "if(-not $vals -or $vals.Count -eq 0){"
-        " $vals += (Get-CimInstance -ClassName MSAcpi_ThermalZoneTemperature -Namespace root/wmi |"
-        "  ForEach-Object { ([double]$_.CurrentTemperature / 10.0) - 273.15 });"
+        "  try {"
+        "    Add-Temps (Get-CimInstance -ClassName MSAcpi_ThermalZoneTemperature -Namespace root/wmi -ErrorAction Stop |"
+        "      ForEach-Object { ([double]$_.CurrentTemperature / 10.0) - 273.15 })"
+        "  } catch {}"
         "}"
         "$vals = $vals | Where-Object { $_ -ne $null -and $_ -gt 0 -and $_ -lt 140 };"
         "if($vals -and $vals.Count -gt 0){ [math]::Round((($vals | Measure-Object -Average).Average),1) }"
     )
     rc, out = _run_powershell(ps_cmd, timeout=8)
     if rc == 0 and out.strip():
-        try:
-            return float(out.strip().splitlines()[-1])
-        except Exception:
-            return None
+        for line in reversed(out.splitlines()):
+            candidate = line.strip().replace(",", ".")
+            if not candidate:
+                continue
+            try:
+                return float(candidate)
+            except Exception:
+                continue
 
     return None
 
