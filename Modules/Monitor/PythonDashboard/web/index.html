@@ -71,6 +71,25 @@
                 <small id="freqTxt">-</small>
               </div>
             </div>
+
+            <div class="monitor-charts grid-4">
+              <div class="chart-card">
+                <span>CPU Verlauf</span>
+                <canvas id="cpuChart" height="70"></canvas>
+              </div>
+              <div class="chart-card">
+                <span>GPU Verlauf</span>
+                <canvas id="gpuChart" height="70"></canvas>
+              </div>
+              <div class="chart-card">
+                <span>RAM Verlauf</span>
+                <canvas id="ramChart" height="70"></canvas>
+              </div>
+              <div class="chart-card">
+                <span>Netz MB/s</span>
+                <canvas id="netChart" height="70"></canvas>
+              </div>
+            </div>
           </section>
 
           <section class="card" data-widget="disks" data-default-size="1-3" draggable="true">

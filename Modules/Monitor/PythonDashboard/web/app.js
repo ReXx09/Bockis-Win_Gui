@@ -14,6 +14,10 @@ const gpuName = document.getElementById('gpuName');
 const gpuPct = document.getElementById('gpuPct');
 const gpuMeta = document.getElementById('gpuMeta');
 const gpuBar = document.getElementById('gpuBar');
+const cpuChart = document.getElementById('cpuChart');
+const gpuChart = document.getElementById('gpuChart');
+const ramChart = document.getElementById('ramChart');
+const netChart = document.getElementById('netChart');
 const disks = document.getElementById('disks');
 const procRows = document.getElementById('procRows');
 
@@ -53,6 +57,76 @@ const WIDGET_LABELS = {
 const SIZE_PRESETS = ['1-3', '1-2', '2-3', 'full', 'min'];
 
 let draggedCard = null;
+const HISTORY_LEN = 45;
+const monitorHistory = {
+  cpu: [],
+  gpu: [],
+  ram: [],
+  net: [],
+};
+let lastNetSample = null;
+
+function pushHistory(key, value) {
+  const list = monitorHistory[key];
+  if (!list) return;
+  list.push(Number.isFinite(value) ? value : 0);
+  while (list.length > HISTORY_LEN) list.shift();
+}
+
+function drawSparkline(canvas, values, maxValue = 100, line = '#4aa3ff', fill = 'rgba(74,163,255,0.16)') {
+  if (!canvas || !values || values.length === 0) return;
+  const w = Math.max(120, canvas.clientWidth || 120);
+  const h = canvas.height || 70;
+  if (canvas.width !== w) canvas.width = w;
+
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  ctx.clearRect(0, 0, w, h);
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(141,163,199,0.22)';
+  ctx.beginPath();
+  ctx.moveTo(0, h - 1);
+  ctx.lineTo(w, h - 1);
+  ctx.stroke();
+
+  const safeMax = Math.max(1, maxValue, ...values);
+  const step = values.length > 1 ? w / (values.length - 1) : w;
+
+  ctx.beginPath();
+  values.forEach((v, i) => {
+    const x = i * step;
+    const y = h - Math.max(0, Math.min(1, v / safeMax)) * (h - 4) - 2;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+
+  const lastX = (values.length - 1) * step;
+  ctx.lineTo(lastX, h - 2);
+  ctx.lineTo(0, h - 2);
+  ctx.closePath();
+  ctx.fillStyle = fill;
+  ctx.fill();
+
+  ctx.beginPath();
+  values.forEach((v, i) => {
+    const x = i * step;
+    const y = h - Math.max(0, Math.min(1, v / safeMax)) * (h - 4) - 2;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = line;
+  ctx.lineWidth = 1.7;
+  ctx.stroke();
+}
+
+function renderMonitorCharts() {
+  drawSparkline(cpuChart, monitorHistory.cpu, 100, '#49a9ff', 'rgba(73,169,255,0.16)');
+  drawSparkline(gpuChart, monitorHistory.gpu, 100, '#41d88f', 'rgba(65,216,143,0.16)');
+  drawSparkline(ramChart, monitorHistory.ram, 100, '#8ea7ff', 'rgba(142,167,255,0.16)');
+  const netMax = Math.max(1, ...monitorHistory.net);
+  drawSparkline(netChart, monitorHistory.net, netMax, '#ffb25a', 'rgba(255,178,90,0.16)');
+}
 
 async function jsonFetch(url, opt = {}) {
   const res = await fetch(url, opt);
@@ -286,6 +360,9 @@ async function loadMetrics() {
   ramBar.style.width = `${Math.max(0, Math.min(100, m.ram_pct))}%`;
   uptime.textContent = `Uptime: ${formatUptime(m.uptime_s || 0)}`;
 
+  pushHistory('cpu', m.cpu_pct || 0);
+  pushHistory('ram', m.ram_pct || 0);
+
   // GPU als gleiches Metrik-Format wie CPU/RAM
   const mainGpu = gpus.length ? gpus[0] : null;
   if (mainGpu) {
@@ -297,12 +374,26 @@ async function loadMetrics() {
       : (mainGpu.vram_total_mb != null ? `VRAM ${mainGpu.vram_total_mb} MB` : 'VRAM n/a');
     gpuMeta.textContent = `${vram} | ${mainGpu.temp_c != null ? `${mainGpu.temp_c} °C` : 'Temp n/a'}`;
     gpuBar.style.width = `${Math.max(0, Math.min(100, pct))}%`;
+    pushHistory('gpu', pct);
   } else {
     gpuName.textContent = 'GPU';
     gpuPct.textContent = 'n/a';
     gpuMeta.textContent = 'Keine GPU-Daten';
     gpuBar.style.width = '0%';
+    pushHistory('gpu', 0);
   }
+
+  const now = Date.now();
+  const netTotal = (m.net_sent_mb || 0) + (m.net_recv_mb || 0);
+  let netRate = 0;
+  if (lastNetSample && now > lastNetSample.ts) {
+    const dt = (now - lastNetSample.ts) / 1000;
+    const delta = Math.max(0, netTotal - lastNetSample.total);
+    netRate = dt > 0 ? delta / dt : 0;
+  }
+  lastNetSample = { ts: now, total: netTotal };
+  pushHistory('net', netRate);
+  renderMonitorCharts();
 
   disks.innerHTML = d
     .map((x) => `<div class="disk"><div><strong>${x.device}</strong> (${x.fstype})</div><div>${x.used_gb} / ${x.total_gb} GB (${x.percent}%)</div><div class="bar"><div style="width:${x.percent}%"></div></div></div>`)
