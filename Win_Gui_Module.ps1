@@ -859,7 +859,26 @@ function Test-PythonDashboardApiCompatibility {
         $schema = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/openapi.json" -Method Get -TimeoutSec 2
         if (-not $schema -or -not $schema.paths) { return $false }
         $pathNames = @($schema.paths.PSObject.Properties.Name)
-        return ($pathNames -contains '/api/gpu' -and $pathNames -contains '/api/audio')
+        if (-not ($pathNames -contains '/api/gpu' -and $pathNames -contains '/api/audio')) {
+            return $false
+        }
+
+        # Audio-Endpunkte muessen nicht nur existieren, sondern auch funktionsfaehig sein.
+        # Dadurch werden alte/beschaedigte Dashboard-Prozesse automatisch ersetzt.
+        try {
+            $audio = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/audio" -Method Get -TimeoutSec 2
+            $devices = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/audio/devices" -Method Get -TimeoutSec 2
+            $sessions = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/audio/sessions" -Method Get -TimeoutSec 2
+
+            if ($audio -and [bool]$audio.available) { return $true }
+            if ($devices -and [bool]$devices.available -and @($devices.devices).Count -gt 0) { return $true }
+            if ($sessions -and [bool]$sessions.available) { return $true }
+
+            return $false
+        }
+        catch {
+            return $false
+        }
     }
     catch {
         return $false
