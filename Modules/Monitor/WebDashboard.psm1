@@ -264,7 +264,7 @@ function Start-WebDashboard {
                             $result = @{ success = $false; message = ""; output = "" }
 
                             if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-                                $result.message = "Git ist nicht installiert oder nicht im PATH verfügbar."
+                                $result.message = "Git ist nicht installiert oder nicht im PATH verfuegbar."
                             } else {
                                 $insideRepo = Invoke-Git -ServerState $s -GitArgs @('rev-parse', '--is-inside-work-tree')
                                 if ($insideRepo.ExitCode -ne 0 -or -not ($insideRepo.Output -match 'true')) {
@@ -299,7 +299,7 @@ function Start-WebDashboard {
                                     } else {
                                         $dirtyInfo = Invoke-Git -ServerState $s -GitArgs @('status', '--porcelain')
                                         if ($dirtyInfo.ExitCode -eq 0 -and $dirtyInfo.Output.Trim()) {
-                                            $result.message = "Lokale Änderungen vorhanden. Bitte zuerst committen/stashen, dann Pull erneut ausführen."
+                                            $result.message = "Lokale Aenderungen vorhanden. Bitte zuerst committen/stashen, dann Pull erneut ausfuehren."
                                             $result.output = $dirtyInfo.Output
                                         } else {
                                             $pullResult = Invoke-Git -ServerState $s -GitArgs @('pull', '--ff-only', $remote, $branch)
