@@ -977,7 +977,7 @@ function Start-PythonDashboard {
 
     try {
         # Pruefe Abhaengigkeiten und installiere sie bei Bedarf automatisch.
-        $checkArgs = @($pythonPrefixArgs + @("-c", "import fastapi, uvicorn, psutil"))
+        $checkArgs = @($pythonPrefixArgs + @("-c", "import fastapi, uvicorn, psutil, comtypes, pycaw"))
         & $pythonCmd @checkArgs 2>$null 1>$null
         if ($LASTEXITCODE -ne 0) {
             $requirementsPath = Join-Path $dashboardDir "requirements.txt"

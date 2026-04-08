@@ -53,7 +53,7 @@ function Get-PythonRunner {
     return $null
 }
 
-if (Test-PortOpen -Port 8083) {
+if (Test-PortOpen -Port 9500) {
     exit 0
 }
 
@@ -65,7 +65,7 @@ if (-not $runner) {
 
 Set-Location $scriptDir
 
-$checkArgs = @($runner.Prefix + @('-c', 'import fastapi, uvicorn, psutil'))
+$checkArgs = @($runner.Prefix + @('-c', 'import fastapi, uvicorn, psutil, comtypes, pycaw'))
 & $runner.Cmd @checkArgs 2>$null 1>$null
 if ($LASTEXITCODE -ne 0) {
     $reqPath = Join-Path $scriptDir 'requirements.txt'
@@ -78,6 +78,6 @@ if ($LASTEXITCODE -ne 0) {
     }
 }
 
-$uvicornArgs = @($runner.Prefix + @('-m', 'uvicorn', 'app:app', '--host', '127.0.0.1', '--port', '8083'))
+$uvicornArgs = @($runner.Prefix + @('-m', 'uvicorn', 'app:app', '--host', '127.0.0.1', '--port', '9500'))
 Start-Process -FilePath $runner.Cmd -ArgumentList $uvicornArgs -WorkingDirectory $scriptDir -WindowStyle Hidden -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog | Out-Null
 exit 0
