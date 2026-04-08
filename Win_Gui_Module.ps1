@@ -833,6 +833,150 @@ $titleLabel.Add_MouseMove({
         }
     })
 
+# Python-Dashboard Status (FastAPI)
+$script:pythonDashboardProcess = $null
+$script:pythonDashboardPort = 8083
+
+function Get-PythonDashboardStatus {
+    $running = $false
+    if ($script:pythonDashboardProcess -and -not $script:pythonDashboardProcess.HasExited) {
+        $running = $true
+    }
+
+    return @{
+        Running = $running
+        Port = $script:pythonDashboardPort
+        Url = "http://127.0.0.1:$($script:pythonDashboardPort)"
+    }
+}
+
+function Start-PythonDashboard {
+    $status = Get-PythonDashboardStatus
+    if ($status.Running) {
+        return @{ Success = $true; Url = $status.Url; Message = "Python-Dashboard laeuft bereits." }
+    }
+
+    $dashboardDir = Join-Path $PSScriptRoot "Modules\Monitor\PythonDashboard"
+    $appPath = Join-Path $dashboardDir "app.py"
+    if (-not (Test-Path $appPath)) {
+        return @{ Success = $false; Message = "Python-Dashboard nicht gefunden: $appPath" }
+    }
+
+    $pythonCmd = $null
+    $pythonPrefixArgs = @()
+
+    # Interpretersuche: erst py-Launcher, dann python.
+    # Der Windows Store Alias (WindowsApps\python.exe) wird explizit aussortiert.
+    $candidates = @()
+    $pyCmd = Get-Command py -ErrorAction SilentlyContinue
+    if ($pyCmd) {
+        $candidates += @{ Cmd = "py"; Prefix = @("-3") }
+    }
+
+    $pythonRaw = Get-Command python -ErrorAction SilentlyContinue
+    if ($pythonRaw) {
+        $pythonPath = [string]$pythonRaw.Source
+        if ($pythonPath -and ($pythonPath -notmatch "WindowsApps\\python\.exe$")) {
+            $candidates += @{ Cmd = "python"; Prefix = @() }
+        }
+    }
+
+    foreach ($cand in $candidates) {
+        try {
+            $verArgs = @($cand.Prefix + @("--version"))
+            $verOut = (& $cand.Cmd @verArgs 2>&1 | Out-String).Trim()
+            if ($LASTEXITCODE -eq 0 -and $verOut -match "Python") {
+                $pythonCmd = [string]$cand.Cmd
+                $pythonPrefixArgs = @($cand.Prefix)
+                break
+            }
+        } catch { }
+    }
+
+    if (-not $pythonCmd) {
+        return @{ Success = $false; Message = "Kein gueltiger Python-Interpreter gefunden.`nInstalliere Python von python.org (Option 'Add Python to PATH') oder aktiviere den py-Launcher.`nHinweis: Der Windows Store Alias reicht nicht aus." }
+    }
+
+    try {
+        # Pruefe Abhaengigkeiten und installiere sie bei Bedarf automatisch.
+        $checkArgs = @($pythonPrefixArgs + @("-c", "import fastapi, uvicorn, psutil"))
+        & $pythonCmd @checkArgs 2>$null 1>$null
+        if ($LASTEXITCODE -ne 0) {
+            $requirementsPath = Join-Path $dashboardDir "requirements.txt"
+            if (Test-Path $requirementsPath) {
+                $installArgs = @($pythonPrefixArgs + @("-m", "pip", "install", "-r", $requirementsPath))
+                $installOutput = (& $pythonCmd @installArgs 2>&1 | Out-String).Trim()
+                if ($LASTEXITCODE -ne 0) {
+                    return @{ Success = $false; Message = "Python-Abhaengigkeiten konnten nicht installiert werden.`n$installOutput" }
+                }
+            }
+        }
+
+        $logDir = Join-Path $PSScriptRoot "Data\Logs"
+        if (-not (Test-Path $logDir)) {
+            New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+        }
+
+        $stdoutLog = Join-Path $logDir "python_dashboard_stdout.log"
+        $stderrLog = Join-Path $logDir "python_dashboard_stderr.log"
+        try { Remove-Item $stdoutLog -Force -ErrorAction SilentlyContinue } catch { }
+        try { Remove-Item $stderrLog -Force -ErrorAction SilentlyContinue } catch { }
+
+        $args = @($pythonPrefixArgs + @("-m", "uvicorn", "app:app", "--host", "127.0.0.1", "--port", "$script:pythonDashboardPort"))
+        $proc = Start-Process -FilePath $pythonCmd -ArgumentList $args -WorkingDirectory $dashboardDir -PassThru -WindowStyle Hidden -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog
+        $script:pythonDashboardProcess = $proc
+
+        # Kurz warten bis API antwortet (max ~12 Sekunden)
+        $ready = $false
+        for ($i = 0; $i -lt 24; $i++) {
+            Start-Sleep -Milliseconds 500
+            try {
+                $health = Invoke-RestMethod -Uri "http://127.0.0.1:$script:pythonDashboardPort/api/health" -Method Get -TimeoutSec 1
+                if ($health -and $health.ok) {
+                    $ready = $true
+                    break
+                }
+            } catch { }
+
+            if ($script:pythonDashboardProcess.HasExited) {
+                break
+            }
+        }
+
+        if (-not $ready) {
+            if ($script:pythonDashboardProcess -and -not $script:pythonDashboardProcess.HasExited) {
+                try { $script:pythonDashboardProcess.Kill() } catch { }
+            }
+
+            $errTail = ""
+            $outTail = ""
+            try {
+                if (Test-Path $stderrLog) { $errTail = (Get-Content $stderrLog -Tail 30 -ErrorAction SilentlyContinue | Out-String).Trim() }
+                if (Test-Path $stdoutLog) { $outTail = (Get-Content $stdoutLog -Tail 30 -ErrorAction SilentlyContinue | Out-String).Trim() }
+            } catch { }
+
+            $script:pythonDashboardProcess = $null
+            $details = @()
+            if ($errTail) { $details += "stderr:`n$errTail" }
+            if ($outTail) { $details += "stdout:`n$outTail" }
+            $detailText = if ($details.Count -gt 0) { "`n`n" + ($details -join "`n`n") } else { "" }
+            return @{ Success = $false; Message = "Python-Dashboard konnte nicht gestartet werden (Timeout/Fehler).$detailText" }
+        }
+
+        return @{ Success = $true; Url = "http://127.0.0.1:$script:pythonDashboardPort"; Message = "Python-Dashboard gestartet." }
+    } catch {
+        $script:pythonDashboardProcess = $null
+        return @{ Success = $false; Message = "Start fehlgeschlagen: $($_.Exception.Message)" }
+    }
+}
+
+function Stop-PythonDashboard {
+    if ($script:pythonDashboardProcess -and -not $script:pythonDashboardProcess.HasExited) {
+        try { $script:pythonDashboardProcess.Kill() } catch { }
+    }
+    $script:pythonDashboardProcess = $null
+}
+
 # Minimieren-Button
 $minimizeButton = New-Object System.Windows.Forms.Button
 $minimizeButton.Text = "−"
@@ -890,6 +1034,52 @@ $infoButton.Add_Click({
 $infoButton.Add_MouseEnter({ $this.BackColor = [System.Drawing.Color]::SlateGray })
 $infoButton.Add_MouseLeave({ $this.BackColor = [System.Drawing.Color]::DarkSlateGray })
 [void]$titleBar.Controls.Add($infoButton)
+
+# Python-Dashboard Toggle-Button
+$script:pythonDashboardButton = New-Object System.Windows.Forms.Button
+$script:pythonDashboardButton.Text      = [char]0xE62F
+$script:pythonDashboardButton.Font      = New-Object System.Drawing.Font("Segoe MDL2 Assets", 10)
+$script:pythonDashboardButton.Size      = New-Object System.Drawing.Size(30, 30)
+$script:pythonDashboardButton.Location  = New-Object System.Drawing.Point(850, 0)
+$script:pythonDashboardButton.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+$script:pythonDashboardButton.FlatAppearance.BorderSize        = 0
+$script:pythonDashboardButton.FlatAppearance.BorderColor       = [System.Drawing.Color]::DarkSlateGray
+$script:pythonDashboardButton.FlatAppearance.MouseDownBackColor = [System.Drawing.Color]::FromArgb(40, 110, 40)
+$script:pythonDashboardButton.BackColor = [System.Drawing.Color]::DarkSlateGray
+$script:pythonDashboardButton.ForeColor = [System.Drawing.Color]::White
+$script:pythonDashboardButton.Add_Click({
+    $st = Get-PythonDashboardStatus
+    if ($st.Running) {
+        Stop-PythonDashboard
+        $script:pythonDashboardButton.BackColor = [System.Drawing.Color]::DarkSlateGray
+        $script:pythonDashboardButton.ForeColor = [System.Drawing.Color]::White
+    } else {
+        $result = Start-PythonDashboard
+        if ($result.Success) {
+            $script:pythonDashboardButton.BackColor = [System.Drawing.Color]::FromArgb(25, 90, 25)
+            $script:pythonDashboardButton.ForeColor = [System.Drawing.Color]::FromArgb(61, 220, 132)
+            Start-Process $result.Url
+        } else {
+            [System.Windows.Forms.MessageBox]::Show(
+                "Python-Dashboard konnte nicht gestartet werden:`n$($result.Message)",
+                "Python-Dashboard Fehler",
+                [System.Windows.Forms.MessageBoxButtons]::OK,
+                [System.Windows.Forms.MessageBoxIcon]::Warning
+            )
+        }
+    }
+})
+$script:pythonDashboardButton.Add_MouseEnter({
+    $st = Get-PythonDashboardStatus
+    if ($st.Running) { $this.BackColor = [System.Drawing.Color]::FromArgb(35, 110, 35) }
+    else { $this.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43) }
+})
+$script:pythonDashboardButton.Add_MouseLeave({
+    $st = Get-PythonDashboardStatus
+    if ($st.Running) { $this.BackColor = [System.Drawing.Color]::FromArgb(25, 90, 25) }
+    else { $this.BackColor = [System.Drawing.Color]::DarkSlateGray }
+})
+[void]$titleBar.Controls.Add($script:pythonDashboardButton)
 
 # Einstellungen-Button
 $settingsButton = New-Object System.Windows.Forms.Button
@@ -1325,6 +1515,9 @@ function Close-FormSafely {
         $script:isClosing = $true
         Write-Host "Close-FormSafely: Schließvorgang wird gestartet..."
         Update-LogFile -Message "Close-FormSafely: Schließvorgang gestartet"
+
+        # Python-Dashboard stoppen (falls aktiv)
+        try { Stop-PythonDashboard } catch { }
 
         # Hardware-Monitoring stoppen
         if ($null -ne $script:hardwareTimer) {
@@ -6823,6 +7016,19 @@ $timer.Add_Tick({
         $statusLabel.Text = "Status: Bereit | " + (Get-Date -Format "dd.MM.yyyy HH:mm")
     })
 $timer.Start()
+
+# Timer: prueft alle 3 Sekunden ob das Dashboard einen GUI-Neustart angefordert hat
+$script:restartCheckTimer = New-Object System.Windows.Forms.Timer
+$script:restartCheckTimer.Interval = 3000
+$script:restartCheckTimer.Add_Tick({
+    $flagPath = [System.IO.Path]::Combine($env:TEMP, 'bockis_restart.flag')
+    if ([System.IO.File]::Exists($flagPath)) {
+        try { [System.IO.File]::Delete($flagPath) } catch { }
+        $script:restartCheckTimer.Stop()
+        $mainform.Close()
+    }
+})
+$script:restartCheckTimer.Start()
 
 $toolInfoBox.Text = "Tool-Informationen werden geladen...`r`n"
 $toolInfoBox.Dock = [System.Windows.Forms.DockStyle]::Fill

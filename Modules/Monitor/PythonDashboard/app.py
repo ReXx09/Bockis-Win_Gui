@@ -1,0 +1,302 @@
+from __future__ import annotations
+
+import json
+import os
+import platform
+import subprocess
+import tempfile
+import time
+from pathlib import Path
+
+import psutil
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+
+APP_DIR = Path(__file__).resolve().parent
+WEB_DIR = APP_DIR / "web"
+REPO_ROOT = APP_DIR.parent.parent.parent
+LOG_DIR = REPO_ROOT / "Data" / "Logs"
+
+app = FastAPI(title="Bockis Python Dashboard")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.mount("/web", StaticFiles(directory=str(WEB_DIR)), name="web")
+
+
+def _run_git(args: list[str]) -> tuple[int, str]:
+    proc = subprocess.run(
+        ["git", "-C", str(REPO_ROOT), *args],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    output = (proc.stdout or "") + ("\n" + proc.stderr if proc.stderr else "")
+    return proc.returncode, output.strip()
+
+
+def _run_powershell(command: str, timeout: int = 20) -> tuple[int, str]:
+    proc = subprocess.run(
+        [
+            "powershell.exe",
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            command,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
+    output = (proc.stdout or "") + ("\n" + proc.stderr if proc.stderr else "")
+    return proc.returncode, output.strip()
+
+
+def get_metrics() -> dict:
+    net = psutil.net_io_counters()
+    mem = psutil.virtual_memory()
+    freq = psutil.cpu_freq()
+    return {
+        "cpu_pct": round(psutil.cpu_percent(interval=0.2), 1),
+        "cpu_freq_mhz": round(freq.current, 1) if freq else None,
+        "ram_pct": round(mem.percent, 1),
+        "ram_used_gb": round(mem.used / 1e9, 2),
+        "ram_total_gb": round(mem.total / 1e9, 2),
+        "net_sent_mb": round(net.bytes_sent / 1e6, 1),
+        "net_recv_mb": round(net.bytes_recv / 1e6, 1),
+        "uptime_s": int(time.time() - psutil.boot_time()),
+    }
+
+
+def get_disks() -> list[dict]:
+    disks: list[dict] = []
+    for part in psutil.disk_partitions(all=False):
+        if "cdrom" in part.opts.lower() or not part.fstype:
+            continue
+        try:
+            usage = psutil.disk_usage(part.mountpoint)
+            disks.append(
+                {
+                    "device": part.device,
+                    "mountpoint": part.mountpoint,
+                    "fstype": part.fstype,
+                    "used_gb": round(usage.used / 1e9, 1),
+                    "total_gb": round(usage.total / 1e9, 1),
+                    "percent": round(usage.percent, 1),
+                }
+            )
+        except OSError:
+            continue
+    return disks
+
+
+def get_processes(top: int = 10) -> list[dict]:
+    items: list[dict] = []
+    for proc in psutil.process_iter(["pid", "name", "cpu_percent", "memory_info"]):
+        try:
+            info = proc.info
+            items.append(
+                {
+                    "pid": info["pid"],
+                    "name": info["name"] or "unknown",
+                    "cpu": round(info["cpu_percent"] or 0.0, 1),
+                    "mem_mb": round((info["memory_info"].rss if info["memory_info"] else 0) / 1e6, 1),
+                }
+            )
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+    return sorted(items, key=lambda x: x["cpu"], reverse=True)[:top]
+
+
+def get_git_status() -> dict:
+    if not shutil_which("git"):
+        return {
+            "available": False,
+            "message": "Git nicht gefunden",
+        }
+
+    rc, inside = _run_git(["rev-parse", "--is-inside-work-tree"])
+    if rc != 0 or "true" not in inside:
+        return {"available": False, "message": "Kein Git-Repository"}
+
+    _, branch = _run_git(["rev-parse", "--abbrev-ref", "HEAD"])
+    _, upstream = _run_git(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"])
+    _, dirty = _run_git(["status", "--porcelain"])
+
+    ahead = 0
+    behind = 0
+    if upstream and "fatal:" not in upstream.lower():
+        _, count = _run_git(["rev-list", "--left-right", "--count", f"{branch}...{upstream}"])
+        parts = count.strip().split()
+        if len(parts) == 2:
+            ahead = int(parts[0])
+            behind = int(parts[1])
+
+    return {
+        "available": True,
+        "branch": branch.strip() or "-",
+        "upstream": upstream.strip() if upstream and "fatal:" not in upstream.lower() else "-",
+        "ahead": ahead,
+        "behind": behind,
+        "dirty_count": len([line for line in dirty.splitlines() if line.strip()]),
+    }
+
+
+def shutil_which(binary: str) -> str | None:
+    rc, out = _run_powershell(f"(Get-Command {binary} -ErrorAction SilentlyContinue).Path")
+    if rc == 0 and out.strip():
+        return out.strip()
+    return None
+
+
+TOOL_COMMANDS: dict[str, str] = {
+    "windows_update": "Start-Process 'ms-settings:windowsupdate'",
+    "defender": "Start-Process 'windowsdefender:'",
+    "services": "Start-Process 'services.msc'",
+    "event_viewer": "Start-Process 'eventvwr.msc'",
+    "task_manager": "Start-Process 'taskmgr.exe'",
+    "disk_cleanup": "Start-Process 'cleanmgr.exe'",
+}
+
+
+@app.get("/")
+def index() -> FileResponse:
+    return FileResponse(WEB_DIR / "index.html")
+
+
+@app.get("/api/health")
+def health() -> dict:
+    return {"ok": True, "service": "python-dashboard"}
+
+
+@app.get("/api/system")
+def system_info() -> dict:
+    return {
+        "hostname": platform.node(),
+        "os": f"{platform.system()} {platform.release()}",
+        "cpu": platform.processor() or "Unknown",
+        "python": platform.python_version(),
+    }
+
+
+@app.get("/api/metrics")
+def api_metrics() -> dict:
+    return get_metrics()
+
+
+@app.get("/api/disks")
+def api_disks() -> list[dict]:
+    return get_disks()
+
+
+@app.get("/api/processes")
+def api_processes(top: int = 10) -> list[dict]:
+    return get_processes(top)
+
+
+@app.get("/api/logs")
+def api_logs() -> list[str]:
+    if not LOG_DIR.exists():
+        return []
+    return sorted([p.name for p in LOG_DIR.glob("*.log")], reverse=True)
+
+
+@app.get("/api/logs/content")
+def api_log_content(file: str, lines: int = 300) -> dict:
+    target = (LOG_DIR / file).resolve()
+    if not str(target).startswith(str(LOG_DIR.resolve())):
+        raise HTTPException(status_code=400, detail="Ungultiger Dateiname")
+    if not target.exists() or not target.is_file():
+        raise HTTPException(status_code=404, detail="Datei nicht gefunden")
+
+    data = target.read_text(encoding="utf-8", errors="replace").splitlines()
+    tail = data[-max(1, min(lines, 3000)) :]
+    return {"file": file, "content": "\n".join(tail)}
+
+
+@app.get("/api/git/status")
+def api_git_status() -> dict:
+    return get_git_status()
+
+
+@app.post("/api/git/pull")
+def api_git_pull(payload: dict | None = None) -> dict:
+    status = get_git_status()
+    if not status.get("available"):
+        return {"success": False, "message": status.get("message", "Git nicht verfugbar")}
+
+    remote = (payload or {}).get("remote") or "origin"
+    branch = (payload or {}).get("branch") or status.get("branch", "main")
+
+    rc, dirty = _run_git(["status", "--porcelain"])
+    if rc == 0 and dirty.strip():
+        return {
+            "success": False,
+            "message": "Lokale Aenderungen vorhanden. Bitte zuerst committen/stashen.",
+            "output": dirty,
+        }
+
+    rc, out = _run_git(["pull", "--ff-only", remote, branch])
+    return {
+        "success": rc == 0,
+        "message": "Pull erfolgreich" if rc == 0 else "Pull fehlgeschlagen",
+        "output": out,
+    }
+
+
+@app.get("/api/tools")
+def api_tools() -> list[dict]:
+    return [
+        {"id": "windows_update", "label": "Windows Update"},
+        {"id": "defender", "label": "Windows Defender"},
+        {"id": "services", "label": "Services"},
+        {"id": "event_viewer", "label": "Event Viewer"},
+        {"id": "task_manager", "label": "Task Manager"},
+        {"id": "disk_cleanup", "label": "Disk Cleanup"},
+    ]
+
+
+@app.post("/api/tools/run/{tool_id}")
+def api_run_tool(tool_id: str) -> dict:
+    cmd = TOOL_COMMANDS.get(tool_id)
+    if not cmd:
+        return {"success": False, "message": "Unbekanntes Tool"}
+
+    rc, out = _run_powershell(cmd, timeout=15)
+    return {
+        "success": rc == 0,
+        "message": "Tool gestartet" if rc == 0 else "Tool konnte nicht gestartet werden",
+        "output": out,
+    }
+
+
+@app.post("/api/restart")
+def api_restart() -> dict:
+    flag_path = Path(tempfile.gettempdir()) / "bockis_restart.flag"
+    try:
+        flag_path.write_text("restart", encoding="utf-8")
+    except OSError as exc:
+        return {"success": False, "message": f"Flag-Datei konnte nicht geschrieben werden: {exc}"}
+
+    script_path = REPO_ROOT / "Win_Gui_Module.ps1"
+    if script_path.exists():
+        subprocess.Popen(
+            [
+                "powershell.exe",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                str(script_path),
+            ],
+            creationflags=subprocess.CREATE_NEW_CONSOLE,
+        )
+
+    return {"success": True, "message": "Neustart wird ausgefuehrt."}
