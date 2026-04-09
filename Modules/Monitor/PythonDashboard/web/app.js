@@ -1050,15 +1050,53 @@ async function loadDashboardDependencyStatus() {
 
 async function loadTools() {
   try {
+    const TOOL_CATEGORY_ORDER = ['sys', 'net', 'diag', 'disk', 'priv', 'dev'];
+    const TOOL_CATEGORY_LABELS = {
+      sys: 'System',
+      net: 'Netzwerk',
+      diag: 'Diagnose',
+      disk: 'Datentraeger',
+      priv: 'Sicherheit',
+      dev: 'Entwickler',
+    };
+
     const tools = await jsonFetch('/api/tools');
     availableTools = Array.isArray(tools) ? tools : [];
-    toolList.innerHTML = availableTools.length
-      ? `<div class="tool-list">${availableTools.map((t) => `
-          <div class="tool-item">
-            <button class="btn tool-item-btn" data-tool-run="${escapeHtml(t.id)}" title="${escapeHtml(t.label)}">${escapeHtml(t.label)}</button>
-            <span class="tool-item-desc" title="${escapeHtml(t.desc || '')}">${escapeHtml(t.desc || '')}</span>
-          </div>`).join('')}</div>`
-      : '<div class="audio-empty">Keine Tools verfuegbar.</div>';
+    if (!availableTools.length) {
+      toolList.innerHTML = '<div class="audio-empty">Keine Tools verfuegbar.</div>';
+    } else {
+      const grouped = new Map();
+      availableTools.forEach((tool) => {
+        const cat = String(tool.cat || 'sys').trim().toLowerCase();
+        if (!grouped.has(cat)) grouped.set(cat, []);
+        grouped.get(cat).push(tool);
+      });
+
+      const renderOrder = [...TOOL_CATEGORY_ORDER, ...Array.from(grouped.keys()).filter((cat) => !TOOL_CATEGORY_ORDER.includes(cat))];
+      toolList.innerHTML = `
+        <div class="tool-cat-list">
+          ${renderOrder.filter((cat) => grouped.has(cat)).map((cat) => {
+            const toolsInCat = grouped.get(cat) || [];
+            return `
+              <section class="tool-cat-block">
+                <div class="tool-cat-head">
+                  <span class="tool-cat-title">${escapeHtml(TOOL_CATEGORY_LABELS[cat] || cat)}</span>
+                  <span class="tool-cat-count">${toolsInCat.length}</span>
+                </div>
+                <div class="tool-tile-grid">
+                  ${toolsInCat.map((t) => `
+                    <button class="tool-tile" type="button" data-tool-run="${escapeHtml(t.id)}" title="${escapeHtml(t.desc || t.label || '')}">
+                      <strong>${escapeHtml(t.label || t.id || '')}</strong>
+                      <span>${escapeHtml(t.desc || '')}</span>
+                    </button>
+                  `).join('')}
+                </div>
+              </section>
+            `;
+          }).join('')}
+        </div>
+      `;
+    }
 
     toolList.querySelectorAll('[data-tool-run]').forEach((btn) => {
       btn.addEventListener('click', async () => {
