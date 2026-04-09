@@ -433,6 +433,11 @@ input, select {
   max-height: 120px;
 }
 
+.compact-console {
+  min-height: 38px;
+  max-height: 72px;
+}
+
 .large-console {
   min-height: 420px;
 }
@@ -461,6 +466,43 @@ input, select {
 .dependency-item {
   display: grid;
   gap: 8px;
+}
+
+.dependency-table {
+  gap: 4px;
+}
+
+.dependency-table-head,
+.dependency-table-row {
+  display: grid;
+  grid-template-columns: minmax(100px, 1.3fr) minmax(64px, 0.8fr) minmax(72px, 0.9fr) minmax(72px, 0.7fr);
+  gap: 8px;
+  align-items: center;
+}
+
+.dependency-table-head {
+  padding: 4px 8px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.dependency-table-row {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 8px;
+  background: #0b1628;
+  font-size: 0.82rem;
+}
+
+.dependency-col-name {
+  font-size: 0.95rem;
+}
+
+.dependency-col-required,
+.dependency-col-installed {
+  color: var(--muted);
 }
 
 .dependency-actions {

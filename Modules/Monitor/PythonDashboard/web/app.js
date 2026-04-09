@@ -722,18 +722,22 @@ function renderDashboardDependencyStatus(data) {
     : `Python ${data.python_version} | ${data.missing_count || 0} fehlend | ${data.outdated_count || 0} abweichend`;
 
   dashboardDependencyList.innerHTML = deps.length
-    ? deps.map((dep) => `
-        <div class="dependency-item dependency-${String(dep.status_color || '').toLowerCase()}">
-          <div>
-            <strong>${dep.name || 'Unbekannt'}</strong>
-            <p class="muted">Soll: ${dep.required || '-'}</p>
-            <p class="muted">Ist: ${dep.installed_version || 'nicht installiert'}</p>
-          </div>
-          <div class="dependency-actions">
-            <span class="dependency-status">${dep.status || '-'}</span>
-          </div>
+    ? `
+      <div class="dependency-table-head">
+        <span>Paket</span>
+        <span>Soll</span>
+        <span>Ist</span>
+        <span>Status</span>
+      </div>
+      ${deps.map((dep) => `
+        <div class="dependency-table-row dependency-${String(dep.status_color || '').toLowerCase()}">
+          <strong class="dependency-col-name">${dep.name || 'Unbekannt'}</strong>
+          <span class="dependency-col-required">${dep.required || '-'}</span>
+          <span class="dependency-col-installed">${dep.installed_version || 'nicht installiert'}</span>
+          <span class="dependency-status">${dep.status || '-'}</span>
         </div>
-      `).join('')
+      `).join('')}
+    `
     : '<div class="audio-empty">Keine Dashboard-Dependencies gefunden.</div>';
 
   scheduleMasonryLayout(logsGrid);
