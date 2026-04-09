@@ -795,10 +795,10 @@ input, select {
 
 .tool-item {
   display: grid;
-  grid-template-columns: max-content 1fr;
+  grid-template-columns: 155px 1fr;
   align-items: center;
-  gap: 12px;
-  padding: 7px 4px;
+  gap: 10px;
+  padding: 6px 4px;
   border-bottom: 1px solid color-mix(in srgb, var(--line) 50%, transparent);
   transition: background 0.12s ease;
   border-radius: 6px;
@@ -813,14 +813,17 @@ input, select {
 .tool-item-btn {
   width: 100%;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .tool-item-desc {
   font-size: 0.82rem;
   color: var(--muted);
   line-height: 1.5;
-  min-width: 0;
-  overflow-wrap: break-word;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .launcher-grid {

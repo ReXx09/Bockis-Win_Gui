@@ -1049,8 +1049,8 @@ async function loadTools() {
     toolList.innerHTML = availableTools.length
       ? `<div class="tool-list">${availableTools.map((t) => `
           <div class="tool-item">
-            <button class="btn tool-item-btn" data-tool-run="${escapeHtml(t.id)}">${escapeHtml(t.label)}</button>
-            <span class="tool-item-desc">${escapeHtml(t.desc || '')}</span>
+            <button class="btn tool-item-btn" data-tool-run="${escapeHtml(t.id)}" title="${escapeHtml(t.label)}">${escapeHtml(t.label)}</button>
+            <span class="tool-item-desc" title="${escapeHtml(t.desc || '')}">${escapeHtml(t.desc || '')}</span>
           </div>`).join('')}</div>`
       : '<div class="audio-empty">Keine Tools verfuegbar.</div>';
 
