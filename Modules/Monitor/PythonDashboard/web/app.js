@@ -52,6 +52,7 @@ const addUserProgramBtn = document.getElementById('addUserProgramBtn');
 const refreshOpenProgramsBtn = document.getElementById('refreshOpenProgramsBtn');
 const openRoutingSettingsBtn = document.getElementById('openRoutingSettingsBtn');
 const userProgramRoutes = document.getElementById('userProgramRoutes');
+const userRoutingHint = document.getElementById('userRoutingHint');
 
 const dashboardGrid = document.getElementById('dashboardGrid');
 const widgetMenu = document.getElementById('widgetMenu');
@@ -728,14 +729,17 @@ function wireUserAudioRoutingControls() {
     if (existing) {
       existing.deviceId = deviceId;
       existing.deviceName = deviceName;
-      audioMsg.textContent = `Zuordnung aktualisiert: ${program} -> ${deviceName}${detectionInfo}`;
+      audioMsg.textContent = `Zuordnung gespeichert: ${program} -> ${deviceName}${detectionInfo}. Hinweis: Die echte Ausgabe-Zuweisung erfolgt in Windows-Routing.`;
     } else {
       all.push({ program, deviceId, deviceName });
-      audioMsg.textContent = `Programm hinzugefuegt: ${program} -> ${deviceName}${detectionInfo}`;
+      audioMsg.textContent = `Programm gespeichert: ${program} -> ${deviceName}${detectionInfo}. Hinweis: Die echte Ausgabe-Zuweisung erfolgt in Windows-Routing.`;
     }
     saveUserAudioRoutes(all);
     if (userProgramName) userProgramName.value = '';
     if (openProgramSelect) openProgramSelect.value = '';
+    if (userRoutingHint) {
+      userRoutingHint.textContent = `Gespeichert fuer ${program}. Jetzt "Windows Routing" oeffnen und dort die App auf ${deviceName} setzen.`;
+    }
     renderUserProgramRoutes();
   });
 
