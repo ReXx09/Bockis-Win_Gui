@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Bockis Python Dashboard</title>
-  <link rel="stylesheet" href="/web/style.css?v=20260409c" />
+  <link rel="stylesheet" href="/web/style.css?v=20260409d" />
   <script>
     (function(){try{var t=localStorage.getItem('bockis_theme_v1');if(t){var d=JSON.parse(t);if(d&&d.vars){var r=document.documentElement;Object.keys(d.vars).forEach(function(k){r.style.setProperty(k,d.vars[k]);});}}}catch(e){}}());
   </script>
@@ -208,6 +208,16 @@
             <div id="dependencyList" class="dependency-list"></div>
             <pre id="dependencyMsg" class="console small-console">Bereit.</pre>
           </section>
+
+          <section class="card" data-widget="logs-dashboard-dependencies" data-default-size="1-3" draggable="true">
+            <div class="card-head"><h2>Dashboard-Dependencies</h2><span class="drag-handle">⋮⋮</span></div>
+            <div class="row">
+              <button id="reloadDashboardDependenciesBtn" class="btn">Pruefen</button>
+            </div>
+            <p id="dashboardDependencySummary" class="muted">Pruefung noch nicht gestartet.</p>
+            <div id="dashboardDependencyList" class="dependency-list"></div>
+            <pre id="dashboardDependencyMsg" class="console small-console">Bereit.</pre>
+          </section>
         </section>
       </section>
 
@@ -270,6 +280,6 @@
     </section>
   </main>
 
-  <script src="/web/app.js?v=20260409g"></script>
+  <script src="/web/app.js?v=20260409h"></script>
 </body>
 </html>

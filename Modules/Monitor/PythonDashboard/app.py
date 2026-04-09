@@ -3,12 +3,14 @@ from __future__ import annotations
 import json
 import os
 import platform
+import re
 import subprocess
 import tempfile
 import time
 import ctypes
 import sys
 import threading
+from importlib import metadata as importlib_metadata
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -81,6 +83,7 @@ APP_DIR = Path(__file__).resolve().parent
 WEB_DIR = APP_DIR / "web"
 REPO_ROOT = APP_DIR.parent.parent.parent
 LOG_DIR = REPO_ROOT / "Data" / "Logs"
+DASHBOARD_REQUIREMENTS = APP_DIR / "requirements.txt"
 
 app = FastAPI(title="Bockis Python Dashboard")
 
@@ -145,6 +148,139 @@ def _extract_json_output(output: str) -> dict:
         except Exception:
             continue
     return {}
+
+
+def _parse_requirement_line(line: str) -> dict | None:
+    raw = str(line or "").strip()
+    if not raw or raw.startswith("#"):
+        return None
+
+    match = re.match(r"^([A-Za-z0-9_.-]+)(?:\[[^\]]+\])?\s*(==|>=|<=|>|<)?\s*([^;#\s]+)?", raw)
+    if not match:
+        return None
+
+    package_name, operator, version = match.groups()
+    return {
+        "package": package_name,
+        "operator": operator or None,
+        "required_version": version or None,
+        "raw": raw,
+    }
+
+
+def _version_tuple(version: str | None) -> tuple[int, ...]:
+    if not version:
+        return tuple()
+    return tuple(int(x) for x in re.findall(r"\d+", str(version)))
+
+
+def _compare_versions(installed: str | None, required: str | None, operator: str | None) -> bool:
+    if not operator or not required:
+        return installed is not None
+    if installed is None:
+        return False
+
+    left = _version_tuple(installed)
+    right = _version_tuple(required)
+    width = max(len(left), len(right))
+    left = left + (0,) * (width - len(left))
+    right = right + (0,) * (width - len(right))
+
+    if operator == "==":
+        return left == right
+    if operator == ">=":
+        return left >= right
+    if operator == "<=":
+        return left <= right
+    if operator == ">":
+        return left > right
+    if operator == "<":
+        return left < right
+    return False
+
+
+def get_dashboard_dependency_status() -> dict:
+    python_ok = sys.version_info >= (3, 10)
+    dependencies: list[dict] = [
+        {
+            "name": "Python",
+            "required": ">=3.10",
+            "installed_version": platform.python_version(),
+            "status": "OK" if python_ok else "Zu alt",
+            "status_color": "green" if python_ok else "red",
+            "found": True,
+            "satisfied": python_ok,
+            "source": "runtime",
+        }
+    ]
+
+    if not DASHBOARD_REQUIREMENTS.exists():
+        return {
+            "available": False,
+            "message": f"requirements.txt nicht gefunden: {DASHBOARD_REQUIREMENTS}",
+            "requirements_path": str(DASHBOARD_REQUIREMENTS),
+            "python_version": platform.python_version(),
+            "dependencies": dependencies,
+            "all_satisfied": False,
+            "missing_count": 0,
+            "outdated_count": 0,
+        }
+
+    missing_count = 0
+    outdated_count = 0
+
+    for line in DASHBOARD_REQUIREMENTS.read_text(encoding="utf-8", errors="replace").splitlines():
+        req = _parse_requirement_line(line)
+        if not req:
+            continue
+
+        installed_version = None
+        found = False
+        try:
+            installed_version = importlib_metadata.version(req["package"])
+            found = True
+        except importlib_metadata.PackageNotFoundError:
+            found = False
+        except Exception:
+            found = False
+
+        satisfied = found and _compare_versions(installed_version, req["required_version"], req["operator"])
+        if not found:
+            missing_count += 1
+            status = "Fehlt"
+            status_color = "red"
+        elif not satisfied:
+            outdated_count += 1
+            status = "Version abweichend"
+            status_color = "yellow"
+        else:
+            status = "OK"
+            status_color = "green"
+
+        required_text = f"{req['operator'] or ''}{req['required_version'] or ''}".strip() or "installiert"
+        dependencies.append(
+            {
+                "name": req["package"],
+                "required": required_text,
+                "installed_version": installed_version,
+                "status": status,
+                "status_color": status_color,
+                "found": found,
+                "satisfied": satisfied,
+                "source": req["raw"],
+            }
+        )
+
+    return {
+        "available": True,
+        "message": "Dashboard-Dependencies geladen.",
+        "requirements_path": str(DASHBOARD_REQUIREMENTS),
+        "python_version": platform.python_version(),
+        "dependencies": dependencies,
+        "all_satisfied": python_ok and missing_count == 0 and outdated_count == 0,
+        "missing_count": missing_count,
+        "outdated_count": outdated_count,
+    }
 
 
 def get_dependency_status() -> dict:
@@ -1038,6 +1174,11 @@ def api_log_content(file: str, lines: int = 300) -> dict:
 @app.get("/api/dependencies")
 def api_dependencies() -> dict:
     return get_dependency_status()
+
+
+@app.get("/api/dashboard/dependencies")
+def api_dashboard_dependencies() -> dict:
+    return get_dashboard_dependency_status()
 
 
 @app.post("/api/dependencies/action")

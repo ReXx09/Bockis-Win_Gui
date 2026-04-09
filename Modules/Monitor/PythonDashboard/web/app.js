@@ -38,6 +38,10 @@ const reloadDependenciesBtn = document.getElementById('reloadDependenciesBtn');
 const dependencySummary = document.getElementById('dependencySummary');
 const dependencyList = document.getElementById('dependencyList');
 const dependencyMsg = document.getElementById('dependencyMsg');
+const reloadDashboardDependenciesBtn = document.getElementById('reloadDashboardDependenciesBtn');
+const dashboardDependencySummary = document.getElementById('dashboardDependencySummary');
+const dashboardDependencyList = document.getElementById('dashboardDependencyList');
+const dashboardDependencyMsg = document.getElementById('dashboardDependencyMsg');
 const toolList = document.getElementById('toolList');
 const toolMsg = document.getElementById('toolMsg');
 
@@ -86,6 +90,7 @@ const WIDGET_LABELS = {
   'audio-routing': 'Benutzer-Programmzuordnung',
   'logs-main': 'Logs',
   'logs-dependencies': 'Dependency-Check',
+  'logs-dashboard-dependencies': 'Dashboard-Dependencies',
   'tools-main': 'Tools',
   'setup-theme': 'Erscheinungsbild',
   'setup-git': 'Git / Setup',
@@ -697,6 +702,53 @@ async function loadDependencyStatus() {
     if (dependencySummary) dependencySummary.textContent = `Dependency-Check Fehler: ${err.message}`;
     if (dependencyList) dependencyList.innerHTML = '<div class="audio-empty">Dependency-Check konnte nicht geladen werden.</div>';
     if (dependencyMsg) dependencyMsg.textContent = `Dependency-Check Fehler: ${err.message}`;
+    scheduleMasonryLayout(logsGrid);
+  }
+}
+
+function renderDashboardDependencyStatus(data) {
+  if (!dashboardDependencySummary || !dashboardDependencyList) return;
+
+  if (!data?.available) {
+    dashboardDependencySummary.textContent = data?.message || 'Dashboard-Dependencies nicht verfuegbar.';
+    dashboardDependencyList.innerHTML = '<div class="audio-empty">Keine Dashboard-Dependency-Daten verfuegbar.</div>';
+    scheduleMasonryLayout(logsGrid);
+    return;
+  }
+
+  const deps = Array.isArray(data.dependencies) ? data.dependencies : [];
+  dashboardDependencySummary.textContent = data.all_satisfied
+    ? `Dashboard ok | Python ${data.python_version} | ${deps.length} Checks`
+    : `Python ${data.python_version} | ${data.missing_count || 0} fehlend | ${data.outdated_count || 0} abweichend`;
+
+  dashboardDependencyList.innerHTML = deps.length
+    ? deps.map((dep) => `
+        <div class="dependency-item dependency-${String(dep.status_color || '').toLowerCase()}">
+          <div>
+            <strong>${dep.name || 'Unbekannt'}</strong>
+            <p class="muted">Soll: ${dep.required || '-'}</p>
+            <p class="muted">Ist: ${dep.installed_version || 'nicht installiert'}</p>
+          </div>
+          <div class="dependency-actions">
+            <span class="dependency-status">${dep.status || '-'}</span>
+          </div>
+        </div>
+      `).join('')
+    : '<div class="audio-empty">Keine Dashboard-Dependencies gefunden.</div>';
+
+  scheduleMasonryLayout(logsGrid);
+}
+
+async function loadDashboardDependencyStatus() {
+  if (dashboardDependencyMsg) dashboardDependencyMsg.textContent = 'Dashboard-Dependency-Check laeuft...';
+  try {
+    const data = await jsonFetch('/api/dashboard/dependencies');
+    renderDashboardDependencyStatus(data);
+    if (dashboardDependencyMsg) dashboardDependencyMsg.textContent = `Quelle: ${data.requirements_path || 'requirements.txt'}`;
+  } catch (err) {
+    if (dashboardDependencySummary) dashboardDependencySummary.textContent = `Dashboard-Dependency-Check Fehler: ${err.message}`;
+    if (dashboardDependencyList) dashboardDependencyList.innerHTML = '<div class="audio-empty">Dashboard-Dependencies konnten nicht geladen werden.</div>';
+    if (dashboardDependencyMsg) dashboardDependencyMsg.textContent = `Dashboard-Dependency-Check Fehler: ${err.message}`;
     scheduleMasonryLayout(logsGrid);
   }
 }
@@ -1378,6 +1430,7 @@ async function init() {
   document.getElementById('gitPullBtn').onclick = pullGit;
   document.getElementById('reloadLogBtn').onclick = () => openLog(logSelect.value);
   if (reloadDependenciesBtn) reloadDependenciesBtn.onclick = loadDependencyStatus;
+  if (reloadDashboardDependenciesBtn) reloadDashboardDependenciesBtn.onclick = loadDashboardDependencyStatus;
   document.getElementById('restartBtn').onclick = restartGui;
   document.getElementById('saveLayoutBtn').onclick = () => {
     const pageConfig = getPageLayoutConfig();
@@ -1422,7 +1475,7 @@ async function init() {
     sysInfo.textContent = 'Systeminfo nicht verfuegbar';
   }
 
-  await Promise.all([refreshAll(), refreshGit(), loadLogs(), loadDependencyStatus(), loadTools()]);
+  await Promise.all([refreshAll(), refreshGit(), loadLogs(), loadDependencyStatus(), loadDashboardDependencyStatus(), loadTools()]);
   document.querySelectorAll('.layout').forEach((layoutEl) => scheduleMasonryLayout(layoutEl));
   setInterval(refreshAll, 5000);
   setInterval(refreshGit, 20000);
