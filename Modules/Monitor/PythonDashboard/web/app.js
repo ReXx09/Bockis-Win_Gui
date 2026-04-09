@@ -1183,22 +1183,30 @@ async function loadTools() {
             d = await jsonFetch(`/api/tools/run/${encodeURIComponent(id)}`, { method: 'POST' });
           }
           toolMsg.textContent = `${d.message || ''}\n${d.output || ''}`.trim();
-          // Optimistic immediate visual update from the toggle response.
-          // This makes the button highlight instantly without waiting for the next poll.
-          if (d && typeof d.is_open !== 'undefined') {
-            const isOpen = !!d.is_open;
+          // Immediate optimistic visual update — do NOT rely on d.is_open:
+          // The backend checks process existence right after launch (0.5 s),
+          // but many tools (mmc-hosted, shell windows, …) aren't detectable yet
+          // at that point → is_open comes back false even though the window opened.
+          // Instead we trust the action field: opened → active, closed → inactive.
+          if (d && d.action) {
             const canClose = !!d.close_supported;
-            btn.classList.toggle('is-open', isOpen);
-            btn.classList.toggle('is-closable', isOpen && canClose);
-            btn.classList.toggle('is-open-readonly', isOpen && !canClose);
+            if (d.action === 'opened') {
+              btn.classList.add('is-open');
+              btn.classList.toggle('is-closable', canClose);
+              btn.classList.toggle('is-open-readonly', !canClose);
+            } else if (d.action === 'closed') {
+              btn.classList.remove('is-open', 'is-closable', 'is-open-readonly');
+            }
+            // already-open / open-failed: leave current state, poll will correct.
           }
-          // Force a real state sync shortly after (cache was already invalidated on backend).
+          // Real state sync shortly after so the backend process-check has had
+          // time to detect the window; corrects any wrong optimistic guess.
           if (toolStateApiAvailable) {
             toolStateRefreshInFlight = false;
             setTimeout(() => {
               toolStateRefreshInFlight = false;
               refreshToolButtonStates();
-            }, 600);
+            }, 1500);
           }
         } catch (err) {
           toolMsg.textContent = `Tool-Fehler: ${err.message}`;
