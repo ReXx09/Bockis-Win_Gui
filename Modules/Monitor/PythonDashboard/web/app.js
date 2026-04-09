@@ -274,6 +274,8 @@ let launcherCategoryDensity = {};
 let launcherCategoryOrder = [];
 let dragArmedCard = null;
 let toolStateTimer = null;
+let toolStateApiAvailable = true;
+let toolToggleApiAvailable = true;
 const masonryFrames = new Map();
 const HISTORY_LEN = 45;
 const monitorHistory = {
@@ -1067,6 +1069,7 @@ async function loadDashboardDependencyStatus() {
 }
 
 async function refreshToolButtonStates() {
+  if (!toolStateApiAvailable) return;
   try {
     const data = await jsonFetch('/api/tools/state');
     const states = data && data.states ? data.states : {};
@@ -1080,7 +1083,17 @@ async function refreshToolButtonStates() {
       btn.classList.toggle('is-closable', canClose);
       btn.classList.toggle('is-open-readonly', isOpen && !canClose);
     });
-  } catch {
+  } catch (err) {
+    if (String(err && err.message || '').includes('404')) {
+      toolStateApiAvailable = false;
+      if (toolStateTimer) {
+        clearInterval(toolStateTimer);
+        toolStateTimer = null;
+      }
+      document.querySelectorAll('#toolsGrid [data-tool-run]').forEach((btn) => {
+        btn.classList.remove('is-open', 'is-closable', 'is-open-readonly');
+      });
+    }
     // keep UI usable even if state endpoint is temporarily unavailable
   }
 }
@@ -1145,9 +1158,28 @@ async function loadTools() {
         const t = availableTools.find((x) => x.id === id) || { label: id };
         toolMsg.textContent = `${t.label} wird verarbeitet...`;
         try {
-          const d = await jsonFetch(`/api/tools/toggle/${encodeURIComponent(id)}`, { method: 'POST' });
+          let d;
+          if (toolToggleApiAvailable) {
+            try {
+              d = await jsonFetch(`/api/tools/toggle/${encodeURIComponent(id)}`, { method: 'POST' });
+            } catch (toggleErr) {
+              if (String(toggleErr && toggleErr.message || '').includes('404')) {
+                toolToggleApiAvailable = false;
+                toolStateApiAvailable = false;
+                if (toolStateTimer) {
+                  clearInterval(toolStateTimer);
+                  toolStateTimer = null;
+                }
+                d = await jsonFetch(`/api/tools/run/${encodeURIComponent(id)}`, { method: 'POST' });
+              } else {
+                throw toggleErr;
+              }
+            }
+          } else {
+            d = await jsonFetch(`/api/tools/run/${encodeURIComponent(id)}`, { method: 'POST' });
+          }
           toolMsg.textContent = `${d.message || ''}\n${d.output || ''}`.trim();
-          await refreshToolButtonStates();
+          if (toolStateApiAvailable) await refreshToolButtonStates();
         } catch (err) {
           toolMsg.textContent = `Tool-Fehler: ${err.message}`;
         }
@@ -1155,10 +1187,12 @@ async function loadTools() {
     });
 
     await refreshToolButtonStates();
-    if (toolStateTimer) clearInterval(toolStateTimer);
-    toolStateTimer = setInterval(() => {
-      refreshToolButtonStates();
-    }, 3000);
+    if (toolStateApiAvailable) {
+      if (toolStateTimer) clearInterval(toolStateTimer);
+      toolStateTimer = setInterval(() => {
+        refreshToolButtonStates();
+      }, 3000);
+    }
 
     populateLauncherToolSelect();
   } catch (err) {
