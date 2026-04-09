@@ -448,6 +448,24 @@ $script:toolLibrary['coding'] = @(
         Winget      = 'Microsoft.PowerShell'
     },
     @{
+        Name        = 'Node.js LTS'
+        Description = 'JavaScript-Laufzeitumgebung fuer Entwicklung, Build-Tools und Web-Backends'
+        Version     = 'LTS'
+        DownloadUrl = 'https://nodejs.org/en/download'
+        Category    = 'Coding / IT'
+        Tags        = @('Node.js', 'JavaScript', 'Runtime', 'Development', 'CLI')
+        Winget      = 'OpenJS.NodeJS.LTS'
+    },
+    @{
+        Name        = 'Python 3.14'
+        Description = 'Python-Laufzeitumgebung fuer Skripte, Automatisierung und Entwicklungs-Workflows'
+        Version     = '3.14'
+        DownloadUrl = 'https://www.python.org/downloads/windows/'
+        Category    = 'Coding / IT'
+        Tags        = @('Python', 'Runtime', 'Scripting', 'Automation', 'Development')
+        Winget      = 'Python.Python.3.14'
+    },
+    @{
         Name        = 'WireGuard'
         Description = 'Modernes VPN mit State-of-the-Art-Verschlüsselung'
         Version     = 'Aktuell'
