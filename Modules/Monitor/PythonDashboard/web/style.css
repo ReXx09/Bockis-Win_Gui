@@ -795,9 +795,10 @@ input, select {
 
 .tool-item {
   display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 6px 2px;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
+  padding: 8px 4px;
   border-bottom: 1px solid color-mix(in srgb, var(--line) 50%, transparent);
   transition: background 0.12s ease;
   border-radius: 6px;
@@ -811,16 +812,16 @@ input, select {
 
 .tool-item-btn {
   flex: 0 0 auto;
-  min-width: 170px;
+  min-width: 160px;
   white-space: nowrap;
 }
 
 .tool-item-desc {
   flex: 1;
+  min-width: 200px;
   font-size: 0.82rem;
   color: var(--muted);
   line-height: 1.5;
-  min-width: 0;
 }
 
 .launcher-grid {
