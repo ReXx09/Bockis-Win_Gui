@@ -56,11 +56,18 @@ const userRoutingHint = document.getElementById('userRoutingHint');
 
 const dashboardGrid = document.getElementById('dashboardGrid');
 const audioGrid = document.getElementById('audioGrid');
+const logsGrid = document.getElementById('logsGrid');
+const toolsGrid = document.getElementById('toolsGrid');
+const setupGrid = document.getElementById('setupGrid');
 const widgetMenu = document.getElementById('widgetMenu');
+const widgetMenuTitle = document.getElementById('widgetMenuTitle');
 const layoutMsg = document.getElementById('layoutMsg');
 
 const LAYOUT_KEY = 'bockis_dashboard_layout_v4';
 const AUDIO_LAYOUT_KEY = 'bockis_audio_layout_v1';
+const LOGS_LAYOUT_KEY = 'bockis_logs_layout_v1';
+const TOOLS_LAYOUT_KEY = 'bockis_tools_layout_v1';
+const SETUP_LAYOUT_KEY = 'bockis_setup_layout_v1';
 const PAGE_KEY = 'bockis_dashboard_page_v1';
 const WIDGET_LABELS = {
   monitoring: 'Monitoring',
@@ -73,6 +80,17 @@ const WIDGET_LABELS = {
   'audio-devices': 'Audiogeraete',
   'audio-sessions': 'Programm-Audio',
   'audio-routing': 'Benutzer-Programmzuordnung',
+  'logs-main': 'Logs',
+  'tools-main': 'Tools',
+  'setup-theme': 'Erscheinungsbild',
+  'setup-git': 'Git / Setup',
+};
+const PAGE_LAYOUTS = {
+  overview: { label: 'Uebersicht', layoutEl: dashboardGrid, storageKey: LAYOUT_KEY },
+  audio: { label: 'Audio', layoutEl: audioGrid, storageKey: AUDIO_LAYOUT_KEY },
+  logs: { label: 'Logs', layoutEl: logsGrid, storageKey: LOGS_LAYOUT_KEY },
+  tools: { label: 'Tools', layoutEl: toolsGrid, storageKey: TOOLS_LAYOUT_KEY },
+  setup: { label: 'Setup', layoutEl: setupGrid, storageKey: SETUP_LAYOUT_KEY },
 };
 const SIZE_PRESETS = ['1-3', '1-2', '2-3', 'full', 'min'];
 const THEME_KEY = 'bockis_theme_v1';
@@ -217,6 +235,14 @@ function getCards(layoutEl = dashboardGrid) {
   return Array.from(layoutEl.querySelectorAll('.card[data-widget]'));
 }
 
+function getCurrentPage() {
+  return document.querySelector('.page.active')?.dataset.page || (localStorage.getItem(PAGE_KEY) || 'overview');
+}
+
+function getPageLayoutConfig(page = getCurrentPage()) {
+  return PAGE_LAYOUTS[page] || null;
+}
+
 function formatUptime(s) {
   const h = Math.floor(s / 3600);
   const m = Math.floor((s % 3600) / 60);
@@ -344,9 +370,21 @@ function wireSizeControls(layoutEl = dashboardGrid, storageKey = LAYOUT_KEY, mes
   });
 }
 
-function renderWidgetMenu() {
+function renderWidgetMenu(page = getCurrentPage()) {
+  const pageConfig = getPageLayoutConfig(page);
+  const layoutEl = pageConfig?.layoutEl || null;
+
+  if (widgetMenuTitle) {
+    widgetMenuTitle.textContent = `Kacheln (${pageConfig?.label || 'Seite'})`;
+  }
+
   widgetMenu.innerHTML = '';
-  getCards(dashboardGrid).forEach((card) => {
+  if (!layoutEl) {
+    widgetMenu.innerHTML = '<div class="audio-empty">Keine Kacheln auf dieser Seite.</div>';
+    return;
+  }
+
+  getCards(layoutEl).forEach((card) => {
     const w = card.dataset.widget;
     const item = document.createElement('label');
     item.className = 'menu-item';
@@ -355,7 +393,7 @@ function renderWidgetMenu() {
     cb.checked = card.style.display !== 'none';
     cb.addEventListener('change', () => {
       card.style.display = cb.checked ? '' : 'none';
-      saveLayout(dashboardGrid, LAYOUT_KEY, false, layoutMsg);
+      saveLayout(layoutEl, pageConfig.storageKey, false, layoutMsg);
     });
     widgetMenu.appendChild(item);
   });
@@ -398,6 +436,7 @@ function showPage(page) {
     b.classList.toggle('active', b.dataset.pageTarget === page);
   });
   localStorage.setItem(PAGE_KEY, page);
+  renderWidgetMenu(page);
   document.querySelectorAll('.page.active .layout').forEach((layoutEl) => scheduleMasonryLayout(layoutEl));
 }
 
@@ -1250,18 +1289,36 @@ async function init() {
   document.getElementById('gitPullBtn').onclick = pullGit;
   document.getElementById('reloadLogBtn').onclick = () => openLog(logSelect.value);
   document.getElementById('restartBtn').onclick = restartGui;
-  document.getElementById('saveLayoutBtn').onclick = () => saveLayout(dashboardGrid, LAYOUT_KEY, true, layoutMsg);
-  document.getElementById('resetLayoutBtn').onclick = () => resetLayout(LAYOUT_KEY);
+  document.getElementById('saveLayoutBtn').onclick = () => {
+    const pageConfig = getPageLayoutConfig();
+    if (!pageConfig?.layoutEl) return;
+    saveLayout(pageConfig.layoutEl, pageConfig.storageKey, true, layoutMsg);
+  };
+  document.getElementById('resetLayoutBtn').onclick = () => {
+    const pageConfig = getPageLayoutConfig();
+    if (!pageConfig) return;
+    resetLayout(pageConfig.storageKey);
+  };
   logSelect.onchange = () => openLog(logSelect.value);
 
-  wirePageMenu();
   wireSizeControls(dashboardGrid, LAYOUT_KEY, layoutMsg);
   wireSizeControls(audioGrid, AUDIO_LAYOUT_KEY);
+  wireSizeControls(logsGrid, LOGS_LAYOUT_KEY);
+  wireSizeControls(toolsGrid, TOOLS_LAYOUT_KEY);
+  wireSizeControls(setupGrid, SETUP_LAYOUT_KEY);
+
   applyLayout(readLayout(LAYOUT_KEY), dashboardGrid);
   applyLayout(readLayout(AUDIO_LAYOUT_KEY), audioGrid);
-  renderWidgetMenu();
+  applyLayout(readLayout(LOGS_LAYOUT_KEY), logsGrid);
+  applyLayout(readLayout(TOOLS_LAYOUT_KEY), toolsGrid);
+  applyLayout(readLayout(SETUP_LAYOUT_KEY), setupGrid);
+
+  wirePageMenu();
   wireDragDrop(dashboardGrid, LAYOUT_KEY, renderWidgetMenu);
   wireDragDrop(audioGrid, AUDIO_LAYOUT_KEY);
+  wireDragDrop(logsGrid, LOGS_LAYOUT_KEY, renderWidgetMenu);
+  wireDragDrop(toolsGrid, TOOLS_LAYOUT_KEY, renderWidgetMenu);
+  wireDragDrop(setupGrid, SETUP_LAYOUT_KEY, renderWidgetMenu);
   window.addEventListener('resize', () => {
     document.querySelectorAll('.layout').forEach((layoutEl) => scheduleMasonryLayout(layoutEl));
   });

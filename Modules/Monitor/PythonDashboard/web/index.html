@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Bockis Python Dashboard</title>
-  <link rel="stylesheet" href="/web/style.css?v=20260409b" />
+  <link rel="stylesheet" href="/web/style.css?v=20260409c" />
   <script>
     (function(){try{var t=localStorage.getItem('bockis_theme_v1');if(t){var d=JSON.parse(t);if(d&&d.vars){var r=document.documentElement;Object.keys(d.vars).forEach(function(k){r.style.setProperty(k,d.vars[k]);});}}}catch(e){}}());
   </script>
@@ -35,7 +35,7 @@
         <button class="menu-nav-btn" data-page-target="setup">Setup</button>
       </div>
 
-      <h4 class="menu-title">Kacheln (Uebersicht)</h4>
+      <h4 class="menu-title" id="widgetMenuTitle">Kacheln (Uebersicht)</h4>
       <div class="menu-group" id="widgetMenu"></div>
       <div class="menu-actions">
         <button id="saveLayoutBtn" class="btn">Layout speichern</button>
@@ -189,28 +189,32 @@
       </section>
 
       <section class="page" data-page="logs">
-        <section class="card">
-          <div class="card-head"><h2>Logs</h2></div>
-          <div class="row">
-            <select id="logSelect"></select>
-            <button id="reloadLogBtn" class="btn">Laden</button>
-          </div>
-          <pre id="logContent" class="console large-console">Keine Log-Datei geladen.</pre>
+        <section class="layout" id="logsGrid">
+          <section class="card" data-widget="logs-main" data-default-size="full" draggable="true">
+            <div class="card-head"><h2>Logs</h2><span class="drag-handle">⋮⋮</span></div>
+            <div class="row">
+              <select id="logSelect"></select>
+              <button id="reloadLogBtn" class="btn">Laden</button>
+            </div>
+            <pre id="logContent" class="console large-console">Keine Log-Datei geladen.</pre>
+          </section>
         </section>
       </section>
 
       <section class="page" data-page="tools">
-        <section class="card">
-          <div class="card-head"><h2>Tools</h2></div>
-          <div id="toolList" class="tool-grid"></div>
-          <pre id="toolMsg" class="console">Bereit.</pre>
+        <section class="layout" id="toolsGrid">
+          <section class="card" data-widget="tools-main" data-default-size="full" draggable="true">
+            <div class="card-head"><h2>Tools</h2><span class="drag-handle">⋮⋮</span></div>
+            <div id="toolList" class="tool-grid"></div>
+            <pre id="toolMsg" class="console">Bereit.</pre>
+          </section>
         </section>
       </section>
 
       <section class="page" data-page="setup">
-        <div class="setup-stack">
-        <section class="card">
-          <div class="card-head"><h2>Erscheinungsbild</h2></div>
+        <section class="layout" id="setupGrid">
+        <section class="card" data-widget="setup-theme" data-default-size="1-2" draggable="true">
+          <div class="card-head"><h2>Erscheinungsbild</h2><span class="drag-handle">⋮⋮</span></div>
           <h4 class="theme-section-label">Presets</h4>
           <div class="theme-presets" id="themePresets"></div>
           <h4 class="theme-section-label">Eigene Farben</h4>
@@ -233,8 +237,8 @@
             <button id="resetThemeBtn" class="btn">Zuruecksetzen</button>
           </div>
         </section>
-        <section class="card">
-          <div class="card-head"><h2>Git / Setup</h2></div>
+        <section class="card" data-widget="setup-git" data-default-size="1-2" draggable="true">
+          <div class="card-head"><h2>Git / Setup</h2><span class="drag-handle">⋮⋮</span></div>
           <div class="kv">
             <div>Branch</div><div id="gitBranch">-</div>
             <div>Upstream</div><div id="gitUpstream">-</div>
@@ -251,11 +255,11 @@
           </div>
           <pre id="gitMsg" class="console">Warte auf Git-Status...</pre>
         </section>
-        </div>
+        </section>
       </section>
     </section>
   </main>
 
-  <script src="/web/app.js?v=20260409e"></script>
+  <script src="/web/app.js?v=20260409f"></script>
 </body>
 </html>
