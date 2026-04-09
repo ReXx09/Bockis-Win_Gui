@@ -418,28 +418,25 @@ input, select {
   min-height: 420px;
 }
 
-.audio-main {
+/* Audio-Seite: 2-spaltige Kacheln */
+.audio-page-layout {
   display: grid;
-  gap: 8px;
-}
-
-.audio-config-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(260px, 1fr));
+  grid-template-columns: minmax(220px, 1fr) minmax(260px, 1.6fr);
+  grid-template-areas:
+    "vol  devices"
+    "sess sess"
+    "rout rout";
   gap: 10px;
 }
 
-.audio-config-card {
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 10px;
-  background: rgba(9, 17, 31, 0.45);
-}
+.audio-vol-card      { grid-area: vol; }
+.audio-devices-card  { grid-area: devices; }
+.audio-sessions-card { grid-area: sess; }
+.audio-routing-card  { grid-area: rout; }
 
-.audio-config-card h3 {
-  margin: 0 0 8px;
-  font-size: 0.9rem;
-  color: var(--accent);
+.audio-main {
+  display: grid;
+  gap: 8px;
 }
 
 .audio-device-list,
@@ -614,8 +611,13 @@ th { color: var(--muted); }
     grid-template-columns: repeat(2, minmax(100px, 1fr));
   }
 
-  .audio-config-grid {
+  .audio-page-layout {
     grid-template-columns: 1fr;
+    grid-template-areas:
+      "vol"
+      "devices"
+      "sess"
+      "rout";
   }
 
   .audio-user-routing-row {

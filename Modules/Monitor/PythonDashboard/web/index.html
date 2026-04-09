@@ -126,60 +126,66 @@
       </section>
 
       <section class="page" data-page="audio">
-        <section class="card">
-          <div class="card-head"><h2>Audio</h2></div>
-          <div class="audio-main">
-            <div class="audio-row">
-              <strong id="audioLevel">-</strong>
-              <span id="audioMuted" class="muted">-</span>
-            </div>
-            <input type="range" id="audioSlider" min="0" max="100" value="0" />
-            <div class="row">
-              <button class="btn" id="audioMinus">-10</button>
-              <button class="btn" id="audioPlus">+10</button>
-              <button class="btn" id="audioMuteBtn">Mute</button>
-            </div>
-            <div class="row">
-              <button class="btn" data-media="prev">Prev</button>
-              <button class="btn" data-media="play_pause">Play/Pause</button>
-              <button class="btn" data-media="next">Next</button>
-              <button class="btn" data-media="stop">Stop</button>
-            </div>
+        <div class="audio-page-layout">
 
-            <div class="audio-config-grid">
-              <section class="audio-config-card">
-                <h3>Audiogeraete</h3>
-                <p id="audioDeviceInfo" class="muted">Lade Geraete...</p>
-                <div id="audioDevices" class="audio-device-list"></div>
-              </section>
-
-              <section class="audio-config-card">
-                <h3>Programm-Audio</h3>
-                <p class="muted">Lautstaerke und Mute pro laufendem Programm.</p>
-                <div id="audioSessions" class="audio-session-list"></div>
-              </section>
-            </div>
-
-            <section class="audio-config-card">
-              <h3>Benutzer-Programmzuordnung</h3>
-              <p class="muted">Bevorzugtes Geraet wird hier als Merkliste gespeichert. Die echte App-zu-Geraet-Zuweisung erfolgt in Windows.</p>
-              <div class="audio-user-routing-row">
-                <select id="openProgramSelect">
-                  <option value="">Offene Programme auswaehlen...</option>
-                </select>
-                <input id="userProgramName" list="openProgramHints" type="text" placeholder="Programmname, z. B. Discord oder Brave" />
-                <datalist id="openProgramHints"></datalist>
-                <select id="userProgramDevice"></select>
-                <button class="btn" id="addUserProgramBtn">Hinzufuegen</button>
-                <button class="btn" id="refreshOpenProgramsBtn">Programme aktualisieren</button>
-                <button class="btn" id="openRoutingSettingsBtn">Windows Routing</button>
+          <!-- Kachel: Lautstaerke & Mediensteuerung -->
+          <section class="card audio-vol-card">
+            <div class="card-head"><h2>Lautstaerke</h2></div>
+            <div class="audio-main">
+              <div class="audio-row">
+                <strong id="audioLevel">-</strong>
+                <span id="audioMuted" class="muted">-</span>
               </div>
-              <p id="userRoutingHint" class="muted">Tipp: Nach dem Speichern direkt auf "Windows Routing" klicken und dort der App das Geraet zuweisen.</p>
-              <div id="userProgramRoutes" class="audio-user-route-list"></div>
-            </section>
-          </div>
-          <pre id="audioMsg" class="console small-console">Audio bereit.</pre>
-        </section>
+              <input type="range" id="audioSlider" min="0" max="100" value="0" />
+              <div class="row">
+                <button class="btn" id="audioMinus">-10</button>
+                <button class="btn" id="audioPlus">+10</button>
+                <button class="btn" id="audioMuteBtn">Mute</button>
+              </div>
+              <div class="row">
+                <button class="btn" data-media="prev">Prev</button>
+                <button class="btn" data-media="play_pause">Play/Pause</button>
+                <button class="btn" data-media="next">Next</button>
+                <button class="btn" data-media="stop">Stop</button>
+              </div>
+              <pre id="audioMsg" class="console small-console">Audio bereit.</pre>
+            </div>
+          </section>
+
+          <!-- Kachel: Audiogeraete -->
+          <section class="card audio-devices-card">
+            <div class="card-head"><h2>Audiogeraete</h2></div>
+            <p id="audioDeviceInfo" class="muted">Lade Geraete...</p>
+            <div id="audioDevices" class="audio-device-list"></div>
+          </section>
+
+          <!-- Kachel: Programm-Audio -->
+          <section class="card audio-sessions-card">
+            <div class="card-head"><h2>Programm-Audio</h2></div>
+            <p class="muted">Lautstaerke und Mute pro laufendem Programm.</p>
+            <div id="audioSessions" class="audio-session-list"></div>
+          </section>
+
+          <!-- Kachel: Benutzer-Programmzuordnung -->
+          <section class="card audio-routing-card">
+            <div class="card-head"><h2>Benutzer-Programmzuordnung</h2></div>
+            <p class="muted">Bevorzugtes Geraet wird hier als Merkliste gespeichert. Die echte Zuweisung erfolgt in Windows.</p>
+            <div class="audio-user-routing-row">
+              <select id="openProgramSelect">
+                <option value="">Offene Programme auswaehlen...</option>
+              </select>
+              <input id="userProgramName" list="openProgramHints" type="text" placeholder="Programmname, z. B. Discord oder Brave" />
+              <datalist id="openProgramHints"></datalist>
+              <select id="userProgramDevice"></select>
+              <button class="btn" id="addUserProgramBtn">Hinzufuegen</button>
+              <button class="btn" id="refreshOpenProgramsBtn">Programme aktualisieren</button>
+              <button class="btn" id="openRoutingSettingsBtn">Windows Routing</button>
+            </div>
+            <p id="userRoutingHint" class="muted">Tipp: Nach dem Speichern direkt auf "Windows Routing" klicken und dort der App das Geraet zuweisen.</p>
+            <div id="userProgramRoutes" class="audio-user-route-list"></div>
+          </section>
+
+        </div>
       </section>
 
       <section class="page" data-page="logs">
@@ -250,6 +256,6 @@
     </section>
   </main>
 
-  <script src="/web/app.js?v=20260409c"></script>
+  <script src="/web/app.js?v=20260409d"></script>
 </body>
 </html>
