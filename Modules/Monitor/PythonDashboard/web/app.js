@@ -205,6 +205,7 @@ const GLASS_STRENGTH_KEY = 'bockis_glass_strength_v1';
 const AUDIO_USER_ROUTES_KEY = 'bockis_audio_user_routes_v1';
 const LAUNCHERS_FALLBACK_KEY = 'bockis_custom_launchers_v1';
 const LAUNCHER_STYLE_PRESETS_KEY = 'bockis_launcher_style_presets_v1';
+const LAUNCHER_CATEGORY_LAYOUTS_KEY = 'bockis_launcher_category_layouts_v1';
 const THEMES = [
   { id: 'ozean',     label: 'Ozean',     s1: '#4aa3ff', s2: '#14315a',
     vars: { '--accent': '#4aa3ff', '--bg': '#071220', '--card': '#0f1b2e', '--line': '#223554', '--muted': '#8da3c7', '--grad-from': '#14315a', '--grad-to': '#071220' } },
@@ -251,6 +252,7 @@ let launcherApiAvailable = true;
 let selectedLauncherCategory = 'Alle';
 let launcherEditMode = false;
 let launcherStylePresets = [];
+let launcherCategoryLayouts = {};
 let dragArmedCard = null;
 const masonryFrames = new Map();
 const HISTORY_LEN = 45;
@@ -1076,6 +1078,50 @@ function normalizeLauncherCategory(value) {
   return String(value || '').trim();
 }
 
+function normalizeLauncherCategoryKey(categoryName) {
+  return normalizeLauncherCategory(categoryName).toLowerCase();
+}
+
+function readLauncherCategoryLayouts() {
+  try {
+    const raw = localStorage.getItem(LAUNCHER_CATEGORY_LAYOUTS_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+
+    const clean = {};
+    Object.entries(parsed).forEach(([key, value]) => {
+      const normalizedKey = normalizeLauncherCategoryKey(key);
+      if (!normalizedKey) return;
+      if (value === 'center' || value === 'left') clean[normalizedKey] = value;
+    });
+    return clean;
+  } catch {
+    return {};
+  }
+}
+
+function saveLauncherCategoryLayouts() {
+  try {
+    localStorage.setItem(LAUNCHER_CATEGORY_LAYOUTS_KEY, JSON.stringify(launcherCategoryLayouts || {}));
+  } catch {
+    // ignore storage failures
+  }
+}
+
+function getLauncherCategoryLayout(categoryName) {
+  const key = normalizeLauncherCategoryKey(categoryName);
+  if (!key) return 'left';
+  return launcherCategoryLayouts[key] === 'center' ? 'center' : 'left';
+}
+
+function toggleLauncherCategoryLayout(categoryName) {
+  const key = normalizeLauncherCategoryKey(categoryName);
+  if (!key) return;
+  const current = getLauncherCategoryLayout(categoryName);
+  launcherCategoryLayouts[key] = current === 'center' ? 'left' : 'center';
+  saveLauncherCategoryLayouts();
+}
+
 function getLauncherCategories() {
   const categories = new Set();
   customLaunchers.forEach((launcher) => {
@@ -1509,9 +1555,17 @@ function renderLaunchers() {
 
     container.innerHTML = orderedCategories.map((categoryName) => {
       const group = groupedLaunchers.get(categoryName) || [];
+      const categoryLayout = getLauncherCategoryLayout(categoryName);
       return `
-        <section class="launcher-section">
-          <div class="launcher-section-title">${escapeHtml(categoryName)}</div>
+        <section class="launcher-section launcher-section-${categoryLayout}">
+          <div class="launcher-section-header">
+            <div class="launcher-section-title">${escapeHtml(categoryName)}</div>
+            <div class="launcher-section-actions">
+              <button class="launcher-section-layout-toggle" type="button" data-launcher-category-layout="${escapeHtml(categoryName)}" title="Kategorie-Layout umschalten">
+                ${categoryLayout === 'center' ? 'Text links' : 'Text zentrieren'}
+              </button>
+            </div>
+          </div>
           <div class="launcher-grid">
             ${group.map((launcher) => `
               <div class="launcher-card${editable ? ' is-editing' : ''}"${getLauncherTileInlineStyle(launcher)}>
@@ -1545,6 +1599,15 @@ function renderLaunchers() {
       btn.addEventListener('click', async (event) => {
         event.stopPropagation();
         await deleteLauncher(btn.dataset.launcherDelete || '');
+      });
+    });
+
+    container.querySelectorAll('[data-launcher-category-layout]').forEach((btn) => {
+      btn.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        toggleLauncherCategoryLayout(btn.dataset.launcherCategoryLayout || '');
+        renderLaunchers();
       });
     });
   };
@@ -2451,6 +2514,7 @@ async function init() {
   wireAudioControls();
   wireUserAudioRoutingControls();
   wireThemeControls();
+  launcherCategoryLayouts = readLauncherCategoryLayouts();
   launcherStylePresets = readLauncherStylePresets();
   renderLauncherStylePresets();
   updateLauncherEditModeButton();

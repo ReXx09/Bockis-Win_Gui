@@ -801,12 +801,59 @@ input, select {
   margin-bottom: 12px;
 }
 
+.launcher-section-header {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
 .launcher-section-title {
   margin: 2px 0 0;
   color: var(--muted);
   font-size: 0.78rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+}
+
+.launcher-section-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.launcher-section-layout-toggle {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.72rem;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--card) 72%, transparent);
+  cursor: pointer;
+}
+
+.launcher-section-layout-toggle:hover {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--line));
+}
+
+.launcher-section-center .launcher-section-header {
+  grid-template-columns: 1fr;
+  justify-items: center;
+}
+
+.launcher-section-center .launcher-section-title {
+  text-align: center;
+}
+
+.launcher-section-center .launcher-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+.launcher-section-center .launcher-card {
+  width: min(260px, 100%);
 }
 
 .launcher-card {
@@ -920,6 +967,14 @@ input, select {
 .launcher-list-setup .launcher-grid {
   grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
   gap: 8px;
+}
+
+.launcher-list-setup .launcher-section-center .launcher-grid {
+  gap: 8px;
+}
+
+.launcher-list-setup .launcher-section-center .launcher-card {
+  width: min(210px, 100%);
 }
 
 .launcher-list-setup .launcher-card {
