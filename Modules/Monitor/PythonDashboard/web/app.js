@@ -46,8 +46,11 @@ const toolList = document.getElementById('toolList');
 const toolMsg = document.getElementById('toolMsg');
 const reloadLaunchersBtn = document.getElementById('reloadLaunchersBtn');
 const toggleLauncherEditModeBtn = document.getElementById('toggleLauncherEditModeBtn');
+const openLauncherSetupBtn = document.getElementById('openLauncherSetupBtn');
 const launcherCategoryBar = document.getElementById('launcherCategoryBar');
+const launcherSetupCategoryBar = document.getElementById('launcherSetupCategoryBar');
 const launcherList = document.getElementById('launcherList');
+const launcherSetupList = document.getElementById('launcherSetupList');
 const launcherMsg = document.getElementById('launcherMsg');
 const launcherName = document.getElementById('launcherName');
 const launcherKind = document.getElementById('launcherKind');
@@ -106,7 +109,7 @@ const layoutMsg = document.getElementById('layoutMsg');
 const LAYOUT_KEY = 'bockis_dashboard_layout_v4';
 const AUDIO_LAYOUT_KEY = 'bockis_audio_layout_v1';
 const LOGS_LAYOUT_KEY = 'bockis_logs_layout_v1';
-const QUICKSTART_LAYOUT_KEY = 'bockis_quickstart_layout_v2';
+const QUICKSTART_LAYOUT_KEY = 'bockis_quickstart_layout_v3';
 const TOOLS_LAYOUT_KEY = 'bockis_tools_layout_v1';
 const SETUP_LAYOUT_KEY = 'bockis_setup_layout_v2';
 const PAGE_KEY = 'bockis_dashboard_page_v1';
@@ -114,7 +117,7 @@ const LEGACY_STORAGE_KEYS = {
   [LAYOUT_KEY]: ['bockis_dashboard_layout_v3', 'bockis_dashboard_layout_v2', 'bockis_dashboard_layout_v1'],
   [AUDIO_LAYOUT_KEY]: [],
   [LOGS_LAYOUT_KEY]: [],
-  [QUICKSTART_LAYOUT_KEY]: ['bockis_quickstart_layout_v1'],
+  [QUICKSTART_LAYOUT_KEY]: ['bockis_quickstart_layout_v2', 'bockis_quickstart_layout_v1'],
   [TOOLS_LAYOUT_KEY]: [],
   [SETUP_LAYOUT_KEY]: ['bockis_setup_layout_v1'],
 };
@@ -141,6 +144,7 @@ const WIDGET_LABELS = {
   'logs-dependencies': 'Win-GUI-Dependencies',
   'logs-dashboard-dependencies': 'Dashboard-Dependencies',
   'quickstart-main': 'Schnellstart',
+  'quickstart-edit-link': 'Bearbeitung',
   'setup-launchers': 'Launcher-Konfiguration',
   'tools-main': 'Tools',
   'setup-theme': 'Erscheinungsbild',
@@ -160,6 +164,7 @@ const WIDGET_ICONS = {
   'logs-dependencies': 'box',
   'logs-dashboard-dependencies': 'layers',
   'quickstart-main': 'globe',
+  'quickstart-edit-link': 'sliders',
   'setup-launchers': 'sliders',
   'tools-main': 'wrench',
   'setup-theme': 'palette',
@@ -1087,20 +1092,24 @@ function populateLauncherCategoryHints() {
 }
 
 function renderLauncherCategoryBar() {
-  if (!launcherCategoryBar) return;
+  if (!launcherCategoryBar && !launcherSetupCategoryBar) return;
   const categories = getLauncherCategories();
   if (!categories.includes(selectedLauncherCategory)) selectedLauncherCategory = 'Alle';
 
-  launcherCategoryBar.innerHTML = categories.map((category) => `
+  const markup = categories.map((category) => `
     <button class="launcher-category-chip${category === selectedLauncherCategory ? ' active' : ''}" type="button" data-launcher-category="${escapeHtml(category)}">
       ${escapeHtml(category)}
     </button>
   `).join('');
 
-  launcherCategoryBar.querySelectorAll('[data-launcher-category]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      selectedLauncherCategory = btn.dataset.launcherCategory || 'Alle';
-      renderLaunchers();
+  [launcherCategoryBar, launcherSetupCategoryBar].forEach((bar) => {
+    if (!bar) return;
+    bar.innerHTML = markup;
+    bar.querySelectorAll('[data-launcher-category]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        selectedLauncherCategory = btn.dataset.launcherCategory || 'Alle';
+        renderLaunchers();
+      });
     });
   });
 }
@@ -1114,7 +1123,7 @@ function updateLauncherEditModeButton() {
 function setLauncherEditMode(enabled) {
   launcherEditMode = !!enabled;
   updateLauncherEditModeButton();
-  if (launcherList) launcherList.classList.toggle('edit-mode', launcherEditMode);
+  if (launcherSetupList) launcherSetupList.classList.toggle('edit-mode', launcherEditMode);
   renderLaunchers();
 }
 
@@ -1463,27 +1472,13 @@ async function runLauncher(launcherId) {
 }
 
 function renderLaunchers() {
-  if (!launcherList) return;
+  if (!launcherList && !launcherSetupList) return;
   populateLauncherCategoryHints();
   renderLauncherCategoryBar();
-  launcherList.classList.toggle('launcher-list', true);
-  launcherList.classList.toggle('edit-mode', launcherEditMode);
-
-  if (!customLaunchers.length) {
-    launcherList.innerHTML = '<div class="audio-empty">Noch keine Schnellstart-Kacheln angelegt.</div>';
-    scheduleMasonryLayout(quickstartGrid);
-    return;
-  }
 
   const visibleLaunchers = selectedLauncherCategory === 'Alle'
     ? [...customLaunchers]
     : customLaunchers.filter((launcher) => normalizeLauncherCategory(launcher.category) === selectedLauncherCategory);
-
-  if (!visibleLaunchers.length) {
-    launcherList.innerHTML = '<div class="audio-empty">Keine Launcher in dieser Kategorie gefunden.</div>';
-    scheduleMasonryLayout(quickstartGrid);
-    return;
-  }
 
   const groupedLaunchers = new Map();
   visibleLaunchers.forEach((launcher) => {
@@ -1491,49 +1486,72 @@ function renderLaunchers() {
     if (!groupedLaunchers.has(categoryName)) groupedLaunchers.set(categoryName, []);
     groupedLaunchers.get(categoryName).push(launcher);
   });
-
   const orderedCategories = Array.from(groupedLaunchers.keys()).sort((a, b) => a.localeCompare(b, 'de', { sensitivity: 'base' }));
-  launcherList.innerHTML = orderedCategories.map((categoryName) => {
-    const group = groupedLaunchers.get(categoryName) || [];
-    return `
-      <section class="launcher-section">
-        <div class="launcher-section-title">${escapeHtml(categoryName)}</div>
-        <div class="launcher-grid">
-          ${group.map((launcher) => `
-            <div class="launcher-card${launcherEditMode ? ' is-editing' : ''}"${getLauncherTileInlineStyle(launcher)}>
-              <button class="launcher-delete" type="button" data-launcher-delete="${escapeHtml(launcher.id)}" aria-label="Launcher entfernen">x</button>
-              <button class="launcher-run${launcherEditMode ? ' is-editable' : ''}" type="button" data-launcher-run="${escapeHtml(launcher.id)}">
-                <span class="launcher-icon-badge">${getLauncherIconMarkup(launcher.icon || 'grid')}</span>
-                <strong>${escapeHtml(launcher.title)}</strong>
-                ${launcher.note ? `<small class="launcher-note">${escapeHtml(launcher.note)}</small>` : ''}
-              </button>
-            </div>
-          `).join('')}
-        </div>
-      </section>
-    `;
-  }).join('');
 
-  launcherList.querySelectorAll('[data-launcher-run]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const launcherId = btn.dataset.launcherRun || '';
-      if (launcherEditMode) {
-        const launcher = customLaunchers.find((item) => item.id === launcherId);
-        fillLauncherForm(launcher);
-        if (launcherMsg && launcher?.title) launcherMsg.textContent = `${launcher.title} zur Bearbeitung geladen.`;
-        return;
-      }
-      runLauncher(launcherId);
+  const renderLauncherListInto = (container, options = {}) => {
+    if (!container) return;
+    const { editable = false } = options;
+
+    container.classList.toggle('launcher-list', true);
+    container.classList.toggle('edit-mode', editable);
+
+    if (!customLaunchers.length) {
+      container.innerHTML = '<div class="audio-empty">Noch keine Schnellstart-Kacheln angelegt.</div>';
+      return;
+    }
+
+    if (!visibleLaunchers.length) {
+      container.innerHTML = '<div class="audio-empty">Keine Launcher in dieser Kategorie gefunden.</div>';
+      return;
+    }
+
+    container.innerHTML = orderedCategories.map((categoryName) => {
+      const group = groupedLaunchers.get(categoryName) || [];
+      return `
+        <section class="launcher-section">
+          <div class="launcher-section-title">${escapeHtml(categoryName)}</div>
+          <div class="launcher-grid">
+            ${group.map((launcher) => `
+              <div class="launcher-card${editable ? ' is-editing' : ''}"${getLauncherTileInlineStyle(launcher)}>
+                <button class="launcher-delete" type="button" data-launcher-delete="${escapeHtml(launcher.id)}" aria-label="Launcher entfernen">x</button>
+                <button class="launcher-run${editable ? ' is-editable' : ''}" type="button" data-launcher-run="${escapeHtml(launcher.id)}">
+                  <span class="launcher-icon-badge">${getLauncherIconMarkup(launcher.icon || 'grid')}</span>
+                  <strong>${escapeHtml(launcher.title)}</strong>
+                  ${launcher.note ? `<small class="launcher-note">${escapeHtml(launcher.note)}</small>` : ''}
+                </button>
+              </div>
+            `).join('')}
+          </div>
+        </section>
+      `;
+    }).join('');
+
+    container.querySelectorAll('[data-launcher-run]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const launcherId = btn.dataset.launcherRun || '';
+        if (editable) {
+          const launcher = customLaunchers.find((item) => item.id === launcherId);
+          fillLauncherForm(launcher);
+          if (launcherMsg && launcher?.title) launcherMsg.textContent = `${launcher.title} zur Bearbeitung geladen.`;
+          return;
+        }
+        runLauncher(launcherId);
+      });
     });
-  });
-  launcherList.querySelectorAll('[data-launcher-delete]').forEach((btn) => {
-    btn.addEventListener('click', async (event) => {
-      event.stopPropagation();
-      await deleteLauncher(btn.dataset.launcherDelete || '');
+
+    container.querySelectorAll('[data-launcher-delete]').forEach((btn) => {
+      btn.addEventListener('click', async (event) => {
+        event.stopPropagation();
+        await deleteLauncher(btn.dataset.launcherDelete || '');
+      });
     });
-  });
+  };
+
+  renderLauncherListInto(launcherList, { editable: false });
+  renderLauncherListInto(launcherSetupList, { editable: launcherEditMode });
 
   scheduleMasonryLayout(quickstartGrid);
+  scheduleMasonryLayout(setupGrid);
 }
 
 async function loadLaunchers() {
@@ -1557,7 +1575,9 @@ async function loadLaunchers() {
     }
     if (launcherMsg) launcherMsg.textContent = `Launcher konnten nicht geladen werden: ${err.message}`;
     if (launcherList) launcherList.innerHTML = '<div class="audio-empty">Launcher konnten nicht geladen werden.</div>';
+    if (launcherSetupList) launcherSetupList.innerHTML = '<div class="audio-empty">Launcher konnten nicht geladen werden.</div>';
     scheduleMasonryLayout(quickstartGrid);
+    scheduleMasonryLayout(setupGrid);
   }
 }
 
@@ -2382,6 +2402,7 @@ async function init() {
   if (reloadDashboardDependenciesBtn) reloadDashboardDependenciesBtn.onclick = loadDashboardDependencyStatus;
   if (reloadLaunchersBtn) reloadLaunchersBtn.onclick = loadLaunchers;
   if (toggleLauncherEditModeBtn) toggleLauncherEditModeBtn.onclick = () => setLauncherEditMode(!launcherEditMode);
+  if (openLauncherSetupBtn) openLauncherSetupBtn.onclick = () => showPage('setup', { updateUrl: true });
   if (launcherKind) launcherKind.onchange = syncLauncherForm;
   if (launcherCategory) launcherCategory.oninput = () => populateLauncherCategoryHints();
   if (saveLauncherBtn) saveLauncherBtn.onclick = saveLauncher;
