@@ -679,6 +679,16 @@ def api_audio_media(action: str) -> dict:
     return {"success": ok, "action": action}
 
 
+@app.post("/api/audio/open-routing-settings")
+def api_audio_open_routing_settings() -> dict:
+    rc, out = _run_powershell("Start-Process 'ms-settings:apps-volume'", timeout=10)
+    return {
+        "success": rc == 0,
+        "message": "Windows Audio-Routing geoeffnet." if rc == 0 else "Audio-Routing konnte nicht geoeffnet werden.",
+        "output": out,
+    }
+
+
 @app.get("/api/audio/devices")
 def api_audio_devices() -> dict:
     devices = get_audio_devices()

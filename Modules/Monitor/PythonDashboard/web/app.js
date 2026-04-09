@@ -44,6 +44,11 @@ const audioMsg = document.getElementById('audioMsg');
 const audioDeviceInfo = document.getElementById('audioDeviceInfo');
 const audioDevices = document.getElementById('audioDevices');
 const audioSessions = document.getElementById('audioSessions');
+const userProgramName = document.getElementById('userProgramName');
+const userProgramDevice = document.getElementById('userProgramDevice');
+const addUserProgramBtn = document.getElementById('addUserProgramBtn');
+const openRoutingSettingsBtn = document.getElementById('openRoutingSettingsBtn');
+const userProgramRoutes = document.getElementById('userProgramRoutes');
 
 const dashboardGrid = document.getElementById('dashboardGrid');
 const widgetMenu = document.getElementById('widgetMenu');
@@ -61,6 +66,7 @@ const WIDGET_LABELS = {
 };
 const SIZE_PRESETS = ['1-3', '1-2', '2-3', 'full', 'min'];
 const THEME_KEY = 'bockis_theme_v1';
+const AUDIO_USER_ROUTES_KEY = 'bockis_audio_user_routes_v1';
 const THEMES = [
   { id: 'ozean',     label: 'Ozean',     s1: '#4aa3ff', s2: '#14315a',
     vars: { '--accent': '#4aa3ff', '--bg': '#071220', '--card': '#0f1b2e', '--line': '#223554', '--muted': '#8da3c7', '--grad-from': '#14315a', '--grad-to': '#071220' } },
@@ -77,6 +83,8 @@ const THEMES = [
 ];
 
 let draggedCard = null;
+let cachedAudioDevices = [];
+let lastAudioSessions = [];
 const HISTORY_LEN = 45;
 const monitorHistory = {
   cpu: [],
@@ -534,6 +542,127 @@ async function loadTools() {
   }
 }
 
+function readUserAudioRoutes() {
+  try {
+    const raw = localStorage.getItem(AUDIO_USER_ROUTES_KEY);
+    const data = raw ? JSON.parse(raw) : [];
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveUserAudioRoutes(routes) {
+  localStorage.setItem(AUDIO_USER_ROUTES_KEY, JSON.stringify(routes));
+}
+
+function refreshUserProgramDeviceSelect(selected = '') {
+  if (!userProgramDevice) return;
+  const options = cachedAudioDevices.length
+    ? cachedAudioDevices.map((d) => `<option value="${d.id}">${d.name}${d.is_active_output ? ' (Aktiv)' : ''}</option>`).join('')
+    : '<option value="">Keine Ausgabegeraete gefunden</option>';
+  userProgramDevice.innerHTML = options;
+  if (selected) userProgramDevice.value = selected;
+}
+
+function resolveDeviceNameById(id) {
+  const dev = cachedAudioDevices.find((d) => d.id === id);
+  return dev ? dev.name : '(Unbekanntes Geraet)';
+}
+
+function renderUserProgramRoutes() {
+  if (!userProgramRoutes) return;
+  const routes = readUserAudioRoutes();
+  if (!routes.length) {
+    userProgramRoutes.innerHTML = '<div class="audio-empty">Noch keine Benutzer-Programme hinterlegt.</div>';
+    return;
+  }
+
+  userProgramRoutes.innerHTML = routes.map((r, idx) => {
+    const match = lastAudioSessions.find((s) => (s.app || '').toLowerCase().includes((r.program || '').toLowerCase()));
+    const status = match ? `Aktiv als ${match.app} (PID ${match.pid})` : 'Aktuell nicht als Session erkannt';
+    return `
+      <div class="audio-user-route-item" data-route-index="${idx}">
+        <div>
+          <strong>${r.program}</strong>
+          <p class="muted">${status}</p>
+        </div>
+        <select data-route-device="${idx}">
+          ${cachedAudioDevices.map((d) => `<option value="${d.id}" ${d.id === r.deviceId ? 'selected' : ''}>${d.name}${d.is_active_output ? ' (Aktiv)' : ''}</option>`).join('')}
+        </select>
+        <button class="btn" data-route-remove="${idx}">Entfernen</button>
+      </div>
+    `;
+  }).join('');
+
+  userProgramRoutes.querySelectorAll('[data-route-device]').forEach((sel) => {
+    sel.addEventListener('change', () => {
+      const idx = parseInt(sel.dataset.routeDevice, 10);
+      const all = readUserAudioRoutes();
+      if (!Number.isInteger(idx) || !all[idx]) return;
+      all[idx].deviceId = sel.value;
+      all[idx].deviceName = resolveDeviceNameById(sel.value);
+      saveUserAudioRoutes(all);
+      audioMsg.textContent = `Zuordnung gespeichert: ${all[idx].program} -> ${all[idx].deviceName}`;
+      renderUserProgramRoutes();
+    });
+  });
+
+  userProgramRoutes.querySelectorAll('[data-route-remove]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt(btn.dataset.routeRemove, 10);
+      const all = readUserAudioRoutes();
+      if (!Number.isInteger(idx) || !all[idx]) return;
+      const removed = all.splice(idx, 1)[0];
+      saveUserAudioRoutes(all);
+      audioMsg.textContent = `Eintrag entfernt: ${removed.program}`;
+      renderUserProgramRoutes();
+    });
+  });
+}
+
+function wireUserAudioRoutingControls() {
+  if (!addUserProgramBtn || !openRoutingSettingsBtn) return;
+
+  addUserProgramBtn.addEventListener('click', () => {
+    const program = (userProgramName?.value || '').trim();
+    const deviceId = userProgramDevice?.value || '';
+    if (!program) {
+      audioMsg.textContent = 'Bitte einen Programmnamen eingeben.';
+      return;
+    }
+    if (!deviceId) {
+      audioMsg.textContent = 'Bitte ein Ausgabegeraet auswaehlen.';
+      return;
+    }
+
+    const all = readUserAudioRoutes();
+    const key = program.toLowerCase();
+    const existing = all.find((r) => (r.program || '').toLowerCase() === key);
+    const deviceName = resolveDeviceNameById(deviceId);
+    if (existing) {
+      existing.deviceId = deviceId;
+      existing.deviceName = deviceName;
+      audioMsg.textContent = `Zuordnung aktualisiert: ${program} -> ${deviceName}`;
+    } else {
+      all.push({ program, deviceId, deviceName });
+      audioMsg.textContent = `Programm hinzugefuegt: ${program} -> ${deviceName}`;
+    }
+    saveUserAudioRoutes(all);
+    if (userProgramName) userProgramName.value = '';
+    renderUserProgramRoutes();
+  });
+
+  openRoutingSettingsBtn.addEventListener('click', async () => {
+    try {
+      const d = await jsonFetch('/api/audio/open-routing-settings', { method: 'POST' });
+      audioMsg.textContent = d.success ? 'Windows Audio-Routing geoeffnet.' : `Routing konnte nicht geoeffnet werden: ${d.message || 'Unbekannter Fehler'}`;
+    } catch (err) {
+      audioMsg.textContent = `Routing-Fehler: ${err.message}`;
+    }
+  });
+}
+
 async function refreshAudio() {
   try {
     const d = await jsonFetch('/api/audio');
@@ -578,6 +707,9 @@ async function loadAudioDevices() {
       }
     }
     dedup.sort((a, b) => (Number(b.is_active_output) - Number(a.is_active_output)) || a.name.localeCompare(b.name, 'de'));
+    cachedAudioDevices = dedup;
+    refreshUserProgramDeviceSelect();
+    renderUserProgramRoutes();
 
     audioDeviceInfo.textContent = `Aktives Ausgabegeraet: ${d.active_output || 'Unbekannt'} | ${dedup.length} eindeutige Geraete${d.routing_message ? ` | ${d.routing_message}` : ''}`;
     audioDevices.innerHTML = dedup.length
@@ -594,8 +726,12 @@ async function loadAudioSessions() {
     const d = await jsonFetch('/api/audio/sessions');
     if (!d.available) {
       audioSessions.innerHTML = '<div class="audio-empty">Programm-Sessions nicht verfuegbar.</div>';
+      lastAudioSessions = [];
+      renderUserProgramRoutes();
       return;
     }
+
+    lastAudioSessions = Array.isArray(d.sessions) ? d.sessions : [];
 
     audioSessions.innerHTML = d.sessions.length
       ? d.sessions.map((s) => `
@@ -638,6 +774,8 @@ async function loadAudioSessions() {
       });
     });
   } catch (err) {
+    lastAudioSessions = [];
+    renderUserProgramRoutes();
     audioSessions.innerHTML = `<div class="audio-empty">Session-Fehler: ${err.message}</div>`;
   }
 }
@@ -816,6 +954,7 @@ async function init() {
   renderWidgetMenu();
   wireDragDrop();
   wireAudioControls();
+  wireUserAudioRoutingControls();
   wireThemeControls();
 
   try {

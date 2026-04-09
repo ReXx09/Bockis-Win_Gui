@@ -487,6 +487,34 @@ input, select {
   align-items: center;
 }
 
+.audio-user-routing-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.2fr) minmax(220px, 1fr) auto auto;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.audio-user-route-list {
+  display: grid;
+  gap: 8px;
+}
+
+.audio-user-route-item {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px;
+  background: #0b1628;
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) minmax(220px, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.audio-user-route-item .muted {
+  margin: 0;
+  font-size: 0.74rem;
+}
+
 .list {
   margin-top: 8px;
   display: grid;
@@ -587,6 +615,14 @@ th { color: var(--muted); }
   }
 
   .audio-config-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .audio-user-routing-row {
+    grid-template-columns: 1fr;
+  }
+
+  .audio-user-route-item {
     grid-template-columns: 1fr;
   }
 
