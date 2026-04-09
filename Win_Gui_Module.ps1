@@ -4605,6 +4605,16 @@ $btnCheckDependenciesH.Add_Click({
                         $actionButton.BackColor = [System.Drawing.Color]::FromArgb(124, 77, 255)
                         $actionButton.ForeColor = [System.Drawing.Color]::White
                         $actionButton.Tag = @{ Dependency = $dep; Action = "gui-release-select" }
+                    } elseif ($dep.Name -eq "Git Pull" -and $dep.Available) {
+                        $actionButton.Text = "Git Pull"
+                        $actionButton.BackColor = [System.Drawing.Color]::FromArgb(255, 152, 0)
+                        $actionButton.ForeColor = [System.Drawing.Color]::White
+                        $actionButton.Tag = @{ Dependency = $dep; Action = "git-pull" }
+                    } elseif ($dep.Name -eq "Git Pull") {
+                        $actionButton.Text = "Nicht verfügbar"
+                        $actionButton.BackColor = [System.Drawing.Color]::FromArgb(70, 70, 70)
+                        $actionButton.ForeColor = [System.Drawing.Color]::Silver
+                        $actionButton.Enabled = $false
                     } elseif ($dep.Name -eq "Winget Package Manager" -and $dep.Found -and $dep.WingetId) {
                         # Winget selbst: Versionsauswahl möglich
                         $actionButton.Text = "Downgrade"
@@ -4664,6 +4674,7 @@ $btnCheckDependenciesH.Add_Click({
                                 "upgrade" { "Aktualisierung" }
                                 "gui-release-select" { "Versionswechsel" }
                                 "winget-version-select" { "Versionswechsel" }
+                                "git-pull" { "Git Pull" }
                                 "lhm-update" { "DLL-Update" }
                                 default { "Installation" }
                             }
@@ -4672,6 +4683,7 @@ $btnCheckDependenciesH.Add_Click({
                                 "upgrade" { "Aktualisiere..." }
                                 "gui-release-select" { "Suche Version..." }
                                 "winget-version-select" { "Suche Version..." }
+                                "git-pull" { "Pull laeuft..." }
                                 "lhm-update" { "Lade DLL..." }
                                 default { "Installiere..." }
                             }
@@ -4717,6 +4729,8 @@ $btnCheckDependenciesH.Add_Click({
                                     $actionResult = Invoke-GuiReleaseAction
                                 } elseif ($actionType -eq "winget-version-select") {
                                     $actionResult = Invoke-WingetVersionAction -WingetId $depToHandle.WingetId -CurrentVersion $depToHandle.Version -ProgressCallback $uiProgressCallback -LogCallback $uiLogCallback
+                                } elseif ($actionType -eq "git-pull") {
+                                    $actionResult = Invoke-GitPullDependencyAction -RepositoryPath $PSScriptRoot -ProgressCallback $uiProgressCallback -LogCallback $uiLogCallback
                                 } elseif ($actionType -eq "upgrade") {
                                     $actionResult = Invoke-DependencyAction -WingetId $depToHandle.WingetId -Action 'upgrade' -ProgressCallback $uiProgressCallback -LogCallback $uiLogCallback
                                 } elseif ($actionType -eq "lhm-update") {
@@ -4746,6 +4760,9 @@ $btnCheckDependenciesH.Add_Click({
                                     if ($actionType -eq "gui-release-select") {
                                         $this.Text = "Downgrade"
                                         $this.BackColor = [System.Drawing.Color]::FromArgb(124, 77, 255)
+                                    } elseif ($actionType -eq "git-pull") {
+                                        $this.Text = "Git Pull"
+                                        $this.BackColor = [System.Drawing.Color]::FromArgb(255, 152, 0)
                                     } elseif ($actionType -eq "winget-version-select") {
                                         $this.Text = "Version wählen"
                                         $this.BackColor = [System.Drawing.Color]::FromArgb(156, 39, 176)
@@ -4758,6 +4775,14 @@ $btnCheckDependenciesH.Add_Click({
                                     }
                                     $this.Enabled = $true
                                 } elseif ($actionResult -and $actionResult.Success) {
+                                    if ($actionType -eq "git-pull" -and $actionResult.RestartRecommended) {
+                                        [System.Windows.Forms.MessageBox]::Show(
+                                            "Git Pull erfolgreich. Es wurden neue Commits geladen.`n`nBitte die GUI neu starten, damit alle Änderungen aktiv werden.",
+                                            "Neustart empfohlen",
+                                            [System.Windows.Forms.MessageBoxButtons]::OK,
+                                            [System.Windows.Forms.MessageBoxIcon]::Information
+                                        ) | Out-Null
+                                    }
                                     if ($depToHandle.Name -eq "PawnIO Ring-0 Treiber") {
                                         [System.Windows.Forms.MessageBox]::Show("Bitte System neu starten, damit der PawnIO-Treiber geladen wird.", "Neustart erforderlich", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information) | Out-Null
                                     }
@@ -4774,6 +4799,9 @@ $btnCheckDependenciesH.Add_Click({
                                     if ($actionType -eq "gui-release-select") {
                                         $this.Text = "Downgrade"
                                         $this.BackColor = [System.Drawing.Color]::FromArgb(124, 77, 255)
+                                    } elseif ($actionType -eq "git-pull") {
+                                        $this.Text = "Git Pull"
+                                        $this.BackColor = [System.Drawing.Color]::FromArgb(255, 152, 0)
                                     } elseif ($actionType -eq "winget-version-select") {
                                         $this.Text = "Version wählen"
                                         $this.BackColor = [System.Drawing.Color]::FromArgb(156, 39, 176)
@@ -7155,6 +7183,108 @@ function Invoke-WingetVersionAction {
             -LogCallback $LogCallback
 
         return $installResult
+    } catch {
+        return @{ Success = $false; Cancelled = $false; Message = $_.Exception.Message }
+    }
+}
+
+function Invoke-GitPullDependencyAction {
+    param(
+        [Parameter(Mandatory = $false)]
+        [string]$RepositoryPath = $PSScriptRoot,
+
+        [Parameter(Mandatory = $false)]
+        [scriptblock]$ProgressCallback,
+
+        [Parameter(Mandatory = $false)]
+        [scriptblock]$LogCallback
+    )
+
+    try {
+        $gitCommand = Get-Command git -ErrorAction SilentlyContinue
+        if (-not $gitCommand) {
+            return @{ Success = $false; Cancelled = $false; Message = "Git ist nicht installiert" }
+        }
+
+        if ($ProgressCallback) {
+            & $ProgressCallback 10 "Prüfe Git-Repository..."
+        }
+
+        $repoCheck = (& $gitCommand.Source -C $RepositoryPath rev-parse --is-inside-work-tree 2>&1 | Out-String).Trim()
+        if ($LASTEXITCODE -ne 0 -or $repoCheck -ne 'true') {
+            return @{ Success = $false; Cancelled = $false; Message = "Diese Installation ist kein Git-Clone (vermutlich ZIP)" }
+        }
+
+        $branch = (& $gitCommand.Source -C $RepositoryPath rev-parse --abbrev-ref HEAD 2>&1 | Out-String).Trim()
+        $upstream = (& $gitCommand.Source -C $RepositoryPath rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>&1 | Out-String).Trim()
+        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($upstream)) {
+            return @{ Success = $false; Cancelled = $false; Message = "Kein Git-Upstream konfiguriert" }
+        }
+
+        $confirmText = "Git Pull fuer Branch '$branch' von '$upstream' ausfuehren?`n`nLokale Aenderungen werden mit --autostash zwischengespeichert, sofern moeglich."
+        $confirmResult = [System.Windows.Forms.MessageBox]::Show(
+            $confirmText,
+            "Git Pull",
+            [System.Windows.Forms.MessageBoxButtons]::YesNo,
+            [System.Windows.Forms.MessageBoxIcon]::Question
+        )
+
+        if ($confirmResult -ne [System.Windows.Forms.DialogResult]::Yes) {
+            return @{ Success = $false; Cancelled = $true; Message = "Abgebrochen" }
+        }
+
+        if ($ProgressCallback) {
+            & $ProgressCallback 25 "Lese aktuellen Commit-Stand..."
+        }
+
+        $beforeHead = (& $gitCommand.Source -C $RepositoryPath rev-parse HEAD 2>&1 | Out-String).Trim()
+
+        if ($LogCallback) {
+            & $LogCallback 'info' "Starte git pull --ff-only --autostash auf $branch"
+        }
+
+        if ($ProgressCallback) {
+            & $ProgressCallback 50 "Fuehre Git Pull aus..."
+        }
+
+        $pullOutput = (& $gitCommand.Source -C $RepositoryPath pull --ff-only --autostash 2>&1 | Out-String).Trim()
+        $pullExitCode = $LASTEXITCODE
+
+        if ($pullExitCode -ne 0) {
+            return @{ Success = $false; Cancelled = $false; Message = if ($pullOutput) { $pullOutput } else { "git pull fehlgeschlagen" } }
+        }
+
+        if ($ProgressCallback) {
+            & $ProgressCallback 85 "Pruefe Ergebnis..."
+        }
+
+        $afterHead = (& $gitCommand.Source -C $RepositoryPath rev-parse HEAD 2>&1 | Out-String).Trim()
+        $updated = (-not [string]::IsNullOrWhiteSpace($beforeHead) -and -not [string]::IsNullOrWhiteSpace($afterHead) -and $beforeHead -ne $afterHead)
+
+        $pulledCommits = 0
+        if ($updated) {
+            $countOutput = (& $gitCommand.Source -C $RepositoryPath rev-list --count "$beforeHead..$afterHead" 2>&1 | Out-String).Trim()
+            if ($LASTEXITCODE -eq 0 -and $countOutput -match '^\d+$') {
+                $pulledCommits = [int]$countOutput
+            }
+        }
+
+        if ($LogCallback) {
+            & $LogCallback 'success' (if ($updated) { "Git Pull erfolgreich: $pulledCommits Commit(s) geladen" } else { 'Git Pull erfolgreich: Bereits aktuell' })
+        }
+
+        if ($ProgressCallback) {
+            & $ProgressCallback 100 (if ($updated) { "Git Pull erfolgreich" } else { "Bereits aktuell" }) ([System.Drawing.Color]::LimeGreen)
+        }
+
+        return @{
+            Success           = $true
+            Cancelled         = $false
+            Message           = if ($updated) { "$pulledCommits Commit(s) geladen. Bitte GUI neu starten." } else { "Bereits aktuell." }
+            Output            = $pullOutput
+            Updated           = $updated
+            RestartRecommended = $updated
+        }
     } catch {
         return @{ Success = $false; Cancelled = $false; Message = $_.Exception.Message }
     }

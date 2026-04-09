@@ -1497,6 +1497,105 @@ function Find-PythonRuntime {
     return $result
 }
 
+function Find-GitClient {
+    $result = @{
+        Found    = $false
+        Version  = $null
+        Command  = $null
+        WingetId = "Git.Git"
+    }
+
+    try {
+        $gitCmd = Get-Command git -ErrorAction SilentlyContinue
+        if (-not $gitCmd) {
+            return $result
+        }
+
+        $gitPath = [string]$gitCmd.Source
+        if ([string]::IsNullOrWhiteSpace($gitPath)) {
+            return $result
+        }
+
+        $gitVersionOutput = (& $gitPath --version 2>&1 | Out-String).Trim()
+        if ($LASTEXITCODE -eq 0 -and $gitVersionOutput -match 'git version\s+(.+)$') {
+            $result.Found = $true
+            $result.Version = $matches[1].Trim()
+            $result.Command = $gitPath
+        }
+    } catch {
+        Write-Verbose "Git-Prüfung fehlgeschlagen: $_"
+    }
+
+    return $result
+}
+
+function Get-GitPullDependencyStatus {
+    param(
+        [Parameter(Mandatory = $false)]
+        [string]$RepositoryPath
+    )
+
+    $gitClient = Find-GitClient
+    $status = @{
+        Name             = "Git Pull"
+        Description      = "Projekt-Update aus Git-Repository laden"
+        Found            = $false
+        Required         = $false
+        Available        = $false
+        Version          = $null
+        Status           = "⚠ Git nicht installiert"
+        StatusColor      = "Yellow"
+        WingetId         = $null
+        UpdateAvailable  = $false
+        AvailableVersion = $null
+        RepoPath         = $RepositoryPath
+        Branch           = $null
+        Remote           = $null
+        Dirty            = $false
+    }
+
+    if (-not $gitClient.Found) {
+        return $status
+    }
+
+    if ([string]::IsNullOrWhiteSpace($RepositoryPath)) {
+        $repoRoot = Split-Path -Parent $PSScriptRoot
+        $RepositoryPath = Split-Path -Parent $repoRoot
+    }
+
+    $status.RepoPath = $RepositoryPath
+
+    try {
+        $repoCheck = (& $gitClient.Command -C $RepositoryPath rev-parse --is-inside-work-tree 2>&1 | Out-String).Trim()
+        if ($LASTEXITCODE -ne 0 -or $repoCheck -ne 'true') {
+            $status.Status = "⚠ ZIP-Installation"
+            $status.Version = "Kein Git-Clone"
+            return $status
+        }
+
+        $branch = (& $gitClient.Command -C $RepositoryPath rev-parse --abbrev-ref HEAD 2>&1 | Out-String).Trim()
+        $upstream = (& $gitClient.Command -C $RepositoryPath rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>&1 | Out-String).Trim()
+        if ($LASTEXITCODE -ne 0) { $upstream = $null }
+
+        $dirtyOutput = (& $gitClient.Command -C $RepositoryPath status --porcelain 2>&1 | Out-String)
+        $isDirty = -not [string]::IsNullOrWhiteSpace($dirtyOutput)
+
+        $status.Found = $true
+        $status.Available = $true
+        $status.Version = if ($branch) { $branch } else { 'Unbekannter Branch' }
+        $status.Branch = $branch
+        $status.Remote = $upstream
+        $status.Dirty = $isDirty
+        $status.Status = if ($isDirty) { '⚠ Lokale Änderungen' } elseif ($upstream) { '✓ Bereit' } else { '⚠ Kein Upstream' }
+        $status.StatusColor = if ($isDirty -or -not $upstream) { 'Yellow' } else { 'Green' }
+    } catch {
+        $status.Status = "⚠ Git-Status fehlgeschlagen"
+        $status.StatusColor = "Yellow"
+    }
+
+    return $status
+}
+
 #endregion
 
 #region Integrated GUI Dependency Check
@@ -1669,6 +1768,37 @@ function Get-DependencyStatusForGUI {
             SourceUrl   = $appInstaller.DownloadUrl
         }
     }
+
+    # Git Client (optional, für Entwickler/Tester und Repo-Updates)
+    $gitClient = Find-GitClient
+    if ($gitClient.Found) {
+        $dependencies += @{
+            Name        = "Git"
+            Description = "Versionsverwaltung für Repo-Updates"
+            Found       = $true
+            Required    = $false
+            Available   = $false
+            Version     = $gitClient.Version
+            Status      = "✓ Installiert"
+            StatusColor = "Green"
+            WingetId    = if ($winget.Found) { $gitClient.WingetId } else { $null }
+        }
+    } else {
+        $dependencies += @{
+            Name        = "Git"
+            Description = "Optional für git pull aus einem Clone"
+            Found       = $false
+            Required    = $false
+            Available   = $winget.Found
+            Version     = $null
+            Status      = "⚠ Nicht installiert"
+            StatusColor = "Yellow"
+            WingetId    = if ($winget.Found) { $gitClient.WingetId } else { $null }
+        }
+    }
+
+    # Git Pull (optional, nur bei echter Git-Clone-Installation)
+    $dependencies += Get-GitPullDependencyStatus
 
     # Python Runtime (optional, für Python-Dashboard)
     $pythonRuntime = Find-PythonRuntime
