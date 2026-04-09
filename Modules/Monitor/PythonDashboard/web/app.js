@@ -364,9 +364,30 @@ function getRouteForPage(page) {
 
 function getPageFromLocation() {
   try {
-    const path = decodeURIComponent(window.location.pathname || '/').trim();
-    const normalized = path ? path.toLowerCase() : '/';
-    return Object.prototype.hasOwnProperty.call(ROUTE_PAGE_MAP, normalized) ? ROUTE_PAGE_MAP[normalized] : null;
+    const pageParam = new URLSearchParams(window.location.search || '').get('page');
+    if (pageParam && PAGE_LAYOUTS[pageParam]) {
+      return pageParam;
+    }
+
+    let path = decodeURIComponent(window.location.pathname || '/').trim();
+    if (!path.startsWith('/')) path = `/${path}`;
+    path = path.replace(/\/+$|\s+$/g, '');
+    if (!path) path = '/';
+
+    const normalized = path.toLowerCase();
+    if (Object.prototype.hasOwnProperty.call(ROUTE_PAGE_MAP, normalized)) {
+      return ROUTE_PAGE_MAP[normalized];
+    }
+
+    const parts = normalized.split('/').filter(Boolean);
+    if (parts.length > 0) {
+      const firstSegment = `/${parts[0]}`;
+      if (Object.prototype.hasOwnProperty.call(ROUTE_PAGE_MAP, firstSegment)) {
+        return ROUTE_PAGE_MAP[firstSegment];
+      }
+    }
+
+    return null;
   } catch {
     return null;
   }
@@ -657,8 +678,9 @@ function wirePageMenu() {
   });
 
   const routedPage = getPageFromLocation();
-  const start = routedPage || localStorage.getItem(PAGE_KEY) || 'overview';
-  showPage(start, { updateUrl: false, replaceUrl: false });
+  const hasExplicitPath = ((window.location.pathname || '/').trim() || '/') !== '/';
+  const start = routedPage || (hasExplicitPath ? 'overview' : (localStorage.getItem(PAGE_KEY) || 'overview'));
+  showPage(start, { updateUrl: hasExplicitPath && !routedPage, replaceUrl: hasExplicitPath });
 }
 
 function resetLayout(storageKey = LAYOUT_KEY) {
