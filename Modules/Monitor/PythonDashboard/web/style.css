@@ -781,9 +781,8 @@ input, select {
 }
 
 .tool-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 8px;
+  display: block;
+  width: 100%;
   margin-bottom: 8px;
 }
 
