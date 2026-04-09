@@ -767,7 +767,61 @@ def _tool_process_names(tool_id: str) -> set[str]:
     return {str(name).strip().lower() for name in names if str(name).strip()}
 
 
+def _is_god_mode_window_open() -> bool:
+        script = r"""
+$found = $false
+try {
+    $shell = New-Object -ComObject Shell.Application
+    foreach ($w in $shell.Windows()) {
+        if ($null -eq $w) { continue }
+        $loc = ''
+        $name = ''
+        try { $loc = [string]$w.LocationURL } catch {}
+        try { $name = [string]$w.LocationName } catch {}
+        if ($loc -match 'ED7BA470-8E54-465E-825C-99712043E01C' -or $name -match 'Alle Aufgaben|All Tasks|God Mode') {
+            $found = $true
+            break
+        }
+    }
+} catch {}
+if ($found) { '1' } else { '0' }
+"""
+        rc, out = _run_powershell(script, timeout=8)
+        return rc == 0 and out.strip().endswith("1")
+
+
+def _close_god_mode_windows() -> tuple[bool, str]:
+        script = r"""
+$closed = 0
+try {
+    $shell = New-Object -ComObject Shell.Application
+    foreach ($w in @($shell.Windows())) {
+        if ($null -eq $w) { continue }
+        $loc = ''
+        $name = ''
+        try { $loc = [string]$w.LocationURL } catch {}
+        try { $name = [string]$w.LocationName } catch {}
+        if ($loc -match 'ED7BA470-8E54-465E-825C-99712043E01C' -or $name -match 'Alle Aufgaben|All Tasks|God Mode') {
+            try {
+                $w.Quit()
+                $closed++
+            } catch {}
+        }
+    }
+} catch {}
+$closed
+"""
+        _run_powershell(script, timeout=8)
+        time.sleep(0.2)
+        still_open = _is_god_mode_window_open()
+        if still_open:
+                return False, "God Mode Fenster konnte nicht geschlossen werden"
+        return True, "Fenster geschlossen"
+
+
 def _is_tool_toggle_supported(tool_id: str) -> bool:
+    if str(tool_id or "").strip() == "god_mode":
+        return True
     return bool(_tool_process_names(tool_id))
 
 
@@ -797,10 +851,15 @@ def _get_tool_processes(tool_id: str) -> list[psutil.Process]:
 
 
 def _is_tool_open(tool_id: str) -> bool:
+    if str(tool_id or "").strip() == "god_mode":
+        return _is_god_mode_window_open()
     return len(_get_tool_processes(tool_id)) > 0
 
 
 def _close_tool(tool_id: str) -> tuple[bool, str]:
+    if str(tool_id or "").strip() == "god_mode":
+        return _close_god_mode_windows()
+
     procs = _get_tool_processes(tool_id)
     if not procs:
         return True, ""
