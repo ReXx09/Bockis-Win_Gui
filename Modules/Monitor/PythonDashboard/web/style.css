@@ -10,6 +10,14 @@
   --accent: #4aa3ff;
   --grad-from: #14315a;
   --grad-to: #071220;
+  --glass-sidebar-solid: 82%;
+  --glass-card-solid: 84%;
+  --glass-launcher-solid: 86%;
+  --glass-chip-solid: 74%;
+  --glass-icon-solid: 82%;
+  --glass-blur-main: 7px;
+  --glass-blur-strong: 8px;
+  --glass-blur-soft: 6px;
 }
 
 * { box-sizing: border-box; }
@@ -121,13 +129,13 @@ body {
 
 .sidebar {
   border: 1px solid var(--line);
-  background: color-mix(in srgb, var(--card) 82%, transparent);
+  background: color-mix(in srgb, var(--card) var(--glass-sidebar-solid), transparent);
   border-radius: 12px;
   padding: 12px;
   position: sticky;
   top: 72px;
   height: fit-content;
-  backdrop-filter: blur(8px) saturate(118%);
+  backdrop-filter: blur(var(--glass-blur-strong)) saturate(118%);
 }
 
 .sidebar h3 {
@@ -214,11 +222,11 @@ body {
 
 .card {
   border: 1px solid var(--line);
-  background: color-mix(in srgb, var(--card) 84%, transparent);
+  background: color-mix(in srgb, var(--card) var(--glass-card-solid), transparent);
   border-radius: 12px;
   padding: 12px;
   transition: border-color 0.2s ease, transform 0.15s ease;
-  backdrop-filter: blur(7px) saturate(115%);
+  backdrop-filter: blur(var(--glass-blur-main)) saturate(115%);
 }
 
 .card.dragging {
@@ -800,13 +808,13 @@ input, select {
   border: 1px solid var(--line);
   border-radius: 10px;
   padding: 10px;
-  background: color-mix(in srgb, var(--launcher-bg) 86%, transparent);
+  background: color-mix(in srgb, var(--launcher-bg) var(--glass-launcher-solid), transparent);
   color: var(--launcher-text);
   border-color: var(--launcher-border);
   display: grid;
   gap: 12px;
   position: relative;
-  backdrop-filter: blur(8px) saturate(118%);
+  backdrop-filter: blur(var(--glass-blur-strong)) saturate(118%);
 }
 
 .launcher-card.is-editing {
@@ -969,10 +977,10 @@ input, select {
   gap: 8px;
   border: 1px solid var(--line);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--card) 74%, transparent);
+  background: color-mix(in srgb, var(--card) var(--glass-chip-solid), transparent);
   color: var(--text);
   padding: 6px 10px;
-  backdrop-filter: blur(8px) saturate(118%);
+  backdrop-filter: blur(var(--glass-blur-strong)) saturate(118%);
 }
 
 .launcher-preset-apply {
@@ -1034,7 +1042,7 @@ input, select {
 .launcher-icon-option {
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: color-mix(in srgb, #0b1628 82%, transparent);
+  background: color-mix(in srgb, #0b1628 var(--glass-icon-solid), transparent);
   color: var(--muted);
   padding: 10px 8px;
   display: grid;
@@ -1043,7 +1051,7 @@ input, select {
   cursor: pointer;
   text-align: center;
   font-size: 0.74rem;
-  backdrop-filter: blur(6px) saturate(118%);
+  backdrop-filter: blur(var(--glass-blur-soft)) saturate(118%);
 }
 
 .launcher-icon-option .icon-inline {
@@ -1201,6 +1209,29 @@ th { color: var(--muted); }
   padding: 2px;
   background: var(--card);
   cursor: pointer;
+}
+
+.theme-glass-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.theme-glass-grid label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.theme-glass-grid input[type='range'] {
+  width: 100%;
+}
+
+.theme-glass-grid small {
+  color: var(--text);
+  font-size: 0.78rem;
 }
 
 .setup-stack {

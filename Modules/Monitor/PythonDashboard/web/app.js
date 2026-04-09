@@ -66,6 +66,8 @@ const launcherPresetName = document.getElementById('launcherPresetName');
 const saveLauncherPresetBtn = document.getElementById('saveLauncherPresetBtn');
 const resetLauncherColorsBtn = document.getElementById('resetLauncherColorsBtn');
 const launcherPresetList = document.getElementById('launcherPresetList');
+const glassStrengthInput = document.getElementById('glassStrength');
+const glassStrengthValue = document.getElementById('glassStrengthValue');
 const launcherIconPicker = document.getElementById('launcherIconPicker');
 const launcherToolField = document.getElementById('launcherToolField');
 const launcherTargetField = document.getElementById('launcherTargetField');
@@ -192,6 +194,7 @@ const ROUTE_PAGE_MAP = {
 };
 const SIZE_PRESETS = ['1-3', '1-2', '2-3', 'full', 'min'];
 const THEME_KEY = 'bockis_theme_v1';
+const GLASS_STRENGTH_KEY = 'bockis_glass_strength_v1';
 const AUDIO_USER_ROUTES_KEY = 'bockis_audio_user_routes_v1';
 const LAUNCHERS_FALLBACK_KEY = 'bockis_custom_launchers_v1';
 const LAUNCHER_STYLE_PRESETS_KEY = 'bockis_launcher_style_presets_v1';
@@ -2172,12 +2175,64 @@ function buildCustomVars(accent, gradFrom, bg) {
   };
 }
 
+function normalizeGlassStrength(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 40;
+  return Math.max(0, Math.min(100, Math.round(numeric)));
+}
+
+function loadGlassStrength() {
+  try {
+    const raw = localStorage.getItem(GLASS_STRENGTH_KEY);
+    if (raw == null) return 40;
+    return normalizeGlassStrength(raw);
+  } catch {
+    return 40;
+  }
+}
+
+function saveGlassStrength(value) {
+  try {
+    localStorage.setItem(GLASS_STRENGTH_KEY, String(normalizeGlassStrength(value)));
+  } catch {
+    // ignore storage failures
+  }
+}
+
+function applyGlassStrength(value) {
+  const strength = normalizeGlassStrength(value);
+  const root = document.documentElement;
+
+  const sidebarSolid = Math.max(30, Math.min(92, 100 - Math.round(strength * 0.45)));
+  const cardSolid = Math.max(30, Math.min(92, 100 - Math.round(strength * 0.4)));
+  const launcherSolid = Math.max(30, Math.min(92, 100 - Math.round(strength * 0.35)));
+  const chipSolid = Math.max(26, Math.min(88, 100 - Math.round(strength * 0.55)));
+  const iconSolid = Math.max(28, Math.min(90, 100 - Math.round(strength * 0.45)));
+
+  const blurMain = Math.max(0, Math.min(14, Math.round(strength * 0.08)));
+  const blurStrong = Math.max(0, Math.min(16, blurMain + (strength > 0 ? 1 : 0)));
+  const blurSoft = Math.max(0, Math.min(12, Math.max(0, blurMain - 1)));
+
+  root.style.setProperty('--glass-sidebar-solid', `${sidebarSolid}%`);
+  root.style.setProperty('--glass-card-solid', `${cardSolid}%`);
+  root.style.setProperty('--glass-launcher-solid', `${launcherSolid}%`);
+  root.style.setProperty('--glass-chip-solid', `${chipSolid}%`);
+  root.style.setProperty('--glass-icon-solid', `${iconSolid}%`);
+  root.style.setProperty('--glass-blur-main', `${blurMain}px`);
+  root.style.setProperty('--glass-blur-strong', `${blurStrong}px`);
+  root.style.setProperty('--glass-blur-soft', `${blurSoft}px`);
+
+  if (glassStrengthInput) glassStrengthInput.value = String(strength);
+  if (glassStrengthValue) glassStrengthValue.textContent = `${strength}%`;
+}
+
 function applyTheme(vars) {
   const root = document.documentElement;
   for (const [prop, val] of Object.entries(vars)) {
     root.style.setProperty(prop, val);
   }
   syncLauncherColorInputsWithThemeDefaults();
+  applyGlassStrength(loadGlassStrength());
 }
 
 function saveTheme(id, vars) {
@@ -2270,6 +2325,19 @@ function wireThemeControls() {
     syncThemeInputs(t.vars);
     setActiveThemeButton('ozean');
   });
+
+  if (glassStrengthInput) {
+    glassStrengthInput.addEventListener('input', () => {
+      applyGlassStrength(glassStrengthInput.value);
+    });
+    glassStrengthInput.addEventListener('change', () => {
+      const strength = normalizeGlassStrength(glassStrengthInput.value);
+      applyGlassStrength(strength);
+      saveGlassStrength(strength);
+    });
+  }
+
+  applyGlassStrength(loadGlassStrength());
 
   loadAndApplyTheme();
 }
