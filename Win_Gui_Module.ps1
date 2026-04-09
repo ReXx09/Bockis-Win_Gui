@@ -870,9 +870,12 @@ function Test-PythonDashboardApiCompatibility {
             $devices = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/audio/devices" -Method Get -TimeoutSec 2
             $sessions = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/audio/sessions" -Method Get -TimeoutSec 2
 
+            $deviceCount = if ($devices -and $devices.PSObject.Properties.Name -contains 'devices') { @($devices.devices).Count } else { 0 }
+            $sessionCount = if ($sessions -and $sessions.PSObject.Properties.Name -contains 'sessions') { @($sessions.sessions).Count } else { 0 }
+
             if ($audio -and [bool]$audio.available) { return $true }
-            if ($devices -and [bool]$devices.available -and @($devices.devices).Count -gt 0) { return $true }
-            if ($sessions -and [bool]$sessions.available) { return $true }
+            if ($deviceCount -gt 0) { return $true }
+            if ($sessionCount -gt 0) { return $true }
 
             return $false
         }
