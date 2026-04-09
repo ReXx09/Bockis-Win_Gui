@@ -1183,7 +1183,23 @@ async function loadTools() {
             d = await jsonFetch(`/api/tools/run/${encodeURIComponent(id)}`, { method: 'POST' });
           }
           toolMsg.textContent = `${d.message || ''}\n${d.output || ''}`.trim();
-          if (toolStateApiAvailable) await refreshToolButtonStates();
+          // Optimistic immediate visual update from the toggle response.
+          // This makes the button highlight instantly without waiting for the next poll.
+          if (d && typeof d.is_open !== 'undefined') {
+            const isOpen = !!d.is_open;
+            const canClose = !!d.close_supported;
+            btn.classList.toggle('is-open', isOpen);
+            btn.classList.toggle('is-closable', isOpen && canClose);
+            btn.classList.toggle('is-open-readonly', isOpen && !canClose);
+          }
+          // Force a real state sync shortly after (cache was already invalidated on backend).
+          if (toolStateApiAvailable) {
+            toolStateRefreshInFlight = false;
+            setTimeout(() => {
+              toolStateRefreshInFlight = false;
+              refreshToolButtonStates();
+            }, 600);
+          }
         } catch (err) {
           toolMsg.textContent = `Tool-Fehler: ${err.message}`;
         }

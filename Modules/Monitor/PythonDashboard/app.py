@@ -2055,8 +2055,13 @@ def api_toggle_tool(tool_id: str) -> dict:
     is_open = _is_tool_open(tool_id)
     close_supported = _is_tool_toggle_supported(tool_id)
 
+    def _invalidate_state_cache() -> None:
+        with _tool_state_cache_lock:
+            _tool_state_cache["ts"] = 0.0
+
     if is_open and close_supported:
         ok, close_msg = _close_tool(tool_id)
+        _invalidate_state_cache()
         return {
             "success": ok,
             "message": close_msg or ("Tool geschlossen" if ok else "Tool konnte nicht geschlossen werden"),
@@ -2077,8 +2082,10 @@ def api_toggle_tool(tool_id: str) -> dict:
         }
 
     rc, out = _run_powershell(cmd, timeout=15)
-    time.sleep(0.35)
+    # Give the process a moment to start so _is_tool_open can detect it.
+    time.sleep(0.5)
     now_open = _is_tool_open(tool_id)
+    _invalidate_state_cache()
     return {
         "success": rc == 0 and (now_open or not close_supported),
         "message": "Tool gestartet" if (rc == 0 and (now_open or not close_supported)) else "Tool konnte nicht gestartet werden",
