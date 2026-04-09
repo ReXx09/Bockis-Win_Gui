@@ -77,6 +77,13 @@ const LOGS_LAYOUT_KEY = 'bockis_logs_layout_v1';
 const TOOLS_LAYOUT_KEY = 'bockis_tools_layout_v1';
 const SETUP_LAYOUT_KEY = 'bockis_setup_layout_v1';
 const PAGE_KEY = 'bockis_dashboard_page_v1';
+const LEGACY_STORAGE_KEYS = {
+  [LAYOUT_KEY]: ['bockis_dashboard_layout_v3', 'bockis_dashboard_layout_v2', 'bockis_dashboard_layout_v1'],
+  [AUDIO_LAYOUT_KEY]: [],
+  [LOGS_LAYOUT_KEY]: [],
+  [TOOLS_LAYOUT_KEY]: [],
+  [SETUP_LAYOUT_KEY]: [],
+};
 const PAGE_ICONS = {
   overview: 'grid',
   audio: 'speaker',
@@ -316,7 +323,18 @@ function setOnline(ok) {
 function readLayout(storageKey = LAYOUT_KEY) {
   try {
     const raw = localStorage.getItem(storageKey);
-    return raw ? JSON.parse(raw) : null;
+    if (raw) return JSON.parse(raw);
+
+    const legacyKeys = LEGACY_STORAGE_KEYS[storageKey] || [];
+    for (const legacyKey of legacyKeys) {
+      const legacyRaw = localStorage.getItem(legacyKey);
+      if (!legacyRaw) continue;
+      const parsed = JSON.parse(legacyRaw);
+      localStorage.setItem(storageKey, legacyRaw);
+      return parsed;
+    }
+
+    return null;
   } catch {
     return null;
   }
