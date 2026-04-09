@@ -734,6 +734,79 @@ TOOL_COMMANDS: dict[str, str] = {
     "intl_settings": "Start-Process 'intl.cpl'",
 }
 
+# Only tools with clear dedicated processes are toggle-close capable.
+TOOL_TOGGLE_PROCESS_NAMES: dict[str, list[str]] = {
+    "system_configuration": ["msconfig.exe"],
+    "task_manager": ["taskmgr.exe"],
+    "registry_editor": ["regedit.exe"],
+    "msinfo32": ["msinfo32.exe"],
+    "directx_diagnostics": ["dxdiag.exe"],
+    "resource_monitor": ["resmon.exe"],
+    "reliability_monitor": ["perfmon.exe"],
+    "performance_monitor": ["perfmon.exe"],
+    "memory_diagnostics": ["mdsched.exe"],
+    "steps_recorder": ["psr.exe"],
+    "disk_cleanup": ["cleanmgr.exe"],
+    "disk_cleanup_advanced": ["cleanmgr.exe"],
+    "defrag": ["dfrgui.exe"],
+    "optional_features": ["optionalfeatures.exe"],
+    "quick_assist": ["quickassist.exe"],
+    "windows_sandbox": ["windowssandbox.exe"],
+    "netplwiz": ["netplwiz.exe"],
+}
+
+
+def _tool_process_names(tool_id: str) -> set[str]:
+    names = TOOL_TOGGLE_PROCESS_NAMES.get(str(tool_id or "").strip(), [])
+    return {str(name).strip().lower() for name in names if str(name).strip()}
+
+
+def _is_tool_toggle_supported(tool_id: str) -> bool:
+    return bool(_tool_process_names(tool_id))
+
+
+def _get_tool_processes(tool_id: str) -> list[psutil.Process]:
+    wanted = _tool_process_names(tool_id)
+    if not wanted:
+        return []
+
+    procs: list[psutil.Process] = []
+    for proc in psutil.process_iter(["pid", "name"]):
+        try:
+            proc_name = str(proc.info.get("name") or "").strip().lower()
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            continue
+        if proc_name in wanted:
+            procs.append(proc)
+    return procs
+
+
+def _is_tool_open(tool_id: str) -> bool:
+    return len(_get_tool_processes(tool_id)) > 0
+
+
+def _close_tool(tool_id: str) -> tuple[bool, str]:
+    procs = _get_tool_processes(tool_id)
+    if not procs:
+        return True, ""
+
+    for proc in procs:
+        try:
+            proc.terminate()
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            pass
+
+    _, alive = psutil.wait_procs(procs, timeout=1.2)
+    for proc in alive:
+        try:
+            proc.kill()
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            pass
+
+    time.sleep(0.15)
+    still_open = _is_tool_open(tool_id)
+    return (not still_open), ("Fenster geschlossen" if not still_open else "Fenster konnte nicht vollstaendig geschlossen werden")
+
 LAUNCHER_KINDS = {"tool", "app", "url"}
 LAUNCHER_COLOR_KEYS = ("tile_bg", "tile_text", "tile_border", "tile_accent")
 
@@ -1635,6 +1708,69 @@ def api_run_tool(tool_id: str) -> dict:
         "success": rc == 0,
         "message": "Tool gestartet" if rc == 0 else "Tool konnte nicht gestartet werden",
         "output": out,
+    }
+
+
+@app.get("/api/tools/state")
+def api_tools_state() -> dict:
+    tools = api_tools()
+    states: dict[str, bool] = {}
+    close_supported: list[str] = []
+
+    for tool in tools:
+        tool_id = str(tool.get("id") or "").strip()
+        if not tool_id:
+            continue
+        states[tool_id] = _is_tool_open(tool_id)
+        if _is_tool_toggle_supported(tool_id):
+            close_supported.append(tool_id)
+
+    return {
+        "success": True,
+        "states": states,
+        "close_supported": close_supported,
+    }
+
+
+@app.post("/api/tools/toggle/{tool_id}")
+def api_toggle_tool(tool_id: str) -> dict:
+    cmd = TOOL_COMMANDS.get(tool_id)
+    if not cmd:
+        return {"success": False, "message": "Unbekanntes Tool", "action": "unknown", "is_open": False}
+
+    is_open = _is_tool_open(tool_id)
+    close_supported = _is_tool_toggle_supported(tool_id)
+
+    if is_open and close_supported:
+        ok, close_msg = _close_tool(tool_id)
+        return {
+            "success": ok,
+            "message": close_msg or ("Tool geschlossen" if ok else "Tool konnte nicht geschlossen werden"),
+            "output": "",
+            "action": "closed" if ok else "close-failed",
+            "is_open": _is_tool_open(tool_id),
+            "close_supported": close_supported,
+        }
+
+    if is_open and not close_supported:
+        return {
+            "success": True,
+            "message": "Tool ist bereits geoeffnet (Schliessen fuer dieses Tool nicht verfuegbar).",
+            "output": "",
+            "action": "already-open",
+            "is_open": True,
+            "close_supported": close_supported,
+        }
+
+    rc, out = _run_powershell(cmd, timeout=15)
+    now_open = _is_tool_open(tool_id)
+    return {
+        "success": rc == 0,
+        "message": "Tool gestartet" if rc == 0 else "Tool konnte nicht gestartet werden",
+        "output": out,
+        "action": "opened" if rc == 0 else "open-failed",
+        "is_open": now_open,
+        "close_supported": close_supported,
     }
 
 

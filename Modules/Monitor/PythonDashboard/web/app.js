@@ -273,6 +273,7 @@ let launcherCategoryLayouts = {};
 let launcherCategoryDensity = {};
 let launcherCategoryOrder = [];
 let dragArmedCard = null;
+let toolStateTimer = null;
 const masonryFrames = new Map();
 const HISTORY_LEN = 45;
 const monitorHistory = {
@@ -1065,6 +1066,25 @@ async function loadDashboardDependencyStatus() {
   }
 }
 
+async function refreshToolButtonStates() {
+  try {
+    const data = await jsonFetch('/api/tools/state');
+    const states = data && data.states ? data.states : {};
+    const closeSupported = new Set(Array.isArray(data.close_supported) ? data.close_supported : []);
+
+    document.querySelectorAll('#toolsGrid [data-tool-run]').forEach((btn) => {
+      const id = btn.dataset.toolRun || '';
+      const isOpen = !!states[id];
+      const canClose = closeSupported.has(id);
+      btn.classList.toggle('is-open', isOpen);
+      btn.classList.toggle('is-closable', canClose);
+      btn.classList.toggle('is-open-readonly', isOpen && !canClose);
+    });
+  } catch {
+    // keep UI usable even if state endpoint is temporarily unavailable
+  }
+}
+
 async function loadTools() {
   try {
     const TOOL_CATEGORY_ORDER = ['sys', 'net', 'diag', 'disk', 'priv', 'dev'];
@@ -1123,15 +1143,22 @@ async function loadTools() {
       btn.addEventListener('click', async () => {
         const id = btn.dataset.toolRun || '';
         const t = availableTools.find((x) => x.id === id) || { label: id };
-        toolMsg.textContent = `Starte ${t.label}...`;
+        toolMsg.textContent = `${t.label} wird verarbeitet...`;
         try {
-          const d = await jsonFetch(`/api/tools/run/${encodeURIComponent(id)}`, { method: 'POST' });
+          const d = await jsonFetch(`/api/tools/toggle/${encodeURIComponent(id)}`, { method: 'POST' });
           toolMsg.textContent = `${d.message || ''}\n${d.output || ''}`.trim();
+          await refreshToolButtonStates();
         } catch (err) {
           toolMsg.textContent = `Tool-Fehler: ${err.message}`;
         }
       });
     });
+
+    await refreshToolButtonStates();
+    if (toolStateTimer) clearInterval(toolStateTimer);
+    toolStateTimer = setInterval(() => {
+      refreshToolButtonStates();
+    }, 3000);
 
     populateLauncherToolSelect();
   } catch (err) {

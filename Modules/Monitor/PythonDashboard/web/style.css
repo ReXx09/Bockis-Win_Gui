@@ -875,6 +875,7 @@ input, select {
   line-height: 1.35;
   color: var(--muted);
   display: -webkit-box;
+  line-clamp: 2;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
@@ -884,6 +885,20 @@ input, select {
   border-color: color-mix(in srgb, var(--accent) 50%, var(--line));
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 28%, transparent);
   transform: translateY(-1px);
+}
+
+.tool-tile.is-open {
+  border-color: color-mix(in srgb, var(--ok) 55%, var(--line));
+  background: color-mix(in srgb, var(--ok) 10%, var(--card));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ok) 32%, transparent);
+}
+
+.tool-tile.is-open strong {
+  color: color-mix(in srgb, var(--ok) 75%, white);
+}
+
+.tool-tile.is-open-readonly {
+  border-style: dashed;
 }
 
 .tool-list {
@@ -922,6 +937,7 @@ input, select {
   line-height: 1.35;
   min-width: 0;
   display: -webkit-box;
+  line-clamp: 2;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
