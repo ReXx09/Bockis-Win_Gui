@@ -676,7 +676,7 @@ function renderUserProgramRoutes() {
     });
     let status = 'Aktuell nicht als Session erkannt';
     if (match) {
-      status = `Aktiv als ${match.app} (PID ${match.pid})`;
+      status = `Aktiv als ${match.app} (PID ${match.pid}) auf ${match.device_name || 'Unbekannt'}`;
     } else if (runningProgram) {
       status = `${runningProgram} laeuft, aber Windows meldet derzeit keine aktive Audio-Session`;
     }
@@ -888,7 +888,7 @@ async function loadAudioSessions() {
         <div class="audio-session-item" data-pid="${s.pid}">
           <div class="audio-session-head">
             <span>${s.app}</span>
-            <span class="muted">PID ${s.pid} | ${s.volume}% ${s.muted ? '| Stumm' : ''}</span>
+            <span class="muted">PID ${s.pid} | ${s.device_name || 'Unbekannt'} | ${s.volume}% ${s.muted ? '| Stumm' : ''}</span>
           </div>
           <div class="row">
             <input type="range" min="0" max="100" value="${s.volume}" data-session-volume="${s.pid}" />

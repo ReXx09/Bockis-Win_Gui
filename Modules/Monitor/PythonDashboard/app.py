@@ -21,20 +21,22 @@ from fastapi.staticfiles import StaticFiles
 try:
     from ctypes import POINTER, cast
     from comtypes import CLSCTX_ALL
-    from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+    from pycaw.pycaw import AudioSession, AudioUtilities, IAudioEndpointVolume, IAudioSessionControl2
 
     AUDIO_AVAILABLE = True
 except Exception:
     POINTER = None
     cast = None
     CLSCTX_ALL = None
+    AudioSession = None
     AudioUtilities = None
     IAudioEndpointVolume = None
+    IAudioSessionControl2 = None
     AUDIO_AVAILABLE = False
 
 
 def _ensure_audio_backend() -> bool:
-    global AUDIO_AVAILABLE, POINTER, cast, CLSCTX_ALL, AudioUtilities, IAudioEndpointVolume
+    global AUDIO_AVAILABLE, POINTER, cast, CLSCTX_ALL, AudioSession, AudioUtilities, IAudioEndpointVolume, IAudioSessionControl2
 
     if AUDIO_AVAILABLE:
         return True
@@ -42,13 +44,15 @@ def _ensure_audio_backend() -> bool:
     try:
         from ctypes import POINTER as _POINTER, cast as _cast
         from comtypes import CLSCTX_ALL as _CLSCTX_ALL
-        from pycaw.pycaw import AudioUtilities as _AudioUtilities, IAudioEndpointVolume as _IAudioEndpointVolume
+        from pycaw.pycaw import AudioSession as _AudioSession, AudioUtilities as _AudioUtilities, IAudioEndpointVolume as _IAudioEndpointVolume, IAudioSessionControl2 as _IAudioSessionControl2
 
         POINTER = _POINTER
         cast = _cast
         CLSCTX_ALL = _CLSCTX_ALL
+        AudioSession = _AudioSession
         AudioUtilities = _AudioUtilities
         IAudioEndpointVolume = _IAudioEndpointVolume
+        IAudioSessionControl2 = _IAudioSessionControl2
         AUDIO_AVAILABLE = True
         return True
     except Exception:
@@ -611,13 +615,69 @@ def _iter_audio_sessions() -> list:
         return []
 
 
+def _iter_render_audio_devices() -> list:
+    if not _ensure_audio_backend():
+        return []
+
+    devices: list = []
+    try:
+        for device in AudioUtilities.GetAllDevices():
+            try:
+                device_id = str(getattr(device, "id", None) or getattr(device, "Id", None) or "")
+                state = str(getattr(device, "state", None) or "")
+                if not device_id.startswith("{0.0.0."):
+                    continue
+                if "active" not in state.lower() and state != "1":
+                    continue
+                devices.append(device)
+            except Exception:
+                continue
+    except Exception:
+        return []
+    return devices
+
+
+def _iter_audio_sessions_with_devices() -> list[tuple[object, str, str]]:
+    if not _ensure_audio_backend():
+        return []
+
+    sessions: list[tuple[object, str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for device in _iter_render_audio_devices():
+        try:
+            device_name = str(getattr(device, "FriendlyName", None) or "Unknown")
+            device_id = str(getattr(device, "id", None) or getattr(device, "Id", None) or device_name)
+            manager = getattr(device, "AudioSessionManager", None)
+            if manager is None:
+                continue
+            session_enumerator = manager.GetSessionEnumerator()
+            count = session_enumerator.GetCount()
+            for index in range(count):
+                ctl = session_enumerator.GetSession(index)
+                if ctl is None:
+                    continue
+                ctl2 = ctl.QueryInterface(IAudioSessionControl2)
+                if ctl2 is None:
+                    continue
+                audio_session = AudioSession(ctl2)
+                instance_id = str(getattr(audio_session, "InstanceIdentifier", None) or getattr(audio_session, "Identifier", None) or "")
+                dedup_key = (device_id, instance_id)
+                if dedup_key in seen:
+                    continue
+                seen.add(dedup_key)
+                sessions.append((audio_session, device_name, device_id))
+        except Exception:
+            continue
+    return sessions
+
+
 def get_audio_sessions() -> dict:
     if not _ensure_audio_backend():
         return {"available": False, "sessions": []}
 
     result: list[dict] = []
     with _audio_com_context():
-        for sess in _iter_audio_sessions():
+        for sess, device_name, device_id in _iter_audio_sessions_with_devices():
             try:
                 pid = int(getattr(sess, "ProcessId", 0) or 0)
                 proc = getattr(sess, "Process", None)
@@ -625,18 +685,22 @@ def get_audio_sessions() -> dict:
                 vol_obj = sess.SimpleAudioVolume
                 vol = int(round(vol_obj.GetMasterVolume() * 100))
                 muted = bool(vol_obj.GetMute())
+                state = int(getattr(sess, "State", 0) or 0)
                 result.append(
                     {
                         "pid": pid,
                         "app": app,
+                        "device_name": device_name,
+                        "device_id": device_id,
                         "volume": max(0, min(100, vol)),
                         "muted": muted,
+                        "state": state,
                     }
                 )
             except Exception:
                 continue
 
-    result = sorted(result, key=lambda x: (x["app"].lower(), x["pid"]))
+    result = sorted(result, key=lambda x: (x["app"].lower(), x["device_name"].lower(), x["pid"]))
     return {"available": True, "sessions": result}
 
 
@@ -647,7 +711,7 @@ def set_audio_session_volume(pid: int, level: int) -> bool:
     target = max(0.0, min(1.0, level / 100.0))
     changed = False
     with _audio_com_context():
-        for sess in _iter_audio_sessions():
+        for sess, _, _ in _iter_audio_sessions_with_devices():
             try:
                 session_pid = int(getattr(sess, "ProcessId", 0) or 0)
                 if session_pid != pid:
@@ -665,7 +729,7 @@ def set_audio_session_mute(pid: int, muted: bool) -> bool:
 
     changed = False
     with _audio_com_context():
-        for sess in _iter_audio_sessions():
+        for sess, _, _ in _iter_audio_sessions_with_devices():
             try:
                 session_pid = int(getattr(sess, "ProcessId", 0) or 0)
                 if session_pid != pid:
