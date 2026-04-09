@@ -787,6 +787,47 @@ input, select {
   margin-bottom: 8px;
 }
 
+.tool-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 8px;
+}
+
+.tool-table thead th {
+  text-align: left;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  padding: 4px 10px 6px;
+  border-bottom: 1px solid var(--line);
+}
+
+.tool-table-col-btn { width: 1%; white-space: nowrap; }
+
+.tool-table-row {
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 50%, transparent);
+  transition: background 0.12s ease;
+}
+
+.tool-table-row:last-child { border-bottom: 0; }
+
+.tool-table-row:hover {
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+
+.tool-table-btn {
+  white-space: nowrap;
+  margin: 6px 0;
+}
+
+.tool-table-desc {
+  padding: 0 12px;
+  font-size: 0.82rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
 .launcher-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));

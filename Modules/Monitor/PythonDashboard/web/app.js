@@ -1046,22 +1046,38 @@ async function loadTools() {
   try {
     const tools = await jsonFetch('/api/tools');
     availableTools = Array.isArray(tools) ? tools : [];
-    toolList.innerHTML = '';
-    for (const t of availableTools) {
-      const btn = document.createElement('button');
-      btn.className = 'btn';
-      btn.textContent = t.label;
-      btn.onclick = async () => {
+    toolList.innerHTML = availableTools.length ? `
+      <table class="tool-table">
+        <thead>
+          <tr>
+            <th class="tool-table-col-btn"></th>
+            <th class="tool-table-col-desc">Beschreibung</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${availableTools.map((t) => `
+            <tr class="tool-table-row">
+              <td><button class="btn tool-table-btn" data-tool-run="${escapeHtml(t.id)}">${escapeHtml(t.label)}</button></td>
+              <td class="tool-table-desc">${escapeHtml(t.desc || '')}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>` : '<div class="audio-empty">Keine Tools verfuegbar.</div>';
+
+    toolList.querySelectorAll('[data-tool-run]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const id = btn.dataset.toolRun || '';
+        const t = availableTools.find((x) => x.id === id) || { label: id };
         toolMsg.textContent = `Starte ${t.label}...`;
         try {
-          const d = await jsonFetch(`/api/tools/run/${t.id}`, { method: 'POST' });
+          const d = await jsonFetch(`/api/tools/run/${encodeURIComponent(id)}`, { method: 'POST' });
           toolMsg.textContent = `${d.message || ''}\n${d.output || ''}`.trim();
         } catch (err) {
           toolMsg.textContent = `Tool-Fehler: ${err.message}`;
         }
-      };
-      toolList.appendChild(btn);
-    }
+      });
+    });
+
     populateLauncherToolSelect();
   } catch (err) {
     toolMsg.textContent = `Tool-Liste fehlgeschlagen: ${err.message}`;

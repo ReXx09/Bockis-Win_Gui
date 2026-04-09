@@ -1440,20 +1440,20 @@ def api_git_pull(payload: dict | None = None) -> dict:
 @app.get("/api/tools")
 def api_tools() -> list[dict]:
     return [
-        {"id": "windows_update", "label": "Windows Update"},
-        {"id": "defender", "label": "Windows Defender"},
-        {"id": "services", "label": "Services"},
-        {"id": "event_viewer", "label": "Event Viewer"},
-        {"id": "task_manager", "label": "Task Manager"},
-        {"id": "disk_cleanup", "label": "Disk Cleanup"},
-        {"id": "reliability_monitor", "label": "Reliability Monitor"},
-        {"id": "resource_monitor", "label": "Resource Monitor"},
-        {"id": "device_manager", "label": "Device Manager"},
-        {"id": "task_scheduler", "label": "Task Scheduler"},
-        {"id": "firewall_advanced", "label": "Firewall (Advanced)"},
-        {"id": "optional_features", "label": "Optional Features"},
-        {"id": "network_connections", "label": "Network Connections"},
-        {"id": "advanced_system_settings", "label": "Advanced System Settings"},
+        {"id": "windows_update",           "label": "Windows Update",           "desc": "Windows-Updates suchen, herunterladen und installieren."},
+        {"id": "defender",                 "label": "Windows Defender",          "desc": "Virenschutz-Status pruefen und Scans starten."},
+        {"id": "services",                 "label": "Services",                  "desc": "Systemdienste anzeigen, starten, stoppen oder konfigurieren."},
+        {"id": "event_viewer",             "label": "Event Viewer",              "desc": "Windows-Ereignisprotokoll – Fehler und Warnungen einsehen."},
+        {"id": "task_manager",             "label": "Task Manager",              "desc": "Laufende Prozesse, CPU- und RAM-Auslastung ueberwachen."},
+        {"id": "disk_cleanup",             "label": "Disk Cleanup",              "desc": "Temporaere Dateien und Systemdateien bereinigen."},
+        {"id": "reliability_monitor",      "label": "Reliability Monitor",       "desc": "Stabilitaetsverlauf und Absturzhistorie chronologisch anzeigen."},
+        {"id": "resource_monitor",         "label": "Resource Monitor",          "desc": "Echtzeit-Uebersicht ueber CPU, RAM, Datentraeger und Netzwerk pro Prozess."},
+        {"id": "device_manager",           "label": "Device Manager",            "desc": "Hardware-Treiber pruefen, aktualisieren oder deaktivieren."},
+        {"id": "task_scheduler",           "label": "Task Scheduler",            "desc": "Geplante Aufgaben erstellen, bearbeiten und ausfuehren."},
+        {"id": "firewall_advanced",        "label": "Firewall (Advanced)",       "desc": "Eingehende und ausgehende Firewall-Regeln granular verwalten."},
+        {"id": "optional_features",        "label": "Optional Features",         "desc": "Windows-Features wie Hyper-V, WSL oder .NET aktivieren/deaktivieren."},
+        {"id": "network_connections",      "label": "Network Connections",       "desc": "Netzwerkadapter direkt verwalten, IP-Konfiguration anpassen."},
+        {"id": "advanced_system_settings", "label": "Advanced System Settings",  "desc": "Leistungseinstellungen, Umgebungsvariablen und Startoptionen."},
     ]
 
 
