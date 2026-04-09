@@ -157,6 +157,7 @@ let lastAudioSessions = [];
 let cachedOpenPrograms = [];
 let lastOpenProgramsFetch = 0;
 let showAllAudioDevices = false;
+let pendingThemeId = 'ozean';
 const masonryFrames = new Map();
 const HISTORY_LEN = 45;
 const monitorHistory = {
@@ -1436,24 +1437,38 @@ function saveTheme(id, vars) {
   localStorage.setItem(THEME_KEY, JSON.stringify({ id, vars }));
 }
 
+function syncThemeInputs(vars) {
+  const accEl = document.getElementById('customAccent');
+  const gfEl = document.getElementById('customGradFrom');
+  const bgEl = document.getElementById('customBg');
+  if (accEl) accEl.value = vars['--accent'] || '#4aa3ff';
+  if (gfEl) gfEl.value = vars['--grad-from'] || '#14315a';
+  if (bgEl) bgEl.value = vars['--bg'] || '#071220';
+}
+
+function setActiveThemeButton(themeId) {
+  pendingThemeId = themeId || 'custom';
+  document.querySelectorAll('.theme-preset-btn').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.theme === themeId);
+  });
+}
+
 function loadAndApplyTheme() {
   try {
     const raw = localStorage.getItem(THEME_KEY);
-    if (!raw) return;
+    if (!raw) {
+      const fallback = THEMES.find((t) => t.id === 'ozean');
+      if (fallback) {
+        syncThemeInputs(fallback.vars);
+        setActiveThemeButton(fallback.id);
+      }
+      return;
+    }
     const data = JSON.parse(raw);
     if (data && data.vars) {
       applyTheme(data.vars);
-      document.querySelectorAll('.theme-preset-btn').forEach((btn) => {
-        btn.classList.toggle('active', btn.dataset.theme === data.id);
-      });
-      if (data.id === 'custom') {
-        const accEl = document.getElementById('customAccent');
-        const gfEl  = document.getElementById('customGradFrom');
-        const bgEl  = document.getElementById('customBg');
-        if (accEl) accEl.value = data.vars['--accent']    || '#4aa3ff';
-        if (gfEl)  gfEl.value  = data.vars['--grad-from'] || '#14315a';
-        if (bgEl)  bgEl.value  = data.vars['--bg']        || '#071220';
-      }
+      syncThemeInputs(data.vars);
+      setActiveThemeButton(data.id === 'custom' ? null : data.id);
     }
   } catch { /* ignore */ }
 }
@@ -1468,36 +1483,45 @@ function wireThemeControls() {
     btn.innerHTML = `<span class="theme-swatch"><span style="background:${theme.s2}"></span><span style="background:${theme.s1};opacity:0.75"></span></span><span>${theme.label}</span>`;
     btn.addEventListener('click', () => {
       applyTheme(theme.vars);
-      saveTheme(theme.id, theme.vars);
-      document.querySelectorAll('.theme-preset-btn').forEach((b) => b.classList.remove('active'));
-      btn.classList.add('active');
+      syncThemeInputs(theme.vars);
+      setActiveThemeButton(theme.id);
     });
     presetContainer.appendChild(btn);
   });
 
+  ['customAccent', 'customGradFrom', 'customBg'].forEach((id) => {
+    const input = document.getElementById(id);
+    if (!input) return;
+    input.addEventListener('input', () => {
+      setActiveThemeButton(null);
+    });
+  });
+
   document.getElementById('applyCustomThemeBtn').addEventListener('click', () => {
+    const selectedPreset = THEMES.find((theme) => theme.id === pendingThemeId) || null;
+    if (selectedPreset) {
+      applyTheme(selectedPreset.vars);
+      syncThemeInputs(selectedPreset.vars);
+      saveTheme(selectedPreset.id, selectedPreset.vars);
+      setActiveThemeButton(selectedPreset.id);
+      return;
+    }
+
     const acc  = document.getElementById('customAccent').value;
     const gf   = document.getElementById('customGradFrom').value;
     const bg   = document.getElementById('customBg').value;
     const vars = buildCustomVars(acc, gf, bg);
     applyTheme(vars);
     saveTheme('custom', vars);
-    document.querySelectorAll('.theme-preset-btn').forEach((b) => b.classList.remove('active'));
+    setActiveThemeButton(null);
   });
 
   document.getElementById('resetThemeBtn').addEventListener('click', () => {
     localStorage.removeItem(THEME_KEY);
     const t = THEMES.find((t) => t.id === 'ozean');
     applyTheme(t.vars);
-    document.querySelectorAll('.theme-preset-btn').forEach((b) => {
-      b.classList.toggle('active', b.dataset.theme === 'ozean');
-    });
-    const accEl = document.getElementById('customAccent');
-    const gfEl  = document.getElementById('customGradFrom');
-    const bgEl  = document.getElementById('customBg');
-    if (accEl) accEl.value = '#4aa3ff';
-    if (gfEl)  gfEl.value  = '#14315a';
-    if (bgEl)  bgEl.value  = '#071220';
+    syncThemeInputs(t.vars);
+    setActiveThemeButton('ozean');
   });
 
   loadAndApplyTheme();
