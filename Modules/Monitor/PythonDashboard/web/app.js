@@ -1199,7 +1199,7 @@ function renderAudioDevicesList(activeOutput = '', activeInput = '', routingMess
   if (audioDeviceInfo) {
     const shownText = showAllAudioDevices || extraCount === 0
       ? `${visibleDevices.length} angezeigt`
-      : `kompakt: ${activeDevicesCount} Standardgeraete sichtbar, ${extraCount} weitere ausblendbar`;
+      : `kompakt: ${activeDevicesCount} aktive Geraete sichtbar, ${extraCount} weitere ausblendbar`;
     audioDeviceInfo.textContent = `Ausgabe: ${activeOutput || 'Unbekannt'} | Mikrofon: ${activeInput || 'Unbekannt'} | ${cachedAudioDevices.length} eindeutige Geraete (${outputCount} Output, ${inputCount} Input) | ${shownText}${routingMessage ? ` | ${routingMessage}` : ''}`;
   }
 
@@ -1218,7 +1218,7 @@ function renderAudioDevicesList(activeOutput = '', activeInput = '', routingMess
       <div class="audio-device-item${dev.is_active_output || dev.is_active_input ? ' active' : ''}">
         <span>${dev.name} <small class="muted">${dev.kind === 'input' ? 'Mikrofon' : 'Ausgabe'}</small></span>
         <div class="row">
-          ${dev.is_active_output && dev.is_active_input ? '<strong>Standard Ausgabe + Mikrofon</strong>' : dev.is_active_output ? '<strong>Standard Ausgabe</strong>' : dev.is_active_input ? '<strong>Standard Mikrofon</strong>' : dev.kind === 'output' ? `<button class="btn" data-switch-device="${dev.id}" data-switch-name="${dev.name}">Als Standard</button>` : '<span class="muted">Nur Anzeige</span>'}
+          ${dev.kind === 'input' ? '<span class="muted">Nur Anzeige</span>' : dev.is_active_output ? '<strong>Standard Ausgabe</strong>' : `<button class="btn" data-switch-device="${dev.id}" data-switch-name="${dev.name}">Als Standard</button>`}
         </div>
       </div>
     `).join('')}
@@ -1262,7 +1262,7 @@ async function loadAudioDevices() {
       if (idx == null) {
         byName.set(key, dedup.length);
         dedup.push(dev);
-      } else if (dev.is_active_output && !dedup[idx].is_active_output) {
+      } else if ((dev.is_active_output && !dedup[idx].is_active_output) || (dev.is_active_input && !dedup[idx].is_active_input)) {
         dedup[idx] = dev;
       }
     }
