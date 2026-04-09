@@ -53,6 +53,8 @@ const launcherToolId = document.getElementById('launcherToolId');
 const launcherTarget = document.getElementById('launcherTarget');
 const launcherArgs = document.getElementById('launcherArgs');
 const launcherNote = document.getElementById('launcherNote');
+const launcherIcon = document.getElementById('launcherIcon');
+const launcherIconPicker = document.getElementById('launcherIconPicker');
 const launcherToolField = document.getElementById('launcherToolField');
 const launcherTargetField = document.getElementById('launcherTargetField');
 const launcherArgsField = document.getElementById('launcherArgsField');
@@ -169,6 +171,23 @@ const THEMES = [
     vars: { '--accent': '#ff6b6b', '--bg': '#1a0808', '--card': '#2a1010', '--line': '#3d1515', '--muted': '#a06060', '--grad-from': '#3d1515', '--grad-to': '#1a0808' } },
   { id: 'titan',     label: 'Titan',     s1: '#94a3b8', s2: '#1e2a3a',
     vars: { '--accent': '#94a3b8', '--bg': '#0a0e14', '--card': '#101620', '--line': '#1e2a3a', '--muted': '#607080', '--grad-from': '#1e2a3a', '--grad-to': '#0a0e14' } },
+];
+const LAUNCHER_ICON_OPTIONS = [
+  { id: 'grid', label: 'Kachel' },
+  { id: 'globe', label: 'Web' },
+  { id: 'server', label: 'Server' },
+  { id: 'cloud', label: 'Cloud' },
+  { id: 'folder', label: 'Ordner' },
+  { id: 'home', label: 'Home' },
+  { id: 'terminal', label: 'Konsole' },
+  { id: 'shield', label: 'Sicherheit' },
+  { id: 'wrench', label: 'Tool' },
+  { id: 'route', label: 'Netzwerk' },
+  { id: 'drive', label: 'Storage' },
+  { id: 'activity', label: 'Monitoring' },
+  { id: 'cpu', label: 'System' },
+  { id: 'speaker', label: 'Audio' },
+  { id: 'file', label: 'Dokument' },
 ];
 
 let draggedCard = null;
@@ -916,6 +935,32 @@ function populateLauncherToolSelect(selected = '') {
   if (selected) launcherToolId.value = selected;
 }
 
+function getLauncherIconMarkup(iconName) {
+  return getIconMarkup(iconName || 'grid');
+}
+
+function selectLauncherIcon(iconName = 'grid') {
+  if (launcherIcon) launcherIcon.value = iconName || 'grid';
+  if (!launcherIconPicker) return;
+  launcherIconPicker.querySelectorAll('[data-launcher-icon]').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.launcherIcon === (iconName || 'grid'));
+  });
+}
+
+function populateLauncherIconPicker(selected = 'grid') {
+  if (!launcherIconPicker) return;
+  launcherIconPicker.innerHTML = LAUNCHER_ICON_OPTIONS.map((item) => `
+    <button class="launcher-icon-option" type="button" data-launcher-icon="${escapeHtml(item.id)}">
+      ${getLauncherIconMarkup(item.id)}
+      <span>${escapeHtml(item.label)}</span>
+    </button>
+  `).join('');
+  launcherIconPicker.querySelectorAll('[data-launcher-icon]').forEach((btn) => {
+    btn.addEventListener('click', () => selectLauncherIcon(btn.dataset.launcherIcon || 'grid'));
+  });
+  selectLauncherIcon(selected);
+}
+
 function syncLauncherForm() {
   if (!launcherKind) return;
   const kind = launcherKind.value || 'tool';
@@ -947,6 +992,7 @@ function resetLauncherForm() {
   if (launcherTarget) launcherTarget.value = '';
   if (launcherArgs) launcherArgs.value = '';
   if (launcherNote) launcherNote.value = '';
+  populateLauncherIconPicker('grid');
   populateLauncherToolSelect();
   syncLauncherForm();
   if (saveLauncherBtn) saveLauncherBtn.textContent = 'Launcher speichern';
@@ -961,6 +1007,7 @@ function fillLauncherForm(launcher) {
   if (launcherTarget) launcherTarget.value = launcher.target || '';
   if (launcherArgs) launcherArgs.value = launcher.args || '';
   if (launcherNote) launcherNote.value = launcher.note || '';
+  populateLauncherIconPicker(launcher.icon || 'grid');
   syncLauncherForm();
   if (saveLauncherBtn) saveLauncherBtn.textContent = 'Launcher aktualisieren';
 }
@@ -1021,13 +1068,9 @@ function renderLaunchers() {
   launcherList.innerHTML = customLaunchers.map((launcher) => `
     <div class="launcher-card">
       <button class="launcher-run" type="button" data-launcher-run="${escapeHtml(launcher.id)}">
+        <span class="launcher-icon-badge">${getLauncherIconMarkup(launcher.icon || 'grid')}</span>
         <strong>${escapeHtml(launcher.title)}</strong>
-        <p class="launcher-note">${escapeHtml(launcher.note || launcher.target || getLauncherKindLabel(launcher.kind))}</p>
       </button>
-      <div class="launcher-meta">
-        <span class="launcher-kind">${escapeHtml(getLauncherKindLabel(launcher.kind))}</span>
-        <span>${escapeHtml(launcher.kind === 'tool' ? (availableTools.find((tool) => tool.id === launcher.tool_id)?.label || launcher.tool_id || '-') : launcher.target || '-')}</span>
-      </div>
       <div class="launcher-actions">
         <button class="btn" type="button" data-launcher-edit="${escapeHtml(launcher.id)}">Bearbeiten</button>
         <button class="btn warn" type="button" data-launcher-delete="${escapeHtml(launcher.id)}">Entfernen</button>
@@ -1109,6 +1152,7 @@ async function saveLauncher() {
     target: launcherTarget?.value.trim() || '',
     args: launcherArgs?.value.trim() || '',
     note: launcherNote?.value.trim() || '',
+    icon: launcherIcon?.value || 'grid',
   };
 
   if (!payload.title) {

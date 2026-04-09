@@ -760,53 +760,52 @@ input, select {
   padding: 10px;
   background: #0b1628;
   display: grid;
-  gap: 10px;
+  gap: 12px;
 }
 
 .launcher-run {
   border: 0;
   background: transparent;
   color: inherit;
-  text-align: left;
+  text-align: center;
   padding: 0;
   cursor: pointer;
   display: grid;
-  gap: 6px;
+  justify-items: center;
+  gap: 10px;
 }
 
 .launcher-run strong {
   font-size: 1rem;
 }
 
-.launcher-note {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.8rem;
-  min-height: 2.2em;
-}
-
-.launcher-meta {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-  color: var(--muted);
-  font-size: 0.76rem;
-}
-
-.launcher-kind {
+.launcher-icon-badge {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line));
+  background: color-mix(in srgb, var(--accent) 12%, #0b1628);
+  color: var(--accent);
   display: inline-flex;
   align-items: center;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 3px 8px;
-  background: rgba(9, 17, 31, 0.6);
+  justify-content: center;
+}
+
+.launcher-icon-badge .icon-inline {
+  width: 1.6rem;
+  height: 1.6rem;
+}
+
+.launcher-run strong {
+  max-width: 100%;
+  word-break: break-word;
 }
 
 .launcher-actions {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  justify-content: center;
 }
 
 .launcher-form-grid {
@@ -822,6 +821,38 @@ input, select {
   gap: 6px;
   color: var(--muted);
   font-size: 0.85rem;
+}
+
+.launcher-icon-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(86px, 1fr));
+  gap: 8px;
+}
+
+.launcher-icon-option {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #0b1628;
+  color: var(--muted);
+  padding: 10px 8px;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  cursor: pointer;
+  text-align: center;
+  font-size: 0.74rem;
+}
+
+.launcher-icon-option .icon-inline {
+  width: 1.2rem;
+  height: 1.2rem;
+  color: var(--text);
+}
+
+.launcher-icon-option.active {
+  border-color: var(--accent);
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 12%, #0b1628);
 }
 
 .launcher-hidden {
