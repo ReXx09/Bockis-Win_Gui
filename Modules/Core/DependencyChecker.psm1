@@ -4,6 +4,85 @@
 # Importiere LogManager für strukturiertes Logging
 Import-Module "$PSScriptRoot\LogManager.psm1" -Force -ErrorAction SilentlyContinue
 
+# Kurzzeit-Cache fuer wiederholte Dependency-Pruefungen innerhalb derselben Session.
+$script:DependencyRuntimeCache = @{}
+
+function Get-DependencyCacheValue {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Key,
+
+        [Parameter(Mandatory = $true)]
+        [int]$MaxAgeSeconds
+    )
+
+    if (-not $script:DependencyRuntimeCache.ContainsKey($Key)) {
+        return $null
+    }
+
+    $entry = $script:DependencyRuntimeCache[$Key]
+    if (-not $entry -or -not $entry.ContainsKey('Timestamp') -or -not $entry.ContainsKey('Value')) {
+        $script:DependencyRuntimeCache.Remove($Key) | Out-Null
+        return $null
+    }
+
+    $age = (Get-Date) - $entry.Timestamp
+    if ($age.TotalSeconds -gt $MaxAgeSeconds) {
+        $script:DependencyRuntimeCache.Remove($Key) | Out-Null
+        return $null
+    }
+
+    return $entry.Value
+}
+
+function Set-DependencyCacheValue {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Key,
+
+        [Parameter(Mandatory = $true)]
+        [object]$Value
+    )
+
+    $script:DependencyRuntimeCache[$Key] = @{
+        Timestamp = Get-Date
+        Value     = $Value
+    }
+}
+
+function Clear-DependencyRuntimeCache {
+    $script:DependencyRuntimeCache.Clear()
+}
+
+function Get-WingetUpgradeOutputCached {
+    $cacheKey = 'winget-upgrade-output'
+    $cachedValue = Get-DependencyCacheValue -Key $cacheKey -MaxAgeSeconds 30
+    if ($null -ne $cachedValue) {
+        return [string]$cachedValue
+    }
+
+    $upgradeOutput = winget upgrade 2>$null | Out-String
+    Set-DependencyCacheValue -Key $cacheKey -Value $upgradeOutput
+    return [string]$upgradeOutput
+}
+
+function Get-WingetListOutputCached {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$WingetId
+    )
+
+    $cacheKey = "winget-list-$WingetId"
+    $cachedValue = Get-DependencyCacheValue -Key $cacheKey -MaxAgeSeconds 30
+    if ($null -ne $cachedValue) {
+        return [string]$cachedValue
+    }
+
+    $listOutput = winget list --id $WingetId --exact 2>$null | Out-String
+    Set-DependencyCacheValue -Key $cacheKey -Value $listOutput
+    return [string]$listOutput
+}
+
 # ===================================================================
 # HILFSFUNKTIONEN FÜR DLL-UPDATE
 # ===================================================================
@@ -967,10 +1046,9 @@ function Get-DependencyUpdateInfo {
             return $info
         }
 
-        # WICHTIG: winget upgrade OHNE Paket-ID aufrufen!
-        # "winget upgrade --id <paket>" würde das Upgrade AUSFÜHREN (nicht nur prüfen).
-        # Stattdessen: alle verfügbaren Upgrades auflisten und nach WingetId suchen.
-        $upgradeOutput = winget upgrade 2>$null | Out-String
+        # Winget-Upgrade-Liste wird kurzzeitig gecacht, damit die GUI nicht fuer
+        # jede Dependency erneut einen separaten winget-Prozess startet.
+        $upgradeOutput = Get-WingetUpgradeOutputCached
         if ([string]::IsNullOrWhiteSpace($upgradeOutput)) {
             return $info
         }
@@ -1058,6 +1136,13 @@ function Get-GuiReleaseDependencyStatus {
         [Parameter(Mandatory = $false)]
         [string]$GitHubToken = $env:GITHUB_TOKEN
     )
+
+    $cacheTokenState = if ([string]::IsNullOrWhiteSpace($GitHubToken) -or $GitHubToken -eq 'ghp_DEIN_TOKEN_HIER') { 'none' } else { 'set' }
+    $cacheKey = "github-release-$RepoOwner-$RepoName-$CurrentVersion-$cacheTokenState"
+    $cachedStatus = Get-DependencyCacheValue -Key $cacheKey -MaxAgeSeconds 60
+    if ($cachedStatus) {
+        return $cachedStatus.Clone()
+    }
 
     $status = @{
         Name             = "GUI-Update (GitHub)"
@@ -1162,9 +1247,11 @@ function Get-GuiReleaseDependencyStatus {
             if ($lastStatusCode -eq 401 -or $lastStatusCode -eq 403) {
                 $status.Status = "⚠ GitHub-Zugriff blockiert"
                 $status.StatusColor = "Red"
+                Set-DependencyCacheValue -Key $cacheKey -Value $status
                 return $status
             }
             $status.Status = "⚠ Kein Release gefunden"
+            Set-DependencyCacheValue -Key $cacheKey -Value $status
             return $status
         }
 
@@ -1200,6 +1287,8 @@ function Get-GuiReleaseDependencyStatus {
         $status.Status = "⚠ Update-Prüfung fehlgeschlagen"
         $status.StatusColor = "Yellow"
     }
+
+    Set-DependencyCacheValue -Key $cacheKey -Value $status
 
     return $status
 }
@@ -1328,6 +1417,7 @@ function Invoke-DependencyAction {
             }
         } else {
             Write-Host "[DependencyChecker] ✅ $actionLabel erfolgreich" -ForegroundColor Green
+            Clear-DependencyRuntimeCache
             if ($LogCallback) {
                 & $LogCallback "success" "$actionLabel erfolgreich"
             }
@@ -1387,7 +1477,7 @@ function Find-PawnIODriver {
             
             # Version über winget ermitteln (wenn installiert)
             try {
-                $wingetList = winget list --id $($result.WingetId) --exact 2>$null | Out-String
+                $wingetList = Get-WingetListOutputCached -WingetId $result.WingetId
                 if ($wingetList -match [regex]::Escape($result.WingetId) + '\s+([\d\.]+)') {
                     $result.Version = $matches[1]
                 } elseif ($result.Found) {
@@ -1414,7 +1504,7 @@ function Find-PythonRuntime {
         MeetsMinimum = $false
         Version      = $null
         Command      = $null
-        WingetId     = "Python.Python.3.12"
+        WingetId     = "Python.Python.3.14"
         MinVersion   = "3.10"
     }
 
