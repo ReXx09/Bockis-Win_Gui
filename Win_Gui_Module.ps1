@@ -7312,11 +7312,11 @@ function Invoke-GitPullDependencyAction {
             $pullErrorMessage = if ($pullOutput) { $pullOutput } else { "git pull fehlgeschlagen" }
             Show-TemporaryCmdPreview -RepositoryPath $RepositoryPath -Title 'Git Pull Fehler' -Lines @(
                 'Git Pull Fehler',
-                '',
+                ' ',
                 "Repository: $RepositoryPath",
                 "Branch: $branch",
                 "Upstream: $upstream",
-                '',
+                ' ',
                 'Ausgabe:',
                 $pullErrorMessage
             ) | Out-Null
@@ -7355,20 +7355,20 @@ function Invoke-GitPullDependencyAction {
 
         $previewLines = New-Object System.Collections.Generic.List[string]
         $previewLines.Add('Git Pull Kontrolle')
-        $previewLines.Add('')
+        $previewLines.Add(' ')
         $previewLines.Add("Repository: $RepositoryPath")
         $previewLines.Add("Branch: $branch")
         $previewLines.Add("Upstream: $upstream")
-        $previewLines.Add('')
+        $previewLines.Add(' ')
         $previewLines.Add('Ausgabe:')
         $previewLines.Add($(if ($pullOutput) { $pullOutput } else { 'Keine Ausgabe vorhanden.' }))
 
         if ($updated) {
-            $previewLines.Add('')
+            $previewLines.Add(' ')
             $previewLines.Add("Geladene Commits: $pulledCommits")
             $previewLines.Add($(if ($pulledCommitLog) { $pulledCommitLog } else { 'Commit-Liste konnte nicht gelesen werden.' }))
         } else {
-            $previewLines.Add('')
+            $previewLines.Add(' ')
             $previewLines.Add('Status: Bereits aktuell.')
         }
 
