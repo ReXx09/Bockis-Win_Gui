@@ -45,6 +45,7 @@ const dashboardDependencyMsg = document.getElementById('dashboardDependencyMsg')
 const toolList = document.getElementById('toolList');
 const toolMsg = document.getElementById('toolMsg');
 const reloadLaunchersBtn = document.getElementById('reloadLaunchersBtn');
+const toggleLauncherEditModeBtn = document.getElementById('toggleLauncherEditModeBtn');
 const launcherCategoryBar = document.getElementById('launcherCategoryBar');
 const launcherList = document.getElementById('launcherList');
 const launcherMsg = document.getElementById('launcherMsg');
@@ -210,6 +211,7 @@ let customLaunchers = [];
 let editingLauncherId = '';
 let launcherApiAvailable = true;
 let selectedLauncherCategory = 'Alle';
+let launcherEditMode = false;
 const masonryFrames = new Map();
 const HISTORY_LEN = 45;
 const monitorHistory = {
@@ -984,6 +986,43 @@ function renderLauncherCategoryBar() {
   });
 }
 
+function updateLauncherEditModeButton() {
+  if (!toggleLauncherEditModeBtn) return;
+  toggleLauncherEditModeBtn.textContent = launcherEditMode ? 'Bearbeitung beenden' : 'Bearbeitungsmodus';
+  toggleLauncherEditModeBtn.classList.toggle('warn', launcherEditMode);
+}
+
+function setLauncherEditMode(enabled) {
+  launcherEditMode = !!enabled;
+  updateLauncherEditModeButton();
+  if (launcherList) launcherList.classList.toggle('edit-mode', launcherEditMode);
+  renderLaunchers();
+}
+
+async function deleteLauncher(launcherId) {
+  const launcher = customLaunchers.find((item) => item.id === launcherId);
+  if (!launcherId || !confirm(`Launcher '${launcher?.title || launcherId}' entfernen?`)) return;
+
+  if (!launcherApiAvailable) {
+    customLaunchers = customLaunchers.filter((item) => item.id !== launcherId);
+    saveLauncherFallback(customLaunchers);
+    if (launcherMsg) launcherMsg.textContent = 'Launcher lokal entfernt. Backend-API nicht verfuegbar.';
+    if (editingLauncherId === launcherId) resetLauncherForm();
+    renderLaunchers();
+    return;
+  }
+
+  try {
+    const result = await jsonFetch(`/api/launchers/${encodeURIComponent(launcherId)}`, { method: 'DELETE' });
+    customLaunchers = Array.isArray(result.launchers) ? result.launchers : [];
+    if (launcherMsg) launcherMsg.textContent = result.message || 'Launcher entfernt.';
+    if (editingLauncherId === launcherId) resetLauncherForm();
+    renderLaunchers();
+  } catch (err) {
+    if (launcherMsg) launcherMsg.textContent = `Loeschen fehlgeschlagen: ${err.message}`;
+  }
+}
+
 function getLauncherIconMarkup(iconName) {
   return getIconMarkup(iconName || 'grid');
 }
@@ -1113,6 +1152,8 @@ function renderLaunchers() {
   if (!launcherList) return;
   populateLauncherCategoryHints();
   renderLauncherCategoryBar();
+  launcherList.classList.toggle('launcher-list', true);
+  launcherList.classList.toggle('edit-mode', launcherEditMode);
 
   if (!customLaunchers.length) {
     launcherList.innerHTML = '<div class="audio-empty">Noch keine Schnellstart-Kacheln angelegt.</div>';
@@ -1145,15 +1186,12 @@ function renderLaunchers() {
         <div class="launcher-section-title">${escapeHtml(categoryName)}</div>
         <div class="launcher-grid">
           ${group.map((launcher) => `
-            <div class="launcher-card">
-              <button class="launcher-run" type="button" data-launcher-run="${escapeHtml(launcher.id)}">
+            <div class="launcher-card${launcherEditMode ? ' is-editing' : ''}">
+              <button class="launcher-delete" type="button" data-launcher-delete="${escapeHtml(launcher.id)}" aria-label="Launcher entfernen">x</button>
+              <button class="launcher-run${launcherEditMode ? ' is-editable' : ''}" type="button" data-launcher-run="${escapeHtml(launcher.id)}">
                 <span class="launcher-icon-badge">${getLauncherIconMarkup(launcher.icon || 'grid')}</span>
                 <strong>${escapeHtml(launcher.title)}</strong>
               </button>
-              <div class="launcher-actions">
-                <button class="btn" type="button" data-launcher-edit="${escapeHtml(launcher.id)}">Bearbeiten</button>
-                <button class="btn warn" type="button" data-launcher-delete="${escapeHtml(launcher.id)}">Entfernen</button>
-              </div>
             </div>
           `).join('')}
         </div>
@@ -1162,38 +1200,21 @@ function renderLaunchers() {
   }).join('');
 
   launcherList.querySelectorAll('[data-launcher-run]').forEach((btn) => {
-    btn.addEventListener('click', () => runLauncher(btn.dataset.launcherRun || ''));
-  });
-  launcherList.querySelectorAll('[data-launcher-edit]').forEach((btn) => {
     btn.addEventListener('click', () => {
-      const launcher = customLaunchers.find((item) => item.id === (btn.dataset.launcherEdit || ''));
-      fillLauncherForm(launcher);
+      const launcherId = btn.dataset.launcherRun || '';
+      if (launcherEditMode) {
+        const launcher = customLaunchers.find((item) => item.id === launcherId);
+        fillLauncherForm(launcher);
+        if (launcherMsg && launcher?.title) launcherMsg.textContent = `${launcher.title} zur Bearbeitung geladen.`;
+        return;
+      }
+      runLauncher(launcherId);
     });
   });
   launcherList.querySelectorAll('[data-launcher-delete]').forEach((btn) => {
-    btn.addEventListener('click', async () => {
-      const launcherId = btn.dataset.launcherDelete || '';
-      const launcher = customLaunchers.find((item) => item.id === launcherId);
-      if (!launcherId || !confirm(`Launcher '${launcher?.title || launcherId}' entfernen?`)) return;
-
-      if (!launcherApiAvailable) {
-        customLaunchers = customLaunchers.filter((item) => item.id !== launcherId);
-        saveLauncherFallback(customLaunchers);
-        if (launcherMsg) launcherMsg.textContent = 'Launcher lokal entfernt. Backend-API nicht verfuegbar.';
-        if (editingLauncherId === launcherId) resetLauncherForm();
-        renderLaunchers();
-        return;
-      }
-
-      try {
-        const result = await jsonFetch(`/api/launchers/${encodeURIComponent(launcherId)}`, { method: 'DELETE' });
-        customLaunchers = Array.isArray(result.launchers) ? result.launchers : [];
-        if (launcherMsg) launcherMsg.textContent = result.message || 'Launcher entfernt.';
-        if (editingLauncherId === launcherId) resetLauncherForm();
-        renderLaunchers();
-      } catch (err) {
-        if (launcherMsg) launcherMsg.textContent = `Loeschen fehlgeschlagen: ${err.message}`;
-      }
+    btn.addEventListener('click', async (event) => {
+      event.stopPropagation();
+      await deleteLauncher(btn.dataset.launcherDelete || '');
     });
   });
 
@@ -1969,6 +1990,7 @@ async function init() {
   if (reloadDependenciesBtn) reloadDependenciesBtn.onclick = loadDependencyStatus;
   if (reloadDashboardDependenciesBtn) reloadDashboardDependenciesBtn.onclick = loadDashboardDependencyStatus;
   if (reloadLaunchersBtn) reloadLaunchersBtn.onclick = loadLaunchers;
+  if (toggleLauncherEditModeBtn) toggleLauncherEditModeBtn.onclick = () => setLauncherEditMode(!launcherEditMode);
   if (launcherKind) launcherKind.onchange = syncLauncherForm;
   if (launcherCategory) launcherCategory.oninput = () => populateLauncherCategoryHints();
   if (saveLauncherBtn) saveLauncherBtn.onclick = saveLauncher;
@@ -2013,6 +2035,7 @@ async function init() {
   wireAudioControls();
   wireUserAudioRoutingControls();
   wireThemeControls();
+  updateLauncherEditModeButton();
   resetLauncherForm();
 
   try {

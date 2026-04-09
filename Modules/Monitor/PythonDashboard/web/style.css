@@ -797,6 +797,12 @@ input, select {
   background: #0b1628;
   display: grid;
   gap: 12px;
+  position: relative;
+}
+
+.launcher-card.is-editing {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent);
 }
 
 .launcher-run {
@@ -809,6 +815,10 @@ input, select {
   display: grid;
   justify-items: center;
   gap: 10px;
+}
+
+.launcher-run.is-editable {
+  cursor: pointer;
 }
 
 .launcher-run strong {
@@ -837,11 +847,37 @@ input, select {
   word-break: break-word;
 }
 
-.launcher-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+.launcher-delete {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, #ff876d 35%, var(--line));
+  background: color-mix(in srgb, #3a1a12 88%, transparent);
+  color: #ffe0d8;
+  display: none;
+  align-items: center;
   justify-content: center;
+  font-size: 0.85rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.launcher-list.edit-mode .launcher-delete {
+  display: inline-flex;
+}
+
+.launcher-list.edit-mode .launcher-run strong::after {
+  content: ' bearbeiten';
+  display: block;
+  margin-top: 4px;
+  font-size: 0.74rem;
+  font-weight: 500;
+  color: var(--muted);
 }
 
 .launcher-form-grid {
