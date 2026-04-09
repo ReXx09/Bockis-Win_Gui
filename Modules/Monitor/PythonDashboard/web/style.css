@@ -243,6 +243,11 @@ body {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 8px;
+  cursor: grab;
+}
+
+.card-head:active {
+  cursor: grabbing;
 }
 
 .card-head-actions {

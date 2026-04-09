@@ -244,6 +244,7 @@ let launcherApiAvailable = true;
 let selectedLauncherCategory = 'Alle';
 let launcherEditMode = false;
 let launcherStylePresets = [];
+let dragArmedCard = null;
 const masonryFrames = new Map();
 const HISTORY_LEN = 45;
 const monitorHistory = {
@@ -637,7 +638,35 @@ function renderWidgetMenu(page = getCurrentPage()) {
 
 function wireDragDrop(layoutEl = dashboardGrid, storageKey = LAYOUT_KEY, onAfterDrop = null) {
   getCards(layoutEl).forEach((card) => {
-    card.addEventListener('dragstart', () => {
+    const cardHead = card.querySelector('.card-head');
+
+    const armDrag = (event) => {
+      const target = event?.target;
+      if (!target) return;
+      if (target.closest('.size-controls')) return;
+      if (target.closest('button, input, select, textarea, a')) return;
+      dragArmedCard = card;
+      card.draggable = true;
+    };
+
+    const disarmDrag = () => {
+      if (dragArmedCard === card) dragArmedCard = null;
+      if (!card.classList.contains('dragging')) card.draggable = false;
+    };
+
+    card.draggable = false;
+    if (cardHead) {
+      cardHead.addEventListener('mousedown', armDrag);
+      cardHead.addEventListener('mouseup', disarmDrag);
+      cardHead.addEventListener('mouseleave', disarmDrag);
+    }
+
+    card.addEventListener('dragstart', (e) => {
+      if (dragArmedCard !== card) {
+        e.preventDefault();
+        card.draggable = false;
+        return;
+      }
       draggedCard = card;
       card.classList.add('dragging');
     });
@@ -645,6 +674,7 @@ function wireDragDrop(layoutEl = dashboardGrid, storageKey = LAYOUT_KEY, onAfter
       card.classList.remove('dragging');
       getCards(layoutEl).forEach((c) => c.classList.remove('drag-over'));
       draggedCard = null;
+      disarmDrag();
       scheduleMasonryLayout(layoutEl);
       saveLayout(layoutEl, storageKey, false);
       if (typeof onAfterDrop === 'function') onAfterDrop();
