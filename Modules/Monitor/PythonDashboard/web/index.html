@@ -126,11 +126,11 @@
       </section>
 
       <section class="page" data-page="audio">
-        <div class="audio-page-layout">
+        <section class="layout" id="audioGrid">
 
           <!-- Kachel: Lautstaerke & Mediensteuerung -->
-          <section class="card audio-vol-card" data-audio-tile="vol">
-            <div class="card-head"><h2>Lautstaerke</h2></div>
+          <section class="card audio-vol-card" data-widget="audio-volume" data-default-size="1-3" draggable="true">
+            <div class="card-head"><h2>Lautstaerke</h2><span class="drag-handle">⋮⋮</span></div>
             <div class="audio-main">
               <div class="audio-row">
                 <strong id="audioLevel">-</strong>
@@ -153,22 +153,22 @@
           </section>
 
           <!-- Kachel: Audiogeraete -->
-          <section class="card audio-devices-card" data-audio-tile="devices">
-            <div class="card-head"><h2>Audiogeraete</h2></div>
+          <section class="card audio-devices-card" data-widget="audio-devices" data-default-size="2-3" draggable="true">
+            <div class="card-head"><h2>Audiogeraete</h2><span class="drag-handle">⋮⋮</span></div>
             <p id="audioDeviceInfo" class="muted">Lade Geraete...</p>
             <div id="audioDevices" class="audio-device-list"></div>
           </section>
 
           <!-- Kachel: Programm-Audio -->
-          <section class="card audio-sessions-card" data-audio-tile="sess">
-            <div class="card-head"><h2>Programm-Audio</h2></div>
+          <section class="card audio-sessions-card" data-widget="audio-sessions" data-default-size="full" draggable="true">
+            <div class="card-head"><h2>Programm-Audio</h2><span class="drag-handle">⋮⋮</span></div>
             <p class="muted">Lautstaerke und Mute pro laufendem Programm.</p>
             <div id="audioSessions" class="audio-session-list"></div>
           </section>
 
           <!-- Kachel: Benutzer-Programmzuordnung -->
-          <section class="card audio-routing-card" data-audio-tile="rout">
-            <div class="card-head"><h2>Benutzer-Programmzuordnung</h2></div>
+          <section class="card audio-routing-card" data-widget="audio-routing" data-default-size="full" draggable="true">
+            <div class="card-head"><h2>Benutzer-Programmzuordnung</h2><span class="drag-handle">⋮⋮</span></div>
             <p class="muted">Bevorzugtes Geraet wird hier als Merkliste gespeichert. Die echte Zuweisung erfolgt in Windows.</p>
             <div class="audio-user-routing-row">
               <select id="openProgramSelect">
@@ -185,7 +185,7 @@
             <div id="userProgramRoutes" class="audio-user-route-list"></div>
           </section>
 
-        </div>
+        </section>
       </section>
 
       <section class="page" data-page="logs">

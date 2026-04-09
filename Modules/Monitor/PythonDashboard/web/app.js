@@ -55,10 +55,12 @@ const userProgramRoutes = document.getElementById('userProgramRoutes');
 const userRoutingHint = document.getElementById('userRoutingHint');
 
 const dashboardGrid = document.getElementById('dashboardGrid');
+const audioGrid = document.getElementById('audioGrid');
 const widgetMenu = document.getElementById('widgetMenu');
 const layoutMsg = document.getElementById('layoutMsg');
 
 const LAYOUT_KEY = 'bockis_dashboard_layout_v4';
+const AUDIO_LAYOUT_KEY = 'bockis_audio_layout_v1';
 const PAGE_KEY = 'bockis_dashboard_page_v1';
 const WIDGET_LABELS = {
   monitoring: 'Monitoring',
@@ -67,6 +69,10 @@ const WIDGET_LABELS = {
   disks: 'Festplatten',
   audio: 'Audio',
   processes: 'Prozesse',
+  'audio-volume': 'Lautstaerke',
+  'audio-devices': 'Audiogeraete',
+  'audio-sessions': 'Programm-Audio',
+  'audio-routing': 'Benutzer-Programmzuordnung',
 };
 const SIZE_PRESETS = ['1-3', '1-2', '2-3', 'full', 'min'];
 const THEME_KEY = 'bockis_theme_v1';
@@ -171,8 +177,9 @@ async function jsonFetch(url, opt = {}) {
   return res.json();
 }
 
-function getCards() {
-  return Array.from(dashboardGrid.querySelectorAll('.card[data-widget]'));
+function getCards(layoutEl = dashboardGrid) {
+  if (!layoutEl) return [];
+  return Array.from(layoutEl.querySelectorAll('.card[data-widget]'));
 }
 
 function formatUptime(s) {
@@ -186,27 +193,27 @@ function setOnline(ok) {
   statePill.classList.toggle('off', !ok);
 }
 
-function readLayout() {
+function readLayout(storageKey = LAYOUT_KEY) {
   try {
-    const raw = localStorage.getItem(LAYOUT_KEY);
+    const raw = localStorage.getItem(storageKey);
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
   }
 }
 
-function collectLayout() {
-  const order = getCards().map((card) => card.dataset.widget);
+function collectLayout(layoutEl = dashboardGrid) {
+  const order = getCards(layoutEl).map((card) => card.dataset.widget);
   const visible = {};
   const sizes = {};
-  getCards().forEach((card) => {
+  getCards(layoutEl).forEach((card) => {
     visible[card.dataset.widget] = card.style.display !== 'none';
     sizes[card.dataset.widget] = card.dataset.size || card.dataset.defaultSize || '1-3';
   });
   return { order, visible, sizes };
 }
 
-function setCardSize(card, size, save = true) {
+function setCardSize(card, size, save = true, layoutEl = dashboardGrid, storageKey = LAYOUT_KEY, messageEl = null) {
   const target = SIZE_PRESETS.includes(size) ? size : (card.dataset.defaultSize || '1-3');
   SIZE_PRESETS.forEach((s) => card.classList.remove(`tile-size-${s}`));
   card.classList.add(`tile-size-${target}`);
@@ -216,32 +223,32 @@ function setCardSize(card, size, save = true) {
     btn.classList.toggle('active', btn.dataset.size === target);
   });
 
-  if (save) saveLayout(false);
+  if (save) saveLayout(layoutEl, storageKey, false, messageEl);
 }
 
-function saveLayout(notify = true) {
-  localStorage.setItem(LAYOUT_KEY, JSON.stringify(collectLayout()));
-  if (notify) {
-    layoutMsg.textContent = 'Layout gespeichert.';
+function saveLayout(layoutEl = dashboardGrid, storageKey = LAYOUT_KEY, notify = true, messageEl = layoutMsg) {
+  localStorage.setItem(storageKey, JSON.stringify(collectLayout(layoutEl)));
+  if (notify && messageEl) {
+    messageEl.textContent = 'Layout gespeichert.';
     setTimeout(() => {
-      if (layoutMsg.textContent === 'Layout gespeichert.') layoutMsg.textContent = '';
+      if (messageEl.textContent === 'Layout gespeichert.') messageEl.textContent = '';
     }, 1800);
   }
 }
 
-function applyLayout(layout) {
+function applyLayout(layout, layoutEl = dashboardGrid) {
   if (!layout) return;
   const map = {};
-  getCards().forEach((card) => {
+  getCards(layoutEl).forEach((card) => {
     map[card.dataset.widget] = card;
   });
   if (Array.isArray(layout.order)) {
     layout.order.forEach((w) => {
-      if (map[w]) dashboardGrid.appendChild(map[w]);
+      if (map[w]) layoutEl.appendChild(map[w]);
     });
   }
   if (layout.visible) {
-    getCards().forEach((card) => {
+    getCards(layoutEl).forEach((card) => {
       const w = card.dataset.widget;
       if (Object.prototype.hasOwnProperty.call(layout.visible, w)) {
         card.style.display = layout.visible[w] ? '' : 'none';
@@ -249,15 +256,15 @@ function applyLayout(layout) {
     });
   }
 
-  getCards().forEach((card) => {
+  getCards(layoutEl).forEach((card) => {
     const w = card.dataset.widget;
     const size = layout.sizes && layout.sizes[w] ? layout.sizes[w] : (card.dataset.defaultSize || '1-3');
-    setCardSize(card, size, false);
+    setCardSize(card, size, false, layoutEl);
   });
 }
 
-function wireSizeControls() {
-  getCards().forEach((card) => {
+function wireSizeControls(layoutEl = dashboardGrid, storageKey = LAYOUT_KEY, messageEl = null) {
+  getCards(layoutEl).forEach((card) => {
     const head = card.querySelector('.card-head');
     if (!head || head.querySelector('.size-controls')) return;
 
@@ -286,7 +293,7 @@ function wireSizeControls() {
       btn.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        setCardSize(card, spec.key, true);
+        setCardSize(card, spec.key, true, layoutEl, storageKey, messageEl);
       });
       controls.appendChild(btn);
     });
@@ -295,69 +302,13 @@ function wireSizeControls() {
     if (drag) actions.appendChild(drag);
     head.appendChild(actions);
 
-    setCardSize(card, card.dataset.size || card.dataset.defaultSize || '1-3', false);
+    setCardSize(card, card.dataset.size || card.dataset.defaultSize || '1-3', false, layoutEl, storageKey, messageEl);
   });
-}
-
-const AUDIO_TILE_SIZES_KEY = 'bockis_audio_tile_sizes';
-
-function wireAudioTileSizeControls() {
-  const saved = JSON.parse(localStorage.getItem(AUDIO_TILE_SIZES_KEY) || '{}');
-  const specs = [
-    { key: 'auto', label: 'auto' },
-    { key: 'full', label: 'voll' },
-    { key: 'min',  label: 'min'  },
-  ];
-
-  document.querySelectorAll('.audio-page-layout .card[data-audio-tile]').forEach((card) => {
-    const tileKey = card.dataset.audioTile;
-    const head = card.querySelector('.card-head');
-    if (!head || head.querySelector('.size-controls')) return;
-
-    const actions = document.createElement('div');
-    actions.className = 'card-head-actions';
-    const controls = document.createElement('div');
-    controls.className = 'size-controls';
-
-    specs.forEach((spec) => {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'size-btn';
-      btn.textContent = spec.label;
-      btn.dataset.size = spec.key;
-      btn.title = spec.key === 'auto' ? 'Standardbreite' : spec.key === 'full' ? 'Volle Breite' : 'Minimieren';
-      btn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setAudioTileSize(card, tileKey, spec.key);
-      });
-      controls.appendChild(btn);
-    });
-
-    actions.appendChild(controls);
-    head.appendChild(actions);
-
-    const initial = saved[tileKey] || 'auto';
-    setAudioTileSize(card, tileKey, initial, false);
-  });
-}
-
-function setAudioTileSize(card, tileKey, size, persist = true) {
-  card.classList.toggle('audio-tile-full', size === 'full');
-  card.classList.toggle('audio-tile-min',  size === 'min');
-  card.querySelectorAll('.size-btn').forEach((btn) => {
-    btn.classList.toggle('active', btn.dataset.size === size);
-  });
-  if (persist) {
-    const saved = JSON.parse(localStorage.getItem(AUDIO_TILE_SIZES_KEY) || '{}');
-    saved[tileKey] = size;
-    localStorage.setItem(AUDIO_TILE_SIZES_KEY, JSON.stringify(saved));
-  }
 }
 
 function renderWidgetMenu() {
   widgetMenu.innerHTML = '';
-  getCards().forEach((card) => {
+  getCards(dashboardGrid).forEach((card) => {
     const w = card.dataset.widget;
     const item = document.createElement('label');
     item.className = 'menu-item';
@@ -366,24 +317,24 @@ function renderWidgetMenu() {
     cb.checked = card.style.display !== 'none';
     cb.addEventListener('change', () => {
       card.style.display = cb.checked ? '' : 'none';
-      saveLayout(false);
+      saveLayout(dashboardGrid, LAYOUT_KEY, false, layoutMsg);
     });
     widgetMenu.appendChild(item);
   });
 }
 
-function wireDragDrop() {
-  getCards().forEach((card) => {
+function wireDragDrop(layoutEl = dashboardGrid, storageKey = LAYOUT_KEY, onAfterDrop = null) {
+  getCards(layoutEl).forEach((card) => {
     card.addEventListener('dragstart', () => {
       draggedCard = card;
       card.classList.add('dragging');
     });
     card.addEventListener('dragend', () => {
       card.classList.remove('dragging');
-      getCards().forEach((c) => c.classList.remove('drag-over'));
+      getCards(layoutEl).forEach((c) => c.classList.remove('drag-over'));
       draggedCard = null;
-      saveLayout(false);
-      renderWidgetMenu();
+      saveLayout(layoutEl, storageKey, false);
+      if (typeof onAfterDrop === 'function') onAfterDrop();
     });
     card.addEventListener('dragover', (e) => {
       e.preventDefault();
@@ -395,7 +346,7 @@ function wireDragDrop() {
       e.preventDefault();
       card.classList.remove('drag-over');
       if (!draggedCard || draggedCard === card) return;
-      dashboardGrid.insertBefore(draggedCard, card);
+      layoutEl.insertBefore(draggedCard, card);
     });
   });
 }
@@ -418,8 +369,8 @@ function wirePageMenu() {
   showPage(start);
 }
 
-function resetLayout() {
-  localStorage.removeItem(LAYOUT_KEY);
+function resetLayout(storageKey = LAYOUT_KEY) {
+  localStorage.removeItem(storageKey);
   window.location.reload();
 }
 
@@ -1195,16 +1146,18 @@ async function init() {
   document.getElementById('gitPullBtn').onclick = pullGit;
   document.getElementById('reloadLogBtn').onclick = () => openLog(logSelect.value);
   document.getElementById('restartBtn').onclick = restartGui;
-  document.getElementById('saveLayoutBtn').onclick = () => saveLayout(true);
-  document.getElementById('resetLayoutBtn').onclick = resetLayout;
+  document.getElementById('saveLayoutBtn').onclick = () => saveLayout(dashboardGrid, LAYOUT_KEY, true, layoutMsg);
+  document.getElementById('resetLayoutBtn').onclick = () => resetLayout(LAYOUT_KEY);
   logSelect.onchange = () => openLog(logSelect.value);
 
   wirePageMenu();
-  wireSizeControls();
-  wireAudioTileSizeControls();
-  applyLayout(readLayout());
+  wireSizeControls(dashboardGrid, LAYOUT_KEY, layoutMsg);
+  wireSizeControls(audioGrid, AUDIO_LAYOUT_KEY);
+  applyLayout(readLayout(LAYOUT_KEY), dashboardGrid);
+  applyLayout(readLayout(AUDIO_LAYOUT_KEY), audioGrid);
   renderWidgetMenu();
-  wireDragDrop();
+  wireDragDrop(dashboardGrid, LAYOUT_KEY, renderWidgetMenu);
+  wireDragDrop(audioGrid, AUDIO_LAYOUT_KEY);
   wireAudioControls();
   wireUserAudioRoutingControls();
   wireThemeControls();
