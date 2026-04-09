@@ -664,6 +664,7 @@ def shutil_which(binary: str) -> str | None:
 
 
 TOOL_COMMANDS: dict[str, str] = {
+    # Existing tools
     "windows_update": "Start-Process 'ms-settings:windowsupdate'",
     "defender": "Start-Process 'windowsdefender:'",
     "services": "Start-Process 'services.msc'",
@@ -677,7 +678,60 @@ TOOL_COMMANDS: dict[str, str] = {
     "firewall_advanced": "Start-Process 'wf.msc'",
     "optional_features": "Start-Process 'optionalfeatures.exe'",
     "network_connections": "Start-Process 'ncpa.cpl'",
-    "advanced_system_settings": "Start-Process 'SystemPropertiesAdvanced.exe'",
+    "advanced_system_settings": "Start-Process 'SystemPropertiesAdvanced'",
+
+    # System
+    "god_mode": "Start-Process 'explorer.exe' -ArgumentList 'shell:::{ED7BA470-8E54-465E-825C-99712043E01C}'",
+    "system_configuration": "Start-Process 'msconfig'",
+    "performance_options": "Start-Process 'SystemPropertiesPerformance'",
+    "computer_management": "Start-Process 'compmgmt.msc'",
+    "registry_editor": "Start-Process 'regedit'",
+    "group_policy_editor": "Start-Process 'gpedit.msc'",
+    "local_security_policy": "Start-Process 'secpol.msc'",
+    "msinfo32": "Start-Process 'msinfo32'",
+    "directx_diagnostics": "Start-Process 'dxdiag'",
+    "system_properties": "Start-Process 'sysdm.cpl'",
+    "control_panel": "Start-Process 'control'",
+    "control_panel_all_tasks": "Start-Process 'explorer.exe' -ArgumentList 'shell:::{26EE0668-A00A-44D7-9371-BEB064C98683}'",
+    "programs_features": "Start-Process 'appwiz.cpl'",
+    "netplwiz": "Start-Process 'netplwiz'",
+
+    # Network
+    "network_diagnostics": "Start-Process 'msdt.exe' -ArgumentList '/id','NetworkDiagnosticsNetworkAdapter'",
+    "hosts_file_editor": "Start-Process 'notepad.exe' -ArgumentList \"$env:SystemRoot\\System32\\drivers\\etc\\hosts\"",
+    "telnet_client_enable": "pkgmgr /iu:\"TelnetClient\"",
+
+    # Diagnostics
+    "performance_monitor": "Start-Process 'perfmon.exe'",
+    "memory_diagnostics": "Start-Process 'mdsched.exe'",
+    "chkdsk_c": "Start-Process 'powershell.exe' -ArgumentList '-NoExit','-Command','chkdsk /f /r C:'",
+    "sfc_scannow": "Start-Process 'powershell.exe' -ArgumentList '-NoExit','-Command','sfc /scannow'",
+    "dism_restorehealth": "Start-Process 'powershell.exe' -ArgumentList '-NoExit','-Command','DISM /Online /Cleanup-Image /RestoreHealth'",
+    "steps_recorder": "Start-Process 'psr.exe'",
+    "windows_error_reporting": "Start-Process 'wer'",
+
+    # Disk
+    "disk_management": "Start-Process 'diskmgmt.msc'",
+    "defrag": "Start-Process 'dfrgui'",
+    "disk_cleanup_advanced": "Start-Process 'cleanmgr.exe' -ArgumentList '/sageset:1'",
+    "diskpart": "Start-Process 'powershell.exe' -ArgumentList '-NoExit','-Command','diskpart'",
+
+    # Privacy / Security
+    "credential_manager": "Start-Process 'control.exe' -ArgumentList '/name','Microsoft.CredentialManager'",
+    "bitlocker_management": "Start-Process 'control.exe' -ArgumentList '/name','Microsoft.BitLockerDriveEncryption'",
+    "certmgr_user": "Start-Process 'certmgr.msc'",
+    "certmgr_machine": "Start-Process 'certlm.msc'",
+    "local_users_groups": "Start-Process 'lusrmgr.msc'",
+
+    # Developer / Power user
+    "hyperv_manager": "Start-Process 'virtmgmt.msc'",
+    "print_management": "Start-Process 'printmanagement.msc'",
+    "odbc_data_sources": "Start-Process 'odbcad32'",
+    "component_services": "Start-Process 'dcomcnfg'",
+    "ole_com_viewer": "Start-Process 'oleview'",
+    "windows_sandbox": "Start-Process 'WindowsSandbox'",
+    "quick_assist": "Start-Process 'quickassist'",
+    "intl_settings": "Start-Process 'intl.cpl'",
 }
 
 LAUNCHER_KINDS = {"tool", "app", "url"}
@@ -1440,20 +1494,74 @@ def api_git_pull(payload: dict | None = None) -> dict:
 @app.get("/api/tools")
 def api_tools() -> list[dict]:
     return [
-        {"id": "windows_update",           "label": "Windows Update",           "desc": "Windows-Updates suchen, herunterladen und installieren.", "cat": "sys"},
-        {"id": "defender",                 "label": "Windows Defender",          "desc": "Virenschutz-Status pruefen und Scans starten.", "cat": "priv"},
-        {"id": "services",                 "label": "Services",                  "desc": "Systemdienste anzeigen, starten, stoppen oder konfigurieren.", "cat": "sys"},
-        {"id": "event_viewer",             "label": "Event Viewer",              "desc": "Windows-Ereignisprotokoll – Fehler und Warnungen einsehen.", "cat": "diag"},
-        {"id": "task_manager",             "label": "Task Manager",              "desc": "Laufende Prozesse, CPU- und RAM-Auslastung ueberwachen.", "cat": "sys"},
-        {"id": "disk_cleanup",             "label": "Disk Cleanup",              "desc": "Temporaere Dateien und Systemdateien bereinigen.", "cat": "disk"},
-        {"id": "reliability_monitor",      "label": "Reliability Monitor",       "desc": "Stabilitaetsverlauf und Absturzhistorie chronologisch anzeigen.", "cat": "diag"},
-        {"id": "resource_monitor",         "label": "Resource Monitor",          "desc": "Echtzeit-Uebersicht ueber CPU, RAM, Datentraeger und Netzwerk pro Prozess.", "cat": "net"},
-        {"id": "device_manager",           "label": "Device Manager",            "desc": "Hardware-Treiber pruefen, aktualisieren oder deaktivieren.", "cat": "sys"},
-        {"id": "task_scheduler",           "label": "Task Scheduler",            "desc": "Geplante Aufgaben erstellen, bearbeiten und ausfuehren.", "cat": "sys"},
-        {"id": "firewall_advanced",        "label": "Firewall (Advanced)",       "desc": "Eingehende und ausgehende Firewall-Regeln granular verwalten.", "cat": "net"},
-        {"id": "optional_features",        "label": "Optional Features",         "desc": "Windows-Features wie Hyper-V, WSL oder .NET aktivieren/deaktivieren.", "cat": "dev"},
-        {"id": "network_connections",      "label": "Network Connections",       "desc": "Netzwerkadapter direkt verwalten, IP-Konfiguration anpassen.", "cat": "net"},
+        # System
+        {"id": "god_mode",                 "label": "God Mode",                 "desc": "Alle Systemaufgaben in einem zentralen Uebersichtsordner.", "cat": "sys"},
+        {"id": "system_configuration",     "label": "System Configuration",     "desc": "Autostart, Bootoptionen und Dienste konfigurieren.", "cat": "sys"},
         {"id": "advanced_system_settings", "label": "Advanced System Settings",  "desc": "Leistungseinstellungen, Umgebungsvariablen und Startoptionen.", "cat": "sys"},
+        {"id": "performance_options",      "label": "Performance Options",      "desc": "Visuelle Effekte und erweiterte Performance-Optionen anpassen.", "cat": "sys"},
+        {"id": "computer_management",      "label": "Computer Management",      "desc": "Ereignisse, Dienste, Datentraeger und Geraete zentral verwalten.", "cat": "sys"},
+        {"id": "services",                 "label": "Services",                  "desc": "Systemdienste anzeigen, starten, stoppen oder konfigurieren.", "cat": "sys"},
+        {"id": "task_scheduler",           "label": "Task Scheduler",            "desc": "Geplante Aufgaben erstellen, bearbeiten und ausfuehren.", "cat": "sys"},
+        {"id": "registry_editor",          "label": "Registry Editor",           "desc": "Windows-Registry direkt bearbeiten.", "cat": "sys"},
+        {"id": "group_policy_editor",      "label": "Group Policy Editor",       "desc": "Lokale Gruppenrichtlinien auf Pro/Enterprise anpassen.", "cat": "sys"},
+        {"id": "local_security_policy",    "label": "Local Security Policy",     "desc": "Sicherheits- und Kennwortrichtlinien konfigurieren.", "cat": "sys"},
+        {"id": "msinfo32",                 "label": "MSInfo32",                  "desc": "Umfassende Systeminformationen anzeigen.", "cat": "sys"},
+        {"id": "directx_diagnostics",      "label": "DirectX Diagnostics",       "desc": "DirectX-, Grafik- und Audiodiagnose anzeigen.", "cat": "sys"},
+        {"id": "system_properties",        "label": "System Properties",         "desc": "Computername, Domane, Remote-Desktop und Systemeinstellungen.", "cat": "sys"},
+        {"id": "control_panel",            "label": "Control Panel",             "desc": "Klassische Systemsteuerung oeffnen.", "cat": "sys"},
+        {"id": "control_panel_all_tasks",  "label": "Control Panel (All Tasks)", "desc": "Vollstaendige Aufgabenansicht der klassischen Systemsteuerung.", "cat": "sys"},
+        {"id": "programs_features",        "label": "Programs and Features",     "desc": "Programme deinstallieren und Windows-Features verwalten.", "cat": "sys"},
+        {"id": "netplwiz",                 "label": "Netplwiz",                  "desc": "Erweiterte Benutzerkonten- und Login-Einstellungen.", "cat": "sys"},
+        {"id": "task_manager",             "label": "Task Manager",              "desc": "Laufende Prozesse, CPU- und RAM-Auslastung ueberwachen.", "cat": "sys"},
+        {"id": "device_manager",           "label": "Device Manager",            "desc": "Hardware-Treiber pruefen, aktualisieren oder deaktivieren.", "cat": "sys"},
+
+        # Network
+        {"id": "network_connections",      "label": "Network Connections",       "desc": "Netzwerkadapter direkt verwalten, IP-Konfiguration anpassen.", "cat": "net"},
+        {"id": "firewall_advanced",        "label": "Firewall (Advanced)",       "desc": "Eingehende und ausgehende Firewall-Regeln granular verwalten.", "cat": "net"},
+        {"id": "resource_monitor",         "label": "Resource Monitor",          "desc": "Echtzeit-Uebersicht ueber CPU, RAM, Datentraeger und Netzwerk pro Prozess.", "cat": "net"},
+        {"id": "network_diagnostics",      "label": "Network Diagnostics",       "desc": "Assistent zur Fehlersuche bei Netzwerkadapter-Problemen.", "cat": "net"},
+        {"id": "hosts_file_editor",        "label": "Hosts File Editor",         "desc": "Hosts-Datei direkt im Editor oeffnen.", "cat": "net"},
+        {"id": "telnet_client_enable",     "label": "Enable Telnet Client",      "desc": "Telnet-Client Feature per Paketmanager aktivieren.", "cat": "net"},
+
+        # Diagnostics
+        {"id": "event_viewer",             "label": "Event Viewer",              "desc": "Windows-Ereignisprotokoll mit Fehlern und Warnungen einsehen.", "cat": "diag"},
+        {"id": "reliability_monitor",      "label": "Reliability Monitor",       "desc": "Stabilitaetsverlauf und Absturzhistorie chronologisch anzeigen.", "cat": "diag"},
+        {"id": "performance_monitor",      "label": "Performance Monitor",       "desc": "Leistungsindikatoren in Echtzeit und historisch analysieren.", "cat": "diag"},
+        {"id": "memory_diagnostics",       "label": "Memory Diagnostics",        "desc": "RAM-Test fuer den naechsten Neustart planen.", "cat": "diag"},
+        {"id": "chkdsk_c",                 "label": "CHKDSK (C:)",               "desc": "Dateisystem und Sektoren der Systempartition pruefen/reparieren.", "cat": "diag"},
+        {"id": "sfc_scannow",              "label": "SFC /scannow",              "desc": "Systemdateien auf Integritaet pruefen und reparieren.", "cat": "diag"},
+        {"id": "dism_restorehealth",       "label": "DISM RestoreHealth",        "desc": "Windows-Image-Komponentenstore reparieren.", "cat": "diag"},
+        {"id": "steps_recorder",           "label": "Steps Recorder",            "desc": "Schrittweise Problemaufzeichnung mit Screenshots.", "cat": "diag"},
+        {"id": "windows_error_reporting",  "label": "Windows Error Reporting",   "desc": "Gespeicherte Windows-Fehlerberichte anzeigen.", "cat": "diag"},
+
+        # Disk
+        {"id": "disk_management",          "label": "Disk Management",           "desc": "Partitionen, Laufwerksbuchstaben und Volumes verwalten.", "cat": "disk"},
+        {"id": "defrag",                   "label": "Defragment and Optimize",   "desc": "Datentraegeroptimierung und SSD-TRIM steuern.", "cat": "disk"},
+        {"id": "disk_cleanup",             "label": "Disk Cleanup",              "desc": "Temporaere Dateien und Systemdateien bereinigen.", "cat": "disk"},
+        {"id": "disk_cleanup_advanced",    "label": "Disk Cleanup (Advanced)",   "desc": "Erweiterte Bereinigungsoptionen via sageset starten.", "cat": "disk"},
+        {"id": "diskpart",                 "label": "DiskPart",                  "desc": "Kommandozeilenwerkzeug fuer Datentraeger und Partitionen.", "cat": "disk"},
+
+        # Security / Privacy
+        {"id": "defender",                 "label": "Windows Defender",          "desc": "Virenschutz-Status pruefen und Scans starten.", "cat": "priv"},
+        {"id": "credential_manager",       "label": "Credential Manager",        "desc": "Gespeicherte Windows- und Web-Anmeldedaten verwalten.", "cat": "priv"},
+        {"id": "bitlocker_management",     "label": "BitLocker Management",      "desc": "BitLocker-Laufwerksverschluesselung verwalten.", "cat": "priv"},
+        {"id": "certmgr_user",             "label": "Certificates (User)",       "desc": "Benutzerzertifikate und vertrauenswuerdige CAs verwalten.", "cat": "priv"},
+        {"id": "certmgr_machine",          "label": "Certificates (Machine)",    "desc": "Maschinenweite Zertifikate verwalten.", "cat": "priv"},
+        {"id": "local_users_groups",       "label": "Local Users and Groups",    "desc": "Lokale Benutzer und Gruppen konfigurieren.", "cat": "priv"},
+
+        # Developer / Power user
+        {"id": "optional_features",        "label": "Optional Features",         "desc": "Windows-Features wie Hyper-V, WSL oder .NET aktivieren/deaktivieren.", "cat": "dev"},
+        {"id": "hyperv_manager",           "label": "Hyper-V Manager",           "desc": "Virtuelle Maschinen in Hyper-V verwalten.", "cat": "dev"},
+        {"id": "print_management",         "label": "Print Management",          "desc": "Drucker, Treiber und Druckserver zentral verwalten.", "cat": "dev"},
+        {"id": "odbc_data_sources",        "label": "ODBC Data Sources",         "desc": "ODBC-Datenquellen (32/64-Bit) konfigurieren.", "cat": "dev"},
+        {"id": "component_services",       "label": "Component Services",        "desc": "COM/DCOM und Komponentendienste konfigurieren.", "cat": "dev"},
+        {"id": "ole_com_viewer",           "label": "OLE/COM Object Viewer",     "desc": "Registrierte COM-Objekte und Typbibliotheken anzeigen.", "cat": "dev"},
+        {"id": "windows_sandbox",          "label": "Windows Sandbox",           "desc": "Isolierte Wegwerf-Umgebung zum sicheren Testen starten.", "cat": "dev"},
+        {"id": "quick_assist",             "label": "Quick Assist",              "desc": "Windows-Remoteunterstuetzung ohne Drittanbieter.", "cat": "dev"},
+        {"id": "intl_settings",            "label": "Region and Keyboard",       "desc": "Region, Sprache und Tastaturlayout klassisch konfigurieren.", "cat": "dev"},
+
+        # Existing general entry
+        {"id": "windows_update",           "label": "Windows Update",           "desc": "Windows-Updates suchen, herunterladen und installieren.", "cat": "sys"},
     ]
 
 
