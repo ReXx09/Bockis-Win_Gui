@@ -1418,7 +1418,7 @@ function Find-PythonRuntime {
         MinVersion   = "3.10"
     }
 
-    $candidates = @()
+    $candidates = New-Object System.Collections.ArrayList
     $seen = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
     $addCandidate = {
         param(
@@ -1430,7 +1430,7 @@ function Find-PythonRuntime {
         $prefixKey = if ($Prefix -and $Prefix.Count -gt 0) { ($Prefix -join ' ') } else { '' }
         $key = "$Cmd|$prefixKey"
         if ($seen.Add($key)) {
-            $candidates += @{ Cmd = $Cmd; Prefix = @($Prefix) }
+            [void]$candidates.Add(@{ Cmd = $Cmd; Prefix = @($Prefix) })
         }
     }
 

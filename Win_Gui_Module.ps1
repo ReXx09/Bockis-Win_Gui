@@ -962,7 +962,7 @@ function Start-PythonDashboard {
 
     # Interpretersuche: py-Launcher, PATH-Python und bekannte Installationspfade.
     # Der Windows Store Alias (WindowsApps\python.exe) wird explizit aussortiert.
-    $candidates = @()
+    $candidates = New-Object System.Collections.ArrayList
     $seenCandidates = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
     $addCandidate = {
         param(
@@ -974,7 +974,7 @@ function Start-PythonDashboard {
         $prefixKey = if ($Prefix -and $Prefix.Count -gt 0) { ($Prefix -join ' ') } else { '' }
         $key = "$Cmd|$prefixKey"
         if ($seenCandidates.Add($key)) {
-            $candidates += @{ Cmd = $Cmd; Prefix = @($Prefix) }
+            [void]$candidates.Add(@{ Cmd = $Cmd; Prefix = @($Prefix) })
         }
     }
 
