@@ -672,7 +672,7 @@ TOOL_COMMANDS: dict[str, str] = {
     "task_manager": "Start-Process 'taskmgr.exe'",
     "disk_cleanup": "Start-Process 'cleanmgr.exe'",
     "reliability_monitor": "Start-Process 'perfmon.exe' -ArgumentList '/rel'",
-    "resource_monitor": "Start-Process 'resmon.exe'",
+    "resource_monitor": "Start-Process 'perfmon.exe' -ArgumentList '/res'",
     "device_manager": "Start-Process 'devmgmt.msc'",
     "task_scheduler": "Start-Process 'taskschd.msc'",
     "firewall_advanced": "Start-Process 'wf.msc'",
@@ -729,8 +729,8 @@ TOOL_COMMANDS: dict[str, str] = {
     "odbc_data_sources": "Start-Process 'odbcad32'",
     "component_services": "Start-Process 'dcomcnfg'",
     "ole_com_viewer": "Start-Process 'oleview'",
-    "windows_sandbox": "Start-Process 'WindowsSandbox'",
-    "quick_assist": "Start-Process 'quickassist'",
+    "windows_sandbox": "Start-Process 'WindowsSandbox.exe'",
+    "quick_assist": "Start-Process 'ms-quick-assist:'",
     "intl_settings": "Start-Process 'intl.cpl'",
 }
 
@@ -741,9 +741,9 @@ TOOL_TOGGLE_PROCESS_NAMES: dict[str, list[str]] = {
     "registry_editor": ["regedit.exe"],
     "msinfo32": ["msinfo32.exe"],
     "directx_diagnostics": ["dxdiag.exe"],
-    "resource_monitor": ["resmon.exe"],
-    "reliability_monitor": ["perfmon.exe"],
-    "performance_monitor": ["perfmon.exe"],
+    "resource_monitor": ["resmon.exe", "perfmon.exe", "mmc.exe"],
+    "reliability_monitor": ["perfmon.exe", "mmc.exe"],
+    "performance_monitor": ["perfmon.exe", "mmc.exe"],
     "memory_diagnostics": ["mdsched.exe"],
     "steps_recorder": ["psr.exe"],
     "disk_cleanup": ["cleanmgr.exe"],
@@ -761,10 +761,140 @@ TOOL_TOGGLE_CMDLINE_CONTAINS: dict[str, str] = {
     "services": "services.msc",
 }
 
+# Tools that are hosted in shared consoles can be tracked more reliably by title.
+TOOL_WINDOW_TITLE_PATTERNS: dict[str, str] = {
+    "resource_monitor": r"Ressourcenmonitor|Resource Monitor",
+    "performance_monitor": r"Leistungsueberwachung|Leistungsüberwachung|Performance Monitor",
+    "reliability_monitor": r"Zuverlaessigkeitsverlauf|Zuverlässigkeitsverlauf|Reliability Monitor|Reliability History",
+}
+
+TOOL_WINDOW_PROCESS_NAMES: dict[str, list[str]] = {
+    "resource_monitor": ["mmc", "perfmon", "resmon"],
+    "performance_monitor": ["mmc", "perfmon"],
+    "reliability_monitor": ["mmc", "perfmon", "explorer"],
+}
+
+TOOL_SHELL_WINDOW_PATTERNS: dict[str, str] = {
+    "reliability_monitor": r"Zuverlaessigkeitsueberwachung|Zuverlässigkeitsüberwachung|Reliability Monitor|Reliability History",
+}
+
 
 def _tool_process_names(tool_id: str) -> set[str]:
     names = TOOL_TOGGLE_PROCESS_NAMES.get(str(tool_id or "").strip(), [])
     return {str(name).strip().lower() for name in names if str(name).strip()}
+
+
+def _is_tool_available(tool_id: str) -> tuple[bool, str]:
+    tool_id = str(tool_id or "").strip()
+    windir = os.environ.get("WINDIR") or r"C:\Windows"
+
+    if tool_id == "windows_sandbox":
+        exe = Path(windir) / "System32" / "WindowsSandbox.exe"
+        if not exe.exists():
+            return False, "Windows Sandbox ist auf diesem System nicht verfuegbar."
+        return True, ""
+
+    if tool_id == "quick_assist":
+        exe = Path(windir) / "System32" / "quickassist.exe"
+        if exe.exists():
+            return True, ""
+        rc, out = _run_powershell("if (Test-Path 'Registry::HKEY_CLASSES_ROOT\\ms-quick-assist') { '1' } else { '0' }", timeout=5)
+        if rc == 0 and out.strip().endswith("1"):
+            return True, ""
+        return False, "Quick Assist ist auf diesem System nicht verfuegbar."
+
+    return True, ""
+
+
+def _get_tool_window_pids(tool_id: str) -> list[int]:
+    tool_id = str(tool_id or "").strip()
+    pattern = str(TOOL_WINDOW_TITLE_PATTERNS.get(tool_id) or "").strip()
+    if not pattern:
+        return []
+
+    proc_names = TOOL_WINDOW_PROCESS_NAMES.get(tool_id, [])
+    if not proc_names:
+        return []
+
+    names_literal = ",".join(["'" + str(name).replace("'", "''") + "'" for name in proc_names])
+    pattern_literal = pattern.replace("'", "''")
+    script = rf"""
+$pattern = '{pattern_literal}'
+$names = @({names_literal})
+Get-Process -Name $names -ErrorAction SilentlyContinue |
+  Where-Object {{ $_.MainWindowTitle -and $_.MainWindowTitle -match $pattern }} |
+  Select-Object -ExpandProperty Id
+"""
+    rc, out = _run_powershell(script, timeout=6)
+    if rc != 0 or not out.strip():
+        return []
+
+    pids: list[int] = []
+    for line in out.splitlines():
+        text = str(line or "").strip()
+        if text.isdigit():
+            pids.append(int(text))
+    return pids
+
+
+def _is_shell_window_open(tool_id: str) -> bool:
+    pattern = str(TOOL_SHELL_WINDOW_PATTERNS.get(str(tool_id or "").strip()) or "").strip()
+    if not pattern:
+        return False
+
+    pattern_literal = pattern.replace("'", "''")
+    script = rf"""
+$found = $false
+$pattern = '{pattern_literal}'
+try {{
+    $shell = New-Object -ComObject Shell.Application
+    foreach ($w in $shell.Windows()) {{
+        if ($null -eq $w) {{ continue }}
+        $name = ''
+        try {{ $name = [string]$w.LocationName }} catch {{}}
+        if ($name -match $pattern) {{
+            $found = $true
+            break
+        }}
+    }}
+}} catch {{}}
+if ($found) {{ '1' }} else {{ '0' }}
+"""
+    rc, out = _run_powershell(script, timeout=8)
+    return rc == 0 and out.strip().endswith("1")
+
+
+def _close_shell_windows(tool_id: str) -> tuple[bool, str]:
+    pattern = str(TOOL_SHELL_WINDOW_PATTERNS.get(str(tool_id or "").strip()) or "").strip()
+    if not pattern:
+        return True, ""
+
+    pattern_literal = pattern.replace("'", "''")
+    script = rf"""
+$closed = 0
+$pattern = '{pattern_literal}'
+try {{
+    $shell = New-Object -ComObject Shell.Application
+    foreach ($w in @($shell.Windows())) {{
+        if ($null -eq $w) {{ continue }}
+        $name = ''
+        try {{ $name = [string]$w.LocationName }} catch {{}}
+        if ($name -match $pattern) {{
+            try {{
+                $w.Quit()
+                $closed++
+            }} catch {{}}
+        }}
+    }}
+}} catch {{}}
+$closed
+"""
+    _run_powershell(script, timeout=8)
+    time.sleep(0.2)
+    still_open = _is_shell_window_open(tool_id)
+    if still_open:
+        return False, "Fenster konnte nicht vollstaendig geschlossen werden"
+    return True, "Fenster geschlossen"
 
 
 def _is_god_mode_window_open() -> bool:
@@ -820,9 +950,13 @@ $closed
 
 
 def _is_tool_toggle_supported(tool_id: str) -> bool:
-    if str(tool_id or "").strip() == "god_mode":
+    tool_id = str(tool_id or "").strip()
+    if tool_id == "god_mode":
         return True
-    return bool(_tool_process_names(tool_id))
+    available, _ = _is_tool_available(tool_id)
+    if not available:
+        return False
+    return bool(_tool_process_names(tool_id) or TOOL_WINDOW_TITLE_PATTERNS.get(tool_id))
 
 
 def _get_tool_processes(tool_id: str) -> list[psutil.Process]:
@@ -851,14 +985,31 @@ def _get_tool_processes(tool_id: str) -> list[psutil.Process]:
 
 
 def _is_tool_open(tool_id: str) -> bool:
-    if str(tool_id or "").strip() == "god_mode":
+    tool_id = str(tool_id or "").strip()
+    if tool_id == "god_mode":
         return _is_god_mode_window_open()
+    if _is_shell_window_open(tool_id):
+        return True
+    if _get_tool_window_pids(tool_id):
+        return True
     return len(_get_tool_processes(tool_id)) > 0
 
 
 def _close_tool(tool_id: str) -> tuple[bool, str]:
-    if str(tool_id or "").strip() == "god_mode":
+    tool_id = str(tool_id or "").strip()
+    if tool_id == "god_mode":
         return _close_god_mode_windows()
+
+    if _is_shell_window_open(tool_id):
+        return _close_shell_windows(tool_id)
+
+    window_pids = _get_tool_window_pids(tool_id)
+    if window_pids:
+        pid_values = ",".join([str(pid) for pid in window_pids])
+        _run_powershell(f"Stop-Process -Id @({pid_values}) -Force -ErrorAction SilentlyContinue", timeout=6)
+        time.sleep(0.2)
+        still_open = _is_tool_open(tool_id)
+        return (not still_open), ("Fenster geschlossen" if not still_open else "Fenster konnte nicht vollstaendig geschlossen werden")
 
     procs = _get_tool_processes(tool_id)
     if not procs:
@@ -1788,6 +1939,10 @@ def api_run_tool(tool_id: str) -> dict:
     if not cmd:
         return {"success": False, "message": "Unbekanntes Tool"}
 
+    available, unavailable_msg = _is_tool_available(tool_id)
+    if not available:
+        return {"success": False, "message": unavailable_msg, "output": ""}
+
     rc, out = _run_powershell(cmd, timeout=15)
     return {
         "success": rc == 0,
@@ -1823,6 +1978,17 @@ def api_toggle_tool(tool_id: str) -> dict:
     if not cmd:
         return {"success": False, "message": "Unbekanntes Tool", "action": "unknown", "is_open": False}
 
+    available, unavailable_msg = _is_tool_available(tool_id)
+    if not available:
+        return {
+            "success": False,
+            "message": unavailable_msg,
+            "output": "",
+            "action": "open-failed",
+            "is_open": False,
+            "close_supported": False,
+        }
+
     is_open = _is_tool_open(tool_id)
     close_supported = _is_tool_toggle_supported(tool_id)
 
@@ -1848,12 +2014,13 @@ def api_toggle_tool(tool_id: str) -> dict:
         }
 
     rc, out = _run_powershell(cmd, timeout=15)
+    time.sleep(0.35)
     now_open = _is_tool_open(tool_id)
     return {
-        "success": rc == 0,
-        "message": "Tool gestartet" if rc == 0 else "Tool konnte nicht gestartet werden",
+        "success": rc == 0 and (now_open or not close_supported),
+        "message": "Tool gestartet" if (rc == 0 and (now_open or not close_supported)) else "Tool konnte nicht gestartet werden",
         "output": out,
-        "action": "opened" if rc == 0 else "open-failed",
+        "action": "opened" if (rc == 0 and (now_open or not close_supported)) else "open-failed",
         "is_open": now_open,
         "close_supported": close_supported,
     }
