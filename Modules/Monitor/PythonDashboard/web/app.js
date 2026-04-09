@@ -564,9 +564,24 @@ async function loadAudioDevices() {
       return;
     }
 
-    audioDeviceInfo.textContent = `Aktives Ausgabegeraet: ${d.active_output || 'Unbekannt'}${d.routing_message ? ` | ${d.routing_message}` : ''}`;
-    audioDevices.innerHTML = d.devices.length
-      ? d.devices.map((dev) => `<div class="audio-device-item${dev.is_active_output ? ' active' : ''}"><span>${dev.name}</span>${dev.is_active_output ? '<strong>Aktiv</strong>' : ''}</div>`).join('')
+    const dedup = [];
+    const byName = new Map();
+    for (const dev of (d.devices || [])) {
+      const key = (dev.name || '').trim().toLowerCase();
+      if (!key) continue;
+      const idx = byName.get(key);
+      if (idx == null) {
+        byName.set(key, dedup.length);
+        dedup.push(dev);
+      } else if (dev.is_active_output && !dedup[idx].is_active_output) {
+        dedup[idx] = dev;
+      }
+    }
+    dedup.sort((a, b) => (Number(b.is_active_output) - Number(a.is_active_output)) || a.name.localeCompare(b.name, 'de'));
+
+    audioDeviceInfo.textContent = `Aktives Ausgabegeraet: ${d.active_output || 'Unbekannt'} | ${dedup.length} eindeutige Geraete${d.routing_message ? ` | ${d.routing_message}` : ''}`;
+    audioDevices.innerHTML = dedup.length
+      ? dedup.map((dev) => `<div class="audio-device-item${dev.is_active_output ? ' active' : ''}"><span>${dev.name}</span>${dev.is_active_output ? '<strong>Aktiv</strong>' : ''}</div>`).join('')
       : '<div class="audio-empty">Keine Audio-Geraete gefunden.</div>';
   } catch (err) {
     audioDeviceInfo.textContent = `Geraete-Fehler: ${err.message}`;
