@@ -256,8 +256,6 @@ let launcherCategoryLayouts = {};
 let launcherCategoryDensity = {};
 let launcherCategoryOrder = [];
 let dragArmedCard = null;
-let dragArmedLauncherSection = null;
-let draggedLauncherCategoryKey = '';
 const masonryFrames = new Map();
 const HISTORY_LEN = 45;
 const monitorHistory = {
@@ -1661,7 +1659,7 @@ function renderLaunchers() {
       return;
     }
 
-    container.innerHTML = orderedCategories.map((categoryName) => {
+    container.innerHTML = orderedCategories.map((categoryName, categoryIndex) => {
       const group = groupedLaunchers.get(categoryName) || [];
       const categoryLayout = getLauncherCategoryLayout(categoryName);
       const categoryDensity = getLauncherCategoryDensity(categoryName);
@@ -1670,7 +1668,7 @@ function renderLaunchers() {
           <div class="launcher-section-header">
             <div class="launcher-section-title">${escapeHtml(categoryName)}</div>
             <div class="launcher-section-actions">
-              ${editable ? `<button class="launcher-section-drag" type="button" data-launcher-category-drag="${escapeHtml(categoryName)}" title="Kategorie verschieben">Verschieben</button>` : ''}
+              ${editable ? `<button class="launcher-section-move" type="button" data-launcher-category-move-up="${escapeHtml(categoryName)}" title="Nach oben" ${categoryIndex === 0 ? 'disabled' : ''}>&uarr;</button><button class="launcher-section-move" type="button" data-launcher-category-move-down="${escapeHtml(categoryName)}" title="Nach unten" ${categoryIndex === orderedCategories.length - 1 ? 'disabled' : ''}>&darr;</button>` : ''}
               ${editable ? `<button class="launcher-section-layout-toggle" type="button" data-launcher-category-layout="${escapeHtml(categoryName)}" title="Kategorie-Layout umschalten">
                 ${categoryLayout === 'center' ? 'Text links' : 'Text zentrieren'}
               </button>` : ''}
@@ -1734,74 +1732,30 @@ function renderLaunchers() {
     });
 
     if (editable) {
-      container.querySelectorAll('[data-launcher-category-section]').forEach((section) => {
-        section.draggable = false;
-        section.addEventListener('dragstart', (event) => {
-          if (dragArmedLauncherSection !== section) {
-            event.preventDefault();
-            return;
+      container.querySelectorAll('[data-launcher-category-move-up]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const categoryName = btn.dataset.launcherCategoryMoveUp || '';
+          const key = normalizeLauncherCategoryKey(categoryName);
+          const idx = orderedCategories.indexOf(categoryName);
+          if (idx > 0) {
+            moveLauncherCategoryBefore(key, normalizeLauncherCategoryKey(orderedCategories[idx - 1]), orderedCategories);
+            renderLaunchers();
           }
-          const categoryName = section.dataset.launcherCategorySection || '';
-          draggedLauncherCategoryKey = normalizeLauncherCategoryKey(categoryName);
-          section.classList.add('dragging-category');
-          if (event.dataTransfer) {
-            event.dataTransfer.effectAllowed = 'move';
-            event.dataTransfer.setData('text/plain', draggedLauncherCategoryKey || 'category');
-          }
-        });
-
-        section.addEventListener('dragend', () => {
-          section.classList.remove('dragging-category');
-          section.draggable = false;
-          dragArmedLauncherSection = null;
-          draggedLauncherCategoryKey = '';
-          container.querySelectorAll('[data-launcher-category-section]').forEach((entry) => entry.classList.remove('drag-over-category'));
-        });
-
-        section.addEventListener('dragover', (event) => {
-          if (!draggedLauncherCategoryKey) return;
-          event.preventDefault();
-          if (normalizeLauncherCategoryKey(section.dataset.launcherCategorySection || '') === draggedLauncherCategoryKey) return;
-          section.classList.add('drag-over-category');
-        });
-
-        section.addEventListener('dragleave', () => {
-          section.classList.remove('drag-over-category');
-        });
-
-        section.addEventListener('drop', (event) => {
-          if (!draggedLauncherCategoryKey) return;
-          event.preventDefault();
-          section.classList.remove('drag-over-category');
-          const targetKey = normalizeLauncherCategoryKey(section.dataset.launcherCategorySection || '');
-          if (!targetKey || targetKey === draggedLauncherCategoryKey) return;
-          const changed = moveLauncherCategoryBefore(draggedLauncherCategoryKey, targetKey, orderedCategories);
-          if (changed) renderLaunchers();
         });
       });
 
-      container.querySelectorAll('[data-launcher-category-drag]').forEach((btn) => {
-        btn.addEventListener('mousedown', (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          const section = btn.closest('[data-launcher-category-section]');
-          if (!section) return;
-          dragArmedLauncherSection = section;
-          section.draggable = true;
-        });
-
-        btn.addEventListener('mouseup', () => {
-          const section = btn.closest('[data-launcher-category-section]');
-          if (!section || section.classList.contains('dragging-category')) return;
-          section.draggable = false;
-          dragArmedLauncherSection = null;
-        });
-
-        btn.addEventListener('mouseleave', () => {
-          const section = btn.closest('[data-launcher-category-section]');
-          if (!section || section.classList.contains('dragging-category')) return;
-          section.draggable = false;
-          dragArmedLauncherSection = null;
+      container.querySelectorAll('[data-launcher-category-move-down]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const categoryName = btn.dataset.launcherCategoryMoveDown || '';
+          const idx = orderedCategories.indexOf(categoryName);
+          if (idx >= 0 && idx < orderedCategories.length - 1) {
+            moveLauncherCategoryBefore(
+              normalizeLauncherCategoryKey(orderedCategories[idx + 1]),
+              normalizeLauncherCategoryKey(categoryName),
+              orderedCategories
+            );
+            renderLaunchers();
+          }
         });
       });
     }
