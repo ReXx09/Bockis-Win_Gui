@@ -787,45 +787,40 @@ input, select {
   margin-bottom: 8px;
 }
 
-.tool-table {
-  width: 100%;
-  border-collapse: collapse;
+.tool-list {
+  display: flex;
+  flex-direction: column;
   margin-bottom: 8px;
 }
 
-.tool-table thead th {
-  text-align: left;
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--muted);
-  padding: 4px 10px 6px;
-  border-bottom: 1px solid var(--line);
-}
-
-.tool-table-col-btn { width: 1%; white-space: nowrap; }
-
-.tool-table-row {
+.tool-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 6px 2px;
   border-bottom: 1px solid color-mix(in srgb, var(--line) 50%, transparent);
   transition: background 0.12s ease;
+  border-radius: 6px;
 }
 
-.tool-table-row:last-child { border-bottom: 0; }
+.tool-item:last-child { border-bottom: 0; }
 
-.tool-table-row:hover {
+.tool-item:hover {
   background: color-mix(in srgb, var(--accent) 6%, transparent);
 }
 
-.tool-table-btn {
+.tool-item-btn {
+  flex: 0 0 auto;
+  min-width: 170px;
   white-space: nowrap;
-  margin: 6px 0;
 }
 
-.tool-table-desc {
-  padding: 0 12px;
+.tool-item-desc {
+  flex: 1;
   font-size: 0.82rem;
   color: var(--muted);
   line-height: 1.5;
+  min-width: 0;
 }
 
 .launcher-grid {

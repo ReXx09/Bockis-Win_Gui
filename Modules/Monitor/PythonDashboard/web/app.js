@@ -1046,23 +1046,13 @@ async function loadTools() {
   try {
     const tools = await jsonFetch('/api/tools');
     availableTools = Array.isArray(tools) ? tools : [];
-    toolList.innerHTML = availableTools.length ? `
-      <table class="tool-table">
-        <thead>
-          <tr>
-            <th class="tool-table-col-btn"></th>
-            <th class="tool-table-col-desc">Beschreibung</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${availableTools.map((t) => `
-            <tr class="tool-table-row">
-              <td><button class="btn tool-table-btn" data-tool-run="${escapeHtml(t.id)}">${escapeHtml(t.label)}</button></td>
-              <td class="tool-table-desc">${escapeHtml(t.desc || '')}</td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>` : '<div class="audio-empty">Keine Tools verfuegbar.</div>';
+    toolList.innerHTML = availableTools.length
+      ? `<div class="tool-list">${availableTools.map((t) => `
+          <div class="tool-item">
+            <button class="btn tool-item-btn" data-tool-run="${escapeHtml(t.id)}">${escapeHtml(t.label)}</button>
+            <span class="tool-item-desc">${escapeHtml(t.desc || '')}</span>
+          </div>`).join('')}</div>`
+      : '<div class="audio-empty">Keine Tools verfuegbar.</div>';
 
     toolList.querySelectorAll('[data-tool-run]').forEach((btn) => {
       btn.addEventListener('click', async () => {
