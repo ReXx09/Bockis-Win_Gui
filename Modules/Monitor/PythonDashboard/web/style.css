@@ -242,7 +242,9 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
   cursor: grab;
 }
 
@@ -325,6 +327,8 @@ body {
 .tile-size-min { grid-column: span 2; }
 .tile-size-min > :not(.card-head) { display: none !important; }
 .tile-size-min .card-head {
+  padding-bottom: 0;
+  border-bottom: 0;
   margin-bottom: 0;
 }
 
