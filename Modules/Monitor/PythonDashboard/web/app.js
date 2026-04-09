@@ -62,6 +62,9 @@ const launcherTileBg = document.getElementById('launcherTileBg');
 const launcherTileText = document.getElementById('launcherTileText');
 const launcherTileBorder = document.getElementById('launcherTileBorder');
 const launcherTileAccent = document.getElementById('launcherTileAccent');
+const launcherPresetName = document.getElementById('launcherPresetName');
+const saveLauncherPresetBtn = document.getElementById('saveLauncherPresetBtn');
+const launcherPresetList = document.getElementById('launcherPresetList');
 const launcherIconPicker = document.getElementById('launcherIconPicker');
 const launcherToolField = document.getElementById('launcherToolField');
 const launcherTargetField = document.getElementById('launcherTargetField');
@@ -190,6 +193,7 @@ const SIZE_PRESETS = ['1-3', '1-2', '2-3', 'full', 'min'];
 const THEME_KEY = 'bockis_theme_v1';
 const AUDIO_USER_ROUTES_KEY = 'bockis_audio_user_routes_v1';
 const LAUNCHERS_FALLBACK_KEY = 'bockis_custom_launchers_v1';
+const LAUNCHER_STYLE_PRESETS_KEY = 'bockis_launcher_style_presets_v1';
 const THEMES = [
   { id: 'ozean',     label: 'Ozean',     s1: '#4aa3ff', s2: '#14315a',
     vars: { '--accent': '#4aa3ff', '--bg': '#071220', '--card': '#0f1b2e', '--line': '#223554', '--muted': '#8da3c7', '--grad-from': '#14315a', '--grad-to': '#071220' } },
@@ -235,6 +239,7 @@ let editingLauncherId = '';
 let launcherApiAvailable = true;
 let selectedLauncherCategory = 'Alle';
 let launcherEditMode = false;
+let launcherStylePresets = [];
 const masonryFrames = new Map();
 const HISTORY_LEN = 45;
 const monitorHistory = {
@@ -1222,6 +1227,134 @@ function getLauncherThemeColorDefaults() {
   };
 }
 
+function getCurrentLauncherColorSelection() {
+  const defaults = getLauncherThemeColorDefaults();
+  return {
+    tile_bg: normalizeLauncherTileColor(launcherTileBg?.value || '') || defaults.tile_bg,
+    tile_text: normalizeLauncherTileColor(launcherTileText?.value || '') || defaults.tile_text,
+    tile_border: normalizeLauncherTileColor(launcherTileBorder?.value || '') || defaults.tile_border,
+    tile_accent: normalizeLauncherTileColor(launcherTileAccent?.value || '') || defaults.tile_accent,
+  };
+}
+
+function normalizeLauncherPresetName(value) {
+  return String(value || '').trim();
+}
+
+function readLauncherStylePresets() {
+  try {
+    const raw = localStorage.getItem(LAUNCHER_STYLE_PRESETS_KEY);
+    const data = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(data)) return [];
+
+    return data.map((item) => {
+      const name = normalizeLauncherPresetName(item?.name);
+      if (!name) return null;
+      return {
+        id: String(item?.id || name.toLowerCase().replace(/[^a-z0-9]+/g, '-')).trim() || `preset-${Date.now()}`,
+        name,
+        colors: {
+          tile_bg: normalizeLauncherTileColor(item?.colors?.tile_bg),
+          tile_text: normalizeLauncherTileColor(item?.colors?.tile_text),
+          tile_border: normalizeLauncherTileColor(item?.colors?.tile_border),
+          tile_accent: normalizeLauncherTileColor(item?.colors?.tile_accent),
+        },
+      };
+    }).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function saveLauncherStylePresets() {
+  localStorage.setItem(LAUNCHER_STYLE_PRESETS_KEY, JSON.stringify(launcherStylePresets));
+}
+
+function getLauncherStylePresetItems() {
+  return [
+    { id: 'theme-default', name: 'Aktuelles Theme', colors: getLauncherThemeColorDefaults(), builtin: true },
+    ...launcherStylePresets,
+  ];
+}
+
+function applyLauncherStylePreset(colors = {}, presetName = '') {
+  const defaults = getLauncherThemeColorDefaults();
+  if (launcherTileBg) launcherTileBg.value = normalizeLauncherTileColor(colors.tile_bg) || defaults.tile_bg;
+  if (launcherTileText) launcherTileText.value = normalizeLauncherTileColor(colors.tile_text) || defaults.tile_text;
+  if (launcherTileBorder) launcherTileBorder.value = normalizeLauncherTileColor(colors.tile_border) || defaults.tile_border;
+  if (launcherTileAccent) launcherTileAccent.value = normalizeLauncherTileColor(colors.tile_accent) || defaults.tile_accent;
+  if (launcherPresetName && presetName) launcherPresetName.value = presetName;
+}
+
+function renderLauncherStylePresets() {
+  if (!launcherPresetList) return;
+
+  const items = getLauncherStylePresetItems();
+  launcherPresetList.innerHTML = items.map((preset) => {
+    const colors = preset.colors || getLauncherThemeColorDefaults();
+    return `
+      <div class="launcher-preset-chip">
+        <button class="launcher-preset-apply" type="button" data-launcher-preset-apply="${escapeHtml(preset.id)}" title="${escapeHtml(preset.name)} anwenden">
+          <span class="launcher-preset-swatch">
+            <span style="background:${escapeHtml(colors.tile_bg || '#0f1b2e')}"></span>
+            <span style="background:${escapeHtml(colors.tile_accent || '#4aa3ff')}"></span>
+            <span style="background:${escapeHtml(colors.tile_border || '#223554')}"></span>
+          </span>
+          <span class="launcher-preset-label">${escapeHtml(preset.name)}</span>
+        </button>
+        ${preset.builtin ? '' : `<button class="launcher-preset-delete" type="button" data-launcher-preset-delete="${escapeHtml(preset.id)}" aria-label="Vorlage loeschen">x</button>`}
+      </div>
+    `;
+  }).join('');
+
+  launcherPresetList.querySelectorAll('[data-launcher-preset-apply]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const presetId = btn.dataset.launcherPresetApply || '';
+      const preset = getLauncherStylePresetItems().find((item) => item.id === presetId);
+      if (!preset) return;
+      applyLauncherStylePreset(preset.colors, preset.builtin ? '' : preset.name);
+      if (launcherMsg) launcherMsg.textContent = `${preset.name} angewendet.`;
+    });
+  });
+
+  launcherPresetList.querySelectorAll('[data-launcher-preset-delete]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const presetId = btn.dataset.launcherPresetDelete || '';
+      launcherStylePresets = launcherStylePresets.filter((item) => item.id !== presetId);
+      saveLauncherStylePresets();
+      renderLauncherStylePresets();
+      if (launcherMsg) launcherMsg.textContent = 'Vorlage entfernt.';
+    });
+  });
+}
+
+function saveCurrentLauncherStylePreset() {
+  const name = normalizeLauncherPresetName(launcherPresetName?.value || '');
+  if (!name) {
+    if (launcherMsg) launcherMsg.textContent = 'Bitte zuerst einen Vorlagennamen angeben.';
+    return;
+  }
+
+  const presetId = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || `preset-${Date.now()}`;
+  const preset = {
+    id: presetId,
+    name,
+    colors: getCurrentLauncherColorSelection(),
+  };
+
+  const existingIndex = launcherStylePresets.findIndex((item) => item.id === presetId || item.name.toLowerCase() === name.toLowerCase());
+  if (existingIndex >= 0) {
+    launcherStylePresets[existingIndex] = preset;
+  } else {
+    launcherStylePresets.push(preset);
+  }
+
+  launcherStylePresets.sort((a, b) => a.name.localeCompare(b.name, 'de', { sensitivity: 'base' }));
+  saveLauncherStylePresets();
+  renderLauncherStylePresets();
+  if (launcherMsg) launcherMsg.textContent = `Vorlage '${name}' gespeichert.`;
+}
+
 function syncLauncherColorInputsWithThemeDefaults() {
   if (editingLauncherId) return;
   if (launcherName && launcherName.value.trim()) return;
@@ -1231,6 +1364,7 @@ function syncLauncherColorInputsWithThemeDefaults() {
   if (launcherTileText) launcherTileText.value = defaults.tile_text;
   if (launcherTileBorder) launcherTileBorder.value = defaults.tile_border;
   if (launcherTileAccent) launcherTileAccent.value = defaults.tile_accent;
+  renderLauncherStylePresets();
 }
 
 function getLauncherTileInlineStyle(launcher) {
@@ -2146,6 +2280,7 @@ async function init() {
   if (launcherKind) launcherKind.onchange = syncLauncherForm;
   if (launcherCategory) launcherCategory.oninput = () => populateLauncherCategoryHints();
   if (saveLauncherBtn) saveLauncherBtn.onclick = saveLauncher;
+  if (saveLauncherPresetBtn) saveLauncherPresetBtn.onclick = saveCurrentLauncherStylePreset;
   if (resetLauncherFormBtn) resetLauncherFormBtn.onclick = resetLauncherForm;
   document.getElementById('restartBtn').onclick = restartGui;
   document.getElementById('saveLayoutBtn').onclick = () => {
@@ -2187,6 +2322,8 @@ async function init() {
   wireAudioControls();
   wireUserAudioRoutingControls();
   wireThemeControls();
+  launcherStylePresets = readLauncherStylePresets();
+  renderLauncherStylePresets();
   updateLauncherEditModeButton();
   resetLauncherForm();
 

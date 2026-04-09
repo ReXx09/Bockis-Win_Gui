@@ -937,6 +937,89 @@ input, select {
   cursor: pointer;
 }
 
+.launcher-template-tools {
+  display: grid;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.launcher-template-name-field {
+  display: grid;
+  gap: 5px;
+  font-size: 0.78rem;
+}
+
+.launcher-template-actions {
+  gap: 8px;
+}
+
+.launcher-preset-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.launcher-preset-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--card) 88%, transparent);
+  color: var(--text);
+  padding: 6px 10px;
+}
+
+.launcher-preset-apply {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+
+.launcher-preset-apply:hover {
+  color: var(--accent);
+}
+
+.launcher-preset-swatch {
+  display: inline-flex;
+  width: 34px;
+  height: 18px;
+  border-radius: 999px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.08);
+  flex-shrink: 0;
+}
+
+.launcher-preset-swatch span {
+  flex: 1;
+  display: block;
+}
+
+.launcher-preset-label {
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.launcher-preset-delete {
+  width: 22px;
+  height: 22px;
+  border: 1px solid color-mix(in srgb, #ff876d 35%, var(--line));
+  border-radius: 999px;
+  background: color-mix(in srgb, #3a1a12 88%, transparent);
+  color: #ffe0d8;
+  cursor: pointer;
+  line-height: 1;
+  font-size: 0.78rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .launcher-icon-picker {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(86px, 1fr));
