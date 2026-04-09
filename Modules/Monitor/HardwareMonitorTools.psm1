@@ -766,7 +766,7 @@ function Initialize-LiveMonitoring {
                     if ($null -ne $script:computerObj) {
                         # LibreHardwareMonitor-Modus
                         # Hardware-Update IMMER durchführen (wichtig für Sensor-Daten!)
-                        $script:computerObj.Hardware | ForEach-Object { $_.Update() }
+                        $null = Invoke-SafeHardwareRefresh
                         
                         # CPU immer aktualisieren (wichtigster Sensor)
                         Update-CpuInfo -CpuLabel $cpuLabel -Panel $gbCPU
@@ -812,6 +812,39 @@ function Initialize-LiveMonitoring {
         Write-Warning "Fehler beim Initialisieren des Live-Monitorings: $_"
         return $null
     }
+}
+
+function Invoke-SafeHardwareRefresh {
+    [CmdletBinding()]
+    param(
+        [switch]$ReturnHardware
+    )
+
+    if ($null -eq $script:computerObj -or $null -eq $script:computerObj.Hardware) {
+        if ($ReturnHardware) { return @() }
+        return $false
+    }
+
+    $validHardware = @()
+
+    foreach ($hardware in @($script:computerObj.Hardware)) {
+        if ($null -eq $hardware) {
+            continue
+        }
+
+        try {
+            $hardware.Update()
+            $validHardware += $hardware
+        } catch {
+            Write-Verbose "Hardware-Refresh für Eintrag fehlgeschlagen: $($_.Exception.Message)"
+        }
+    }
+
+    if ($ReturnHardware) {
+        return $validHardware
+    }
+
+    return ($validHardware.Count -gt 0)
 }
 
 function Initialize-LibreHardwareMonitor {
@@ -902,6 +935,9 @@ function Initialize-LibreHardwareMonitor {
 # Funktion zum Starten des Monitorings
 function Start-HardwareMonitoring {
     if ($null -eq $script:hardwareTimer) {
+        if (-not $script:useLibreHardware) {
+            return $true
+        }
         Write-Warning "Timer nicht initialisiert"
         return $false
     }
@@ -1782,14 +1818,20 @@ function Get-RamTemperature {
         }
         
         # Aktuelle Daten sicherstellen
-        $script:computerObj.Hardware | ForEach-Object { $_.Update() }
+        $hardwareEntries = Invoke-SafeHardwareRefresh -ReturnHardware
+        if (-not $hardwareEntries -or $hardwareEntries.Count -eq 0) {
+            if ($script:DebugModeRAM) {
+                Write-DebugOutput -Component 'RAM' -Message "Keine aktualisierbaren Hardware-Einträge gefunden" -Force
+            }
+            return $null
+        }
         
         # Für Debug: Liste aller verfügbaren Temperatursensoren erstellen
         if ($script:DebugModeRAM) {
             $allTempSensors = @()
             
             # Alle Temperatursensoren sammeln
-            $script:computerObj.Hardware | ForEach-Object {
+            $hardwareEntries | ForEach-Object {
                 $hw = $_
                 $_.Sensors | Where-Object { $_.SensorType -eq "Temperature" } | ForEach-Object {
                     $allTempSensors += [PSCustomObject]@{
