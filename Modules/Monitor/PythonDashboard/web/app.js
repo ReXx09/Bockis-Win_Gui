@@ -98,7 +98,7 @@ let lastAudioSessions = [];
 let cachedOpenPrograms = [];
 let lastOpenProgramsFetch = 0;
 let showAllAudioDevices = false;
-let audioLayoutFrame = 0;
+const masonryFrames = new Map();
 const HISTORY_LEN = 45;
 const monitorHistory = {
   cpu: [],
@@ -180,7 +180,7 @@ async function jsonFetch(url, opt = {}) {
 }
 
 function isMasonryLayout(layoutEl) {
-  return Boolean(layoutEl && layoutEl.id === 'audioGrid');
+  return Boolean(layoutEl && layoutEl.classList && layoutEl.classList.contains('layout'));
 }
 
 function refreshMasonryLayout(layoutEl = audioGrid) {
@@ -202,8 +202,14 @@ function refreshMasonryLayout(layoutEl = audioGrid) {
 
 function scheduleMasonryLayout(layoutEl = audioGrid) {
   if (!isMasonryLayout(layoutEl)) return;
-  cancelAnimationFrame(audioLayoutFrame);
-  audioLayoutFrame = requestAnimationFrame(() => refreshMasonryLayout(layoutEl));
+  const key = layoutEl.id || 'layout';
+  const prev = masonryFrames.get(key);
+  if (prev) cancelAnimationFrame(prev);
+  const frame = requestAnimationFrame(() => {
+    refreshMasonryLayout(layoutEl);
+    masonryFrames.delete(key);
+  });
+  masonryFrames.set(key, frame);
 }
 
 function getCards(layoutEl = dashboardGrid) {
@@ -392,7 +398,7 @@ function showPage(page) {
     b.classList.toggle('active', b.dataset.pageTarget === page);
   });
   localStorage.setItem(PAGE_KEY, page);
-  if (page === 'audio') scheduleMasonryLayout(audioGrid);
+  document.querySelectorAll('.page.active .layout').forEach((layoutEl) => scheduleMasonryLayout(layoutEl));
 }
 
 function wirePageMenu() {
@@ -491,6 +497,8 @@ async function loadMetrics() {
   procRows.innerHTML = p
     .map((x) => `<tr><td>${x.name}</td><td>${x.pid}</td><td>${x.cpu}</td><td>${x.mem_mb}</td></tr>`)
     .join('');
+
+  scheduleMasonryLayout(dashboardGrid);
 }
 
 let lastPullTime = 0;
@@ -1239,7 +1247,9 @@ async function init() {
   renderWidgetMenu();
   wireDragDrop(dashboardGrid, LAYOUT_KEY, renderWidgetMenu);
   wireDragDrop(audioGrid, AUDIO_LAYOUT_KEY);
-  window.addEventListener('resize', () => scheduleMasonryLayout(audioGrid));
+  window.addEventListener('resize', () => {
+    document.querySelectorAll('.layout').forEach((layoutEl) => scheduleMasonryLayout(layoutEl));
+  });
   wireAudioControls();
   wireUserAudioRoutingControls();
   wireThemeControls();
@@ -1251,7 +1261,7 @@ async function init() {
   }
 
   await Promise.all([refreshAll(), refreshGit(), loadLogs(), loadTools()]);
-  scheduleMasonryLayout(audioGrid);
+  document.querySelectorAll('.layout').forEach((layoutEl) => scheduleMasonryLayout(layoutEl));
   setInterval(refreshAll, 5000);
   setInterval(refreshGit, 20000);
 }
