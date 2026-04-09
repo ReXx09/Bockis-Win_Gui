@@ -840,6 +840,25 @@ input, select {
   gap: 6px;
 }
 
+.launcher-section-drag {
+  border: 1px dashed color-mix(in srgb, var(--accent) 45%, var(--line));
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.72rem;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--card) 72%, transparent);
+  cursor: grab;
+}
+
+.launcher-section-drag:hover {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 65%, var(--line));
+}
+
+.launcher-section-drag:active {
+  cursor: grabbing;
+}
+
 .launcher-section-layout-toggle,
 .launcher-section-density-toggle {
   border: 1px solid var(--line);
@@ -855,6 +874,15 @@ input, select {
 .launcher-section-density-toggle:hover {
   color: var(--text);
   border-color: color-mix(in srgb, var(--accent) 48%, var(--line));
+}
+
+.launcher-section-editable.dragging-category {
+  opacity: 0.65;
+}
+
+.launcher-section-editable.drag-over-category {
+  border-color: color-mix(in srgb, var(--accent) 70%, var(--line));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent);
 }
 
 .launcher-section-center .launcher-section-header {

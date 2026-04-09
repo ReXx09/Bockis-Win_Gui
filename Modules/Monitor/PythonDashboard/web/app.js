@@ -205,6 +205,7 @@ const LAUNCHERS_FALLBACK_KEY = 'bockis_custom_launchers_v1';
 const LAUNCHER_STYLE_PRESETS_KEY = 'bockis_launcher_style_presets_v1';
 const LAUNCHER_CATEGORY_LAYOUTS_KEY = 'bockis_launcher_category_layouts_v1';
 const LAUNCHER_CATEGORY_DENSITY_KEY = 'bockis_launcher_category_density_v1';
+const LAUNCHER_CATEGORY_ORDER_KEY = 'bockis_launcher_category_order_v1';
 const THEMES = [
   { id: 'ozean',     label: 'Ozean',     s1: '#4aa3ff', s2: '#14315a',
     vars: { '--accent': '#4aa3ff', '--bg': '#071220', '--card': '#0f1b2e', '--line': '#223554', '--muted': '#8da3c7', '--grad-from': '#14315a', '--grad-to': '#071220' } },
@@ -253,7 +254,10 @@ let launcherEditMode = false;
 let launcherStylePresets = [];
 let launcherCategoryLayouts = {};
 let launcherCategoryDensity = {};
+let launcherCategoryOrder = [];
 let dragArmedCard = null;
+let dragArmedLauncherSection = null;
+let draggedLauncherCategoryKey = '';
 const masonryFrames = new Map();
 const HISTORY_LEN = 45;
 const monitorHistory = {
@@ -1162,6 +1166,70 @@ function toggleLauncherCategoryDensity(categoryName) {
   saveLauncherCategoryDensity();
 }
 
+function readLauncherCategoryOrder() {
+  try {
+    const raw = localStorage.getItem(LAUNCHER_CATEGORY_ORDER_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((entry) => normalizeLauncherCategoryKey(entry))
+      .filter((entry) => entry);
+  } catch {
+    return [];
+  }
+}
+
+function saveLauncherCategoryOrder() {
+  try {
+    localStorage.setItem(LAUNCHER_CATEGORY_ORDER_KEY, JSON.stringify(launcherCategoryOrder || []));
+  } catch {
+    // ignore storage failures
+  }
+}
+
+function getOrderedLauncherCategoryNames(groupedLaunchers) {
+  const names = Array.from(groupedLaunchers.keys());
+  const keyToName = new Map();
+  names.forEach((name) => {
+    keyToName.set(normalizeLauncherCategoryKey(name), name);
+  });
+
+  const ordered = [];
+  const used = new Set();
+  (launcherCategoryOrder || []).forEach((key) => {
+    const name = keyToName.get(key);
+    if (!name) return;
+    ordered.push(name);
+    used.add(key);
+  });
+
+  names
+    .filter((name) => !used.has(normalizeLauncherCategoryKey(name)))
+    .sort((a, b) => a.localeCompare(b, 'de', { sensitivity: 'base' }))
+    .forEach((name) => ordered.push(name));
+
+  launcherCategoryOrder = ordered.map((name) => normalizeLauncherCategoryKey(name)).filter((key) => key);
+  saveLauncherCategoryOrder();
+  return ordered;
+}
+
+function moveLauncherCategoryBefore(sourceKey, targetKey, orderedCategoryNames) {
+  if (!sourceKey || !targetKey || sourceKey === targetKey) return false;
+
+  const keys = orderedCategoryNames.map((name) => normalizeLauncherCategoryKey(name)).filter((key) => key);
+  const fromIndex = keys.indexOf(sourceKey);
+  const toIndex = keys.indexOf(targetKey);
+  if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return false;
+
+  const [moved] = keys.splice(fromIndex, 1);
+  const insertIndex = keys.indexOf(targetKey);
+  keys.splice(insertIndex, 0, moved);
+
+  launcherCategoryOrder = keys;
+  saveLauncherCategoryOrder();
+  return true;
+}
+
 function getLauncherCategories() {
   const categories = new Set();
   customLaunchers.forEach((launcher) => {
@@ -1574,7 +1642,7 @@ function renderLaunchers() {
     if (!groupedLaunchers.has(categoryName)) groupedLaunchers.set(categoryName, []);
     groupedLaunchers.get(categoryName).push(launcher);
   });
-  const orderedCategories = Array.from(groupedLaunchers.keys()).sort((a, b) => a.localeCompare(b, 'de', { sensitivity: 'base' }));
+  const orderedCategories = getOrderedLauncherCategoryNames(groupedLaunchers);
 
   const renderLauncherListInto = (container, options = {}) => {
     if (!container) return;
@@ -1598,10 +1666,11 @@ function renderLaunchers() {
       const categoryLayout = getLauncherCategoryLayout(categoryName);
       const categoryDensity = getLauncherCategoryDensity(categoryName);
       return `
-        <section class="launcher-section launcher-section-${categoryLayout} launcher-section-density-${categoryDensity}">
+        <section class="launcher-section launcher-section-${categoryLayout} launcher-section-density-${categoryDensity}${editable ? ' launcher-section-editable' : ''}" data-launcher-category-section="${escapeHtml(categoryName)}">
           <div class="launcher-section-header">
             <div class="launcher-section-title">${escapeHtml(categoryName)}</div>
             <div class="launcher-section-actions">
+              ${editable ? `<button class="launcher-section-drag" type="button" data-launcher-category-drag="${escapeHtml(categoryName)}" title="Kategorie verschieben">Verschieben</button>` : ''}
               <button class="launcher-section-layout-toggle" type="button" data-launcher-category-layout="${escapeHtml(categoryName)}" title="Kategorie-Layout umschalten">
                 ${categoryLayout === 'center' ? 'Text links' : 'Text zentrieren'}
               </button>
@@ -1663,6 +1732,79 @@ function renderLaunchers() {
         renderLaunchers();
       });
     });
+
+    if (editable) {
+      container.querySelectorAll('[data-launcher-category-section]').forEach((section) => {
+        section.draggable = false;
+        section.addEventListener('dragstart', (event) => {
+          if (dragArmedLauncherSection !== section) {
+            event.preventDefault();
+            return;
+          }
+          const categoryName = section.dataset.launcherCategorySection || '';
+          draggedLauncherCategoryKey = normalizeLauncherCategoryKey(categoryName);
+          section.classList.add('dragging-category');
+          if (event.dataTransfer) {
+            event.dataTransfer.effectAllowed = 'move';
+            event.dataTransfer.setData('text/plain', draggedLauncherCategoryKey || 'category');
+          }
+        });
+
+        section.addEventListener('dragend', () => {
+          section.classList.remove('dragging-category');
+          section.draggable = false;
+          dragArmedLauncherSection = null;
+          draggedLauncherCategoryKey = '';
+          container.querySelectorAll('[data-launcher-category-section]').forEach((entry) => entry.classList.remove('drag-over-category'));
+        });
+
+        section.addEventListener('dragover', (event) => {
+          if (!draggedLauncherCategoryKey) return;
+          event.preventDefault();
+          if (normalizeLauncherCategoryKey(section.dataset.launcherCategorySection || '') === draggedLauncherCategoryKey) return;
+          section.classList.add('drag-over-category');
+        });
+
+        section.addEventListener('dragleave', () => {
+          section.classList.remove('drag-over-category');
+        });
+
+        section.addEventListener('drop', (event) => {
+          if (!draggedLauncherCategoryKey) return;
+          event.preventDefault();
+          section.classList.remove('drag-over-category');
+          const targetKey = normalizeLauncherCategoryKey(section.dataset.launcherCategorySection || '');
+          if (!targetKey || targetKey === draggedLauncherCategoryKey) return;
+          const changed = moveLauncherCategoryBefore(draggedLauncherCategoryKey, targetKey, orderedCategories);
+          if (changed) renderLaunchers();
+        });
+      });
+
+      container.querySelectorAll('[data-launcher-category-drag]').forEach((btn) => {
+        btn.addEventListener('mousedown', (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const section = btn.closest('[data-launcher-category-section]');
+          if (!section) return;
+          dragArmedLauncherSection = section;
+          section.draggable = true;
+        });
+
+        btn.addEventListener('mouseup', () => {
+          const section = btn.closest('[data-launcher-category-section]');
+          if (!section || section.classList.contains('dragging-category')) return;
+          section.draggable = false;
+          dragArmedLauncherSection = null;
+        });
+
+        btn.addEventListener('mouseleave', () => {
+          const section = btn.closest('[data-launcher-category-section]');
+          if (!section || section.classList.contains('dragging-category')) return;
+          section.draggable = false;
+          dragArmedLauncherSection = null;
+        });
+      });
+    }
   };
 
   renderLauncherListInto(launcherList, { editable: false });
@@ -2569,6 +2711,7 @@ async function init() {
   wireThemeControls();
   launcherCategoryLayouts = readLauncherCategoryLayouts();
   launcherCategoryDensity = readLauncherCategoryDensity();
+  launcherCategoryOrder = readLauncherCategoryOrder();
   launcherStylePresets = readLauncherStylePresets();
   renderLauncherStylePresets();
   updateLauncherEditModeButton();
