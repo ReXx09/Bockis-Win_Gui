@@ -111,6 +111,12 @@ body {
   color: var(--danger);
 }
 
+.pill-version {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: color-mix(in srgb, var(--accent) 85%, white);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line));
+}
+
 .layout {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
