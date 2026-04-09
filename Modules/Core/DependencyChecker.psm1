@@ -1408,6 +1408,95 @@ function Find-PawnIODriver {
     return $result
 }
 
+function Find-PythonRuntime {
+    $result = @{
+        Found        = $false
+        MeetsMinimum = $false
+        Version      = $null
+        Command      = $null
+        WingetId     = "Python.Python.3.12"
+        MinVersion   = "3.10"
+    }
+
+    $candidates = @()
+    $seen = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $addCandidate = {
+        param(
+            [string]$Cmd,
+            [string[]]$Prefix
+        )
+
+        if ([string]::IsNullOrWhiteSpace($Cmd)) { return }
+        $prefixKey = if ($Prefix -and $Prefix.Count -gt 0) { ($Prefix -join ' ') } else { '' }
+        $key = "$Cmd|$prefixKey"
+        if ($seen.Add($key)) {
+            $candidates += @{ Cmd = $Cmd; Prefix = @($Prefix) }
+        }
+    }
+
+    $pyCmd = Get-Command py -ErrorAction SilentlyContinue
+    if ($pyCmd) {
+        foreach ($pyVersionArg in @('-3.14', '-3.13', '-3.12', '-3.11', '-3.10', '-3')) {
+            & $addCandidate 'py' @($pyVersionArg)
+        }
+    }
+
+    $pythonRaw = Get-Command python -ErrorAction SilentlyContinue
+    if ($pythonRaw) {
+        $pythonPath = [string]$pythonRaw.Source
+        if ($pythonPath -and ($pythonPath -notmatch 'WindowsApps\\python\.exe$')) {
+            & $addCandidate $pythonPath @()
+            & $addCandidate 'python' @()
+        }
+    }
+
+    $pythonPathCandidates = @(
+        (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python*\python.exe'),
+        (Join-Path $env:ProgramFiles 'Python*\python.exe'),
+        (Join-Path ${env:ProgramFiles(x86)} 'Python*\python.exe'),
+        'C:\Python*\python.exe'
+    )
+
+    foreach ($pattern in $pythonPathCandidates) {
+        if ([string]::IsNullOrWhiteSpace($pattern)) { continue }
+        try {
+            Get-ChildItem -Path $pattern -File -ErrorAction SilentlyContinue |
+                Sort-Object FullName -Descending |
+                ForEach-Object {
+                    $candidatePath = [string]$_.FullName
+                    if ($candidatePath -and ($candidatePath -notmatch 'WindowsApps\\python\.exe$')) {
+                        & $addCandidate $candidatePath @()
+                    }
+                }
+        } catch { }
+    }
+
+    foreach ($candidate in $candidates) {
+        try {
+            $args = @($candidate.Prefix + @('--version'))
+            $versionOutput = (& $candidate.Cmd @args 2>&1 | Out-String).Trim()
+            if ($LASTEXITCODE -ne 0 -or $versionOutput -notmatch 'Python\s+(\d+)\.(\d+)(?:\.(\d+))?') {
+                continue
+            }
+
+            $major = [int]$matches[1]
+            $minor = [int]$matches[2]
+            $patch = if ($matches[3]) { [int]$matches[3] } else { 0 }
+
+            $result.Found = $true
+            $result.Version = "$major.$minor.$patch"
+            $result.Command = [string]$candidate.Cmd
+            $result.MeetsMinimum = ($major -gt 3) -or ($major -eq 3 -and $minor -ge 10)
+
+            if ($result.MeetsMinimum) {
+                break
+            }
+        } catch { }
+    }
+
+    return $result
+}
+
 #endregion
 
 #region Integrated GUI Dependency Check
@@ -1578,6 +1667,46 @@ function Get-DependencyStatusForGUI {
             StatusColor = "Red"
             WingetId    = if ($winget.Found) { $appInstaller.WingetId } else { $null }
             SourceUrl   = $appInstaller.DownloadUrl
+        }
+    }
+
+    # Python Runtime (optional, für Python-Dashboard)
+    $pythonRuntime = Find-PythonRuntime
+    if ($pythonRuntime.Found -and $pythonRuntime.MeetsMinimum) {
+        $dependencies += @{
+            Name        = "Python Runtime"
+            Description = "Erforderlich für Python-Dashboard (>= $($pythonRuntime.MinVersion))"
+            Found       = $true
+            Required    = $false
+            Available   = $false
+            Version     = $pythonRuntime.Version
+            Status      = "✓ Installiert"
+            StatusColor = "Green"
+            WingetId    = if ($winget.Found) { $pythonRuntime.WingetId } else { $null }
+        }
+    } elseif ($pythonRuntime.Found) {
+        $dependencies += @{
+            Name        = "Python Runtime"
+            Description = "Für Python-Dashboard wird >= $($pythonRuntime.MinVersion) benötigt"
+            Found       = $false
+            Required    = $false
+            Available   = $winget.Found
+            Version     = $pythonRuntime.Version
+            Status      = "⚠ Version zu alt"
+            StatusColor = "Yellow"
+            WingetId    = if ($winget.Found) { $pythonRuntime.WingetId } else { $null }
+        }
+    } else {
+        $dependencies += @{
+            Name        = "Python Runtime"
+            Description = "Optional für Python-Dashboard (>= 3.10)"
+            Found       = $false
+            Required    = $false
+            Available   = $winget.Found
+            Version     = $null
+            Status      = "⚠ Nicht installiert"
+            StatusColor = "Yellow"
+            WingetId    = if ($winget.Found) { $pythonRuntime.WingetId } else { $null }
         }
     }
     
