@@ -1,4 +1,4 @@
-# Bockis System-Tool v4.2.0
+# Bockis System-Tool v4.2.1
 
 **Datum:** 2026-04-08  
 **Autor:** Bockis

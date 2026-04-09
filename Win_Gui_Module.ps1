@@ -1,11 +1,11 @@
 ﻿# Win_Gui_Module.ps1 - Hauptskript für die PowerShell-GUI
 # Autor: Bocki
-# Version: 4.2.0
+# Version: 4.2.1
 
 # ===================================================================
 # VERSIONS-INFORMATION
 # ===================================================================
-$script:AppVersion = "4.2.0"
+$script:AppVersion = "4.2.1"
 $script:AppName = "Bockis System-Tool"
 $script:AppPublisher = "Bocki"
 $script:VersionDate = "2026-03-23"
