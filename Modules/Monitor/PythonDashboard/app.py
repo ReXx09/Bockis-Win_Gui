@@ -697,6 +697,7 @@ def _load_custom_launchers() -> list[dict]:
         args = str(item.get("args") or "").strip()
         note = str(item.get("note") or "").strip()
         icon = str(item.get("icon") or "grid").strip() or "grid"
+        category = str(item.get("category") or "Allgemein").strip() or "Allgemein"
 
         if not launcher_id or not title or kind not in LAUNCHER_KINDS:
             continue
@@ -715,6 +716,7 @@ def _load_custom_launchers() -> list[dict]:
                 "args": args,
                 "note": note,
                 "icon": icon,
+                "category": category,
             }
         )
 
@@ -736,6 +738,7 @@ def _normalize_launcher_payload(payload: dict | None = None) -> dict:
     args = str(payload.get("args") or "").strip()
     note = str(payload.get("note") or "").strip()
     icon = str(payload.get("icon") or "grid").strip() or "grid"
+    category = str(payload.get("category") or "Allgemein").strip() or "Allgemein"
 
     if kind not in LAUNCHER_KINDS:
         raise ValueError("Typ muss tool, app oder url sein")
@@ -763,6 +766,7 @@ def _normalize_launcher_payload(payload: dict | None = None) -> dict:
         "args": args,
         "note": note,
         "icon": icon,
+        "category": category,
     }
 
 

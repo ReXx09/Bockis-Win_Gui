@@ -754,6 +754,42 @@ input, select {
   margin-bottom: 8px;
 }
 
+.launcher-category-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.launcher-category-chip {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: rgba(9, 17, 31, 0.6);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.launcher-category-chip.active {
+  border-color: var(--accent);
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 14%, #0b1628);
+}
+
+.launcher-section {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.launcher-section-title {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
 .launcher-card {
   border: 1px solid var(--line);
   border-radius: 10px;

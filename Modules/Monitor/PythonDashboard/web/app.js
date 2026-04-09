@@ -45,10 +45,13 @@ const dashboardDependencyMsg = document.getElementById('dashboardDependencyMsg')
 const toolList = document.getElementById('toolList');
 const toolMsg = document.getElementById('toolMsg');
 const reloadLaunchersBtn = document.getElementById('reloadLaunchersBtn');
+const launcherCategoryBar = document.getElementById('launcherCategoryBar');
 const launcherList = document.getElementById('launcherList');
 const launcherMsg = document.getElementById('launcherMsg');
 const launcherName = document.getElementById('launcherName');
 const launcherKind = document.getElementById('launcherKind');
+const launcherCategory = document.getElementById('launcherCategory');
+const launcherCategoryHints = document.getElementById('launcherCategoryHints');
 const launcherToolId = document.getElementById('launcherToolId');
 const launcherTarget = document.getElementById('launcherTarget');
 const launcherArgs = document.getElementById('launcherArgs');
@@ -82,6 +85,7 @@ const userRoutingHint = document.getElementById('userRoutingHint');
 const dashboardGrid = document.getElementById('dashboardGrid');
 const audioGrid = document.getElementById('audioGrid');
 const logsGrid = document.getElementById('logsGrid');
+const quickstartGrid = document.getElementById('quickstartGrid');
 const toolsGrid = document.getElementById('toolsGrid');
 const setupGrid = document.getElementById('setupGrid');
 const widgetMenu = document.getElementById('widgetMenu');
@@ -91,6 +95,7 @@ const layoutMsg = document.getElementById('layoutMsg');
 const LAYOUT_KEY = 'bockis_dashboard_layout_v4';
 const AUDIO_LAYOUT_KEY = 'bockis_audio_layout_v1';
 const LOGS_LAYOUT_KEY = 'bockis_logs_layout_v1';
+const QUICKSTART_LAYOUT_KEY = 'bockis_quickstart_layout_v1';
 const TOOLS_LAYOUT_KEY = 'bockis_tools_layout_v1';
 const SETUP_LAYOUT_KEY = 'bockis_setup_layout_v1';
 const PAGE_KEY = 'bockis_dashboard_page_v1';
@@ -98,12 +103,14 @@ const LEGACY_STORAGE_KEYS = {
   [LAYOUT_KEY]: ['bockis_dashboard_layout_v3', 'bockis_dashboard_layout_v2', 'bockis_dashboard_layout_v1'],
   [AUDIO_LAYOUT_KEY]: [],
   [LOGS_LAYOUT_KEY]: [],
+  [QUICKSTART_LAYOUT_KEY]: [],
   [TOOLS_LAYOUT_KEY]: [],
   [SETUP_LAYOUT_KEY]: [],
 };
 const PAGE_ICONS = {
   overview: 'grid',
   audio: 'speaker',
+  quickstart: 'globe',
   logs: 'file',
   tools: 'wrench',
   setup: 'sliders',
@@ -122,9 +129,9 @@ const WIDGET_LABELS = {
   'logs-main': 'Logs',
   'logs-dependencies': 'Win-GUI-Dependencies',
   'logs-dashboard-dependencies': 'Dashboard-Dependencies',
+  'quickstart-main': 'Schnellstart',
+  'quickstart-config': 'Launcher-Konfiguration',
   'tools-main': 'Tools',
-  'tools-launchers': 'Schnellstart',
-  'tools-launcher-config': 'Launcher-Konfiguration',
   'setup-theme': 'Erscheinungsbild',
   'setup-git': 'Git / Setup',
 };
@@ -141,9 +148,9 @@ const WIDGET_ICONS = {
   'logs-main': 'file',
   'logs-dependencies': 'box',
   'logs-dashboard-dependencies': 'layers',
+  'quickstart-main': 'globe',
+  'quickstart-config': 'sliders',
   'tools-main': 'wrench',
-  'tools-launchers': 'grid',
-  'tools-launcher-config': 'sliders',
   'setup-theme': 'palette',
   'setup-git': 'git-branch',
 };
@@ -151,6 +158,7 @@ const PAGE_LAYOUTS = {
   overview: { label: 'Uebersicht', layoutEl: dashboardGrid, storageKey: LAYOUT_KEY },
   audio: { label: 'Audio', layoutEl: audioGrid, storageKey: AUDIO_LAYOUT_KEY },
   logs: { label: 'Logs', layoutEl: logsGrid, storageKey: LOGS_LAYOUT_KEY },
+  quickstart: { label: 'Schnellstart', layoutEl: quickstartGrid, storageKey: QUICKSTART_LAYOUT_KEY },
   tools: { label: 'Tools', layoutEl: toolsGrid, storageKey: TOOLS_LAYOUT_KEY },
   setup: { label: 'Setup', layoutEl: setupGrid, storageKey: SETUP_LAYOUT_KEY },
 };
@@ -201,6 +209,7 @@ let availableTools = [];
 let customLaunchers = [];
 let editingLauncherId = '';
 let launcherApiAvailable = true;
+let selectedLauncherCategory = 'Alle';
 const masonryFrames = new Map();
 const HISTORY_LEN = 45;
 const monitorHistory = {
@@ -935,6 +944,46 @@ function populateLauncherToolSelect(selected = '') {
   if (selected) launcherToolId.value = selected;
 }
 
+function normalizeLauncherCategory(value) {
+  return String(value || '').trim();
+}
+
+function getLauncherCategories() {
+  const categories = new Set();
+  customLaunchers.forEach((launcher) => {
+    const categoryValue = normalizeLauncherCategory(launcher.category);
+    if (categoryValue) categories.add(categoryValue);
+  });
+  return ['Alle', ...Array.from(categories).sort((a, b) => a.localeCompare(b, 'de', { sensitivity: 'base' }))];
+}
+
+function populateLauncherCategoryHints() {
+  if (!launcherCategoryHints) return;
+  launcherCategoryHints.innerHTML = getLauncherCategories()
+    .filter((category) => category !== 'Alle')
+    .map((category) => `<option value="${escapeHtml(category)}"></option>`)
+    .join('');
+}
+
+function renderLauncherCategoryBar() {
+  if (!launcherCategoryBar) return;
+  const categories = getLauncherCategories();
+  if (!categories.includes(selectedLauncherCategory)) selectedLauncherCategory = 'Alle';
+
+  launcherCategoryBar.innerHTML = categories.map((category) => `
+    <button class="launcher-category-chip${category === selectedLauncherCategory ? ' active' : ''}" type="button" data-launcher-category="${escapeHtml(category)}">
+      ${escapeHtml(category)}
+    </button>
+  `).join('');
+
+  launcherCategoryBar.querySelectorAll('[data-launcher-category]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      selectedLauncherCategory = btn.dataset.launcherCategory || 'Alle';
+      renderLaunchers();
+    });
+  });
+}
+
 function getLauncherIconMarkup(iconName) {
   return getIconMarkup(iconName || 'grid');
 }
@@ -989,11 +1038,13 @@ function resetLauncherForm() {
   editingLauncherId = '';
   if (launcherName) launcherName.value = '';
   if (launcherKind) launcherKind.value = 'tool';
+  if (launcherCategory) launcherCategory.value = '';
   if (launcherTarget) launcherTarget.value = '';
   if (launcherArgs) launcherArgs.value = '';
   if (launcherNote) launcherNote.value = '';
   populateLauncherIconPicker('grid');
   populateLauncherToolSelect();
+  populateLauncherCategoryHints();
   syncLauncherForm();
   if (saveLauncherBtn) saveLauncherBtn.textContent = 'Launcher speichern';
 }
@@ -1003,6 +1054,7 @@ function fillLauncherForm(launcher) {
   editingLauncherId = launcher.id || '';
   if (launcherName) launcherName.value = launcher.title || '';
   if (launcherKind) launcherKind.value = launcher.kind || 'tool';
+  if (launcherCategory) launcherCategory.value = launcher.category || '';
   populateLauncherToolSelect(launcher.tool_id || '');
   if (launcherTarget) launcherTarget.value = launcher.target || '';
   if (launcherArgs) launcherArgs.value = launcher.args || '';
@@ -1059,24 +1111,55 @@ async function runLauncher(launcherId) {
 
 function renderLaunchers() {
   if (!launcherList) return;
+  populateLauncherCategoryHints();
+  renderLauncherCategoryBar();
+
   if (!customLaunchers.length) {
     launcherList.innerHTML = '<div class="audio-empty">Noch keine Schnellstart-Kacheln angelegt.</div>';
-    scheduleMasonryLayout(toolsGrid);
+    scheduleMasonryLayout(quickstartGrid);
     return;
   }
 
-  launcherList.innerHTML = customLaunchers.map((launcher) => `
-    <div class="launcher-card">
-      <button class="launcher-run" type="button" data-launcher-run="${escapeHtml(launcher.id)}">
-        <span class="launcher-icon-badge">${getLauncherIconMarkup(launcher.icon || 'grid')}</span>
-        <strong>${escapeHtml(launcher.title)}</strong>
-      </button>
-      <div class="launcher-actions">
-        <button class="btn" type="button" data-launcher-edit="${escapeHtml(launcher.id)}">Bearbeiten</button>
-        <button class="btn warn" type="button" data-launcher-delete="${escapeHtml(launcher.id)}">Entfernen</button>
-      </div>
-    </div>
-  `).join('');
+  const visibleLaunchers = selectedLauncherCategory === 'Alle'
+    ? [...customLaunchers]
+    : customLaunchers.filter((launcher) => normalizeLauncherCategory(launcher.category) === selectedLauncherCategory);
+
+  if (!visibleLaunchers.length) {
+    launcherList.innerHTML = '<div class="audio-empty">Keine Launcher in dieser Kategorie gefunden.</div>';
+    scheduleMasonryLayout(quickstartGrid);
+    return;
+  }
+
+  const groupedLaunchers = new Map();
+  visibleLaunchers.forEach((launcher) => {
+    const categoryName = normalizeLauncherCategory(launcher.category) || 'Ohne Kategorie';
+    if (!groupedLaunchers.has(categoryName)) groupedLaunchers.set(categoryName, []);
+    groupedLaunchers.get(categoryName).push(launcher);
+  });
+
+  const orderedCategories = Array.from(groupedLaunchers.keys()).sort((a, b) => a.localeCompare(b, 'de', { sensitivity: 'base' }));
+  launcherList.innerHTML = orderedCategories.map((categoryName) => {
+    const group = groupedLaunchers.get(categoryName) || [];
+    return `
+      <section class="launcher-section">
+        <div class="launcher-section-title">${escapeHtml(categoryName)}</div>
+        <div class="launcher-grid">
+          ${group.map((launcher) => `
+            <div class="launcher-card">
+              <button class="launcher-run" type="button" data-launcher-run="${escapeHtml(launcher.id)}">
+                <span class="launcher-icon-badge">${getLauncherIconMarkup(launcher.icon || 'grid')}</span>
+                <strong>${escapeHtml(launcher.title)}</strong>
+              </button>
+              <div class="launcher-actions">
+                <button class="btn" type="button" data-launcher-edit="${escapeHtml(launcher.id)}">Bearbeiten</button>
+                <button class="btn warn" type="button" data-launcher-delete="${escapeHtml(launcher.id)}">Entfernen</button>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </section>
+    `;
+  }).join('');
 
   launcherList.querySelectorAll('[data-launcher-run]').forEach((btn) => {
     btn.addEventListener('click', () => runLauncher(btn.dataset.launcherRun || ''));
@@ -1114,7 +1197,7 @@ function renderLaunchers() {
     });
   });
 
-  scheduleMasonryLayout(toolsGrid);
+  scheduleMasonryLayout(quickstartGrid);
 }
 
 async function loadLaunchers() {
@@ -1138,7 +1221,7 @@ async function loadLaunchers() {
     }
     if (launcherMsg) launcherMsg.textContent = `Launcher konnten nicht geladen werden: ${err.message}`;
     if (launcherList) launcherList.innerHTML = '<div class="audio-empty">Launcher konnten nicht geladen werden.</div>';
-    scheduleMasonryLayout(toolsGrid);
+    scheduleMasonryLayout(quickstartGrid);
   }
 }
 
@@ -1149,6 +1232,7 @@ async function saveLauncher() {
     title: launcherName.value.trim(),
     kind: launcherKind.value,
     tool_id: launcherToolId?.value || '',
+    category: normalizeLauncherCategory(launcherCategory?.value || ''),
     target: launcherTarget?.value.trim() || '',
     args: launcherArgs?.value.trim() || '',
     note: launcherNote?.value.trim() || '',
@@ -1176,6 +1260,7 @@ async function saveLauncher() {
     const existingIndex = customLaunchers.findIndex((item) => item.id === localId);
     if (existingIndex >= 0) customLaunchers[existingIndex] = localLauncher;
     else customLaunchers.push(localLauncher);
+    selectedLauncherCategory = payload.category || 'Alle';
     saveLauncherFallback(customLaunchers);
     if (launcherMsg) launcherMsg.textContent = 'Launcher lokal gespeichert. Fuer App-Starts bitte Python-Dashboard neu starten.';
     renderLaunchers();
@@ -1194,6 +1279,7 @@ async function saveLauncher() {
       return;
     }
     customLaunchers = Array.isArray(result.launchers) ? result.launchers : [];
+    selectedLauncherCategory = payload.category || 'Alle';
     if (launcherMsg) launcherMsg.textContent = result.message || 'Launcher gespeichert.';
     renderLaunchers();
     resetLauncherForm();
@@ -1884,6 +1970,7 @@ async function init() {
   if (reloadDashboardDependenciesBtn) reloadDashboardDependenciesBtn.onclick = loadDashboardDependencyStatus;
   if (reloadLaunchersBtn) reloadLaunchersBtn.onclick = loadLaunchers;
   if (launcherKind) launcherKind.onchange = syncLauncherForm;
+  if (launcherCategory) launcherCategory.oninput = () => populateLauncherCategoryHints();
   if (saveLauncherBtn) saveLauncherBtn.onclick = saveLauncher;
   if (resetLauncherFormBtn) resetLauncherFormBtn.onclick = resetLauncherForm;
   document.getElementById('restartBtn').onclick = restartGui;
@@ -1902,12 +1989,14 @@ async function init() {
   wireSizeControls(dashboardGrid, LAYOUT_KEY, layoutMsg);
   wireSizeControls(audioGrid, AUDIO_LAYOUT_KEY);
   wireSizeControls(logsGrid, LOGS_LAYOUT_KEY);
+  wireSizeControls(quickstartGrid, QUICKSTART_LAYOUT_KEY);
   wireSizeControls(toolsGrid, TOOLS_LAYOUT_KEY);
   wireSizeControls(setupGrid, SETUP_LAYOUT_KEY);
 
   applyLayout(readLayout(LAYOUT_KEY), dashboardGrid);
   applyLayout(readLayout(AUDIO_LAYOUT_KEY), audioGrid);
   applyLayout(readLayout(LOGS_LAYOUT_KEY), logsGrid);
+  applyLayout(readLayout(QUICKSTART_LAYOUT_KEY), quickstartGrid);
   applyLayout(readLayout(TOOLS_LAYOUT_KEY), toolsGrid);
   applyLayout(readLayout(SETUP_LAYOUT_KEY), setupGrid);
 
@@ -1915,6 +2004,7 @@ async function init() {
   wireDragDrop(dashboardGrid, LAYOUT_KEY, renderWidgetMenu);
   wireDragDrop(audioGrid, AUDIO_LAYOUT_KEY);
   wireDragDrop(logsGrid, LOGS_LAYOUT_KEY, renderWidgetMenu);
+  wireDragDrop(quickstartGrid, QUICKSTART_LAYOUT_KEY, renderWidgetMenu);
   wireDragDrop(toolsGrid, TOOLS_LAYOUT_KEY, renderWidgetMenu);
   wireDragDrop(setupGrid, SETUP_LAYOUT_KEY, renderWidgetMenu);
   window.addEventListener('resize', () => {
