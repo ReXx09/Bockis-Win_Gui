@@ -89,7 +89,7 @@ const WIDGET_LABELS = {
   'audio-sessions': 'Programm-Audio',
   'audio-routing': 'Benutzer-Programmzuordnung',
   'logs-main': 'Logs',
-  'logs-dependencies': 'Dependency-Check',
+  'logs-dependencies': 'Win-GUI-Dependencies',
   'logs-dashboard-dependencies': 'Dashboard-Dependencies',
   'tools-main': 'Tools',
   'setup-theme': 'Erscheinungsbild',
