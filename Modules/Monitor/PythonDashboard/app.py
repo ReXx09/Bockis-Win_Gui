@@ -1150,6 +1150,14 @@ def send_media_key(action: str) -> bool:
 
 
 @app.get("/")
+@app.get("/overview")
+@app.get("/uebersicht")
+@app.get("/Übersicht")
+@app.get("/audio")
+@app.get("/schnellstart")
+@app.get("/logs")
+@app.get("/tools")
+@app.get("/setup")
 def index() -> FileResponse:
     return FileResponse(WEB_DIR / "index.html")
 

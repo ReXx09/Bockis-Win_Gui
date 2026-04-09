@@ -163,6 +163,25 @@ const PAGE_LAYOUTS = {
   tools: { label: 'Tools', layoutEl: toolsGrid, storageKey: TOOLS_LAYOUT_KEY },
   setup: { label: 'Setup', layoutEl: setupGrid, storageKey: SETUP_LAYOUT_KEY },
 };
+const PAGE_ROUTES = {
+  overview: '/uebersicht',
+  audio: '/audio',
+  quickstart: '/schnellstart',
+  logs: '/logs',
+  tools: '/tools',
+  setup: '/setup',
+};
+const ROUTE_PAGE_MAP = {
+  '/': null,
+  '/overview': 'overview',
+  '/uebersicht': 'overview',
+  '/übersicht': 'overview',
+  '/audio': 'audio',
+  '/schnellstart': 'quickstart',
+  '/logs': 'logs',
+  '/tools': 'tools',
+  '/setup': 'setup',
+};
 const SIZE_PRESETS = ['1-3', '1-2', '2-3', 'full', 'min'];
 const THEME_KEY = 'bockis_theme_v1';
 const AUDIO_USER_ROUTES_KEY = 'bockis_audio_user_routes_v1';
@@ -337,6 +356,30 @@ function getCards(layoutEl = dashboardGrid) {
 
 function getCurrentPage() {
   return document.querySelector('.page.active')?.dataset.page || (localStorage.getItem(PAGE_KEY) || 'overview');
+}
+
+function getRouteForPage(page) {
+  return PAGE_ROUTES[page] || PAGE_ROUTES.overview;
+}
+
+function getPageFromLocation() {
+  try {
+    const path = decodeURIComponent(window.location.pathname || '/').trim();
+    const normalized = path ? path.toLowerCase() : '/';
+    return Object.prototype.hasOwnProperty.call(ROUTE_PAGE_MAP, normalized) ? ROUTE_PAGE_MAP[normalized] : null;
+  } catch {
+    return null;
+  }
+}
+
+function updateBrowserLocation(page, replace = false) {
+  const targetPath = getRouteForPage(page);
+  if (!targetPath) return;
+  const currentPath = window.location.pathname || '/';
+  if (currentPath.toLowerCase() === targetPath.toLowerCase()) return;
+
+  const method = replace ? 'replaceState' : 'pushState';
+  window.history[method]({ page }, '', targetPath);
 }
 
 function getIconMarkup(iconName) {
@@ -587,24 +630,35 @@ function wireDragDrop(layoutEl = dashboardGrid, storageKey = LAYOUT_KEY, onAfter
   });
 }
 
-function showPage(page) {
+function showPage(page, options = {}) {
+  const { updateUrl = false, replaceUrl = false } = options;
+  const resolvedPage = PAGE_LAYOUTS[page] ? page : 'overview';
+
   document.querySelectorAll('.page').forEach((p) => {
-    p.classList.toggle('active', p.dataset.page === page);
+    p.classList.toggle('active', p.dataset.page === resolvedPage);
   });
   document.querySelectorAll('.menu-nav-btn').forEach((b) => {
-    b.classList.toggle('active', b.dataset.pageTarget === page);
+    b.classList.toggle('active', b.dataset.pageTarget === resolvedPage);
   });
-  localStorage.setItem(PAGE_KEY, page);
-  renderWidgetMenu(page);
+  localStorage.setItem(PAGE_KEY, resolvedPage);
+  if (updateUrl) updateBrowserLocation(resolvedPage, replaceUrl);
+  renderWidgetMenu(resolvedPage);
   document.querySelectorAll('.page.active .layout').forEach((layoutEl) => scheduleMasonryLayout(layoutEl));
 }
 
 function wirePageMenu() {
   document.querySelectorAll('.menu-nav-btn').forEach((btn) => {
-    btn.addEventListener('click', () => showPage(btn.dataset.pageTarget));
+    btn.addEventListener('click', () => showPage(btn.dataset.pageTarget, { updateUrl: true }));
   });
-  const start = localStorage.getItem(PAGE_KEY) || 'overview';
-  showPage(start);
+
+  window.addEventListener('popstate', () => {
+    const routedPage = getPageFromLocation() || 'overview';
+    showPage(routedPage, { updateUrl: false });
+  });
+
+  const routedPage = getPageFromLocation();
+  const start = routedPage || localStorage.getItem(PAGE_KEY) || 'overview';
+  showPage(start, { updateUrl: false, replaceUrl: false });
 }
 
 function resetLayout(storageKey = LAYOUT_KEY) {

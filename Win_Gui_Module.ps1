@@ -9,6 +9,8 @@ $script:AppVersion = "4.2.1"
 $script:AppName = "Bockis System-Tool"
 $script:AppPublisher = "Bocki"
 $script:VersionDate = "2026-03-23"
+$script:GuiUpdateRepoOwner = "ReXx09"
+$script:GuiUpdateRepoName = "Bockis-Win_Gui"
 
 # ===================================================================
 # ZONE.IDENTIFIER / MARK OF THE WEB ENTFERNEN
@@ -4436,7 +4438,12 @@ $btnCheckDependenciesH.Add_Click({
             }
 
             # Hole Dependency-Status
-            $depResult = Get-DependencyStatusForGUI -CurrentVersion $script:AppVersion
+            $resolvedGitHubToken = Get-GuiGitHubToken -ProjectPath $PSScriptRoot
+            $depResult = Get-DependencyStatusForGUI `
+                -CurrentVersion $script:AppVersion `
+                -RepoOwner $script:GuiUpdateRepoOwner `
+                -RepoName $script:GuiUpdateRepoName `
+                -GitHubToken $resolvedGitHubToken
             & $updateDependencyProgress -Value 45 -Text "Analysiere Prüfergebnisse..."
         
             if (-not $depResult) {
@@ -7010,18 +7017,60 @@ function Invoke-GuiReleaseAction {
             return @{ Success = $false; Cancelled = $false; Message = "Release-Auswahlfunktion nicht verfügbar" }
         }
 
+        $resolvedGitHubToken = Get-GuiGitHubToken -ProjectPath $PSScriptRoot
+
         return Invoke-ReleaseSelectionUpdate `
             -CurrentVersion $script:AppVersion `
             -OutputBox $outputBox `
             -ProgressBar $progressBar `
             -MainForm $mainform `
             -ApplicationPath $PSScriptRoot `
-            -RepoOwner "ReXx09" `
-            -RepoName "Bockis-Win_Gui" `
-            -GitHubToken ""
+            -RepoOwner $script:GuiUpdateRepoOwner `
+            -RepoName $script:GuiUpdateRepoName `
+            -GitHubToken $resolvedGitHubToken
     } catch {
         return @{ Success = $false; Cancelled = $false; Message = $_.Exception.Message }
     }
+}
+
+function Get-GuiGitHubToken {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $false)]
+        [string]$ProjectPath = $PSScriptRoot
+    )
+
+    $envToken = $env:GITHUB_TOKEN
+    if (-not [string]::IsNullOrWhiteSpace($envToken) -and $envToken -ne "ghp_DEIN_TOKEN_HIER") {
+        return $envToken.Trim()
+    }
+
+    $envFilePath = Join-Path $ProjectPath ".env"
+    if (-not (Test-Path $envFilePath)) {
+        return $null
+    }
+
+    try {
+        $lines = Get-Content -Path $envFilePath -ErrorAction Stop
+        foreach ($line in $lines) {
+            if ([string]::IsNullOrWhiteSpace($line)) { continue }
+            if ($line -match '^\s*#') { continue }
+            if ($line -notmatch '=') { continue }
+
+            $parts = $line -split '=', 2
+            $key = $parts[0].Trim()
+            if ($key -ne 'GITHUB_TOKEN') { continue }
+
+            $value = $parts[1].Trim().Trim('"').Trim("'")
+            if (-not [string]::IsNullOrWhiteSpace($value) -and $value -ne "ghp_DEIN_TOKEN_HIER") {
+                return $value
+            }
+        }
+    } catch {
+        # Silent fallback: Öffentliche Repositories funktionieren auch ohne Token.
+    }
+
+    return $null
 }
 
 function Invoke-WingetVersionAction {
@@ -7709,7 +7758,12 @@ $mainform.Add_Shown({
                     $guiUpdateStatus = $null
 
                     try {
-                        $guiUpdateStatus = Get-GuiReleaseDependencyStatus -CurrentVersion $script:AppVersion
+                        $resolvedGitHubToken = Get-GuiGitHubToken -ProjectPath $PSScriptRoot
+                        $guiUpdateStatus = Get-GuiReleaseDependencyStatus `
+                            -CurrentVersion $script:AppVersion `
+                            -RepoOwner $script:GuiUpdateRepoOwner `
+                            -RepoName $script:GuiUpdateRepoName `
+                            -GitHubToken $resolvedGitHubToken
                     } catch {
                         Write-Verbose "GUI-Update-Prüfung beim Start fehlgeschlagen: $_"
                     }
