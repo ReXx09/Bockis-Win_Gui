@@ -239,8 +239,25 @@ body {
 .tile-size-1-2 { grid-column: span 3; }
 .tile-size-2-3 { grid-column: span 4; }
 .tile-size-full { grid-column: span 6; }
-.tile-size-min { grid-column: span 6; }
+.tile-size-min { grid-column: span 2; }
 .tile-size-min > :not(.card-head) { display: none !important; }
+.tile-size-min .card-head {
+  margin-bottom: 0;
+}
+
+.tile-size-min .card-head h2 {
+  font-size: 0.88rem;
+  margin: 0;
+}
+
+.tile-size-min .card-head-actions {
+  gap: 6px;
+}
+
+.tile-size-min .size-controls {
+  transform: scale(0.92);
+  transform-origin: right center;
+}
 
 .pages {
   min-width: 0;
