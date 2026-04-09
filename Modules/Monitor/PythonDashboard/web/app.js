@@ -1671,12 +1671,12 @@ function renderLaunchers() {
             <div class="launcher-section-title">${escapeHtml(categoryName)}</div>
             <div class="launcher-section-actions">
               ${editable ? `<button class="launcher-section-drag" type="button" data-launcher-category-drag="${escapeHtml(categoryName)}" title="Kategorie verschieben">Verschieben</button>` : ''}
-              <button class="launcher-section-layout-toggle" type="button" data-launcher-category-layout="${escapeHtml(categoryName)}" title="Kategorie-Layout umschalten">
+              ${editable ? `<button class="launcher-section-layout-toggle" type="button" data-launcher-category-layout="${escapeHtml(categoryName)}" title="Kategorie-Layout umschalten">
                 ${categoryLayout === 'center' ? 'Text links' : 'Text zentrieren'}
-              </button>
-              <button class="launcher-section-density-toggle" type="button" data-launcher-category-density="${escapeHtml(categoryName)}" title="Kategorie-Kachelgroesse umschalten">
+              </button>` : ''}
+              ${editable ? `<button class="launcher-section-density-toggle" type="button" data-launcher-category-density="${escapeHtml(categoryName)}" title="Kategorie-Kachelgroesse umschalten">
                 ${categoryDensity === 'compact' ? 'Normal' : 'Kompakt'}
-              </button>
+              </button>` : ''}
             </div>
           </div>
           <div class="launcher-grid">
