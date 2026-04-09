@@ -16,6 +16,10 @@ from pathlib import Path
 
 import psutil
 from fastapi import FastAPI, HTTPException
+import asyncio
+import threading
+from time import time as current_time
+import functools
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -109,7 +113,24 @@ def _run_git(args: list[str]) -> tuple[int, str]:
     return proc.returncode, output.strip()
 
 
-def _run_powershell(command: str, timeout: int = 20) -> tuple[int, str]:
+# Cache for God Mode window state to avoid repeated expensive COM queries
+_god_mode_cache: dict[str, tuple[float, bool]] = {}
+_god_mode_cache_lock = threading.Lock()
+
+def _get_god_mode_cached(cache_key: str, func, timeout_sec: float = 0.5) -> bool:
+    """Get cached God Mode state or compute fresh if cache expired."""
+    current = current_time()
+    with _god_mode_cache_lock:
+        if cache_key in _god_mode_cache:
+            cache_time, cached_val = _god_mode_cache[cache_key]
+            if current - cache_time < timeout_sec:
+                return cached_val
+        result = func()
+        _god_mode_cache[cache_key] = (current, result)
+        return result
+
+
+def _run_powershell(command: str, timeout: int = 8) -> tuple[int, str]:
     # UTF-8-BOM: PowerShell emits BOM so the decoder can identify encoding unambiguously.
     # Python's 'utf-8-sig' codec strips the BOM transparently and handles plain UTF-8 too.
     cmd_bom = (
@@ -445,7 +466,7 @@ def _get_cpu_temp_c() -> float | None:
         "$vals = $vals | Where-Object { $_ -ne $null -and $_ -gt 0 -and $_ -lt 140 };"
         "if($vals -and $vals.Count -gt 0){ [math]::Round((($vals | Measure-Object -Average).Average),1) }"
     )
-    rc, out = _run_powershell(ps_cmd, timeout=8)
+    rc, out = _run_powershell(ps_cmd, timeout=3)
     if rc == 0 and out.strip():
         for line in reversed(out.splitlines()):
             candidate = line.strip().replace(",", ".")
@@ -825,7 +846,7 @@ Get-Process -Name $names -ErrorAction SilentlyContinue |
   Where-Object {{ $_.MainWindowTitle -and $_.MainWindowTitle -match $pattern }} |
   Select-Object -ExpandProperty Id
 """
-    rc, out = _run_powershell(script, timeout=6)
+    rc, out = _run_powershell(script, timeout=3)
     if rc != 0 or not out.strip():
         return []
 
@@ -860,7 +881,7 @@ try {{
 }} catch {{}}
 if ($found) {{ '1' }} else {{ '0' }}
 """
-    rc, out = _run_powershell(script, timeout=8)
+    rc, out = _run_powershell(script, timeout=3)
     return rc == 0 and out.strip().endswith("1")
 
 
@@ -889,7 +910,7 @@ try {{
 }} catch {{}}
 $closed
 """
-    _run_powershell(script, timeout=8)
+    _run_powershell(script, timeout=3)
     time.sleep(0.2)
     still_open = _is_shell_window_open(tool_id)
     if still_open:
@@ -916,7 +937,7 @@ try {
 } catch {}
 if ($found) { '1' } else { '0' }
 """
-        rc, out = _run_powershell(script, timeout=8)
+        rc, out = _run_powershell(script, timeout=3)
         return rc == 0 and out.strip().endswith("1")
 
 
@@ -941,7 +962,7 @@ try {
 } catch {}
 $closed
 """
-        _run_powershell(script, timeout=8)
+        _run_powershell(script, timeout=3)
         time.sleep(0.2)
         still_open = _is_god_mode_window_open()
         if still_open:
@@ -987,7 +1008,7 @@ def _get_tool_processes(tool_id: str) -> list[psutil.Process]:
 def _is_tool_open(tool_id: str) -> bool:
     tool_id = str(tool_id or "").strip()
     if tool_id == "god_mode":
-        return _is_god_mode_window_open()
+        return _get_god_mode_cached("god_mode_state", _is_god_mode_window_open, timeout_sec=0.3)
     if _is_shell_window_open(tool_id):
         return True
     if _get_tool_window_pids(tool_id):
@@ -1006,7 +1027,7 @@ def _close_tool(tool_id: str) -> tuple[bool, str]:
     window_pids = _get_tool_window_pids(tool_id)
     if window_pids:
         pid_values = ",".join([str(pid) for pid in window_pids])
-        _run_powershell(f"Stop-Process -Id @({pid_values}) -Force -ErrorAction SilentlyContinue", timeout=6)
+        _run_powershell(f"Stop-Process -Id @({pid_values}) -Force -ErrorAction SilentlyContinue", timeout=3)
         time.sleep(0.2)
         still_open = _is_tool_open(tool_id)
         return (not still_open), ("Fenster geschlossen" if not still_open else "Fenster konnte nicht vollstaendig geschlossen werden")
@@ -1023,7 +1044,7 @@ def _close_tool(tool_id: str) -> tuple[bool, str]:
 
     alive: list[psutil.Process] = []
     try:
-        _, alive = psutil.wait_procs(procs, timeout=1.2)
+        _, alive = psutil.wait_procs(procs, timeout=0.4)
     except Exception:
         # Some system tools may deny wait/handle access; continue with best effort.
         for proc in procs:
