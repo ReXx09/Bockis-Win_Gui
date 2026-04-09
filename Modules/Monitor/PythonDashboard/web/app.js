@@ -647,24 +647,30 @@ function renderDependencyStatus(data) {
     : `Pruefung abgeschlossen | ${deps.length} Abhaengigkeiten | Eingriffe empfohlen`;
 
   dependencyList.innerHTML = deps.length
-    ? deps.map((dep, idx) => {
+    ? `
+      <div class="dependency-table-head dependency-table-head-actions">
+        <span>Paket</span>
+        <span>Version</span>
+        <span>Status</span>
+        <span>Aktion</span>
+      </div>
+      ${deps.map((dep) => {
         const action = getDependencyAction(dep);
         const versionText = dep.Version || dep.AvailableVersion || '-';
         const nextVersion = dep.UpdateAvailable && dep.AvailableVersion ? ` → ${dep.AvailableVersion}` : '';
         return `
-          <div class="dependency-item dependency-${String(dep.StatusColor || '').toLowerCase()}">
-            <div>
-              <strong>${dep.Name || 'Unbekannt'}</strong>
-              <p class="muted">${dep.Description || ''}</p>
-              <p class="muted">Version: ${versionText}${nextVersion}</p>
+          <div class="dependency-table-row dependency-table-row-actions dependency-${String(dep.StatusColor || '').toLowerCase()}">
+            <div class="dependency-col-name-wrap">
+              <strong class="dependency-col-name">${dep.Name || 'Unbekannt'}</strong>
+              <span class="muted dependency-col-description">${dep.Description || ''}</span>
             </div>
-            <div class="dependency-actions">
-              <span class="dependency-status">${dep.Status || '-'}</span>
-              ${action ? `<button class="btn" data-dependency-action="${action}" data-winget-id="${dep.WingetId}" data-dependency-name="${dep.Name || ''}">${action === 'upgrade' ? 'Update' : 'Installieren'}</button>` : ''}
-            </div>
+            <span class="dependency-col-installed">${versionText}${nextVersion}</span>
+            <span class="dependency-status">${dep.Status || '-'}</span>
+            <span class="dependency-col-action">${action ? `<button class="btn" data-dependency-action="${action}" data-winget-id="${dep.WingetId}" data-dependency-name="${dep.Name || ''}">${action === 'upgrade' ? 'Update' : 'Installieren'}</button>` : ''}</span>
           </div>
         `;
-      }).join('')
+      }).join('')}
+    `
     : '<div class="audio-empty">Keine Dependency-Daten gefunden.</div>';
 
   dependencyList.querySelectorAll('[data-dependency-action]').forEach((btn) => {

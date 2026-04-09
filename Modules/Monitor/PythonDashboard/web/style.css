@@ -496,6 +496,26 @@ input, select {
   font-size: 0.82rem;
 }
 
+.dependency-table-head-actions,
+.dependency-table-row-actions {
+  grid-template-columns: minmax(120px, 1.4fr) minmax(84px, 0.9fr) minmax(90px, 0.8fr) minmax(90px, 0.9fr);
+}
+
+.dependency-col-name-wrap {
+  display: grid;
+  gap: 2px;
+}
+
+.dependency-col-description {
+  font-size: 0.72rem;
+  line-height: 1.2;
+}
+
+.dependency-col-action {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .dependency-col-name {
   font-size: 0.95rem;
 }
