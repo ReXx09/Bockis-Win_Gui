@@ -824,6 +824,9 @@ input, select {
   grid-template-columns: 1fr auto;
   gap: 8px;
   align-items: center;
+  padding-bottom: 8px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 65%, transparent);
 }
 
 .launcher-section-title {
