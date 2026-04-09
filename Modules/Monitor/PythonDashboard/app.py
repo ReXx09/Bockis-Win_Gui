@@ -565,10 +565,6 @@ Add-Type -TypeDefinition @"
 using System;
 using System.Runtime.InteropServices;
 
-[ComImport, Guid("870AF99C-171D-4F9E-AF0D-E63DF40C2BC9")]
-public class _PolicyConfigClient {{
-}}
-
 [ComImport, InterfaceType(ComInterfaceType.InterfaceIsIUnknown), Guid("F8679F50-850A-41CF-9C72-430F290290C8")]
 public interface IPolicyConfig {{
     int GetMixFormat();
@@ -583,14 +579,22 @@ public interface IPolicyConfig {{
     int SetDefaultEndpoint([MarshalAs(UnmanagedType.LPWStr)] string wszDeviceId, int eRole);
     int SetEndpointVisibility();
 }}
+
+public static class PolicyConfigApi {{
+    public static void SetDefault(string deviceId) {{
+        var clsid = new Guid("870AF99C-171D-4F9E-AF0D-E63DF40C2BC9");
+        var type = Type.GetTypeFromCLSID(clsid, throwOnError: true);
+        object instance = Activator.CreateInstance(type);
+        var policy = (IPolicyConfig)instance;
+        // 0=Console, 1=Multimedia, 2=Communications
+        policy.SetDefaultEndpoint(deviceId, 0);
+        policy.SetDefaultEndpoint(deviceId, 1);
+        policy.SetDefaultEndpoint(deviceId, 2);
+    }}
+}}
 "@
 
-$policy = [IPolicyConfig]([Activator]::CreateInstance([type]::GetTypeFromCLSID([Guid]"870AF99C-171D-4F9E-AF0D-E63DF40C2BC9")))
-if ($null -eq $policy) {{ throw "PolicyConfig konnte nicht initialisiert werden." }}
-
-[void]$policy.SetDefaultEndpoint($deviceId, 0)
-[void]$policy.SetDefaultEndpoint($deviceId, 1)
-[void]$policy.SetDefaultEndpoint($deviceId, 2)
+[PolicyConfigApi]::SetDefault($deviceId)
 Write-Output "OK"
 """
 
