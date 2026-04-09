@@ -795,7 +795,7 @@ input, select {
 
 .tool-item {
   display: grid;
-  grid-template-columns: 165px 1fr;
+  grid-template-columns: max-content 1fr;
   align-items: center;
   gap: 12px;
   padding: 7px 4px;
@@ -819,7 +819,8 @@ input, select {
   font-size: 0.82rem;
   color: var(--muted);
   line-height: 1.5;
-  word-break: break-word;
+  min-width: 0;
+  overflow-wrap: break-word;
 }
 
 .launcher-grid {
