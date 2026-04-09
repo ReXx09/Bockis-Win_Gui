@@ -106,6 +106,8 @@ def _run_git(args: list[str]) -> tuple[int, str]:
 
 
 def _run_powershell(command: str, timeout: int = 20) -> tuple[int, str]:
+    # Prepend UTF-8 output encoding so German error messages don't crash the decoder.
+    cmd_utf8 = "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8; " + command
     proc = subprocess.run(
         [
             "powershell.exe",
@@ -113,10 +115,11 @@ def _run_powershell(command: str, timeout: int = 20) -> tuple[int, str]:
             "-ExecutionPolicy",
             "Bypass",
             "-Command",
-            command,
+            cmd_utf8,
         ],
         capture_output=True,
-        text=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=timeout,
     )
     output = (proc.stdout or "") + ("\n" + proc.stderr if proc.stderr else "")
@@ -573,6 +576,7 @@ using System.Runtime.InteropServices;
 public interface IPolicyConfig {{
     int GetMixFormat();
     int GetDeviceFormat();
+    int ResetDeviceFormat();
     int SetDeviceFormat();
     int GetProcessingPeriod();
     int SetProcessingPeriod();
