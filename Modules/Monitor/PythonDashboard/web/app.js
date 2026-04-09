@@ -628,6 +628,51 @@ function bestProgramMatch(input) {
   return '';
 }
 
+function groupAudioSessionsByProcess(sessions) {
+  const groups = new Map();
+
+  for (const session of Array.isArray(sessions) ? sessions : []) {
+    const key = `${session.pid}:${normalizeProgramToken(session.app)}`;
+    const existing = groups.get(key);
+    if (!existing) {
+      groups.set(key, {
+        ...session,
+        devices: session.device_name ? [session.device_name] : [],
+      });
+      continue;
+    }
+
+    if (session.device_name && !existing.devices.includes(session.device_name)) {
+      existing.devices.push(session.device_name);
+    }
+
+    const existingState = Number(existing.state || 0);
+    const currentState = Number(session.state || 0);
+    const existingVolume = Number(existing.volume || 0);
+    const currentVolume = Number(session.volume || 0);
+    const preferCurrent = currentState > existingState || (currentState === existingState && currentVolume > existingVolume);
+
+    if (preferCurrent) {
+      existing.device_name = session.device_name;
+      existing.device_id = session.device_id;
+      existing.volume = session.volume;
+      existing.muted = session.muted;
+      existing.state = session.state;
+    } else {
+      existing.muted = Boolean(existing.muted && session.muted);
+      existing.volume = Math.max(existingVolume, currentVolume);
+      existing.state = Math.max(existingState, currentState);
+    }
+  }
+
+  return [...groups.values()]
+    .map((item) => ({
+      ...item,
+      device_name: item.devices.length ? item.devices.join(', ') : (item.device_name || 'Unbekannt'),
+    }))
+    .sort((a, b) => a.app.localeCompare(b.app, 'de') || a.pid - b.pid);
+}
+
 function renderOpenProgramSuggestions() {
   if (openProgramSelect) {
     const options = ['<option value="">Offene Programme auswaehlen...</option>']
@@ -881,10 +926,10 @@ async function loadAudioSessions() {
       return;
     }
 
-    lastAudioSessions = Array.isArray(d.sessions) ? d.sessions : [];
+    lastAudioSessions = groupAudioSessionsByProcess(Array.isArray(d.sessions) ? d.sessions : []);
 
-    audioSessions.innerHTML = d.sessions.length
-      ? d.sessions.map((s) => `
+    audioSessions.innerHTML = lastAudioSessions.length
+      ? lastAudioSessions.map((s) => `
         <div class="audio-session-item" data-pid="${s.pid}">
           <div class="audio-session-head">
             <span>${s.app}</span>
