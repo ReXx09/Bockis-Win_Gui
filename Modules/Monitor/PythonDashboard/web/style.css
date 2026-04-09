@@ -1380,7 +1380,7 @@ th { color: var(--muted); }
   }
 }
 
-/* â”€â”€â”€ Theme UI â”€â”€â”€ */
+/* Theme UI */
 .theme-section-label {
   color: var(--muted);
   font-size: 0.8rem;
@@ -1485,6 +1485,7 @@ th { color: var(--muted); }
   flex-direction: column;
   gap: 14px;
 }
+
 
 
 
