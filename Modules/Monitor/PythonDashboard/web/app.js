@@ -670,7 +670,16 @@ function renderUserProgramRoutes() {
       const appToken = normalizeProgramToken(s.app);
       return appToken.includes(routeToken) || routeToken.includes(appToken);
     });
-    const status = match ? `Aktiv als ${match.app} (PID ${match.pid})` : 'Aktuell nicht als Session erkannt';
+    const runningProgram = cachedOpenPrograms.find((p) => {
+      const processToken = normalizeProgramToken(p);
+      return processToken.includes(routeToken) || routeToken.includes(processToken);
+    });
+    let status = 'Aktuell nicht als Session erkannt';
+    if (match) {
+      status = `Aktiv als ${match.app} (PID ${match.pid})`;
+    } else if (runningProgram) {
+      status = `${runningProgram} laeuft, aber Windows meldet derzeit keine aktive Audio-Session`;
+    }
     return `
       <div class="audio-user-route-item" data-route-index="${idx}">
         <div>
