@@ -576,6 +576,30 @@ function resolveDeviceNameById(id) {
   return dev ? dev.name : '(Unbekanntes Geraet)';
 }
 
+async function setDefaultAudioDevice(deviceId, deviceName = '') {
+  if (!deviceId) {
+    audioMsg.textContent = 'Kein Ausgabegeraet ausgewaehlt.';
+    return false;
+  }
+  try {
+    const d = await jsonFetch('/api/audio/default-device', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ device_id: deviceId }),
+    });
+    if (!d.success) {
+      audioMsg.textContent = `Umschalten fehlgeschlagen: ${d.output || d.message || 'Unbekannter Fehler'}`;
+      return false;
+    }
+    audioMsg.textContent = `Umschaltung erfolgreich: ${deviceName || d.active_output || 'Neues Standardgeraet aktiv'}`;
+    await refreshAudio();
+    return true;
+  } catch (err) {
+    audioMsg.textContent = `Umschalten-Fehler: ${err.message}`;
+    return false;
+  }
+}
+
 function normalizeProgramToken(value) {
   return String(value || '')
     .trim()
@@ -656,6 +680,7 @@ function renderUserProgramRoutes() {
         <select data-route-device="${idx}">
           ${cachedAudioDevices.map((d) => `<option value="${d.id}" ${d.id === r.deviceId ? 'selected' : ''}>${d.name}${d.is_active_output ? ' (Aktiv)' : ''}</option>`).join('')}
         </select>
+        <button class="btn" data-route-apply="${idx}">Jetzt umschalten</button>
         <button class="btn" data-route-remove="${idx}">Entfernen</button>
       </div>
     `;
@@ -683,6 +708,17 @@ function renderUserProgramRoutes() {
       saveUserAudioRoutes(all);
       audioMsg.textContent = `Eintrag entfernt: ${removed.program}`;
       renderUserProgramRoutes();
+    });
+  });
+
+  userProgramRoutes.querySelectorAll('[data-route-apply]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const idx = parseInt(btn.dataset.routeApply, 10);
+      const all = readUserAudioRoutes();
+      if (!Number.isInteger(idx) || !all[idx]) return;
+      const route = all[idx];
+      const devName = route.deviceName || resolveDeviceNameById(route.deviceId);
+      await setDefaultAudioDevice(route.deviceId, devName);
     });
   });
 }
@@ -803,8 +839,23 @@ async function loadAudioDevices() {
 
     audioDeviceInfo.textContent = `Aktives Ausgabegeraet: ${d.active_output || 'Unbekannt'} | ${dedup.length} eindeutige Geraete${d.routing_message ? ` | ${d.routing_message}` : ''}`;
     audioDevices.innerHTML = dedup.length
-      ? dedup.map((dev) => `<div class="audio-device-item${dev.is_active_output ? ' active' : ''}"><span>${dev.name}</span>${dev.is_active_output ? '<strong>Aktiv</strong>' : ''}</div>`).join('')
+      ? dedup.map((dev) => `
+        <div class="audio-device-item${dev.is_active_output ? ' active' : ''}">
+          <span>${dev.name}</span>
+          <div class="row">
+            ${dev.is_active_output ? '<strong>Aktiv</strong>' : `<button class="btn" data-switch-device="${dev.id}" data-switch-name="${dev.name}">Als Standard</button>`}
+          </div>
+        </div>
+      `).join('')
       : '<div class="audio-empty">Keine Audio-Geraete gefunden.</div>';
+
+    audioDevices.querySelectorAll('[data-switch-device]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const id = btn.dataset.switchDevice || '';
+        const name = btn.dataset.switchName || '';
+        await setDefaultAudioDevice(id, name);
+      });
+    });
   } catch (err) {
     audioDeviceInfo.textContent = `Geraete-Fehler: ${err.message}`;
     audioDevices.innerHTML = '<div class="audio-empty">Geraete konnten nicht geladen werden.</div>';

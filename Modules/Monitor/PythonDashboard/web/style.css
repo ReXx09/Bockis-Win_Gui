@@ -505,7 +505,7 @@ input, select {
   padding: 8px;
   background: #0b1628;
   display: grid;
-  grid-template-columns: minmax(140px, 1fr) minmax(220px, 1fr) auto;
+  grid-template-columns: minmax(140px, 1fr) minmax(220px, 1fr) auto auto;
   gap: 8px;
   align-items: center;
 }

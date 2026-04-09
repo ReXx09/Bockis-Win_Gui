@@ -549,6 +549,55 @@ def get_audio_devices() -> dict:
     return {"available": True, "active_output": active_output, "devices": devices}
 
 
+def _ps_quote(value: str) -> str:
+    return "'" + str(value or "").replace("'", "''") + "'"
+
+
+def set_default_audio_device(device_id: str) -> tuple[bool, str]:
+    if not device_id:
+        return False, "Keine Device-ID uebergeben."
+
+    ps_script = f"""
+$ErrorActionPreference = 'Stop'
+$deviceId = {_ps_quote(device_id)}
+
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+
+[ComImport, Guid("870AF99C-171D-4F9E-AF0D-E63DF40C2BC9")]
+public class _PolicyConfigClient {{
+}}
+
+[ComImport, InterfaceType(ComInterfaceType.InterfaceIsIUnknown), Guid("F8679F50-850A-41CF-9C72-430F290290C8")]
+public interface IPolicyConfig {{
+    int GetMixFormat();
+    int GetDeviceFormat();
+    int SetDeviceFormat();
+    int GetProcessingPeriod();
+    int SetProcessingPeriod();
+    int GetShareMode();
+    int SetShareMode();
+    int GetPropertyValue();
+    int SetPropertyValue();
+    int SetDefaultEndpoint([MarshalAs(UnmanagedType.LPWStr)] string wszDeviceId, int eRole);
+    int SetEndpointVisibility();
+}}
+"@
+
+$policy = [IPolicyConfig]([Activator]::CreateInstance([type]::GetTypeFromCLSID([Guid]"870AF99C-171D-4F9E-AF0D-E63DF40C2BC9")))
+if ($null -eq $policy) {{ throw "PolicyConfig konnte nicht initialisiert werden." }}
+
+[void]$policy.SetDefaultEndpoint($deviceId, 0)
+[void]$policy.SetDefaultEndpoint($deviceId, 1)
+[void]$policy.SetDefaultEndpoint($deviceId, 2)
+Write-Output "OK"
+"""
+
+    rc, out = _run_powershell(ps_script, timeout=30)
+    return rc == 0 and "OK" in out, out
+
+
 def _iter_audio_sessions() -> list:
     if not _ensure_audio_backend():
         return []
@@ -740,9 +789,22 @@ def api_audio_open_routing_settings() -> dict:
 @app.get("/api/audio/devices")
 def api_audio_devices() -> dict:
     devices = get_audio_devices()
-    devices["routing_supported"] = False
-    devices["routing_message"] = "App-zu-Device-Zuweisung ist in dieser Version noch nicht direkt verfuegbar."
+    devices["routing_supported"] = True
+    devices["routing_message"] = "Globales Ausgabegeraet kann direkt umgeschaltet werden. App-spezifisch weiterhin ueber Windows-Routing."
     return devices
+
+
+@app.post("/api/audio/default-device")
+def api_audio_default_device(payload: dict | None = None) -> dict:
+    target_id = str((payload or {}).get("device_id") or "").strip()
+    ok, out = set_default_audio_device(target_id)
+    updated = get_audio_devices()
+    return {
+        "success": ok,
+        "message": "Standard-Ausgabegeraet umgeschaltet." if ok else "Umschalten fehlgeschlagen.",
+        "output": out,
+        "active_output": updated.get("active_output"),
+    }
 
 
 @app.get("/api/audio/sessions")
