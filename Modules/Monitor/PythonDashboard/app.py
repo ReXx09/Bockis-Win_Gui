@@ -106,8 +106,13 @@ def _run_git(args: list[str]) -> tuple[int, str]:
 
 
 def _run_powershell(command: str, timeout: int = 20) -> tuple[int, str]:
-    # Prepend UTF-8 output encoding so German error messages don't crash the decoder.
-    cmd_utf8 = "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8; " + command
+    # UTF-8-BOM: PowerShell emits BOM so the decoder can identify encoding unambiguously.
+    # Python's 'utf-8-sig' codec strips the BOM transparently and handles plain UTF-8 too.
+    cmd_bom = (
+        "$OutputEncoding = [Console]::InputEncoding = [Console]::OutputEncoding"
+        " = [System.Text.UTF8Encoding]::new($true); "  # $true = emit BOM
+        + command
+    )
     proc = subprocess.run(
         [
             "powershell.exe",
@@ -115,10 +120,10 @@ def _run_powershell(command: str, timeout: int = 20) -> tuple[int, str]:
             "-ExecutionPolicy",
             "Bypass",
             "-Command",
-            cmd_utf8,
+            cmd_bom,
         ],
         capture_output=True,
-        encoding="utf-8",
+        encoding="utf-8-sig",  # strips BOM if present, reads plain UTF-8 if not
         errors="replace",
         timeout=timeout,
     )
