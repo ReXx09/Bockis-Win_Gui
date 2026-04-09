@@ -108,18 +108,18 @@ const layoutMsg = document.getElementById('layoutMsg');
 
 const LAYOUT_KEY = 'bockis_dashboard_layout_v4';
 const AUDIO_LAYOUT_KEY = 'bockis_audio_layout_v1';
-const LOGS_LAYOUT_KEY = 'bockis_logs_layout_v1';
+const LOGS_LAYOUT_KEY = 'bockis_logs_layout_v2';
 const QUICKSTART_LAYOUT_KEY = 'bockis_quickstart_layout_v3';
 const TOOLS_LAYOUT_KEY = 'bockis_tools_layout_v1';
-const SETUP_LAYOUT_KEY = 'bockis_setup_layout_v2';
+const SETUP_LAYOUT_KEY = 'bockis_setup_layout_v3';
 const PAGE_KEY = 'bockis_dashboard_page_v1';
 const LEGACY_STORAGE_KEYS = {
   [LAYOUT_KEY]: ['bockis_dashboard_layout_v3', 'bockis_dashboard_layout_v2', 'bockis_dashboard_layout_v1'],
   [AUDIO_LAYOUT_KEY]: [],
-  [LOGS_LAYOUT_KEY]: [],
+  [LOGS_LAYOUT_KEY]: ['bockis_logs_layout_v1'],
   [QUICKSTART_LAYOUT_KEY]: ['bockis_quickstart_layout_v2', 'bockis_quickstart_layout_v1'],
   [TOOLS_LAYOUT_KEY]: [],
-  [SETUP_LAYOUT_KEY]: ['bockis_setup_layout_v1'],
+  [SETUP_LAYOUT_KEY]: ['bockis_setup_layout_v2', 'bockis_setup_layout_v1'],
 };
 const PAGE_ICONS = {
   overview: 'grid',

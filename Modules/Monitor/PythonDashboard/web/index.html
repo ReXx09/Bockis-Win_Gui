@@ -359,6 +359,25 @@
             <div id="dashboardDependencyList" class="dependency-list dependency-table"></div>
             <pre id="dashboardDependencyMsg" class="console compact-console">Bereit.</pre>
           </section>
+
+          <section class="card" data-widget="setup-git" data-default-size="1-3" draggable="true">
+            <div class="card-head"><h2>Git / Setup</h2><span class="drag-handle">⋮⋮</span></div>
+            <div class="kv">
+              <div>Branch</div><div id="gitBranch">-</div>
+              <div>Upstream</div><div id="gitUpstream">-</div>
+              <div>Ahead/Behind</div><div id="gitAB">-</div>
+              <div>Lokale Aenderungen</div><div id="gitDirty">-</div>
+            </div>
+            <div class="row">
+              <input id="gitRemote" value="origin" />
+              <input id="gitTarget" value="main" />
+            </div>
+            <div class="row">
+              <button id="gitStatusBtn" class="btn">Status</button>
+              <button id="gitPullBtn" class="btn">Pull</button>
+            </div>
+            <pre id="gitMsg" class="console">Warte auf Git-Status...</pre>
+          </section>
         </section>
       </section>
 
@@ -510,29 +529,11 @@
             <button id="resetThemeBtn" class="btn">Zuruecksetzen</button>
           </div>
         </section>
-        <section class="card" data-widget="setup-git" data-default-size="1-2" draggable="true">
-          <div class="card-head"><h2>Git / Setup</h2><span class="drag-handle">⋮⋮</span></div>
-          <div class="kv">
-            <div>Branch</div><div id="gitBranch">-</div>
-            <div>Upstream</div><div id="gitUpstream">-</div>
-            <div>Ahead/Behind</div><div id="gitAB">-</div>
-            <div>Lokale Aenderungen</div><div id="gitDirty">-</div>
-          </div>
-          <div class="row">
-            <input id="gitRemote" value="origin" />
-            <input id="gitTarget" value="main" />
-          </div>
-          <div class="row">
-            <button id="gitStatusBtn" class="btn">Status</button>
-            <button id="gitPullBtn" class="btn">Pull</button>
-          </div>
-          <pre id="gitMsg" class="console">Warte auf Git-Status...</pre>
-        </section>
         </section>
       </section>
     </section>
   </main>
 
-  <script src="/web/app.js?v=20260409v"></script>
+  <script src="/web/app.js?v=20260409w"></script>
 </body>
 </html>
