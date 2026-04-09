@@ -27,27 +27,60 @@ function Test-PortOpen {
 }
 
 function Get-PythonRunner {
+    $candidates = @()
+
     $py = Get-Command py -ErrorAction SilentlyContinue
     if ($py) {
-        try {
-            $out = (& py -3 --version 2>&1 | Out-String).Trim()
-            if ($LASTEXITCODE -eq 0 -and $out -match 'Python') {
-                return @{ Cmd = 'py'; Prefix = @('-3') }
-            }
-        } catch { }
+        foreach ($versionArg in @('-3.14', '-3.13', '-3.12', '-3.11', '-3.10', '-3')) {
+            $candidates += @{ Cmd = 'py'; Prefix = @($versionArg) }
+        }
     }
 
     $python = Get-Command python -ErrorAction SilentlyContinue
     if ($python) {
         $path = [string]$python.Source
         if ($path -and ($path -notmatch 'WindowsApps\\python\.exe$')) {
-            try {
-                $out = (& python --version 2>&1 | Out-String).Trim()
-                if ($LASTEXITCODE -eq 0 -and $out -match 'Python') {
-                    return @{ Cmd = 'python'; Prefix = @() }
-                }
-            } catch { }
+            $candidates += @{ Cmd = $path; Prefix = @() }
+            $candidates += @{ Cmd = 'python'; Prefix = @() }
         }
+    }
+
+    $pathPatterns = @(
+        (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python*\python.exe'),
+        (Join-Path $env:ProgramFiles 'Python*\python.exe'),
+        (Join-Path ${env:ProgramFiles(x86)} 'Python*\python.exe'),
+        'C:\Python*\python.exe'
+    )
+
+    foreach ($pattern in $pathPatterns) {
+        if ([string]::IsNullOrWhiteSpace($pattern)) { continue }
+        try {
+            Get-ChildItem -Path $pattern -File -ErrorAction SilentlyContinue |
+                Sort-Object FullName -Descending |
+                ForEach-Object {
+                    $candidatePath = [string]$_.FullName
+                    if ($candidatePath -and ($candidatePath -notmatch 'WindowsApps\\python\.exe$')) {
+                        $candidates += @{ Cmd = $candidatePath; Prefix = @() }
+                    }
+                }
+        } catch { }
+    }
+
+    foreach ($cand in $candidates) {
+        try {
+            $out = (& $cand.Cmd @($cand.Prefix + @('--version')) 2>&1 | Out-String).Trim()
+            if ($LASTEXITCODE -ne 0 -or $out -notmatch 'Python\s+(\d+)\.(\d+)') {
+                continue
+            }
+
+            $major = [int]$matches[1]
+            $minor = [int]$matches[2]
+            if ($major -lt 3 -or ($major -eq 3 -and $minor -lt 10)) {
+                continue
+            }
+
+            return @{ Cmd = [string]$cand.Cmd; Prefix = @($cand.Prefix) }
+        } catch { }
     }
 
     return $null

@@ -960,25 +960,64 @@ function Start-PythonDashboard {
     $pythonCmd = $null
     $pythonPrefixArgs = @()
 
-    # Interpretersuche: erst py-Launcher, dann python.
+    # Interpretersuche: py-Launcher, PATH-Python und bekannte Installationspfade.
     # Der Windows Store Alias (WindowsApps\python.exe) wird explizit aussortiert.
     $candidates = @()
+    $seenCandidates = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $addCandidate = {
+        param(
+            [string]$Cmd,
+            [string[]]$Prefix
+        )
+
+        if ([string]::IsNullOrWhiteSpace($Cmd)) { return }
+        $prefixKey = if ($Prefix -and $Prefix.Count -gt 0) { ($Prefix -join ' ') } else { '' }
+        $key = "$Cmd|$prefixKey"
+        if ($seenCandidates.Add($key)) {
+            $candidates += @{ Cmd = $Cmd; Prefix = @($Prefix) }
+        }
+    }
+
     $pyCmd = Get-Command py -ErrorAction SilentlyContinue
     if ($pyCmd) {
-        $candidates += @{ Cmd = "py"; Prefix = @("-3") }
+        foreach ($pyVersionArg in @('-3.14', '-3.13', '-3.12', '-3.11', '-3.10', '-3')) {
+            & $addCandidate 'py' @($pyVersionArg)
+        }
     }
 
     $pythonRaw = Get-Command python -ErrorAction SilentlyContinue
     if ($pythonRaw) {
         $pythonPath = [string]$pythonRaw.Source
-        if ($pythonPath -and ($pythonPath -notmatch "WindowsApps\\python\.exe$")) {
-            $candidates += @{ Cmd = "python"; Prefix = @() }
+        if ($pythonPath -and ($pythonPath -notmatch 'WindowsApps\\python\.exe$')) {
+            & $addCandidate $pythonPath @()
+            & $addCandidate 'python' @()
         }
+    }
+
+    $pythonPathCandidates = @(
+        (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python*\python.exe'),
+        (Join-Path $env:ProgramFiles 'Python*\python.exe'),
+        (Join-Path ${env:ProgramFiles(x86)} 'Python*\python.exe'),
+        'C:\Python*\python.exe'
+    )
+
+    foreach ($pattern in $pythonPathCandidates) {
+        if ([string]::IsNullOrWhiteSpace($pattern)) { continue }
+        try {
+            Get-ChildItem -Path $pattern -File -ErrorAction SilentlyContinue |
+                Sort-Object FullName -Descending |
+                ForEach-Object {
+                    $candidatePath = [string]$_.FullName
+                    if ($candidatePath -and ($candidatePath -notmatch 'WindowsApps\\python\.exe$')) {
+                        & $addCandidate $candidatePath @()
+                    }
+                }
+        } catch { }
     }
 
     foreach ($cand in $candidates) {
         try {
-            $verArgs = @($cand.Prefix + @("--version"))
+            $verArgs = @($cand.Prefix + @('--version'))
             $verOut = (& $cand.Cmd @verArgs 2>&1 | Out-String).Trim()
             if ($LASTEXITCODE -eq 0 -and $verOut -match "Python") {
                 if ($verOut -match "Python\s+(\d+)\.(\d+)") {
