@@ -34,6 +34,10 @@ const gitMsg = document.getElementById('gitMsg');
 
 const logSelect = document.getElementById('logSelect');
 const logContent = document.getElementById('logContent');
+const reloadDependenciesBtn = document.getElementById('reloadDependenciesBtn');
+const dependencySummary = document.getElementById('dependencySummary');
+const dependencyList = document.getElementById('dependencyList');
+const dependencyMsg = document.getElementById('dependencyMsg');
 const toolList = document.getElementById('toolList');
 const toolMsg = document.getElementById('toolMsg');
 
@@ -81,6 +85,7 @@ const WIDGET_LABELS = {
   'audio-sessions': 'Programm-Audio',
   'audio-routing': 'Benutzer-Programmzuordnung',
   'logs-main': 'Logs',
+  'logs-dependencies': 'Dependency-Check',
   'tools-main': 'Tools',
   'setup-theme': 'Erscheinungsbild',
   'setup-git': 'Git / Setup',
@@ -607,8 +612,92 @@ async function openLog(name) {
   try {
     const d = await jsonFetch(`/api/logs/content?file=${encodeURIComponent(name)}&lines=250`);
     logContent.textContent = d.content || '(leer)';
+    scheduleMasonryLayout(logsGrid);
   } catch (err) {
     logContent.textContent = `Log-Laden fehlgeschlagen: ${err.message}`;
+    scheduleMasonryLayout(logsGrid);
+  }
+}
+
+function getDependencyAction(dep) {
+  if (!dep || !dep.WingetId) return null;
+  if (!dep.Found && dep.Available) return 'install';
+  if (dep.UpdateAvailable) return 'upgrade';
+  return null;
+}
+
+function renderDependencyStatus(data) {
+  if (!dependencySummary || !dependencyList) return;
+
+  if (!data?.available) {
+    dependencySummary.textContent = data?.message || 'Dependency-Check nicht verfuegbar.';
+    dependencyList.innerHTML = '<div class="audio-empty">Keine Dependency-Daten verfuegbar.</div>';
+    scheduleMasonryLayout(logsGrid);
+    return;
+  }
+
+  const deps = Array.isArray(data.dependencies) ? data.dependencies : [];
+  dependencySummary.textContent = data.all_satisfied
+    ? `Systemstatus ok | ${deps.length} Abhaengigkeiten geprueft`
+    : `Pruefung abgeschlossen | ${deps.length} Abhaengigkeiten | Eingriffe empfohlen`;
+
+  dependencyList.innerHTML = deps.length
+    ? deps.map((dep, idx) => {
+        const action = getDependencyAction(dep);
+        const versionText = dep.Version || dep.AvailableVersion || '-';
+        const nextVersion = dep.UpdateAvailable && dep.AvailableVersion ? ` → ${dep.AvailableVersion}` : '';
+        return `
+          <div class="dependency-item dependency-${String(dep.StatusColor || '').toLowerCase()}">
+            <div>
+              <strong>${dep.Name || 'Unbekannt'}</strong>
+              <p class="muted">${dep.Description || ''}</p>
+              <p class="muted">Version: ${versionText}${nextVersion}</p>
+            </div>
+            <div class="dependency-actions">
+              <span class="dependency-status">${dep.Status || '-'}</span>
+              ${action ? `<button class="btn" data-dependency-action="${action}" data-winget-id="${dep.WingetId}" data-dependency-name="${dep.Name || ''}">${action === 'upgrade' ? 'Update' : 'Installieren'}</button>` : ''}
+            </div>
+          </div>
+        `;
+      }).join('')
+    : '<div class="audio-empty">Keine Dependency-Daten gefunden.</div>';
+
+  dependencyList.querySelectorAll('[data-dependency-action]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const action = btn.dataset.dependencyAction || 'install';
+      const wingetId = btn.dataset.wingetId || '';
+      const name = btn.dataset.dependencyName || wingetId;
+      if (!wingetId) return;
+      dependencyMsg.textContent = `${action === 'upgrade' ? 'Update' : 'Installation'} laeuft: ${name}`;
+      btn.disabled = true;
+      try {
+        const result = await jsonFetch('/api/dependencies/action', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ winget_id: wingetId, action }),
+        });
+        dependencyMsg.textContent = `${result.message || ''}\n${result.output || ''}`.trim();
+        renderDependencyStatus(result.status || { available: false, message: 'Status konnte nicht aktualisiert werden.' });
+      } catch (err) {
+        dependencyMsg.textContent = `Dependency-Aktion fehlgeschlagen: ${err.message}`;
+      }
+    });
+  });
+
+  scheduleMasonryLayout(logsGrid);
+}
+
+async function loadDependencyStatus() {
+  if (dependencyMsg) dependencyMsg.textContent = 'Dependency-Check laeuft...';
+  try {
+    const data = await jsonFetch('/api/dependencies');
+    renderDependencyStatus(data);
+    if (dependencyMsg) dependencyMsg.textContent = 'Dependency-Check abgeschlossen.';
+  } catch (err) {
+    if (dependencySummary) dependencySummary.textContent = `Dependency-Check Fehler: ${err.message}`;
+    if (dependencyList) dependencyList.innerHTML = '<div class="audio-empty">Dependency-Check konnte nicht geladen werden.</div>';
+    if (dependencyMsg) dependencyMsg.textContent = `Dependency-Check Fehler: ${err.message}`;
+    scheduleMasonryLayout(logsGrid);
   }
 }
 
@@ -1288,6 +1377,7 @@ async function init() {
   document.getElementById('gitStatusBtn').onclick = refreshGit;
   document.getElementById('gitPullBtn').onclick = pullGit;
   document.getElementById('reloadLogBtn').onclick = () => openLog(logSelect.value);
+  if (reloadDependenciesBtn) reloadDependenciesBtn.onclick = loadDependencyStatus;
   document.getElementById('restartBtn').onclick = restartGui;
   document.getElementById('saveLayoutBtn').onclick = () => {
     const pageConfig = getPageLayoutConfig();
@@ -1332,7 +1422,7 @@ async function init() {
     sysInfo.textContent = 'Systeminfo nicht verfuegbar';
   }
 
-  await Promise.all([refreshAll(), refreshGit(), loadLogs(), loadTools()]);
+  await Promise.all([refreshAll(), refreshGit(), loadLogs(), loadDependencyStatus(), loadTools()]);
   document.querySelectorAll('.layout').forEach((layoutEl) => scheduleMasonryLayout(layoutEl));
   setInterval(refreshAll, 5000);
   setInterval(refreshGit, 20000);

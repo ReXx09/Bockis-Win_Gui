@@ -443,17 +443,49 @@ input, select {
 }
 
 .audio-device-list,
-.audio-session-list {
+.audio-session-list,
+.dependency-list {
   display: grid;
   gap: 8px;
 }
 
 .audio-device-item,
-.audio-session-item {
+.audio-session-item,
+.dependency-item {
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 8px;
   background: #0b1628;
+}
+
+.dependency-item {
+  display: grid;
+  gap: 8px;
+}
+
+.dependency-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.dependency-status {
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+.dependency-green {
+  border-color: rgba(62, 207, 142, 0.35);
+}
+
+.dependency-yellow {
+  border-color: rgba(255, 176, 32, 0.35);
+}
+
+.dependency-red {
+  border-color: rgba(255, 107, 107, 0.35);
 }
 
 .audio-device-item {

@@ -131,6 +131,86 @@ def _run_powershell(command: str, timeout: int = 20) -> tuple[int, str]:
     return proc.returncode, output.strip()
 
 
+def _extract_json_output(output: str) -> dict:
+    text = (output or "").strip()
+    if not text:
+        return {}
+
+    for candidate in [text, *reversed(text.splitlines())]:
+        candidate = candidate.strip()
+        if not candidate:
+            continue
+        try:
+            return json.loads(candidate)
+        except Exception:
+            continue
+    return {}
+
+
+def get_dependency_status() -> dict:
+    dep_module = REPO_ROOT / "Modules" / "Core" / "DependencyChecker.psm1"
+    if not dep_module.exists():
+        return {"available": False, "message": f"DependencyChecker nicht gefunden: {dep_module}", "dependencies": []}
+
+    ps_script = f"""
+$ErrorActionPreference = 'Stop'
+$WarningPreference = 'SilentlyContinue'
+$VerbosePreference = 'SilentlyContinue'
+Import-Module {_ps_quote(str(dep_module))} -Force
+$result = Get-DependencyStatusForGUI -CurrentVersion '4.2.0' -RepoOwner 'ReXx09' -RepoName 'Bockis-Win_Gui-Release'
+$result | ConvertTo-Json -Depth 8 -Compress
+"""
+    rc, out = _run_powershell(ps_script, timeout=120)
+    parsed = _extract_json_output(out)
+    if rc != 0 or not parsed:
+        return {
+            "available": False,
+            "message": out or "DependencyChecker konnte nicht ausgeführt werden.",
+            "dependencies": [],
+        }
+
+    return {
+        "available": True,
+        "message": "Dependency-Status geladen.",
+        "dependencies": parsed.get("Dependencies", []),
+        "all_satisfied": bool(parsed.get("AllSatisfied", False)),
+        "has_installable_items": bool(parsed.get("HasInstallableItems", False)),
+    }
+
+
+def run_dependency_action(winget_id: str, action: str) -> dict:
+    dep_module = REPO_ROOT / "Modules" / "Core" / "DependencyChecker.psm1"
+    if not dep_module.exists():
+        return {"success": False, "message": f"DependencyChecker nicht gefunden: {dep_module}"}
+
+    safe_action = action if action in {"install", "upgrade"} else "install"
+    ps_script = f"""
+$ErrorActionPreference = 'Stop'
+$WarningPreference = 'SilentlyContinue'
+$VerbosePreference = 'SilentlyContinue'
+Import-Module {_ps_quote(str(dep_module))} -Force
+$result = Invoke-DependencyAction -WingetId {_ps_quote(winget_id)} -Action {safe_action}
+$result | ConvertTo-Json -Depth 6 -Compress
+"""
+    rc, out = _run_powershell(ps_script, timeout=1800)
+    parsed = _extract_json_output(out)
+
+    if parsed:
+        return {
+            "success": bool(parsed.get("Success", False)),
+            "message": parsed.get("ErrorMessage") or ("Aktion erfolgreich" if parsed.get("Success") else "Aktion fehlgeschlagen"),
+            "exit_code": parsed.get("ExitCode"),
+            "output": out,
+        }
+
+    return {
+        "success": rc == 0,
+        "message": out or "Dependency-Aktion fehlgeschlagen",
+        "exit_code": rc,
+        "output": out,
+    }
+
+
 def _detect_current_port(default_port: int = 9500) -> int:
     env_port = os.environ.get("BOCKIS_DASHBOARD_PORT", "").strip()
     if env_port.isdigit():
@@ -953,6 +1033,25 @@ def api_log_content(file: str, lines: int = 300) -> dict:
     data = target.read_text(encoding="utf-8", errors="replace").splitlines()
     tail = data[-max(1, min(lines, 3000)) :]
     return {"file": file, "content": "\n".join(tail)}
+
+
+@app.get("/api/dependencies")
+def api_dependencies() -> dict:
+    return get_dependency_status()
+
+
+@app.post("/api/dependencies/action")
+def api_dependency_action(payload: dict | None = None) -> dict:
+    winget_id = str((payload or {}).get("winget_id") or "").strip()
+    action = str((payload or {}).get("action") or "").strip().lower()
+    if not winget_id:
+        return {"success": False, "message": "Winget-ID fehlt"}
+    if action not in {"install", "upgrade"}:
+        return {"success": False, "message": "Aktion muss install oder upgrade sein"}
+
+    result = run_dependency_action(winget_id, action)
+    result["status"] = get_dependency_status()
+    return result
 
 
 @app.get("/api/git/status")
