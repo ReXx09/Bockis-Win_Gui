@@ -194,6 +194,22 @@ body {
   color: var(--accent);
 }
 
+.menu-nav-label {
+  min-width: 0;
+}
+
+.menu-nav-badge {
+  margin-left: auto;
+  border: 1px solid color-mix(in srgb, var(--accent) 48%, var(--line));
+  border-radius: 999px;
+  padding: 1px 7px;
+  font-size: 0.64rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
 .menu-item-label {
   display: flex;
   align-items: center;

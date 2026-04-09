@@ -434,11 +434,17 @@ function getIconMarkup(iconName) {
 }
 
 function decoratePageMenuIcons() {
+  const pageBadges = {
+    audio: 'Beta',
+    tools: 'Beta',
+  };
+
   document.querySelectorAll('.menu-nav-btn').forEach((btn) => {
     if (btn.dataset.iconDecorated === '1') return;
     const page = btn.dataset.pageTarget || '';
     const label = btn.textContent.trim();
-    btn.innerHTML = `${getIconMarkup(PAGE_ICONS[page] || 'grid')}<span>${label}</span>`;
+    const badge = pageBadges[page] ? `<span class="menu-nav-badge">${pageBadges[page]}</span>` : '';
+    btn.innerHTML = `${getIconMarkup(PAGE_ICONS[page] || 'grid')}<span class="menu-nav-label">${label}</span>${badge}`;
     btn.dataset.iconDecorated = '1';
   });
 }
