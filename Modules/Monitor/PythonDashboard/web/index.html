@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Bockis Python Dashboard</title>
-  <link rel="stylesheet" href="/web/style.css?v=20260409g" />
+  <link rel="stylesheet" href="/web/style.css?v=20260409h" />
   <script>
     (function(){try{var t=localStorage.getItem('bockis_theme_v1');if(t){var d=JSON.parse(t);if(d&&d.vars){var r=document.documentElement;Object.keys(d.vars).forEach(function(k){r.style.setProperty(k,d.vars[k]);});}}}catch(e){}}());
   </script>
@@ -331,10 +331,58 @@
 
       <section class="page" data-page="tools">
         <section class="layout" id="toolsGrid">
-          <section class="card" data-widget="tools-main" data-default-size="full" draggable="true">
+          <section class="card" data-widget="tools-main" data-default-size="1-3" draggable="true">
             <div class="card-head"><h2>Tools</h2><span class="drag-handle">⋮⋮</span></div>
             <div id="toolList" class="tool-grid"></div>
             <pre id="toolMsg" class="console">Bereit.</pre>
+          </section>
+
+          <section class="card" data-widget="tools-launchers" data-default-size="2-3" draggable="true">
+            <div class="card-head"><h2>Schnellstart</h2><span class="drag-handle">⋮⋮</span></div>
+            <div class="row">
+              <button id="reloadLaunchersBtn" class="btn">Aktualisieren</button>
+            </div>
+            <div id="launcherList" class="launcher-grid"></div>
+            <pre id="launcherMsg" class="console compact-console">Bereit.</pre>
+          </section>
+
+          <section class="card" data-widget="tools-launcher-config" data-default-size="full" draggable="true">
+            <div class="card-head"><h2>Launcher-Konfiguration</h2><span class="drag-handle">⋮⋮</span></div>
+            <div class="launcher-form-grid">
+              <label>
+                <span>Name</span>
+                <input id="launcherName" type="text" placeholder="z. B. FRITZ!Box, NAS, Discord" />
+              </label>
+              <label>
+                <span>Typ</span>
+                <select id="launcherKind">
+                  <option value="tool">Tool</option>
+                  <option value="app">App / Dienst</option>
+                  <option value="url">Website / Netzwerkdienst</option>
+                </select>
+              </label>
+              <label id="launcherToolField">
+                <span>Tool</span>
+                <select id="launcherToolId"></select>
+              </label>
+              <label id="launcherTargetField" class="span-2">
+                <span>Ziel</span>
+                <input id="launcherTarget" type="text" placeholder="https://router.local oder C:\\Windows\\System32\\notepad.exe" />
+              </label>
+              <label id="launcherArgsField" class="span-2">
+                <span>Argumente</span>
+                <input id="launcherArgs" type="text" placeholder="optional, z. B. --profile work" />
+              </label>
+              <label class="span-2">
+                <span>Beschreibung</span>
+                <input id="launcherNote" type="text" placeholder="optionale Zusatzinfo fuer die Kachel" />
+              </label>
+            </div>
+            <div class="row">
+              <button id="saveLauncherBtn" class="btn">Launcher speichern</button>
+              <button id="resetLauncherFormBtn" class="btn">Neu</button>
+            </div>
+            <p id="launcherConfigHint" class="muted">Erstelle frei konfigurierbare Kacheln fuer Tools, Apps, Netzwerkdienste oder Webseiten.</p>
           </section>
         </section>
       </section>
@@ -388,6 +436,6 @@
     </section>
   </main>
 
-  <script src="/web/app.js?v=20260409i"></script>
+  <script src="/web/app.js?v=20260409k"></script>
 </body>
 </html>

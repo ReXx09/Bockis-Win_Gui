@@ -747,6 +747,87 @@ input, select {
   margin-bottom: 8px;
 }
 
+.launcher-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.launcher-card {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px;
+  background: #0b1628;
+  display: grid;
+  gap: 10px;
+}
+
+.launcher-run {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  padding: 0;
+  cursor: pointer;
+  display: grid;
+  gap: 6px;
+}
+
+.launcher-run strong {
+  font-size: 1rem;
+}
+
+.launcher-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  min-height: 2.2em;
+}
+
+.launcher-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.launcher-kind {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: rgba(9, 17, 31, 0.6);
+}
+
+.launcher-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.launcher-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.launcher-form-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.launcher-hidden {
+  display: none !important;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
@@ -783,6 +864,10 @@ th { color: var(--muted); }
   }
 
   .audio-user-route-item {
+    grid-template-columns: 1fr;
+  }
+
+  .launcher-form-grid {
     grid-template-columns: 1fr;
   }
 

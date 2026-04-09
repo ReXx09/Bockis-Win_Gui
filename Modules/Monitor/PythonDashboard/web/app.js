@@ -44,6 +44,21 @@ const dashboardDependencyList = document.getElementById('dashboardDependencyList
 const dashboardDependencyMsg = document.getElementById('dashboardDependencyMsg');
 const toolList = document.getElementById('toolList');
 const toolMsg = document.getElementById('toolMsg');
+const reloadLaunchersBtn = document.getElementById('reloadLaunchersBtn');
+const launcherList = document.getElementById('launcherList');
+const launcherMsg = document.getElementById('launcherMsg');
+const launcherName = document.getElementById('launcherName');
+const launcherKind = document.getElementById('launcherKind');
+const launcherToolId = document.getElementById('launcherToolId');
+const launcherTarget = document.getElementById('launcherTarget');
+const launcherArgs = document.getElementById('launcherArgs');
+const launcherNote = document.getElementById('launcherNote');
+const launcherToolField = document.getElementById('launcherToolField');
+const launcherTargetField = document.getElementById('launcherTargetField');
+const launcherArgsField = document.getElementById('launcherArgsField');
+const saveLauncherBtn = document.getElementById('saveLauncherBtn');
+const resetLauncherFormBtn = document.getElementById('resetLauncherFormBtn');
+const launcherConfigHint = document.getElementById('launcherConfigHint');
 
 const audioLevel = document.getElementById('audioLevel');
 const audioMuted = document.getElementById('audioMuted');
@@ -106,6 +121,8 @@ const WIDGET_LABELS = {
   'logs-dependencies': 'Win-GUI-Dependencies',
   'logs-dashboard-dependencies': 'Dashboard-Dependencies',
   'tools-main': 'Tools',
+  'tools-launchers': 'Schnellstart',
+  'tools-launcher-config': 'Launcher-Konfiguration',
   'setup-theme': 'Erscheinungsbild',
   'setup-git': 'Git / Setup',
 };
@@ -123,6 +140,8 @@ const WIDGET_ICONS = {
   'logs-dependencies': 'box',
   'logs-dashboard-dependencies': 'layers',
   'tools-main': 'wrench',
+  'tools-launchers': 'grid',
+  'tools-launcher-config': 'sliders',
   'setup-theme': 'palette',
   'setup-git': 'git-branch',
 };
@@ -158,6 +177,9 @@ let cachedOpenPrograms = [];
 let lastOpenProgramsFetch = 0;
 let showAllAudioDevices = false;
 let pendingThemeId = 'ozean';
+let availableTools = [];
+let customLaunchers = [];
+let editingLauncherId = '';
 const masonryFrames = new Map();
 const HISTORY_LEN = 45;
 const monitorHistory = {
@@ -308,6 +330,15 @@ function decorateCardIcons() {
 
 function getPageLayoutConfig(page = getCurrentPage()) {
   return PAGE_LAYOUTS[page] || null;
+}
+
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function formatUptime(s) {
@@ -834,8 +865,9 @@ async function loadDashboardDependencyStatus() {
 async function loadTools() {
   try {
     const tools = await jsonFetch('/api/tools');
+    availableTools = Array.isArray(tools) ? tools : [];
     toolList.innerHTML = '';
-    for (const t of tools) {
+    for (const t of availableTools) {
       const btn = document.createElement('button');
       btn.className = 'btn';
       btn.textContent = t.label;
@@ -850,8 +882,196 @@ async function loadTools() {
       };
       toolList.appendChild(btn);
     }
+    populateLauncherToolSelect();
   } catch (err) {
     toolMsg.textContent = `Tool-Liste fehlgeschlagen: ${err.message}`;
+  }
+}
+
+function populateLauncherToolSelect(selected = '') {
+  if (!launcherToolId) return;
+  launcherToolId.innerHTML = availableTools.length
+    ? availableTools.map((tool) => `<option value="${escapeHtml(tool.id)}">${escapeHtml(tool.label)}</option>`).join('')
+    : '<option value="">Keine Tools verfuegbar</option>';
+  if (selected) launcherToolId.value = selected;
+}
+
+function syncLauncherForm() {
+  if (!launcherKind) return;
+  const kind = launcherKind.value || 'tool';
+  if (launcherToolField) launcherToolField.classList.toggle('launcher-hidden', kind !== 'tool');
+  if (launcherTargetField) launcherTargetField.classList.toggle('launcher-hidden', kind === 'tool');
+  if (launcherArgsField) launcherArgsField.classList.toggle('launcher-hidden', kind !== 'app');
+
+  if (launcherConfigHint) {
+    if (kind === 'tool') {
+      launcherConfigHint.textContent = 'Waehle ein vorhandenes Dashboard-Tool und mache daraus eine eigene Schnellstart-Kachel.';
+    } else if (kind === 'app') {
+      launcherConfigHint.textContent = 'Starte lokale Programme, MMCs, Ordner oder Dienste per Start-Process, optional mit Argumenten.';
+    } else {
+      launcherConfigHint.textContent = 'Lege Webseiten oder Netzwerkdienste wie Router, NAS, Proxmox oder Drucker-Weboberflaechen als Kachel ab.';
+    }
+  }
+
+  if (launcherTarget) {
+    launcherTarget.placeholder = kind === 'url'
+      ? 'https://router.local oder http://192.168.178.1'
+      : 'C:\\Windows\\System32\\services.msc oder \\NAS\\Freigabe';
+  }
+}
+
+function resetLauncherForm() {
+  editingLauncherId = '';
+  if (launcherName) launcherName.value = '';
+  if (launcherKind) launcherKind.value = 'tool';
+  if (launcherTarget) launcherTarget.value = '';
+  if (launcherArgs) launcherArgs.value = '';
+  if (launcherNote) launcherNote.value = '';
+  populateLauncherToolSelect();
+  syncLauncherForm();
+  if (saveLauncherBtn) saveLauncherBtn.textContent = 'Launcher speichern';
+}
+
+function fillLauncherForm(launcher) {
+  if (!launcher) return;
+  editingLauncherId = launcher.id || '';
+  if (launcherName) launcherName.value = launcher.title || '';
+  if (launcherKind) launcherKind.value = launcher.kind || 'tool';
+  populateLauncherToolSelect(launcher.tool_id || '');
+  if (launcherTarget) launcherTarget.value = launcher.target || '';
+  if (launcherArgs) launcherArgs.value = launcher.args || '';
+  if (launcherNote) launcherNote.value = launcher.note || '';
+  syncLauncherForm();
+  if (saveLauncherBtn) saveLauncherBtn.textContent = 'Launcher aktualisieren';
+}
+
+function getLauncherKindLabel(kind) {
+  if (kind === 'tool') return 'Tool';
+  if (kind === 'app') return 'App / Dienst';
+  return 'Website / Netzwerk';
+}
+
+async function runLauncher(launcherId) {
+  if (!launcherId) return;
+  const launcher = customLaunchers.find((item) => item.id === launcherId);
+  if (launcherMsg) launcherMsg.textContent = `Starte ${launcher?.title || 'Launcher'}...`;
+  try {
+    const result = await jsonFetch(`/api/launchers/run/${encodeURIComponent(launcherId)}`, { method: 'POST' });
+    if (launcherMsg) launcherMsg.textContent = `${result.message || ''}\n${result.output || ''}`.trim();
+  } catch (err) {
+    if (launcherMsg) launcherMsg.textContent = `Launcher-Fehler: ${err.message}`;
+  }
+}
+
+function renderLaunchers() {
+  if (!launcherList) return;
+  if (!customLaunchers.length) {
+    launcherList.innerHTML = '<div class="audio-empty">Noch keine Schnellstart-Kacheln angelegt.</div>';
+    scheduleMasonryLayout(toolsGrid);
+    return;
+  }
+
+  launcherList.innerHTML = customLaunchers.map((launcher) => `
+    <div class="launcher-card">
+      <button class="launcher-run" type="button" data-launcher-run="${escapeHtml(launcher.id)}">
+        <strong>${escapeHtml(launcher.title)}</strong>
+        <p class="launcher-note">${escapeHtml(launcher.note || launcher.target || getLauncherKindLabel(launcher.kind))}</p>
+      </button>
+      <div class="launcher-meta">
+        <span class="launcher-kind">${escapeHtml(getLauncherKindLabel(launcher.kind))}</span>
+        <span>${escapeHtml(launcher.kind === 'tool' ? (availableTools.find((tool) => tool.id === launcher.tool_id)?.label || launcher.tool_id || '-') : launcher.target || '-')}</span>
+      </div>
+      <div class="launcher-actions">
+        <button class="btn" type="button" data-launcher-edit="${escapeHtml(launcher.id)}">Bearbeiten</button>
+        <button class="btn warn" type="button" data-launcher-delete="${escapeHtml(launcher.id)}">Entfernen</button>
+      </div>
+    </div>
+  `).join('');
+
+  launcherList.querySelectorAll('[data-launcher-run]').forEach((btn) => {
+    btn.addEventListener('click', () => runLauncher(btn.dataset.launcherRun || ''));
+  });
+  launcherList.querySelectorAll('[data-launcher-edit]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const launcher = customLaunchers.find((item) => item.id === (btn.dataset.launcherEdit || ''));
+      fillLauncherForm(launcher);
+    });
+  });
+  launcherList.querySelectorAll('[data-launcher-delete]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const launcherId = btn.dataset.launcherDelete || '';
+      const launcher = customLaunchers.find((item) => item.id === launcherId);
+      if (!launcherId || !confirm(`Launcher '${launcher?.title || launcherId}' entfernen?`)) return;
+      try {
+        const result = await jsonFetch(`/api/launchers/${encodeURIComponent(launcherId)}`, { method: 'DELETE' });
+        customLaunchers = Array.isArray(result.launchers) ? result.launchers : [];
+        if (launcherMsg) launcherMsg.textContent = result.message || 'Launcher entfernt.';
+        if (editingLauncherId === launcherId) resetLauncherForm();
+        renderLaunchers();
+      } catch (err) {
+        if (launcherMsg) launcherMsg.textContent = `Loeschen fehlgeschlagen: ${err.message}`;
+      }
+    });
+  });
+
+  scheduleMasonryLayout(toolsGrid);
+}
+
+async function loadLaunchers() {
+  try {
+    const data = await jsonFetch('/api/launchers');
+    customLaunchers = Array.isArray(data.launchers) ? data.launchers : [];
+    renderLaunchers();
+  } catch (err) {
+    if (launcherMsg) launcherMsg.textContent = `Launcher konnten nicht geladen werden: ${err.message}`;
+    if (launcherList) launcherList.innerHTML = '<div class="audio-empty">Launcher konnten nicht geladen werden.</div>';
+    scheduleMasonryLayout(toolsGrid);
+  }
+}
+
+async function saveLauncher() {
+  if (!launcherName || !launcherKind) return;
+  const payload = {
+    id: editingLauncherId,
+    title: launcherName.value.trim(),
+    kind: launcherKind.value,
+    tool_id: launcherToolId?.value || '',
+    target: launcherTarget?.value.trim() || '',
+    args: launcherArgs?.value.trim() || '',
+    note: launcherNote?.value.trim() || '',
+  };
+
+  if (!payload.title) {
+    if (launcherMsg) launcherMsg.textContent = 'Bitte einen Namen fuer die Kachel angeben.';
+    return;
+  }
+
+  if (payload.kind === 'tool' && !payload.tool_id) {
+    if (launcherMsg) launcherMsg.textContent = 'Bitte ein Tool waehlen.';
+    return;
+  }
+
+  if ((payload.kind === 'app' || payload.kind === 'url') && !payload.target) {
+    if (launcherMsg) launcherMsg.textContent = 'Bitte ein Ziel angeben.';
+    return;
+  }
+
+  try {
+    const result = await jsonFetch('/api/launchers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!result.success) {
+      if (launcherMsg) launcherMsg.textContent = result.message || 'Launcher konnte nicht gespeichert werden.';
+      return;
+    }
+    customLaunchers = Array.isArray(result.launchers) ? result.launchers : [];
+    if (launcherMsg) launcherMsg.textContent = result.message || 'Launcher gespeichert.';
+    renderLaunchers();
+    resetLauncherForm();
+  } catch (err) {
+    if (launcherMsg) launcherMsg.textContent = `Speichern fehlgeschlagen: ${err.message}`;
   }
 }
 
@@ -1535,6 +1755,10 @@ async function init() {
   document.getElementById('reloadLogBtn').onclick = () => openLog(logSelect.value);
   if (reloadDependenciesBtn) reloadDependenciesBtn.onclick = loadDependencyStatus;
   if (reloadDashboardDependenciesBtn) reloadDashboardDependenciesBtn.onclick = loadDashboardDependencyStatus;
+  if (reloadLaunchersBtn) reloadLaunchersBtn.onclick = loadLaunchers;
+  if (launcherKind) launcherKind.onchange = syncLauncherForm;
+  if (saveLauncherBtn) saveLauncherBtn.onclick = saveLauncher;
+  if (resetLauncherFormBtn) resetLauncherFormBtn.onclick = resetLauncherForm;
   document.getElementById('restartBtn').onclick = restartGui;
   document.getElementById('saveLayoutBtn').onclick = () => {
     const pageConfig = getPageLayoutConfig();
@@ -1572,6 +1796,7 @@ async function init() {
   wireAudioControls();
   wireUserAudioRoutingControls();
   wireThemeControls();
+  resetLauncherForm();
 
   try {
     await loadSystem();
@@ -1579,7 +1804,7 @@ async function init() {
     sysInfo.textContent = 'Systeminfo nicht verfuegbar';
   }
 
-  await Promise.all([refreshAll(), refreshGit(), loadLogs(), loadDependencyStatus(), loadDashboardDependencyStatus(), loadTools()]);
+  await Promise.all([refreshAll(), refreshGit(), loadLogs(), loadDependencyStatus(), loadDashboardDependencyStatus(), loadTools(), loadLaunchers()]);
   document.querySelectorAll('.layout').forEach((layoutEl) => scheduleMasonryLayout(layoutEl));
   setInterval(refreshAll, 5000);
   setInterval(refreshGit, 20000);

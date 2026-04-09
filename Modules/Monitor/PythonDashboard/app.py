@@ -84,6 +84,7 @@ WEB_DIR = APP_DIR / "web"
 REPO_ROOT = APP_DIR.parent.parent.parent
 LOG_DIR = REPO_ROOT / "Data" / "Logs"
 DASHBOARD_REQUIREMENTS = APP_DIR / "requirements.txt"
+CUSTOM_LAUNCHERS_FILE = REPO_ROOT / "Data" / "dashboard_launchers.json"
 
 app = FastAPI(title="Bockis Python Dashboard")
 
@@ -670,6 +671,116 @@ TOOL_COMMANDS: dict[str, str] = {
     "task_manager": "Start-Process 'taskmgr.exe'",
     "disk_cleanup": "Start-Process 'cleanmgr.exe'",
 }
+
+LAUNCHER_KINDS = {"tool", "app", "url"}
+
+
+def _load_custom_launchers() -> list[dict]:
+    try:
+        if not CUSTOM_LAUNCHERS_FILE.exists():
+            return []
+        data = json.loads(CUSTOM_LAUNCHERS_FILE.read_text(encoding="utf-8"))
+        if not isinstance(data, list):
+            return []
+    except Exception:
+        return []
+
+    launchers: list[dict] = []
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        kind = str(item.get("kind") or "").strip().lower()
+        launcher_id = str(item.get("id") or "").strip()
+        title = str(item.get("title") or "").strip()
+        tool_id = str(item.get("tool_id") or "").strip()
+        target = str(item.get("target") or "").strip()
+        args = str(item.get("args") or "").strip()
+        note = str(item.get("note") or "").strip()
+
+        if not launcher_id or not title or kind not in LAUNCHER_KINDS:
+            continue
+        if kind == "tool" and tool_id not in TOOL_COMMANDS:
+            continue
+        if kind in {"app", "url"} and not target:
+            continue
+
+        launchers.append(
+            {
+                "id": launcher_id,
+                "title": title,
+                "kind": kind,
+                "tool_id": tool_id,
+                "target": target,
+                "args": args,
+                "note": note,
+            }
+        )
+
+    return launchers
+
+
+def _save_custom_launchers(launchers: list[dict]) -> None:
+    CUSTOM_LAUNCHERS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    CUSTOM_LAUNCHERS_FILE.write_text(json.dumps(launchers, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _normalize_launcher_payload(payload: dict | None = None) -> dict:
+    payload = payload or {}
+    kind = str(payload.get("kind") or "url").strip().lower()
+    title = str(payload.get("title") or "").strip()
+    launcher_id = str(payload.get("id") or "").strip()
+    tool_id = str(payload.get("tool_id") or "").strip()
+    target = str(payload.get("target") or "").strip()
+    args = str(payload.get("args") or "").strip()
+    note = str(payload.get("note") or "").strip()
+
+    if kind not in LAUNCHER_KINDS:
+        raise ValueError("Typ muss tool, app oder url sein")
+    if not title:
+        raise ValueError("Titel fehlt")
+
+    if kind == "tool":
+        if tool_id not in TOOL_COMMANDS:
+            raise ValueError("Tool ist ungueltig")
+        target = ""
+        args = ""
+    elif not target:
+        raise ValueError("Ziel fehlt")
+
+    if not launcher_id:
+        slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-") or "launcher"
+        launcher_id = f"{slug}-{int(time.time() * 1000)}"
+
+    return {
+        "id": launcher_id,
+        "title": title,
+        "kind": kind,
+        "tool_id": tool_id,
+        "target": target,
+        "args": args,
+        "note": note,
+    }
+
+
+def _run_custom_launcher(launcher: dict) -> tuple[bool, str]:
+    kind = str(launcher.get("kind") or "").strip().lower()
+    if kind == "tool":
+        cmd = TOOL_COMMANDS.get(str(launcher.get("tool_id") or "").strip())
+        if not cmd:
+            return False, "Tool nicht gefunden"
+        rc, out = _run_powershell(cmd, timeout=15)
+        return rc == 0, out
+
+    target = str(launcher.get("target") or "").strip()
+    args = str(launcher.get("args") or "").strip()
+    if not target:
+        return False, "Ziel fehlt"
+
+    ps = f"Start-Process -FilePath {_ps_quote(target)}"
+    if args:
+        ps += f" -ArgumentList {_ps_quote(args)}"
+    rc, out = _run_powershell(ps, timeout=15)
+    return rc == 0, out
 
 MEDIA_KEY_MAP: dict[str, int] = {
     "play_pause": 0xB3,
@@ -1269,6 +1380,65 @@ def api_tools() -> list[dict]:
         {"id": "task_manager", "label": "Task Manager"},
         {"id": "disk_cleanup", "label": "Disk Cleanup"},
     ]
+
+
+@app.get("/api/launchers")
+def api_launchers() -> dict:
+    return {"launchers": _load_custom_launchers()}
+
+
+@app.post("/api/launchers")
+def api_save_launcher(payload: dict | None = None) -> dict:
+    try:
+        launcher = _normalize_launcher_payload(payload)
+    except ValueError as exc:
+        return {"success": False, "message": str(exc), "launchers": _load_custom_launchers()}
+
+    launchers = _load_custom_launchers()
+    updated = False
+    for idx, existing in enumerate(launchers):
+        if existing.get("id") == launcher["id"]:
+            launchers[idx] = launcher
+            updated = True
+            break
+    if not updated:
+        launchers.append(launcher)
+
+    _save_custom_launchers(launchers)
+    return {
+        "success": True,
+        "message": "Launcher aktualisiert" if updated else "Launcher hinzugefuegt",
+        "launchers": launchers,
+        "launcher": launcher,
+    }
+
+
+@app.delete("/api/launchers/{launcher_id}")
+def api_delete_launcher(launcher_id: str) -> dict:
+    launcher_id = str(launcher_id or "").strip()
+    launchers = _load_custom_launchers()
+    remaining = [item for item in launchers if item.get("id") != launcher_id]
+    if len(remaining) == len(launchers):
+        return {"success": False, "message": "Launcher nicht gefunden", "launchers": launchers}
+
+    _save_custom_launchers(remaining)
+    return {"success": True, "message": "Launcher entfernt", "launchers": remaining}
+
+
+@app.post("/api/launchers/run/{launcher_id}")
+def api_run_launcher(launcher_id: str) -> dict:
+    launcher_id = str(launcher_id or "").strip()
+    launcher = next((item for item in _load_custom_launchers() if item.get("id") == launcher_id), None)
+    if not launcher:
+        return {"success": False, "message": "Launcher nicht gefunden"}
+
+    ok, out = _run_custom_launcher(launcher)
+    return {
+        "success": ok,
+        "message": f"{launcher.get('title', 'Launcher')} gestartet" if ok else f"{launcher.get('title', 'Launcher')} konnte nicht gestartet werden",
+        "output": out,
+        "launcher": launcher,
+    }
 
 
 @app.post("/api/tools/run/{tool_id}")
