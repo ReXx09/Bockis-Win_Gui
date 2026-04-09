@@ -106,17 +106,17 @@ const layoutMsg = document.getElementById('layoutMsg');
 const LAYOUT_KEY = 'bockis_dashboard_layout_v4';
 const AUDIO_LAYOUT_KEY = 'bockis_audio_layout_v1';
 const LOGS_LAYOUT_KEY = 'bockis_logs_layout_v1';
-const QUICKSTART_LAYOUT_KEY = 'bockis_quickstart_layout_v1';
+const QUICKSTART_LAYOUT_KEY = 'bockis_quickstart_layout_v2';
 const TOOLS_LAYOUT_KEY = 'bockis_tools_layout_v1';
-const SETUP_LAYOUT_KEY = 'bockis_setup_layout_v1';
+const SETUP_LAYOUT_KEY = 'bockis_setup_layout_v2';
 const PAGE_KEY = 'bockis_dashboard_page_v1';
 const LEGACY_STORAGE_KEYS = {
   [LAYOUT_KEY]: ['bockis_dashboard_layout_v3', 'bockis_dashboard_layout_v2', 'bockis_dashboard_layout_v1'],
   [AUDIO_LAYOUT_KEY]: [],
   [LOGS_LAYOUT_KEY]: [],
-  [QUICKSTART_LAYOUT_KEY]: [],
+  [QUICKSTART_LAYOUT_KEY]: ['bockis_quickstart_layout_v1'],
   [TOOLS_LAYOUT_KEY]: [],
-  [SETUP_LAYOUT_KEY]: [],
+  [SETUP_LAYOUT_KEY]: ['bockis_setup_layout_v1'],
 };
 const PAGE_ICONS = {
   overview: 'grid',
@@ -141,7 +141,7 @@ const WIDGET_LABELS = {
   'logs-dependencies': 'Win-GUI-Dependencies',
   'logs-dashboard-dependencies': 'Dashboard-Dependencies',
   'quickstart-main': 'Schnellstart',
-  'quickstart-config': 'Launcher-Konfiguration',
+  'setup-launchers': 'Launcher-Konfiguration',
   'tools-main': 'Tools',
   'setup-theme': 'Erscheinungsbild',
   'setup-git': 'Git / Setup',
@@ -160,7 +160,7 @@ const WIDGET_ICONS = {
   'logs-dependencies': 'box',
   'logs-dashboard-dependencies': 'layers',
   'quickstart-main': 'globe',
-  'quickstart-config': 'sliders',
+  'setup-launchers': 'sliders',
   'tools-main': 'wrench',
   'setup-theme': 'palette',
   'setup-git': 'git-branch',
@@ -182,7 +182,7 @@ const PAGE_ROUTES = {
   setup: '/setup',
 };
 const ROUTE_PAGE_MAP = {
-  '/': null,
+  '/': 'quickstart',
   '/overview': 'overview',
   '/uebersicht': 'overview',
   '/übersicht': 'overview',
@@ -369,7 +369,7 @@ function getCards(layoutEl = dashboardGrid) {
 }
 
 function getCurrentPage() {
-  return document.querySelector('.page.active')?.dataset.page || (localStorage.getItem(PAGE_KEY) || 'overview');
+  return document.querySelector('.page.active')?.dataset.page || (localStorage.getItem(PAGE_KEY) || 'quickstart');
 }
 
 function getRouteForPage(page) {
@@ -716,13 +716,13 @@ function wirePageMenu() {
   });
 
   window.addEventListener('popstate', () => {
-    const routedPage = getPageFromLocation() || 'overview';
+    const routedPage = getPageFromLocation() || 'quickstart';
     showPage(routedPage, { updateUrl: false });
   });
 
   const routedPage = getPageFromLocation();
   const hasExplicitPath = ((window.location.pathname || '/').trim() || '/') !== '/';
-  const start = routedPage || (hasExplicitPath ? 'overview' : (localStorage.getItem(PAGE_KEY) || 'overview'));
+  const start = routedPage || (hasExplicitPath ? 'overview' : (localStorage.getItem(PAGE_KEY) || 'quickstart'));
   showPage(start, { updateUrl: hasExplicitPath && !routedPage, replaceUrl: hasExplicitPath });
 }
 
