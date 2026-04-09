@@ -121,12 +121,13 @@ body {
 
 .sidebar {
   border: 1px solid var(--line);
-  background: var(--card);
+  background: color-mix(in srgb, var(--card) 82%, transparent);
   border-radius: 12px;
   padding: 12px;
   position: sticky;
   top: 72px;
   height: fit-content;
+  backdrop-filter: blur(8px) saturate(118%);
 }
 
 .sidebar h3 {
@@ -213,10 +214,11 @@ body {
 
 .card {
   border: 1px solid var(--line);
-  background: var(--card);
+  background: color-mix(in srgb, var(--card) 84%, transparent);
   border-radius: 12px;
   padding: 12px;
   transition: border-color 0.2s ease, transform 0.15s ease;
+  backdrop-filter: blur(7px) saturate(115%);
 }
 
 .card.dragging {
@@ -798,12 +800,13 @@ input, select {
   border: 1px solid var(--line);
   border-radius: 10px;
   padding: 10px;
-  background: var(--launcher-bg);
+  background: color-mix(in srgb, var(--launcher-bg) 86%, transparent);
   color: var(--launcher-text);
   border-color: var(--launcher-border);
   display: grid;
   gap: 12px;
   position: relative;
+  backdrop-filter: blur(8px) saturate(118%);
 }
 
 .launcher-card.is-editing {
@@ -836,11 +839,12 @@ input, select {
   height: 56px;
   border-radius: 16px;
   border: 1px solid color-mix(in srgb, var(--launcher-accent) 30%, var(--launcher-border));
-  background: color-mix(in srgb, var(--launcher-accent) 12%, var(--launcher-bg));
+  background: color-mix(in srgb, var(--launcher-accent) 18%, transparent);
   color: var(--launcher-accent);
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  backdrop-filter: blur(4px) saturate(120%);
 }
 
 .launcher-icon-badge .icon-inline {
@@ -965,9 +969,10 @@ input, select {
   gap: 8px;
   border: 1px solid var(--line);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--card) 88%, transparent);
+  background: color-mix(in srgb, var(--card) 74%, transparent);
   color: var(--text);
   padding: 6px 10px;
+  backdrop-filter: blur(8px) saturate(118%);
 }
 
 .launcher-preset-apply {
@@ -1029,7 +1034,7 @@ input, select {
 .launcher-icon-option {
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: #0b1628;
+  background: color-mix(in srgb, #0b1628 82%, transparent);
   color: var(--muted);
   padding: 10px 8px;
   display: grid;
@@ -1038,6 +1043,7 @@ input, select {
   cursor: pointer;
   text-align: center;
   font-size: 0.74rem;
+  backdrop-filter: blur(6px) saturate(118%);
 }
 
 .launcher-icon-option .icon-inline {
