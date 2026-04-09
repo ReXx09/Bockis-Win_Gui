@@ -1176,11 +1176,12 @@ function renderAudioDevicesList(activeOutput = '', activeInput = '', routingMess
   const extraCount = hiddenDevices.length;
   const outputCount = cachedAudioDevices.filter((dev) => dev.kind === 'output').length;
   const inputCount = cachedAudioDevices.filter((dev) => dev.kind === 'input').length;
+  const activeDevicesCount = primaryDevices.filter((dev) => dev.is_active_output || dev.is_active_input).length;
 
   if (audioDeviceInfo) {
     const shownText = showAllAudioDevices || extraCount === 0
       ? `${visibleDevices.length} angezeigt`
-      : `kompakt: nur aktives Geraet sichtbar, ${extraCount} weitere ausblendbar`;
+      : `kompakt: ${activeDevicesCount} Standardgeraete sichtbar, ${extraCount} weitere ausblendbar`;
     audioDeviceInfo.textContent = `Ausgabe: ${activeOutput || 'Unbekannt'} | Mikrofon: ${activeInput || 'Unbekannt'} | ${cachedAudioDevices.length} eindeutige Geraete (${outputCount} Output, ${inputCount} Input) | ${shownText}${routingMessage ? ` | ${routingMessage}` : ''}`;
   }
 
@@ -1196,10 +1197,10 @@ function renderAudioDevicesList(activeOutput = '', activeInput = '', routingMess
 
   audioDevices.innerHTML = `
     ${visibleDevices.map((dev) => `
-      <div class="audio-device-item${dev.is_active_output ? ' active' : ''}">
+      <div class="audio-device-item${dev.is_active_output || dev.is_active_input ? ' active' : ''}">
         <span>${dev.name} <small class="muted">${dev.kind === 'input' ? 'Mikrofon' : 'Ausgabe'}</small></span>
         <div class="row">
-          ${dev.is_active_output ? '<strong>Aktiv</strong>' : dev.is_active_input ? '<strong>Aktiv Mikrofon</strong>' : dev.kind === 'output' ? `<button class="btn" data-switch-device="${dev.id}" data-switch-name="${dev.name}">Als Standard</button>` : '<span class="muted">Nur Anzeige</span>'}
+          ${dev.is_active_output && dev.is_active_input ? '<strong>Standard Ausgabe + Mikrofon</strong>' : dev.is_active_output ? '<strong>Standard Ausgabe</strong>' : dev.is_active_input ? '<strong>Standard Mikrofon</strong>' : dev.kind === 'output' ? `<button class="btn" data-switch-device="${dev.id}" data-switch-name="${dev.name}">Als Standard</button>` : '<span class="muted">Nur Anzeige</span>'}
         </div>
       </div>
     `).join('')}
@@ -1218,7 +1219,7 @@ function renderAudioDevicesList(activeOutput = '', activeInput = '', routingMess
   if (toggleBtn) {
     toggleBtn.addEventListener('click', () => {
       showAllAudioDevices = !showAllAudioDevices;
-      renderAudioDevicesList(activeOutput, routingMessage);
+      renderAudioDevicesList(activeOutput, activeInput, routingMessage);
     });
   }
 
