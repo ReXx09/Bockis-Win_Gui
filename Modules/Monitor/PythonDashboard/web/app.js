@@ -299,6 +299,62 @@ function wireSizeControls() {
   });
 }
 
+const AUDIO_TILE_SIZES_KEY = 'bockis_audio_tile_sizes';
+
+function wireAudioTileSizeControls() {
+  const saved = JSON.parse(localStorage.getItem(AUDIO_TILE_SIZES_KEY) || '{}');
+  const specs = [
+    { key: 'auto', label: 'auto' },
+    { key: 'full', label: 'voll' },
+    { key: 'min',  label: 'min'  },
+  ];
+
+  document.querySelectorAll('.audio-page-layout .card[data-audio-tile]').forEach((card) => {
+    const tileKey = card.dataset.audioTile;
+    const head = card.querySelector('.card-head');
+    if (!head || head.querySelector('.size-controls')) return;
+
+    const actions = document.createElement('div');
+    actions.className = 'card-head-actions';
+    const controls = document.createElement('div');
+    controls.className = 'size-controls';
+
+    specs.forEach((spec) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'size-btn';
+      btn.textContent = spec.label;
+      btn.dataset.size = spec.key;
+      btn.title = spec.key === 'auto' ? 'Standardbreite' : spec.key === 'full' ? 'Volle Breite' : 'Minimieren';
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setAudioTileSize(card, tileKey, spec.key);
+      });
+      controls.appendChild(btn);
+    });
+
+    actions.appendChild(controls);
+    head.appendChild(actions);
+
+    const initial = saved[tileKey] || 'auto';
+    setAudioTileSize(card, tileKey, initial, false);
+  });
+}
+
+function setAudioTileSize(card, tileKey, size, persist = true) {
+  card.classList.toggle('audio-tile-full', size === 'full');
+  card.classList.toggle('audio-tile-min',  size === 'min');
+  card.querySelectorAll('.size-btn').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.size === size);
+  });
+  if (persist) {
+    const saved = JSON.parse(localStorage.getItem(AUDIO_TILE_SIZES_KEY) || '{}');
+    saved[tileKey] = size;
+    localStorage.setItem(AUDIO_TILE_SIZES_KEY, JSON.stringify(saved));
+  }
+}
+
 function renderWidgetMenu() {
   widgetMenu.innerHTML = '';
   getCards().forEach((card) => {
@@ -1145,6 +1201,7 @@ async function init() {
 
   wirePageMenu();
   wireSizeControls();
+  wireAudioTileSizeControls();
   applyLayout(readLayout());
   renderWidgetMenu();
   wireDragDrop();

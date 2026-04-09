@@ -129,7 +129,7 @@
         <div class="audio-page-layout">
 
           <!-- Kachel: Lautstaerke & Mediensteuerung -->
-          <section class="card audio-vol-card">
+          <section class="card audio-vol-card" data-audio-tile="vol">
             <div class="card-head"><h2>Lautstaerke</h2></div>
             <div class="audio-main">
               <div class="audio-row">
@@ -153,21 +153,21 @@
           </section>
 
           <!-- Kachel: Audiogeraete -->
-          <section class="card audio-devices-card">
+          <section class="card audio-devices-card" data-audio-tile="devices">
             <div class="card-head"><h2>Audiogeraete</h2></div>
             <p id="audioDeviceInfo" class="muted">Lade Geraete...</p>
             <div id="audioDevices" class="audio-device-list"></div>
           </section>
 
           <!-- Kachel: Programm-Audio -->
-          <section class="card audio-sessions-card">
+          <section class="card audio-sessions-card" data-audio-tile="sess">
             <div class="card-head"><h2>Programm-Audio</h2></div>
             <p class="muted">Lautstaerke und Mute pro laufendem Programm.</p>
             <div id="audioSessions" class="audio-session-list"></div>
           </section>
 
           <!-- Kachel: Benutzer-Programmzuordnung -->
-          <section class="card audio-routing-card">
+          <section class="card audio-routing-card" data-audio-tile="rout">
             <div class="card-head"><h2>Benutzer-Programmzuordnung</h2></div>
             <p class="muted">Bevorzugtes Geraet wird hier als Merkliste gespeichert. Die echte Zuweisung erfolgt in Windows.</p>
             <div class="audio-user-routing-row">
@@ -256,6 +256,6 @@
     </section>
   </main>
 
-  <script src="/web/app.js?v=20260409d"></script>
+  <script src="/web/app.js?v=20260409e"></script>
 </body>
 </html>

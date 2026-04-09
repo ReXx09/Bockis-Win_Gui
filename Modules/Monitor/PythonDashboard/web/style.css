@@ -434,6 +434,18 @@ input, select {
 .audio-sessions-card { grid-area: sess; }
 .audio-routing-card  { grid-area: rout; }
 
+/* Audio-Kachel Größenmodi */
+.audio-page-layout .card.audio-tile-full {
+  grid-area: unset !important;
+  grid-column: 1 / -1;
+}
+.audio-page-layout .card.audio-tile-min > :not(.card-head) {
+  display: none !important;
+}
+.audio-page-layout .card.audio-tile-min {
+  align-self: start;
+}
+
 .audio-main {
   display: grid;
   gap: 8px;
