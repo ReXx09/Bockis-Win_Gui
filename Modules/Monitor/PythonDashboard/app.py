@@ -753,6 +753,12 @@ TOOL_TOGGLE_PROCESS_NAMES: dict[str, list[str]] = {
     "quick_assist": ["quickassist.exe"],
     "windows_sandbox": ["windowssandbox.exe"],
     "netplwiz": ["netplwiz.exe"],
+    "services": ["mmc.exe"],
+}
+
+# Optional cmdline filters to avoid matching unrelated processes with same executable.
+TOOL_TOGGLE_CMDLINE_CONTAINS: dict[str, str] = {
+    "services": "services.msc",
 }
 
 
@@ -770,13 +776,22 @@ def _get_tool_processes(tool_id: str) -> list[psutil.Process]:
     if not wanted:
         return []
 
+    cmdline_filter = str(TOOL_TOGGLE_CMDLINE_CONTAINS.get(str(tool_id or "").strip()) or "").strip().lower()
+
     procs: list[psutil.Process] = []
-    for proc in psutil.process_iter(["pid", "name"]):
+    for proc in psutil.process_iter(["pid", "name", "cmdline"]):
         try:
             proc_name = str(proc.info.get("name") or "").strip().lower()
         except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
             continue
         if proc_name in wanted:
+            if cmdline_filter:
+                try:
+                    cmdline = " ".join(proc.info.get("cmdline") or []).strip().lower()
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                    cmdline = ""
+                if cmdline_filter not in cmdline:
+                    continue
             procs.append(proc)
     return procs
 
@@ -796,7 +811,18 @@ def _close_tool(tool_id: str) -> tuple[bool, str]:
         except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
             pass
 
-    _, alive = psutil.wait_procs(procs, timeout=1.2)
+    alive: list[psutil.Process] = []
+    try:
+        _, alive = psutil.wait_procs(procs, timeout=1.2)
+    except Exception:
+        # Some system tools may deny wait/handle access; continue with best effort.
+        for proc in procs:
+            try:
+                if proc.is_running():
+                    alive.append(proc)
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                continue
+
     for proc in alive:
         try:
             proc.kill()
