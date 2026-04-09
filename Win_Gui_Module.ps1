@@ -4855,18 +4855,31 @@ $btnCheckDependenciesH.Add_Click({
                 }
             }
         
-            # Hardware-Monitor Neustart (optional)
-            & $updateDependencyProgress -Value 90 -Text "Aktualisiere Hardware-Monitor..."
-        
+            # Hardware-Monitor nur bei Bedarf anstoßen, nicht destruktiv neu initialisieren.
+            & $updateDependencyProgress -Value 90 -Text "Pruefe Hardware-Monitor-Status..."
+
             try {
-                Clear-HardwareMonitoring
-                Start-Sleep -Milliseconds 500
-                Initialize-LibreHardwareMonitor
-                Initialize-LiveMonitoring -cpuLabel $cpuLabel -gpuLabel $gpuLabel -ramLabel $ramLabel -cpuProgress $cpuProgressBar -gpuProgress $gpuProgressBar -ramProgress $ramProgressBar
-                Start-HardwareMonitoring
+                $hardwareTimerStatus = $null
+                try {
+                    $hardwareTimerStatus = Get-HardwareTimerStatus
+                } catch {
+                    $hardwareTimerStatus = $null
+                }
+
+                if (-not $hardwareTimerStatus -or -not $hardwareTimerStatus.Exists -or -not $hardwareTimerStatus.Running) {
+                    Initialize-HardwareMonitoring `
+                        -cpuLabel $cpuLabel `
+                        -gpuLabel $gpuLabel `
+                        -ramLabel $ramLabel `
+                        -gbCPU $gbCPU `
+                        -gbGPU $gbGPU `
+                        -gbRAM $gbRAM `
+                        -SuppressVisualFeedback `
+                        -GlobalTooltip $tooltipObj | Out-Null
+                }
             } catch {
-                # Hardware-Monitor-Neustart optional - Fehler tolerieren
-                Write-Verbose "Hardware-Monitor konnte nicht neu gestartet werden: $($_.Exception.Message)"
+                # Hardware-Monitor-Prüfung optional - Fehler tolerieren
+                Write-Verbose "Hardware-Monitor-Status konnte nach Dependency-Pruefung nicht verifiziert werden: $($_.Exception.Message)"
             }
 
             & $updateDependencyProgress -Value 100 -Text "Abhängigkeitsprüfung abgeschlossen" -Color ([System.Drawing.Color]::LimeGreen)
