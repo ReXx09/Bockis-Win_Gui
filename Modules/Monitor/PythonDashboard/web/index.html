@@ -401,9 +401,38 @@
 
       <section class="page" data-page="tools">
         <section class="layout" id="toolsGrid">
-          <section class="card" data-widget="tools-main" data-default-size="full" draggable="true">
+          <section class="card" data-widget="tools-sys" data-default-size="1-3" draggable="true">
+            <div class="card-head"><h2>System</h2><span class="drag-handle">&#8942;&#8942;</span></div>
+            <div id="toolSysList" class="tool-grid"></div>
+          </section>
+
+          <section class="card" data-widget="tools-net" data-default-size="1-3" draggable="true">
+            <div class="card-head"><h2>Netzwerk</h2><span class="drag-handle">&#8942;&#8942;</span></div>
+            <div id="toolNetList" class="tool-grid"></div>
+          </section>
+
+          <section class="card" data-widget="tools-diag" data-default-size="1-3" draggable="true">
+            <div class="card-head"><h2>Diagnose</h2><span class="drag-handle">&#8942;&#8942;</span></div>
+            <div id="toolDiagList" class="tool-grid"></div>
+          </section>
+
+          <section class="card" data-widget="tools-disk" data-default-size="1-3" draggable="true">
+            <div class="card-head"><h2>Datentraeger</h2><span class="drag-handle">&#8942;&#8942;</span></div>
+            <div id="toolDiskList" class="tool-grid"></div>
+          </section>
+
+          <section class="card" data-widget="tools-priv" data-default-size="1-3" draggable="true">
+            <div class="card-head"><h2>Sicherheit</h2><span class="drag-handle">&#8942;&#8942;</span></div>
+            <div id="toolPrivList" class="tool-grid"></div>
+          </section>
+
+          <section class="card" data-widget="tools-dev" data-default-size="1-3" draggable="true">
+            <div class="card-head"><h2>Entwickler</h2><span class="drag-handle">&#8942;&#8942;</span></div>
+            <div id="toolDevList" class="tool-grid"></div>
+          </section>
+
+          <section class="card" data-widget="tools-console" data-default-size="full" draggable="true">
             <div class="card-head"><h2>Tools</h2><span class="drag-handle">&#8942;&#8942;</span></div>
-            <div id="toolList" class="tool-grid"></div>
             <pre id="toolMsg" class="console">Bereit.</pre>
           </section>
         </section>
@@ -538,7 +567,7 @@
     </section>
   </main>
 
-  <script src="/web/app.js?v=20260409ai"></script>
+  <script src="/web/app.js?v=20260409aj"></script>
 </body>
 </html>
 

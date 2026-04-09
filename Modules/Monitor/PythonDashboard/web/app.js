@@ -42,7 +42,12 @@ const reloadDashboardDependenciesBtn = document.getElementById('reloadDashboardD
 const dashboardDependencySummary = document.getElementById('dashboardDependencySummary');
 const dashboardDependencyList = document.getElementById('dashboardDependencyList');
 const dashboardDependencyMsg = document.getElementById('dashboardDependencyMsg');
-const toolList = document.getElementById('toolList');
+const toolSysList = document.getElementById('toolSysList');
+const toolNetList = document.getElementById('toolNetList');
+const toolDiagList = document.getElementById('toolDiagList');
+const toolDiskList = document.getElementById('toolDiskList');
+const toolPrivList = document.getElementById('toolPrivList');
+const toolDevList = document.getElementById('toolDevList');
 const toolMsg = document.getElementById('toolMsg');
 const reloadLaunchersBtn = document.getElementById('reloadLaunchersBtn');
 const toggleLauncherEditModeBtn = document.getElementById('toggleLauncherEditModeBtn');
@@ -110,7 +115,7 @@ const LAYOUT_KEY = 'bockis_dashboard_layout_v4';
 const AUDIO_LAYOUT_KEY = 'bockis_audio_layout_v1';
 const LOGS_LAYOUT_KEY = 'bockis_logs_layout_v2';
 const QUICKSTART_LAYOUT_KEY = 'bockis_quickstart_layout_v4';
-const TOOLS_LAYOUT_KEY = 'bockis_tools_layout_v1';
+const TOOLS_LAYOUT_KEY = 'bockis_tools_layout_v2';
 const SETUP_LAYOUT_KEY = 'bockis_setup_layout_v4';
 const PAGE_KEY = 'bockis_dashboard_page_v1';
 const LEGACY_STORAGE_KEYS = {
@@ -118,7 +123,7 @@ const LEGACY_STORAGE_KEYS = {
   [AUDIO_LAYOUT_KEY]: [],
   [LOGS_LAYOUT_KEY]: ['bockis_logs_layout_v1'],
   [QUICKSTART_LAYOUT_KEY]: ['bockis_quickstart_layout_v3', 'bockis_quickstart_layout_v2', 'bockis_quickstart_layout_v1'],
-  [TOOLS_LAYOUT_KEY]: [],
+  [TOOLS_LAYOUT_KEY]: ['bockis_tools_layout_v1'],
   [SETUP_LAYOUT_KEY]: ['bockis_setup_layout_v3', 'bockis_setup_layout_v2', 'bockis_setup_layout_v1'],
 };
 const PAGE_ICONS = {
@@ -146,7 +151,13 @@ const WIDGET_LABELS = {
   'quickstart-main': 'Schnellstart',
   'setup-launcher-dashboard': 'Launcher-Uebersicht',
   'setup-launchers': 'Launcher-Konfiguration',
-  'tools-main': 'Tools',
+  'tools-sys': 'Tools - System',
+  'tools-net': 'Tools - Netzwerk',
+  'tools-diag': 'Tools - Diagnose',
+  'tools-disk': 'Tools - Datentraeger',
+  'tools-priv': 'Tools - Sicherheit',
+  'tools-dev': 'Tools - Entwickler',
+  'tools-console': 'Tools - Ausgabe',
   'setup-theme': 'Erscheinungsbild',
   'setup-git': 'Git / Setup',
 };
@@ -166,7 +177,13 @@ const WIDGET_ICONS = {
   'quickstart-main': 'globe',
   'setup-launcher-dashboard': 'globe',
   'setup-launchers': 'sliders',
-  'tools-main': 'wrench',
+  'tools-sys': 'wrench',
+  'tools-net': 'wrench',
+  'tools-diag': 'wrench',
+  'tools-disk': 'wrench',
+  'tools-priv': 'wrench',
+  'tools-dev': 'wrench',
+  'tools-console': 'wrench',
   'setup-theme': 'palette',
   'setup-git': 'git-branch',
 };
@@ -1051,54 +1068,58 @@ async function loadDashboardDependencyStatus() {
 async function loadTools() {
   try {
     const TOOL_CATEGORY_ORDER = ['sys', 'net', 'diag', 'disk', 'priv', 'dev'];
-    const TOOL_CATEGORY_LABELS = {
-      sys: 'System',
-      net: 'Netzwerk',
-      diag: 'Diagnose',
-      disk: 'Datentraeger',
-      priv: 'Sicherheit',
-      dev: 'Entwickler',
+    const TOOL_CATEGORY_CONTAINERS = {
+      sys: toolSysList,
+      net: toolNetList,
+      diag: toolDiagList,
+      disk: toolDiskList,
+      priv: toolPrivList,
+      dev: toolDevList,
     };
 
     const tools = await jsonFetch('/api/tools');
     availableTools = Array.isArray(tools) ? tools : [];
-    if (!availableTools.length) {
-      toolList.innerHTML = '<div class="audio-empty">Keine Tools verfuegbar.</div>';
-    } else {
-      const grouped = new Map();
-      availableTools.forEach((tool) => {
-        const cat = String(tool.cat || 'sys').trim().toLowerCase();
-        if (!grouped.has(cat)) grouped.set(cat, []);
-        grouped.get(cat).push(tool);
-      });
+    const grouped = new Map();
+    availableTools.forEach((tool) => {
+      const cat = String(tool.cat || 'sys').trim().toLowerCase();
+      if (!grouped.has(cat)) grouped.set(cat, []);
+      grouped.get(cat).push(tool);
+    });
 
-      const renderOrder = [...TOOL_CATEGORY_ORDER, ...Array.from(grouped.keys()).filter((cat) => !TOOL_CATEGORY_ORDER.includes(cat))];
-      toolList.innerHTML = `
-        <div class="tool-cat-list">
-          ${renderOrder.filter((cat) => grouped.has(cat)).map((cat) => {
-            const toolsInCat = grouped.get(cat) || [];
-            return `
-              <section class="tool-cat-block">
-                <div class="tool-cat-head">
-                  <span class="tool-cat-title">${escapeHtml(TOOL_CATEGORY_LABELS[cat] || cat)}</span>
-                  <span class="tool-cat-count">${toolsInCat.length}</span>
-                </div>
-                <div class="tool-tile-grid">
-                  ${toolsInCat.map((t) => `
-                    <button class="tool-tile" type="button" data-tool-run="${escapeHtml(t.id)}" title="${escapeHtml(t.desc || t.label || '')}">
-                      <strong>${escapeHtml(t.label || t.id || '')}</strong>
-                      <span>${escapeHtml(t.desc || '')}</span>
-                    </button>
-                  `).join('')}
-                </div>
-              </section>
-            `;
-          }).join('')}
+    TOOL_CATEGORY_ORDER.forEach((cat) => {
+      const container = TOOL_CATEGORY_CONTAINERS[cat];
+      if (!container) return;
+      const toolsInCat = grouped.get(cat) || [];
+      container.innerHTML = toolsInCat.length
+        ? `<div class="tool-tile-grid">
+            ${toolsInCat.map((t) => `
+              <button class="tool-tile" type="button" data-tool-run="${escapeHtml(t.id)}" title="${escapeHtml(t.desc || t.label || '')}">
+                <strong>${escapeHtml(t.label || t.id || '')}</strong>
+                <span>${escapeHtml(t.desc || '')}</span>
+              </button>
+            `).join('')}
+          </div>`
+        : '<div class="audio-empty">Keine Tools in dieser Kategorie.</div>';
+    });
+
+    // Unknown categories fall back into System card
+    const unknownTools = Array.from(grouped.entries())
+      .filter(([cat]) => !TOOL_CATEGORY_ORDER.includes(cat))
+      .flatMap(([, list]) => list);
+    if (unknownTools.length && toolSysList) {
+      toolSysList.insertAdjacentHTML('beforeend', `
+        <div class="tool-tile-grid">
+          ${unknownTools.map((t) => `
+            <button class="tool-tile" type="button" data-tool-run="${escapeHtml(t.id)}" title="${escapeHtml(t.desc || t.label || '')}">
+              <strong>${escapeHtml(t.label || t.id || '')}</strong>
+              <span>${escapeHtml(t.desc || '')}</span>
+            </button>
+          `).join('')}
         </div>
-      `;
+      `);
     }
 
-    toolList.querySelectorAll('[data-tool-run]').forEach((btn) => {
+    document.querySelectorAll('#toolsGrid [data-tool-run]').forEach((btn) => {
       btn.addEventListener('click', async () => {
         const id = btn.dataset.toolRun || '';
         const t = availableTools.find((x) => x.id === id) || { label: id };
