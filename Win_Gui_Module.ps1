@@ -7201,6 +7201,51 @@ function Invoke-WingetVersionAction {
     }
 }
 
+function Show-TemporaryCmdPreview {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RepositoryPath,
+
+        [Parameter(Mandatory = $true)]
+        [string[]]$Lines,
+
+        [Parameter(Mandatory = $false)]
+        [string]$Title = 'Git Pull Kontrolle',
+
+        [Parameter(Mandatory = $false)]
+        [int]$TimeoutSeconds = 8
+    )
+
+    try {
+        $previewLines = New-Object System.Collections.Generic.List[string]
+        foreach ($line in $Lines) {
+            if ($null -eq $line) {
+                continue
+            }
+
+            $normalizedLine = ([string]$line) -replace "`r?`n", [System.Environment]::NewLine
+            $previewLines.Add($normalizedLine)
+        }
+
+        if ($previewLines.Count -eq 0) {
+            return $false
+        }
+
+        $tempFileName = 'git-pull-preview-{0}.txt' -f ([System.Guid]::NewGuid().ToString('N'))
+        $tempFilePath = Join-Path ([System.IO.Path]::GetTempPath()) $tempFileName
+        [System.IO.File]::WriteAllLines($tempFilePath, $previewLines)
+
+        $cmdTitle = ($Title -replace '"', '')
+        $cmdArguments = "/c title $cmdTitle & type `"$tempFilePath`" & echo. & timeout /t $TimeoutSeconds /nobreak >nul & del /f /q `"$tempFilePath`""
+
+        Start-Process -FilePath 'cmd.exe' -ArgumentList $cmdArguments -WorkingDirectory $RepositoryPath -WindowStyle Normal | Out-Null
+        return $true
+    } catch {
+        Write-Verbose "CMD-Vorschaufenster konnte nicht geoeffnet werden: $($_.Exception.Message)"
+        return $false
+    }
+}
+
 function Invoke-GitPullDependencyAction {
     param(
         [Parameter(Mandatory = $false)]
@@ -7265,6 +7310,16 @@ function Invoke-GitPullDependencyAction {
 
         if ($pullExitCode -ne 0) {
             $pullErrorMessage = if ($pullOutput) { $pullOutput } else { "git pull fehlgeschlagen" }
+            Show-TemporaryCmdPreview -RepositoryPath $RepositoryPath -Title 'Git Pull Fehler' -Lines @(
+                'Git Pull Fehler',
+                '',
+                "Repository: $RepositoryPath",
+                "Branch: $branch",
+                "Upstream: $upstream",
+                '',
+                'Ausgabe:',
+                $pullErrorMessage
+            ) | Out-Null
             return @{ Success = $false; Cancelled = $false; Message = $pullErrorMessage }
         }
 
@@ -7276,11 +7331,14 @@ function Invoke-GitPullDependencyAction {
         $updated = (-not [string]::IsNullOrWhiteSpace($beforeHead) -and -not [string]::IsNullOrWhiteSpace($afterHead) -and $beforeHead -ne $afterHead)
 
         $pulledCommits = 0
+        $pulledCommitLog = ''
         if ($updated) {
             $countOutput = (& $gitCommand.Source -C $RepositoryPath rev-list --count "$beforeHead..$afterHead" 2>&1 | Out-String).Trim()
             if ($LASTEXITCODE -eq 0 -and $countOutput -match '^\d+$') {
                 $pulledCommits = [int]$countOutput
             }
+
+            $pulledCommitLog = (& $gitCommand.Source -C $RepositoryPath --no-pager log --oneline --decorate "$beforeHead..$afterHead" 2>&1 | Out-String).Trim()
         }
 
         $pullSuccessLog = if ($updated) { "Git Pull erfolgreich: $pulledCommits Commit(s) geladen" } else { 'Git Pull erfolgreich: Bereits aktuell' }
@@ -7294,6 +7352,27 @@ function Invoke-GitPullDependencyAction {
         }
 
         $pullResultMessage = if ($updated) { "$pulledCommits Commit(s) geladen. Bitte GUI neu starten." } else { "Bereits aktuell." }
+
+        $previewLines = New-Object System.Collections.Generic.List[string]
+        $previewLines.Add('Git Pull Kontrolle')
+        $previewLines.Add('')
+        $previewLines.Add("Repository: $RepositoryPath")
+        $previewLines.Add("Branch: $branch")
+        $previewLines.Add("Upstream: $upstream")
+        $previewLines.Add('')
+        $previewLines.Add('Ausgabe:')
+        $previewLines.Add($(if ($pullOutput) { $pullOutput } else { 'Keine Ausgabe vorhanden.' }))
+
+        if ($updated) {
+            $previewLines.Add('')
+            $previewLines.Add("Geladene Commits: $pulledCommits")
+            $previewLines.Add($(if ($pulledCommitLog) { $pulledCommitLog } else { 'Commit-Liste konnte nicht gelesen werden.' }))
+        } else {
+            $previewLines.Add('')
+            $previewLines.Add('Status: Bereits aktuell.')
+        }
+
+        Show-TemporaryCmdPreview -RepositoryPath $RepositoryPath -Lines $previewLines.ToArray() | Out-Null
 
         return @{
             Success           = $true
