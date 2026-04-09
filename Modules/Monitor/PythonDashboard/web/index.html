@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Bockis Python Dashboard</title>
-  <link rel="stylesheet" href="/web/style.css?v=20260409k" />
+  <link rel="stylesheet" href="/web/style.css?v=20260409l" />
   <script>
     (function(){try{var t=localStorage.getItem('bockis_theme_v1');if(t){var d=JSON.parse(t);if(d&&d.vars){var r=document.documentElement;Object.keys(d.vars).forEach(function(k){r.style.setProperty(k,d.vars[k]);});}}}catch(e){}}());
   </script>
@@ -420,20 +420,20 @@
                 <span>Kachel-Farben (optional)</span>
                 <div class="launcher-color-grid">
                   <label>
-                    <span>Hintergrund</span>
-                    <input id="launcherTileBg" type="text" placeholder="#0b1628" maxlength="9" />
+                    <span>Dunkle Basis</span>
+                    <input id="launcherTileBg" type="color" value="#0f1b2e" />
                   </label>
                   <label>
                     <span>Text</span>
-                    <input id="launcherTileText" type="text" placeholder="#e8efff" maxlength="9" />
+                    <input id="launcherTileText" type="color" value="#e8efff" />
                   </label>
                   <label>
                     <span>Rahmen</span>
-                    <input id="launcherTileBorder" type="text" placeholder="#223554" maxlength="9" />
+                    <input id="launcherTileBorder" type="color" value="#223554" />
                   </label>
                   <label>
-                    <span>Icon-Akzent</span>
-                    <input id="launcherTileAccent" type="text" placeholder="#4aa3ff" maxlength="9" />
+                    <span>Akzentfarbe</span>
+                    <input id="launcherTileAccent" type="color" value="#4aa3ff" />
                   </label>
                 </div>
               </label>
@@ -506,6 +506,6 @@
     </section>
   </main>
 
-  <script src="/web/app.js?v=20260409o"></script>
+  <script src="/web/app.js?v=20260409p"></script>
 </body>
 </html>

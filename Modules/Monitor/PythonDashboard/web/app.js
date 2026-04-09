@@ -1154,6 +1154,7 @@ function syncLauncherForm() {
 }
 
 function resetLauncherForm() {
+  const themeDefaults = getLauncherThemeColorDefaults();
   editingLauncherId = '';
   if (launcherName) launcherName.value = '';
   if (launcherKind) launcherKind.value = 'tool';
@@ -1161,10 +1162,10 @@ function resetLauncherForm() {
   if (launcherTarget) launcherTarget.value = '';
   if (launcherArgs) launcherArgs.value = '';
   if (launcherNote) launcherNote.value = '';
-  if (launcherTileBg) launcherTileBg.value = '';
-  if (launcherTileText) launcherTileText.value = '';
-  if (launcherTileBorder) launcherTileBorder.value = '';
-  if (launcherTileAccent) launcherTileAccent.value = '';
+  if (launcherTileBg) launcherTileBg.value = themeDefaults.tile_bg;
+  if (launcherTileText) launcherTileText.value = themeDefaults.tile_text;
+  if (launcherTileBorder) launcherTileBorder.value = themeDefaults.tile_border;
+  if (launcherTileAccent) launcherTileAccent.value = themeDefaults.tile_accent;
   populateLauncherIconPicker('grid');
   populateLauncherToolSelect();
   populateLauncherCategoryHints();
@@ -1174,6 +1175,7 @@ function resetLauncherForm() {
 
 function fillLauncherForm(launcher) {
   if (!launcher) return;
+  const themeDefaults = getLauncherThemeColorDefaults();
   editingLauncherId = launcher.id || '';
   if (launcherName) launcherName.value = launcher.title || '';
   if (launcherKind) launcherKind.value = launcher.kind || 'tool';
@@ -1182,10 +1184,10 @@ function fillLauncherForm(launcher) {
   if (launcherTarget) launcherTarget.value = launcher.target || '';
   if (launcherArgs) launcherArgs.value = launcher.args || '';
   if (launcherNote) launcherNote.value = launcher.note || '';
-  if (launcherTileBg) launcherTileBg.value = launcher.tile_bg || '';
-  if (launcherTileText) launcherTileText.value = launcher.tile_text || '';
-  if (launcherTileBorder) launcherTileBorder.value = launcher.tile_border || '';
-  if (launcherTileAccent) launcherTileAccent.value = launcher.tile_accent || '';
+  if (launcherTileBg) launcherTileBg.value = normalizeLauncherTileColor(launcher.tile_bg) || themeDefaults.tile_bg;
+  if (launcherTileText) launcherTileText.value = normalizeLauncherTileColor(launcher.tile_text) || themeDefaults.tile_text;
+  if (launcherTileBorder) launcherTileBorder.value = normalizeLauncherTileColor(launcher.tile_border) || themeDefaults.tile_border;
+  if (launcherTileAccent) launcherTileAccent.value = normalizeLauncherTileColor(launcher.tile_accent) || themeDefaults.tile_accent;
   populateLauncherIconPicker(launcher.icon || 'grid');
   syncLauncherForm();
   if (saveLauncherBtn) saveLauncherBtn.textContent = 'Launcher aktualisieren';
@@ -1202,6 +1204,33 @@ function normalizeLauncherTileColor(value) {
   const isShortHex = /^#[0-9a-fA-F]{3,4}$/.test(normalized);
   const isLongHex = /^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/.test(normalized);
   return (isShortHex || isLongHex) ? normalized.toLowerCase() : '';
+}
+
+function getLauncherThemeColorDefaults() {
+  const rootStyles = getComputedStyle(document.documentElement);
+  const pick = (name, fallback) => {
+    const raw = String(rootStyles.getPropertyValue(name) || '').trim();
+    const normalized = normalizeLauncherTileColor(raw);
+    return normalized || fallback;
+  };
+
+  return {
+    tile_bg: pick('--card', '#0f1b2e'),
+    tile_text: pick('--text', '#e8efff'),
+    tile_border: pick('--line', '#223554'),
+    tile_accent: pick('--accent', '#4aa3ff'),
+  };
+}
+
+function syncLauncherColorInputsWithThemeDefaults() {
+  if (editingLauncherId) return;
+  if (launcherName && launcherName.value.trim()) return;
+
+  const defaults = getLauncherThemeColorDefaults();
+  if (launcherTileBg) launcherTileBg.value = defaults.tile_bg;
+  if (launcherTileText) launcherTileText.value = defaults.tile_text;
+  if (launcherTileBorder) launcherTileBorder.value = defaults.tile_border;
+  if (launcherTileAccent) launcherTileAccent.value = defaults.tile_accent;
 }
 
 function getLauncherTileInlineStyle(launcher) {
@@ -1360,6 +1389,12 @@ async function loadLaunchers() {
 
 async function saveLauncher() {
   if (!launcherName || !launcherKind) return;
+  const themeDefaults = getLauncherThemeColorDefaults();
+  const tileBg = normalizeLauncherTileColor(launcherTileBg?.value || '') || themeDefaults.tile_bg;
+  const tileText = normalizeLauncherTileColor(launcherTileText?.value || '') || themeDefaults.tile_text;
+  const tileBorder = normalizeLauncherTileColor(launcherTileBorder?.value || '') || themeDefaults.tile_border;
+  const tileAccent = normalizeLauncherTileColor(launcherTileAccent?.value || '') || themeDefaults.tile_accent;
+
   const payload = {
     id: editingLauncherId,
     title: launcherName.value.trim(),
@@ -1370,10 +1405,10 @@ async function saveLauncher() {
     args: launcherArgs?.value.trim() || '',
     note: launcherNote?.value.trim() || '',
     icon: launcherIcon?.value || 'grid',
-    tile_bg: normalizeLauncherTileColor(launcherTileBg?.value || ''),
-    tile_text: normalizeLauncherTileColor(launcherTileText?.value || ''),
-    tile_border: normalizeLauncherTileColor(launcherTileBorder?.value || ''),
-    tile_accent: normalizeLauncherTileColor(launcherTileAccent?.value || ''),
+    tile_bg: tileBg,
+    tile_text: tileText,
+    tile_border: tileBorder,
+    tile_accent: tileAccent,
   };
 
   if (!payload.title) {
@@ -2001,6 +2036,7 @@ function applyTheme(vars) {
   for (const [prop, val] of Object.entries(vars)) {
     root.style.setProperty(prop, val);
   }
+  syncLauncherColorInputsWithThemeDefaults();
 }
 
 function saveTheme(id, vars) {
