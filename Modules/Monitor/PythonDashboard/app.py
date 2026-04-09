@@ -16,10 +16,7 @@ from pathlib import Path
 
 import psutil
 from fastapi import FastAPI, HTTPException
-import asyncio
-import threading
 from time import time as current_time
-import functools
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -116,6 +113,16 @@ def _run_git(args: list[str]) -> tuple[int, str]:
 # Cache for God Mode window state to avoid repeated expensive COM queries
 _god_mode_cache: dict[str, tuple[float, bool]] = {}
 _god_mode_cache_lock = threading.Lock()
+
+# Keep expensive availability checks away from hot polling path.
+_tool_availability_cache: dict[str, tuple[float, tuple[bool, str]]] = {}
+_tool_availability_cache_lock = threading.Lock()
+_tool_availability_ttl_sec = 20.0
+
+# `/api/tools/state` is polled frequently by the frontend; cache short-term.
+_tool_state_cache: dict[str, object] = {"ts": 0.0, "payload": None}
+_tool_state_cache_lock = threading.Lock()
+_tool_state_ttl_sec = 1.2
 
 def _get_god_mode_cached(cache_key: str, func, timeout_sec: float = 0.5) -> bool:
     """Get cached God Mode state or compute fresh if cache expired."""
@@ -807,24 +814,48 @@ def _tool_process_names(tool_id: str) -> set[str]:
 
 def _is_tool_available(tool_id: str) -> tuple[bool, str]:
     tool_id = str(tool_id or "").strip()
+    now = time.monotonic()
+    with _tool_availability_cache_lock:
+        cached = _tool_availability_cache.get(tool_id)
+        if cached and now - cached[0] < _tool_availability_ttl_sec:
+            return cached[1]
+
     windir = os.environ.get("WINDIR") or r"C:\Windows"
 
     if tool_id == "windows_sandbox":
         exe = Path(windir) / "System32" / "WindowsSandbox.exe"
         if not exe.exists():
-            return False, "Windows Sandbox ist auf diesem System nicht verfuegbar."
-        return True, ""
+            result = (False, "Windows Sandbox ist auf diesem System nicht verfuegbar.")
+            with _tool_availability_cache_lock:
+                _tool_availability_cache[tool_id] = (now, result)
+            return result
+        result = (True, "")
+        with _tool_availability_cache_lock:
+            _tool_availability_cache[tool_id] = (now, result)
+        return result
 
     if tool_id == "quick_assist":
         exe = Path(windir) / "System32" / "quickassist.exe"
         if exe.exists():
-            return True, ""
+            result = (True, "")
+            with _tool_availability_cache_lock:
+                _tool_availability_cache[tool_id] = (now, result)
+            return result
         rc, out = _run_powershell("if (Test-Path 'Registry::HKEY_CLASSES_ROOT\\ms-quick-assist') { '1' } else { '0' }", timeout=5)
         if rc == 0 and out.strip().endswith("1"):
-            return True, ""
-        return False, "Quick Assist ist auf diesem System nicht verfuegbar."
+            result = (True, "")
+            with _tool_availability_cache_lock:
+                _tool_availability_cache[tool_id] = (now, result)
+            return result
+        result = (False, "Quick Assist ist auf diesem System nicht verfuegbar.")
+        with _tool_availability_cache_lock:
+            _tool_availability_cache[tool_id] = (now, result)
+        return result
 
-    return True, ""
+    result = (True, "")
+    with _tool_availability_cache_lock:
+        _tool_availability_cache[tool_id] = (now, result)
+    return result
 
 
 def _get_tool_window_pids(tool_id: str) -> list[int]:
@@ -1974,6 +2005,13 @@ def api_run_tool(tool_id: str) -> dict:
 
 @app.get("/api/tools/state")
 def api_tools_state() -> dict:
+    now = time.monotonic()
+    with _tool_state_cache_lock:
+        cached_ts = float(_tool_state_cache.get("ts") or 0.0)
+        cached_payload = _tool_state_cache.get("payload")
+        if cached_payload is not None and (now - cached_ts) < _tool_state_ttl_sec:
+            return cached_payload
+
     tools = api_tools()
     states: dict[str, bool] = {}
     close_supported: list[str] = []
@@ -1986,11 +2024,15 @@ def api_tools_state() -> dict:
         if _is_tool_toggle_supported(tool_id):
             close_supported.append(tool_id)
 
-    return {
+    payload = {
         "success": True,
         "states": states,
         "close_supported": close_supported,
     }
+    with _tool_state_cache_lock:
+        _tool_state_cache["ts"] = now
+        _tool_state_cache["payload"] = payload
+    return payload
 
 
 @app.post("/api/tools/toggle/{tool_id}")

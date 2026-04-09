@@ -276,6 +276,7 @@ let dragArmedCard = null;
 let toolStateTimer = null;
 let toolStateApiAvailable = true;
 let toolToggleApiAvailable = true;
+let toolStateRefreshInFlight = false;
 const masonryFrames = new Map();
 const HISTORY_LEN = 45;
 const monitorHistory = {
@@ -1069,7 +1070,8 @@ async function loadDashboardDependencyStatus() {
 }
 
 async function refreshToolButtonStates() {
-  if (!toolStateApiAvailable) return;
+  if (!toolStateApiAvailable || toolStateRefreshInFlight) return;
+  toolStateRefreshInFlight = true;
   try {
     const data = await jsonFetch('/api/tools/state');
     const states = data && data.states ? data.states : {};
@@ -1095,6 +1097,8 @@ async function refreshToolButtonStates() {
       });
     }
     // keep UI usable even if state endpoint is temporarily unavailable
+  } finally {
+    toolStateRefreshInFlight = false;
   }
 }
 
@@ -1191,7 +1195,7 @@ async function loadTools() {
       if (toolStateTimer) clearInterval(toolStateTimer);
       toolStateTimer = setInterval(() => {
         refreshToolButtonStates();
-      }, 3000);
+      }, 5000);
     }
 
     populateLauncherToolSelect();
