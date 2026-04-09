@@ -455,15 +455,25 @@ def get_audio_devices() -> dict:
             all_devices = AudioUtilities.GetAllDevices()
             for d in all_devices:
                 state = getattr(d, "state", None)
-                try:
-                    # IMMDevice state 1 = ACTIVE. We hide disabled/unplugged duplicates.
-                    if state is not None and int(state) != 1:
-                        continue
-                except Exception:
-                    pass
-
                 name = getattr(d, "FriendlyName", None) or getattr(d, "DeviceFriendlyName", None) or "Unknown"
                 dev_id = getattr(d, "id", None) or getattr(d, "Id", None) or name
+
+                state_str = str(state)
+                is_active_state = (
+                    state is None
+                    or state_str.endswith(".Active")
+                    or state_str == "1"
+                    or state_str.lower() == "active"
+                )
+                if not is_active_state:
+                    continue
+
+                # In pycaw IDs, {0.0.0...} = render/output, {0.0.1...} = capture/input.
+                # UI expects playback devices only.
+                dev_id_str = str(dev_id)
+                if not dev_id_str.startswith("{0.0.0."):
+                    continue
+
                 is_active = bool(
                     (active_output_id and str(dev_id) == str(active_output_id))
                     or (active_output and str(name) == str(active_output))
