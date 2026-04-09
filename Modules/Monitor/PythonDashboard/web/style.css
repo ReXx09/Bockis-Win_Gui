@@ -507,9 +507,16 @@ input, select {
   border-radius: 8px;
   padding: 8px 10px;
   cursor: pointer;
+  transition: background 0.14s ease, border-color 0.14s ease, box-shadow 0.14s ease, backdrop-filter 0.14s ease;
 }
 
-.btn:hover { background: #1a3154; }
+.btn:hover {
+  background: #1a3154;
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--line));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent),
+              0 4px 14px color-mix(in srgb, var(--accent) 10%, transparent);
+  backdrop-filter: blur(var(--glass-blur-soft)) saturate(120%);
+}
 .btn.warn { border-color: #6d4c1f; background: #3a2710; }
 
 .console {
@@ -952,6 +959,15 @@ input, select {
   gap: 12px;
   position: relative;
   backdrop-filter: blur(var(--glass-blur-strong)) saturate(118%);
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease, backdrop-filter 0.16s ease;
+}
+
+.launcher-card:not(.is-editing):hover {
+  transform: translateY(-3px) scale(1.012);
+  border-color: color-mix(in srgb, var(--launcher-accent) 50%, var(--launcher-border));
+  box-shadow: 0 6px 24px color-mix(in srgb, var(--launcher-accent) 18%, transparent),
+              0 0 0 1px color-mix(in srgb, var(--launcher-accent) 32%, transparent);
+  backdrop-filter: blur(calc(var(--glass-blur-strong) + 4px)) saturate(135%);
 }
 
 .launcher-card.is-editing {
