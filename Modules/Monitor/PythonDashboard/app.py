@@ -670,6 +670,14 @@ TOOL_COMMANDS: dict[str, str] = {
     "event_viewer": "Start-Process 'eventvwr.msc'",
     "task_manager": "Start-Process 'taskmgr.exe'",
     "disk_cleanup": "Start-Process 'cleanmgr.exe'",
+    "reliability_monitor": "Start-Process 'perfmon.exe' -ArgumentList '/rel'",
+    "resource_monitor": "Start-Process 'resmon.exe'",
+    "device_manager": "Start-Process 'devmgmt.msc'",
+    "task_scheduler": "Start-Process 'taskschd.msc'",
+    "firewall_advanced": "Start-Process 'wf.msc'",
+    "optional_features": "Start-Process 'optionalfeatures.exe'",
+    "network_connections": "Start-Process 'ncpa.cpl'",
+    "advanced_system_settings": "Start-Process 'SystemPropertiesAdvanced.exe'",
 }
 
 LAUNCHER_KINDS = {"tool", "app", "url"}
@@ -1438,6 +1446,14 @@ def api_tools() -> list[dict]:
         {"id": "event_viewer", "label": "Event Viewer"},
         {"id": "task_manager", "label": "Task Manager"},
         {"id": "disk_cleanup", "label": "Disk Cleanup"},
+        {"id": "reliability_monitor", "label": "Reliability Monitor"},
+        {"id": "resource_monitor", "label": "Resource Monitor"},
+        {"id": "device_manager", "label": "Device Manager"},
+        {"id": "task_scheduler", "label": "Task Scheduler"},
+        {"id": "firewall_advanced", "label": "Firewall (Advanced)"},
+        {"id": "optional_features", "label": "Optional Features"},
+        {"id": "network_connections", "label": "Network Connections"},
+        {"id": "advanced_system_settings", "label": "Advanced System Settings"},
     ]
 
 
