@@ -384,17 +384,16 @@
       <section class="page" data-page="quickstart">
         <section class="layout" id="quickstartGrid">
           <section class="card" data-widget="quickstart-main" data-default-size="2-3" draggable="true">
-            <div class="card-head"><h2>Schnellstart</h2><span class="drag-handle">⋮⋮</span></div>
+            <div class="card-head">
+              <div class="card-head-title-group">
+                <h2>Schnellstart</h2>
+                <button id="openLauncherSetupBtn" class="btn quickstart-edit-btn" type="button">Bearbeiten</button>
+              </div>
+              <span class="drag-handle">⋮⋮</span>
+            </div>
             <div id="launcherCategoryBar" class="launcher-category-bar"></div>
             <div id="launcherList"></div>
             <pre id="launcherMsg" class="console compact-console">Bereit.</pre>
-          </section>
-          <section class="card" data-widget="quickstart-edit-link" data-default-size="1-3" draggable="true">
-            <div class="card-head"><h2>Bearbeitung</h2><span class="drag-handle">⋮⋮</span></div>
-            <p class="muted">Launcher bearbeiten, neue Kacheln anlegen und Farben pflegen erfolgt zentral im Setup.</p>
-            <div class="row">
-              <button id="openLauncherSetupBtn" class="btn">Launcher im Setup bearbeiten</button>
-            </div>
           </section>
         </section>
       </section>
@@ -538,6 +537,6 @@
     </section>
   </main>
 
-  <script src="/web/app.js?v=20260409z"></script>
+  <script src="/web/app.js?v=20260409aa"></script>
 </body>
 </html>
