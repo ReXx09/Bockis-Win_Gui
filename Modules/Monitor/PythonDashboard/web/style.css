@@ -460,6 +460,10 @@ input, select {
   align-items: center;
 }
 
+.audio-device-toggle {
+  justify-self: start;
+}
+
 .audio-device-item.active {
   border-color: var(--accent);
 }

@@ -97,6 +97,7 @@ let cachedAudioDevices = [];
 let lastAudioSessions = [];
 let cachedOpenPrograms = [];
 let lastOpenProgramsFetch = 0;
+let showAllAudioDevices = false;
 const HISTORY_LEN = 45;
 const monitorHistory = {
   cpu: [],
@@ -871,6 +872,62 @@ async function refreshAudio() {
   }
 }
 
+function renderAudioDevicesList(activeOutput = '', routingMessage = '') {
+  if (!audioDevices) return;
+
+  const activeDevices = cachedAudioDevices.filter((dev) => dev.is_active_output);
+  const primaryDevice = activeDevices[0] || cachedAudioDevices[0] || null;
+  const hiddenDevices = primaryDevice
+    ? cachedAudioDevices.filter((dev) => dev.id !== primaryDevice.id)
+    : [];
+  const visibleDevices = showAllAudioDevices ? cachedAudioDevices : (primaryDevice ? [primaryDevice] : []);
+  const extraCount = hiddenDevices.length;
+
+  if (audioDeviceInfo) {
+    const shownText = showAllAudioDevices || extraCount === 0
+      ? `${visibleDevices.length} angezeigt`
+      : `kompakt: nur aktives Geraet sichtbar, ${extraCount} weitere ausblendbar`;
+    audioDeviceInfo.textContent = `Aktives Ausgabegeraet: ${activeOutput || 'Unbekannt'} | ${cachedAudioDevices.length} eindeutige Geraete | ${shownText}${routingMessage ? ` | ${routingMessage}` : ''}`;
+  }
+
+  if (!visibleDevices.length) {
+    audioDevices.innerHTML = '<div class="audio-empty">Keine Audio-Geraete gefunden.</div>';
+    return;
+  }
+
+  const toggleMarkup = extraCount > 0
+    ? `<button class="btn audio-device-toggle" data-audio-device-toggle="${showAllAudioDevices ? 'collapse' : 'expand'}">${showAllAudioDevices ? `Weitere Geraete ausblenden (${extraCount})` : `Weitere Geraete anzeigen (${extraCount})`}</button>`
+    : '';
+
+  audioDevices.innerHTML = `
+    ${visibleDevices.map((dev) => `
+      <div class="audio-device-item${dev.is_active_output ? ' active' : ''}">
+        <span>${dev.name}</span>
+        <div class="row">
+          ${dev.is_active_output ? '<strong>Aktiv</strong>' : `<button class="btn" data-switch-device="${dev.id}" data-switch-name="${dev.name}">Als Standard</button>`}
+        </div>
+      </div>
+    `).join('')}
+    ${toggleMarkup}
+  `;
+
+  audioDevices.querySelectorAll('[data-switch-device]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.switchDevice || '';
+      const name = btn.dataset.switchName || '';
+      await setDefaultAudioDevice(id, name);
+    });
+  });
+
+  const toggleBtn = audioDevices.querySelector('[data-audio-device-toggle]');
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', () => {
+      showAllAudioDevices = !showAllAudioDevices;
+      renderAudioDevicesList(activeOutput, routingMessage);
+    });
+  }
+}
+
 async function loadAudioDevices() {
   try {
     const d = await jsonFetch('/api/audio/devices');
@@ -897,26 +954,7 @@ async function loadAudioDevices() {
     cachedAudioDevices = dedup;
     refreshUserProgramDeviceSelect();
     renderUserProgramRoutes();
-
-    audioDeviceInfo.textContent = `Aktives Ausgabegeraet: ${d.active_output || 'Unbekannt'} | ${dedup.length} eindeutige Geraete${d.routing_message ? ` | ${d.routing_message}` : ''}`;
-    audioDevices.innerHTML = dedup.length
-      ? dedup.map((dev) => `
-        <div class="audio-device-item${dev.is_active_output ? ' active' : ''}">
-          <span>${dev.name}</span>
-          <div class="row">
-            ${dev.is_active_output ? '<strong>Aktiv</strong>' : `<button class="btn" data-switch-device="${dev.id}" data-switch-name="${dev.name}">Als Standard</button>`}
-          </div>
-        </div>
-      `).join('')
-      : '<div class="audio-empty">Keine Audio-Geraete gefunden.</div>';
-
-    audioDevices.querySelectorAll('[data-switch-device]').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        const id = btn.dataset.switchDevice || '';
-        const name = btn.dataset.switchName || '';
-        await setDefaultAudioDevice(id, name);
-      });
-    });
+    renderAudioDevicesList(d.active_output || '', d.routing_message || '');
   } catch (err) {
     audioDeviceInfo.textContent = `Geraete-Fehler: ${err.message}`;
     audioDevices.innerHTML = '<div class="audio-empty">Geraete konnten nicht geladen werden.</div>';
