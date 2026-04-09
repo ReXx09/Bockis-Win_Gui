@@ -495,12 +495,14 @@ def get_audio_status() -> dict:
 
 def get_audio_devices() -> dict:
     if not _ensure_audio_backend():
-        return {"available": False, "active_output": None, "devices": []}
+        return {"available": False, "active_output": None, "active_input": None, "devices": []}
 
     devices: list[dict] = []
     dedup_by_name: dict[str, dict] = {}
     active_output = None
     active_output_id = None
+    active_input = None
+    active_input_id = None
 
     with _audio_com_context():
         try:
@@ -510,6 +512,15 @@ def get_audio_devices() -> dict:
         except Exception:
             active_output = None
             active_output_id = None
+
+        try:
+            active_mic_getter = getattr(AudioUtilities, "GetMicrophone", None)
+            active_mic = active_mic_getter() if callable(active_mic_getter) else None
+            active_input = getattr(active_mic, "FriendlyName", None)
+            active_input_id = getattr(active_mic, "id", None) or getattr(active_mic, "Id", None)
+        except Exception:
+            active_input = None
+            active_input_id = None
 
         try:
             all_devices = AudioUtilities.GetAllDevices()
@@ -528,37 +539,52 @@ def get_audio_devices() -> dict:
                 if not is_active_state:
                     continue
 
-                # In pycaw IDs, {0.0.0...} = render/output, {0.0.1...} = capture/input.
-                # UI expects playback devices only.
                 dev_id_str = str(dev_id)
-                if not dev_id_str.startswith("{0.0.0."):
+                if dev_id_str.startswith("{0.0.0."):
+                    device_kind = "output"
+                elif dev_id_str.startswith("{0.0.1."):
+                    device_kind = "input"
+                else:
                     continue
 
-                is_active = bool(
+                is_active_output = bool(
                     (active_output_id and str(dev_id) == str(active_output_id))
                     or (active_output and str(name) == str(active_output))
+                )
+                is_active_input = bool(
+                    (active_input_id and str(dev_id) == str(active_input_id))
+                    or (active_input and str(name) == str(active_input))
                 )
 
                 entry = {
                     "id": str(dev_id),
                     "name": str(name),
-                    "is_active_output": is_active,
+                    "kind": device_kind,
+                    "is_output": device_kind == "output",
+                    "is_input": device_kind == "input",
+                    "is_active_output": is_active_output,
+                    "is_active_input": is_active_input,
                 }
 
-                key = str(name).strip().lower()
+                key = f"{device_kind}:{str(name).strip().lower()}"
                 existing = dedup_by_name.get(key)
                 if existing is None:
                     dedup_by_name[key] = entry
-                elif is_active and not existing.get("is_active_output"):
-                    # Prefer the active endpoint if same friendly name appears multiple times.
+                elif (is_active_output and not existing.get("is_active_output")) or (is_active_input and not existing.get("is_active_input")):
                     dedup_by_name[key] = entry
         except Exception:
             pass
 
     devices = list(dedup_by_name.values())
-    devices.sort(key=lambda x: (not x["is_active_output"], x["name"].lower()))
+    devices.sort(
+        key=lambda x: (
+            0 if x.get("kind") == "output" else 1,
+            not (x.get("is_active_output") or x.get("is_active_input")),
+            x["name"].lower(),
+        )
+    )
 
-    return {"available": True, "active_output": active_output, "devices": devices}
+    return {"available": True, "active_output": active_output, "active_input": active_input, "devices": devices}
 
 
 def _ps_quote(value: str) -> str:

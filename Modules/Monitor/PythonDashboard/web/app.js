@@ -611,10 +611,15 @@ function saveUserAudioRoutes(routes) {
   localStorage.setItem(AUDIO_USER_ROUTES_KEY, JSON.stringify(routes));
 }
 
+function getOutputAudioDevices() {
+  return cachedAudioDevices.filter((d) => d.is_output !== false && d.kind !== 'input');
+}
+
 function refreshUserProgramDeviceSelect(selected = '') {
   if (!userProgramDevice) return;
-  const options = cachedAudioDevices.length
-    ? cachedAudioDevices.map((d) => `<option value="${d.id}">${d.name}${d.is_active_output ? ' (Aktiv)' : ''}</option>`).join('')
+  const outputDevices = getOutputAudioDevices();
+  const options = outputDevices.length
+    ? outputDevices.map((d) => `<option value="${d.id}">${d.name}${d.is_active_output ? ' (Aktiv)' : ''}</option>`).join('')
     : '<option value="">Keine Ausgabegeraete gefunden</option>';
   userProgramDevice.innerHTML = options;
   if (selected) userProgramDevice.value = selected;
@@ -782,7 +787,7 @@ function renderUserProgramRoutes() {
           <p class="muted">${status}</p>
         </div>
         <select data-route-device="${idx}">
-          ${cachedAudioDevices.map((d) => `<option value="${d.id}" ${d.id === r.deviceId ? 'selected' : ''}>${d.name}${d.is_active_output ? ' (Aktiv)' : ''}</option>`).join('')}
+          ${getOutputAudioDevices().map((d) => `<option value="${d.id}" ${d.id === r.deviceId ? 'selected' : ''}>${d.name}${d.is_active_output ? ' (Aktiv)' : ''}</option>`).join('')}
         </select>
         <button class="btn" data-route-apply="${idx}">Jetzt umschalten</button>
         <button class="btn" data-route-remove="${idx}">Entfernen</button>
@@ -916,22 +921,28 @@ async function refreshAudio() {
   }
 }
 
-function renderAudioDevicesList(activeOutput = '', routingMessage = '') {
+function renderAudioDevicesList(activeOutput = '', activeInput = '', routingMessage = '') {
   if (!audioDevices) return;
 
-  const activeDevices = cachedAudioDevices.filter((dev) => dev.is_active_output);
-  const primaryDevice = activeDevices[0] || cachedAudioDevices[0] || null;
-  const hiddenDevices = primaryDevice
-    ? cachedAudioDevices.filter((dev) => dev.id !== primaryDevice.id)
-    : [];
-  const visibleDevices = showAllAudioDevices ? cachedAudioDevices : (primaryDevice ? [primaryDevice] : []);
+  const primaryDevices = [];
+  const activeOutputDevice = cachedAudioDevices.find((dev) => dev.is_active_output) || null;
+  const activeInputDevice = cachedAudioDevices.find((dev) => dev.is_active_input) || null;
+  if (activeOutputDevice) primaryDevices.push(activeOutputDevice);
+  if (activeInputDevice && (!activeOutputDevice || activeInputDevice.id !== activeOutputDevice.id)) primaryDevices.push(activeInputDevice);
+  if (!primaryDevices.length && cachedAudioDevices[0]) primaryDevices.push(cachedAudioDevices[0]);
+
+  const primaryIds = new Set(primaryDevices.map((dev) => dev.id));
+  const hiddenDevices = cachedAudioDevices.filter((dev) => !primaryIds.has(dev.id));
+  const visibleDevices = showAllAudioDevices ? cachedAudioDevices : primaryDevices;
   const extraCount = hiddenDevices.length;
+  const outputCount = cachedAudioDevices.filter((dev) => dev.kind === 'output').length;
+  const inputCount = cachedAudioDevices.filter((dev) => dev.kind === 'input').length;
 
   if (audioDeviceInfo) {
     const shownText = showAllAudioDevices || extraCount === 0
       ? `${visibleDevices.length} angezeigt`
       : `kompakt: nur aktives Geraet sichtbar, ${extraCount} weitere ausblendbar`;
-    audioDeviceInfo.textContent = `Aktives Ausgabegeraet: ${activeOutput || 'Unbekannt'} | ${cachedAudioDevices.length} eindeutige Geraete | ${shownText}${routingMessage ? ` | ${routingMessage}` : ''}`;
+    audioDeviceInfo.textContent = `Ausgabe: ${activeOutput || 'Unbekannt'} | Mikrofon: ${activeInput || 'Unbekannt'} | ${cachedAudioDevices.length} eindeutige Geraete (${outputCount} Output, ${inputCount} Input) | ${shownText}${routingMessage ? ` | ${routingMessage}` : ''}`;
   }
 
   if (!visibleDevices.length) {
@@ -947,9 +958,9 @@ function renderAudioDevicesList(activeOutput = '', routingMessage = '') {
   audioDevices.innerHTML = `
     ${visibleDevices.map((dev) => `
       <div class="audio-device-item${dev.is_active_output ? ' active' : ''}">
-        <span>${dev.name}</span>
+        <span>${dev.name} <small class="muted">${dev.kind === 'input' ? 'Mikrofon' : 'Ausgabe'}</small></span>
         <div class="row">
-          ${dev.is_active_output ? '<strong>Aktiv</strong>' : `<button class="btn" data-switch-device="${dev.id}" data-switch-name="${dev.name}">Als Standard</button>`}
+          ${dev.is_active_output ? '<strong>Aktiv</strong>' : dev.is_active_input ? '<strong>Aktiv Mikrofon</strong>' : dev.kind === 'output' ? `<button class="btn" data-switch-device="${dev.id}" data-switch-name="${dev.name}">Als Standard</button>` : '<span class="muted">Nur Anzeige</span>'}
         </div>
       </div>
     `).join('')}
@@ -997,11 +1008,15 @@ async function loadAudioDevices() {
         dedup[idx] = dev;
       }
     }
-    dedup.sort((a, b) => (Number(b.is_active_output) - Number(a.is_active_output)) || a.name.localeCompare(b.name, 'de'));
+    dedup.sort((a, b) => (
+      (a.kind === 'output' ? 0 : 1) - (b.kind === 'output' ? 0 : 1)
+      || Number(Boolean(b.is_active_output || b.is_active_input)) - Number(Boolean(a.is_active_output || a.is_active_input))
+      || a.name.localeCompare(b.name, 'de')
+    ));
     cachedAudioDevices = dedup;
     refreshUserProgramDeviceSelect();
     renderUserProgramRoutes();
-    renderAudioDevicesList(d.active_output || '', d.routing_message || '');
+    renderAudioDevicesList(d.active_output || '', d.active_input || '', d.routing_message || '');
   } catch (err) {
     audioDeviceInfo.textContent = `Geraete-Fehler: ${err.message}`;
     audioDevices.innerHTML = '<div class="audio-empty">Geraete konnten nicht geladen werden.</div>';
