@@ -791,18 +791,24 @@ input, select {
 }
 
 .launcher-card {
+  --launcher-bg: #0b1628;
+  --launcher-text: var(--text);
+  --launcher-border: var(--line);
+  --launcher-accent: var(--accent);
   border: 1px solid var(--line);
   border-radius: 10px;
   padding: 10px;
-  background: #0b1628;
+  background: var(--launcher-bg);
+  color: var(--launcher-text);
+  border-color: var(--launcher-border);
   display: grid;
   gap: 12px;
   position: relative;
 }
 
 .launcher-card.is-editing {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent);
+  border-color: var(--launcher-accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--launcher-accent) 40%, transparent);
 }
 
 .launcher-run {
@@ -829,9 +835,9 @@ input, select {
   width: 56px;
   height: 56px;
   border-radius: 16px;
-  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line));
-  background: color-mix(in srgb, var(--accent) 12%, #0b1628);
-  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--launcher-accent) 30%, var(--launcher-border));
+  background: color-mix(in srgb, var(--launcher-accent) 12%, var(--launcher-bg));
+  color: var(--launcher-accent);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -844,6 +850,16 @@ input, select {
 
 .launcher-run strong {
   max-width: 100%;
+  word-break: break-word;
+}
+
+.launcher-note {
+  display: block;
+  margin-top: -2px;
+  max-width: 100%;
+  color: color-mix(in srgb, var(--launcher-text) 72%, transparent);
+  font-size: 0.76rem;
+  line-height: 1.25;
   word-break: break-word;
 }
 
@@ -893,6 +909,26 @@ input, select {
   gap: 6px;
   color: var(--muted);
   font-size: 0.85rem;
+}
+
+.launcher-color-block {
+  gap: 8px;
+}
+
+.launcher-color-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.launcher-color-grid label {
+  display: grid;
+  gap: 5px;
+  font-size: 0.78rem;
+}
+
+.launcher-color-grid input {
+  text-transform: lowercase;
 }
 
 .launcher-icon-picker {
@@ -971,6 +1007,10 @@ th { color: var(--muted); }
   }
 
   .launcher-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .launcher-color-grid {
     grid-template-columns: 1fr;
   }
 

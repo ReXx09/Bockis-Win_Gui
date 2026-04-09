@@ -58,6 +58,10 @@ const launcherTarget = document.getElementById('launcherTarget');
 const launcherArgs = document.getElementById('launcherArgs');
 const launcherNote = document.getElementById('launcherNote');
 const launcherIcon = document.getElementById('launcherIcon');
+const launcherTileBg = document.getElementById('launcherTileBg');
+const launcherTileText = document.getElementById('launcherTileText');
+const launcherTileBorder = document.getElementById('launcherTileBorder');
+const launcherTileAccent = document.getElementById('launcherTileAccent');
 const launcherIconPicker = document.getElementById('launcherIconPicker');
 const launcherToolField = document.getElementById('launcherToolField');
 const launcherTargetField = document.getElementById('launcherTargetField');
@@ -1157,6 +1161,10 @@ function resetLauncherForm() {
   if (launcherTarget) launcherTarget.value = '';
   if (launcherArgs) launcherArgs.value = '';
   if (launcherNote) launcherNote.value = '';
+  if (launcherTileBg) launcherTileBg.value = '';
+  if (launcherTileText) launcherTileText.value = '';
+  if (launcherTileBorder) launcherTileBorder.value = '';
+  if (launcherTileAccent) launcherTileAccent.value = '';
   populateLauncherIconPicker('grid');
   populateLauncherToolSelect();
   populateLauncherCategoryHints();
@@ -1174,6 +1182,10 @@ function fillLauncherForm(launcher) {
   if (launcherTarget) launcherTarget.value = launcher.target || '';
   if (launcherArgs) launcherArgs.value = launcher.args || '';
   if (launcherNote) launcherNote.value = launcher.note || '';
+  if (launcherTileBg) launcherTileBg.value = launcher.tile_bg || '';
+  if (launcherTileText) launcherTileText.value = launcher.tile_text || '';
+  if (launcherTileBorder) launcherTileBorder.value = launcher.tile_border || '';
+  if (launcherTileAccent) launcherTileAccent.value = launcher.tile_accent || '';
   populateLauncherIconPicker(launcher.icon || 'grid');
   syncLauncherForm();
   if (saveLauncherBtn) saveLauncherBtn.textContent = 'Launcher aktualisieren';
@@ -1183,6 +1195,29 @@ function getLauncherKindLabel(kind) {
   if (kind === 'tool') return 'Tool';
   if (kind === 'app') return 'App / Dienst';
   return 'Website / Netzwerk';
+}
+
+function normalizeLauncherTileColor(value) {
+  const normalized = String(value || '').trim();
+  const isShortHex = /^#[0-9a-fA-F]{3,4}$/.test(normalized);
+  const isLongHex = /^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/.test(normalized);
+  return (isShortHex || isLongHex) ? normalized.toLowerCase() : '';
+}
+
+function getLauncherTileInlineStyle(launcher) {
+  const styles = [];
+
+  const tileBg = normalizeLauncherTileColor(launcher?.tile_bg);
+  const tileText = normalizeLauncherTileColor(launcher?.tile_text);
+  const tileBorder = normalizeLauncherTileColor(launcher?.tile_border);
+  const tileAccent = normalizeLauncherTileColor(launcher?.tile_accent);
+
+  if (tileBg) styles.push(`--launcher-bg:${tileBg}`);
+  if (tileText) styles.push(`--launcher-text:${tileText}`);
+  if (tileBorder) styles.push(`--launcher-border:${tileBorder}`);
+  if (tileAccent) styles.push(`--launcher-accent:${tileAccent}`);
+
+  return styles.length ? ` style="${styles.join(';')}"` : '';
 }
 
 async function runLauncher(launcherId) {
@@ -1262,11 +1297,12 @@ function renderLaunchers() {
         <div class="launcher-section-title">${escapeHtml(categoryName)}</div>
         <div class="launcher-grid">
           ${group.map((launcher) => `
-            <div class="launcher-card${launcherEditMode ? ' is-editing' : ''}">
+            <div class="launcher-card${launcherEditMode ? ' is-editing' : ''}"${getLauncherTileInlineStyle(launcher)}>
               <button class="launcher-delete" type="button" data-launcher-delete="${escapeHtml(launcher.id)}" aria-label="Launcher entfernen">x</button>
               <button class="launcher-run${launcherEditMode ? ' is-editable' : ''}" type="button" data-launcher-run="${escapeHtml(launcher.id)}">
                 <span class="launcher-icon-badge">${getLauncherIconMarkup(launcher.icon || 'grid')}</span>
                 <strong>${escapeHtml(launcher.title)}</strong>
+                ${launcher.note ? `<small class="launcher-note">${escapeHtml(launcher.note)}</small>` : ''}
               </button>
             </div>
           `).join('')}
@@ -1334,6 +1370,10 @@ async function saveLauncher() {
     args: launcherArgs?.value.trim() || '',
     note: launcherNote?.value.trim() || '',
     icon: launcherIcon?.value || 'grid',
+    tile_bg: normalizeLauncherTileColor(launcherTileBg?.value || ''),
+    tile_text: normalizeLauncherTileColor(launcherTileText?.value || ''),
+    tile_border: normalizeLauncherTileColor(launcherTileBorder?.value || ''),
+    tile_accent: normalizeLauncherTileColor(launcherTileAccent?.value || ''),
   };
 
   if (!payload.title) {

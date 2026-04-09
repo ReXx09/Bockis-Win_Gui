@@ -673,6 +673,19 @@ TOOL_COMMANDS: dict[str, str] = {
 }
 
 LAUNCHER_KINDS = {"tool", "app", "url"}
+LAUNCHER_COLOR_KEYS = ("tile_bg", "tile_text", "tile_border", "tile_accent")
+
+
+def _normalize_launcher_color(value: object) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+
+    # Accept common hex formats (#rgb, #rgba, #rrggbb, #rrggbbaa).
+    if re.fullmatch(r"#[0-9a-fA-F]{3,4}", text) or re.fullmatch(r"#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?", text):
+        return text.lower()
+
+    raise ValueError("Farbwert ungueltig. Erlaubt sind HEX-Farben wie #ff8800.")
 
 
 def _load_custom_launchers() -> list[dict]:
@@ -698,6 +711,16 @@ def _load_custom_launchers() -> list[dict]:
         note = str(item.get("note") or "").strip()
         icon = str(item.get("icon") or "grid").strip() or "grid"
         category = str(item.get("category") or "Allgemein").strip() or "Allgemein"
+        try:
+            tile_bg = _normalize_launcher_color(item.get("tile_bg"))
+            tile_text = _normalize_launcher_color(item.get("tile_text"))
+            tile_border = _normalize_launcher_color(item.get("tile_border"))
+            tile_accent = _normalize_launcher_color(item.get("tile_accent"))
+        except ValueError:
+            tile_bg = ""
+            tile_text = ""
+            tile_border = ""
+            tile_accent = ""
 
         if not launcher_id or not title or kind not in LAUNCHER_KINDS:
             continue
@@ -717,6 +740,10 @@ def _load_custom_launchers() -> list[dict]:
                 "note": note,
                 "icon": icon,
                 "category": category,
+                "tile_bg": tile_bg,
+                "tile_text": tile_text,
+                "tile_border": tile_border,
+                "tile_accent": tile_accent,
             }
         )
 
@@ -739,6 +766,10 @@ def _normalize_launcher_payload(payload: dict | None = None) -> dict:
     note = str(payload.get("note") or "").strip()
     icon = str(payload.get("icon") or "grid").strip() or "grid"
     category = str(payload.get("category") or "Allgemein").strip() or "Allgemein"
+    tile_bg = _normalize_launcher_color(payload.get("tile_bg"))
+    tile_text = _normalize_launcher_color(payload.get("tile_text"))
+    tile_border = _normalize_launcher_color(payload.get("tile_border"))
+    tile_accent = _normalize_launcher_color(payload.get("tile_accent"))
 
     if kind not in LAUNCHER_KINDS:
         raise ValueError("Typ muss tool, app oder url sein")
@@ -767,6 +798,10 @@ def _normalize_launcher_payload(payload: dict | None = None) -> dict:
         "note": note,
         "icon": icon,
         "category": category,
+        "tile_bg": tile_bg,
+        "tile_text": tile_text,
+        "tile_border": tile_border,
+        "tile_accent": tile_accent,
     }
 
 

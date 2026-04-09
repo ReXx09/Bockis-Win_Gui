@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Bockis Python Dashboard</title>
-  <link rel="stylesheet" href="/web/style.css?v=20260409j" />
+  <link rel="stylesheet" href="/web/style.css?v=20260409k" />
   <script>
     (function(){try{var t=localStorage.getItem('bockis_theme_v1');if(t){var d=JSON.parse(t);if(d&&d.vars){var r=document.documentElement;Object.keys(d.vars).forEach(function(k){r.style.setProperty(k,d.vars[k]);});}}}catch(e){}}());
   </script>
@@ -416,6 +416,27 @@
                 <span>Beschreibung</span>
                 <input id="launcherNote" type="text" placeholder="optionale Zusatzinfo fuer die Einstellungen" />
               </label>
+              <label class="span-2 launcher-color-block">
+                <span>Kachel-Farben (optional)</span>
+                <div class="launcher-color-grid">
+                  <label>
+                    <span>Hintergrund</span>
+                    <input id="launcherTileBg" type="text" placeholder="#0b1628" maxlength="9" />
+                  </label>
+                  <label>
+                    <span>Text</span>
+                    <input id="launcherTileText" type="text" placeholder="#e8efff" maxlength="9" />
+                  </label>
+                  <label>
+                    <span>Rahmen</span>
+                    <input id="launcherTileBorder" type="text" placeholder="#223554" maxlength="9" />
+                  </label>
+                  <label>
+                    <span>Icon-Akzent</span>
+                    <input id="launcherTileAccent" type="text" placeholder="#4aa3ff" maxlength="9" />
+                  </label>
+                </div>
+              </label>
             </div>
             <div class="row">
               <button id="saveLauncherBtn" class="btn">Launcher speichern</button>
@@ -485,6 +506,6 @@
     </section>
   </main>
 
-  <script src="/web/app.js?v=20260409n"></script>
+  <script src="/web/app.js?v=20260409o"></script>
 </body>
 </html>
