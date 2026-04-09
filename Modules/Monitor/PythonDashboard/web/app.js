@@ -206,6 +206,7 @@ const AUDIO_USER_ROUTES_KEY = 'bockis_audio_user_routes_v1';
 const LAUNCHERS_FALLBACK_KEY = 'bockis_custom_launchers_v1';
 const LAUNCHER_STYLE_PRESETS_KEY = 'bockis_launcher_style_presets_v1';
 const LAUNCHER_CATEGORY_LAYOUTS_KEY = 'bockis_launcher_category_layouts_v1';
+const LAUNCHER_CATEGORY_DENSITY_KEY = 'bockis_launcher_category_density_v1';
 const THEMES = [
   { id: 'ozean',     label: 'Ozean',     s1: '#4aa3ff', s2: '#14315a',
     vars: { '--accent': '#4aa3ff', '--bg': '#071220', '--card': '#0f1b2e', '--line': '#223554', '--muted': '#8da3c7', '--grad-from': '#14315a', '--grad-to': '#071220' } },
@@ -253,6 +254,7 @@ let selectedLauncherCategory = 'Alle';
 let launcherEditMode = false;
 let launcherStylePresets = [];
 let launcherCategoryLayouts = {};
+let launcherCategoryDensity = {};
 let dragArmedCard = null;
 const masonryFrames = new Map();
 const HISTORY_LEN = 45;
@@ -1122,6 +1124,46 @@ function toggleLauncherCategoryLayout(categoryName) {
   saveLauncherCategoryLayouts();
 }
 
+function readLauncherCategoryDensity() {
+  try {
+    const raw = localStorage.getItem(LAUNCHER_CATEGORY_DENSITY_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+
+    const clean = {};
+    Object.entries(parsed).forEach(([key, value]) => {
+      const normalizedKey = normalizeLauncherCategoryKey(key);
+      if (!normalizedKey) return;
+      if (value === 'compact' || value === 'normal') clean[normalizedKey] = value;
+    });
+    return clean;
+  } catch {
+    return {};
+  }
+}
+
+function saveLauncherCategoryDensity() {
+  try {
+    localStorage.setItem(LAUNCHER_CATEGORY_DENSITY_KEY, JSON.stringify(launcherCategoryDensity || {}));
+  } catch {
+    // ignore storage failures
+  }
+}
+
+function getLauncherCategoryDensity(categoryName) {
+  const key = normalizeLauncherCategoryKey(categoryName);
+  if (!key) return 'normal';
+  return launcherCategoryDensity[key] === 'compact' ? 'compact' : 'normal';
+}
+
+function toggleLauncherCategoryDensity(categoryName) {
+  const key = normalizeLauncherCategoryKey(categoryName);
+  if (!key) return;
+  const current = getLauncherCategoryDensity(categoryName);
+  launcherCategoryDensity[key] = current === 'compact' ? 'normal' : 'compact';
+  saveLauncherCategoryDensity();
+}
+
 function getLauncherCategories() {
   const categories = new Set();
   customLaunchers.forEach((launcher) => {
@@ -1556,13 +1598,17 @@ function renderLaunchers() {
     container.innerHTML = orderedCategories.map((categoryName) => {
       const group = groupedLaunchers.get(categoryName) || [];
       const categoryLayout = getLauncherCategoryLayout(categoryName);
+      const categoryDensity = getLauncherCategoryDensity(categoryName);
       return `
-        <section class="launcher-section launcher-section-${categoryLayout}">
+        <section class="launcher-section launcher-section-${categoryLayout} launcher-section-density-${categoryDensity}">
           <div class="launcher-section-header">
             <div class="launcher-section-title">${escapeHtml(categoryName)}</div>
             <div class="launcher-section-actions">
               <button class="launcher-section-layout-toggle" type="button" data-launcher-category-layout="${escapeHtml(categoryName)}" title="Kategorie-Layout umschalten">
                 ${categoryLayout === 'center' ? 'Text links' : 'Text zentrieren'}
+              </button>
+              <button class="launcher-section-density-toggle" type="button" data-launcher-category-density="${escapeHtml(categoryName)}" title="Kategorie-Kachelgroesse umschalten">
+                ${categoryDensity === 'compact' ? 'Normal' : 'Kompakt'}
               </button>
             </div>
           </div>
@@ -1607,6 +1653,15 @@ function renderLaunchers() {
         event.preventDefault();
         event.stopPropagation();
         toggleLauncherCategoryLayout(btn.dataset.launcherCategoryLayout || '');
+        renderLaunchers();
+      });
+    });
+
+    container.querySelectorAll('[data-launcher-category-density]').forEach((btn) => {
+      btn.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        toggleLauncherCategoryDensity(btn.dataset.launcherCategoryDensity || '');
         renderLaunchers();
       });
     });
@@ -2515,6 +2570,7 @@ async function init() {
   wireUserAudioRoutingControls();
   wireThemeControls();
   launcherCategoryLayouts = readLauncherCategoryLayouts();
+  launcherCategoryDensity = readLauncherCategoryDensity();
   launcherStylePresets = readLauncherStylePresets();
   renderLauncherStylePresets();
   updateLauncherEditModeButton();

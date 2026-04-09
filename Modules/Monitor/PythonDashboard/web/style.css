@@ -819,9 +819,11 @@ input, select {
 .launcher-section-actions {
   display: flex;
   justify-content: flex-end;
+  gap: 6px;
 }
 
-.launcher-section-layout-toggle {
+.launcher-section-layout-toggle,
+.launcher-section-density-toggle {
   border: 1px solid var(--line);
   border-radius: 999px;
   padding: 4px 10px;
@@ -831,7 +833,8 @@ input, select {
   cursor: pointer;
 }
 
-.launcher-section-layout-toggle:hover {
+.launcher-section-layout-toggle:hover,
+.launcher-section-density-toggle:hover {
   color: var(--text);
   border-color: color-mix(in srgb, var(--accent) 48%, var(--line));
 }
@@ -854,6 +857,40 @@ input, select {
 
 .launcher-section-center .launcher-card {
   width: min(260px, 100%);
+}
+
+.launcher-section-density-compact .launcher-grid {
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 8px;
+}
+
+.launcher-section-density-compact .launcher-card {
+  border-radius: 9px;
+  padding: 8px;
+  gap: 8px;
+}
+
+.launcher-section-density-compact .launcher-icon-badge {
+  width: 46px;
+  height: 46px;
+  border-radius: 13px;
+}
+
+.launcher-section-density-compact .launcher-icon-badge .icon-inline {
+  width: 1.35rem;
+  height: 1.35rem;
+}
+
+.launcher-section-density-compact .launcher-run {
+  gap: 8px;
+}
+
+.launcher-section-density-compact .launcher-run strong {
+  font-size: 0.9rem;
+}
+
+.launcher-section-density-compact .launcher-note {
+  font-size: 0.72rem;
 }
 
 .launcher-card {
