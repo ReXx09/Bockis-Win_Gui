@@ -71,6 +71,11 @@ body {
   align-items: start;
 }
 
+#audioGrid {
+  grid-auto-flow: dense;
+  grid-auto-rows: 8px;
+}
+
 .app-layout {
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr);

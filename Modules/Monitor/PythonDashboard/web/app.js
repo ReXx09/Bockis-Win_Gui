@@ -98,6 +98,7 @@ let lastAudioSessions = [];
 let cachedOpenPrograms = [];
 let lastOpenProgramsFetch = 0;
 let showAllAudioDevices = false;
+let audioLayoutFrame = 0;
 const HISTORY_LEN = 45;
 const monitorHistory = {
   cpu: [],
@@ -178,6 +179,33 @@ async function jsonFetch(url, opt = {}) {
   return res.json();
 }
 
+function isMasonryLayout(layoutEl) {
+  return Boolean(layoutEl && layoutEl.id === 'audioGrid');
+}
+
+function refreshMasonryLayout(layoutEl = audioGrid) {
+  if (!isMasonryLayout(layoutEl)) return;
+
+  const styles = getComputedStyle(layoutEl);
+  const rowHeight = parseFloat(styles.getPropertyValue('grid-auto-rows')) || 8;
+  const rowGap = parseFloat(styles.getPropertyValue('row-gap')) || parseFloat(styles.getPropertyValue('gap')) || 14;
+
+  getCards(layoutEl).forEach((card) => {
+    card.style.gridRowEnd = 'auto';
+  });
+
+  getCards(layoutEl).forEach((card) => {
+    const span = Math.max(1, Math.ceil((card.getBoundingClientRect().height + rowGap) / (rowHeight + rowGap)));
+    card.style.gridRowEnd = `span ${span}`;
+  });
+}
+
+function scheduleMasonryLayout(layoutEl = audioGrid) {
+  if (!isMasonryLayout(layoutEl)) return;
+  cancelAnimationFrame(audioLayoutFrame);
+  audioLayoutFrame = requestAnimationFrame(() => refreshMasonryLayout(layoutEl));
+}
+
 function getCards(layoutEl = dashboardGrid) {
   if (!layoutEl) return [];
   return Array.from(layoutEl.querySelectorAll('.card[data-widget]'));
@@ -224,6 +252,7 @@ function setCardSize(card, size, save = true, layoutEl = dashboardGrid, storageK
     btn.classList.toggle('active', btn.dataset.size === target);
   });
 
+  scheduleMasonryLayout(layoutEl);
   if (save) saveLayout(layoutEl, storageKey, false, messageEl);
 }
 
@@ -262,6 +291,8 @@ function applyLayout(layout, layoutEl = dashboardGrid) {
     const size = layout.sizes && layout.sizes[w] ? layout.sizes[w] : (card.dataset.defaultSize || '1-3');
     setCardSize(card, size, false, layoutEl);
   });
+
+  scheduleMasonryLayout(layoutEl);
 }
 
 function wireSizeControls(layoutEl = dashboardGrid, storageKey = LAYOUT_KEY, messageEl = null) {
@@ -334,6 +365,7 @@ function wireDragDrop(layoutEl = dashboardGrid, storageKey = LAYOUT_KEY, onAfter
       card.classList.remove('dragging');
       getCards(layoutEl).forEach((c) => c.classList.remove('drag-over'));
       draggedCard = null;
+      scheduleMasonryLayout(layoutEl);
       saveLayout(layoutEl, storageKey, false);
       if (typeof onAfterDrop === 'function') onAfterDrop();
     });
@@ -360,6 +392,7 @@ function showPage(page) {
     b.classList.toggle('active', b.dataset.pageTarget === page);
   });
   localStorage.setItem(PAGE_KEY, page);
+  if (page === 'audio') scheduleMasonryLayout(audioGrid);
 }
 
 function wirePageMenu() {
@@ -714,6 +747,7 @@ function renderUserProgramRoutes() {
   const routes = readUserAudioRoutes();
   if (!routes.length) {
     userProgramRoutes.innerHTML = '<div class="audio-empty">Noch keine Benutzer-Programme hinterlegt.</div>';
+    scheduleMasonryLayout(audioGrid);
     return;
   }
 
@@ -783,6 +817,8 @@ function renderUserProgramRoutes() {
       await setDefaultAudioDevice(route.deviceId, devName);
     });
   });
+
+  scheduleMasonryLayout(audioGrid);
 }
 
 function wireUserAudioRoutingControls() {
@@ -892,6 +928,7 @@ function renderAudioDevicesList(activeOutput = '', routingMessage = '') {
 
   if (!visibleDevices.length) {
     audioDevices.innerHTML = '<div class="audio-empty">Keine Audio-Geraete gefunden.</div>';
+    scheduleMasonryLayout(audioGrid);
     return;
   }
 
@@ -926,6 +963,8 @@ function renderAudioDevicesList(activeOutput = '', routingMessage = '') {
       renderAudioDevicesList(activeOutput, routingMessage);
     });
   }
+
+  scheduleMasonryLayout(audioGrid);
 }
 
 async function loadAudioDevices() {
@@ -968,6 +1007,7 @@ async function loadAudioSessions() {
       audioSessions.innerHTML = '<div class="audio-empty">Programm-Sessions nicht verfuegbar.</div>';
       lastAudioSessions = [];
       renderUserProgramRoutes();
+      scheduleMasonryLayout(audioGrid);
       return;
     }
 
@@ -1013,10 +1053,13 @@ async function loadAudioSessions() {
         }
       });
     });
+
+    scheduleMasonryLayout(audioGrid);
   } catch (err) {
     lastAudioSessions = [];
     renderUserProgramRoutes();
     audioSessions.innerHTML = `<div class="audio-empty">Session-Fehler: ${err.message}</div>`;
+    scheduleMasonryLayout(audioGrid);
   }
 }
 
@@ -1196,6 +1239,7 @@ async function init() {
   renderWidgetMenu();
   wireDragDrop(dashboardGrid, LAYOUT_KEY, renderWidgetMenu);
   wireDragDrop(audioGrid, AUDIO_LAYOUT_KEY);
+  window.addEventListener('resize', () => scheduleMasonryLayout(audioGrid));
   wireAudioControls();
   wireUserAudioRoutingControls();
   wireThemeControls();
@@ -1207,6 +1251,7 @@ async function init() {
   }
 
   await Promise.all([refreshAll(), refreshGit(), loadLogs(), loadTools()]);
+  scheduleMasonryLayout(audioGrid);
   setInterval(refreshAll, 5000);
   setInterval(refreshGit, 20000);
 }
