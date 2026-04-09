@@ -64,6 +64,7 @@ const launcherTileBorder = document.getElementById('launcherTileBorder');
 const launcherTileAccent = document.getElementById('launcherTileAccent');
 const launcherPresetName = document.getElementById('launcherPresetName');
 const saveLauncherPresetBtn = document.getElementById('saveLauncherPresetBtn');
+const resetLauncherColorsBtn = document.getElementById('resetLauncherColorsBtn');
 const launcherPresetList = document.getElementById('launcherPresetList');
 const launcherIconPicker = document.getElementById('launcherIconPicker');
 const launcherToolField = document.getElementById('launcherToolField');
@@ -1286,6 +1287,12 @@ function applyLauncherStylePreset(colors = {}, presetName = '') {
   if (launcherPresetName && presetName) launcherPresetName.value = presetName;
 }
 
+function resetLauncherColorsToThemeDefaults() {
+  applyLauncherStylePreset(getLauncherThemeColorDefaults(), '');
+  if (launcherPresetName) launcherPresetName.value = '';
+  if (launcherMsg) launcherMsg.textContent = 'Launcher-Farben auf Standardfarben des aktuellen Themes zurueckgesetzt.';
+}
+
 function renderLauncherStylePresets() {
   if (!launcherPresetList) return;
 
@@ -2281,6 +2288,7 @@ async function init() {
   if (launcherCategory) launcherCategory.oninput = () => populateLauncherCategoryHints();
   if (saveLauncherBtn) saveLauncherBtn.onclick = saveLauncher;
   if (saveLauncherPresetBtn) saveLauncherPresetBtn.onclick = saveCurrentLauncherStylePreset;
+  if (resetLauncherColorsBtn) resetLauncherColorsBtn.onclick = resetLauncherColorsToThemeDefaults;
   if (resetLauncherFormBtn) resetLauncherFormBtn.onclick = resetLauncherForm;
   document.getElementById('restartBtn').onclick = restartGui;
   document.getElementById('saveLayoutBtn').onclick = () => {
