@@ -7251,7 +7251,8 @@ function Invoke-GitPullDependencyAction {
         $pullExitCode = $LASTEXITCODE
 
         if ($pullExitCode -ne 0) {
-            return @{ Success = $false; Cancelled = $false; Message = if ($pullOutput) { $pullOutput } else { "git pull fehlgeschlagen" } }
+            $pullErrorMessage = if ($pullOutput) { $pullOutput } else { "git pull fehlgeschlagen" }
+            return @{ Success = $false; Cancelled = $false; Message = $pullErrorMessage }
         }
 
         if ($ProgressCallback) {
@@ -7269,18 +7270,22 @@ function Invoke-GitPullDependencyAction {
             }
         }
 
+        $pullSuccessLog = if ($updated) { "Git Pull erfolgreich: $pulledCommits Commit(s) geladen" } else { 'Git Pull erfolgreich: Bereits aktuell' }
         if ($LogCallback) {
-            & $LogCallback 'success' (if ($updated) { "Git Pull erfolgreich: $pulledCommits Commit(s) geladen" } else { 'Git Pull erfolgreich: Bereits aktuell' })
+            & $LogCallback 'success' $pullSuccessLog
         }
 
+        $pullProgressText = if ($updated) { "Git Pull erfolgreich" } else { "Bereits aktuell" }
         if ($ProgressCallback) {
-            & $ProgressCallback 100 (if ($updated) { "Git Pull erfolgreich" } else { "Bereits aktuell" }) ([System.Drawing.Color]::LimeGreen)
+            & $ProgressCallback 100 $pullProgressText ([System.Drawing.Color]::LimeGreen)
         }
+
+        $pullResultMessage = if ($updated) { "$pulledCommits Commit(s) geladen. Bitte GUI neu starten." } else { "Bereits aktuell." }
 
         return @{
             Success           = $true
             Cancelled         = $false
-            Message           = if ($updated) { "$pulledCommits Commit(s) geladen. Bitte GUI neu starten." } else { "Bereits aktuell." }
+            Message           = $pullResultMessage
             Output            = $pullOutput
             Updated           = $updated
             RestartRecommended = $updated
