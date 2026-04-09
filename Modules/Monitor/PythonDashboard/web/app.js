@@ -111,7 +111,7 @@ const AUDIO_LAYOUT_KEY = 'bockis_audio_layout_v1';
 const LOGS_LAYOUT_KEY = 'bockis_logs_layout_v2';
 const QUICKSTART_LAYOUT_KEY = 'bockis_quickstart_layout_v3';
 const TOOLS_LAYOUT_KEY = 'bockis_tools_layout_v1';
-const SETUP_LAYOUT_KEY = 'bockis_setup_layout_v3';
+const SETUP_LAYOUT_KEY = 'bockis_setup_layout_v4';
 const PAGE_KEY = 'bockis_dashboard_page_v1';
 const LEGACY_STORAGE_KEYS = {
   [LAYOUT_KEY]: ['bockis_dashboard_layout_v3', 'bockis_dashboard_layout_v2', 'bockis_dashboard_layout_v1'],
@@ -119,7 +119,7 @@ const LEGACY_STORAGE_KEYS = {
   [LOGS_LAYOUT_KEY]: ['bockis_logs_layout_v1'],
   [QUICKSTART_LAYOUT_KEY]: ['bockis_quickstart_layout_v2', 'bockis_quickstart_layout_v1'],
   [TOOLS_LAYOUT_KEY]: [],
-  [SETUP_LAYOUT_KEY]: ['bockis_setup_layout_v2', 'bockis_setup_layout_v1'],
+  [SETUP_LAYOUT_KEY]: ['bockis_setup_layout_v3', 'bockis_setup_layout_v2', 'bockis_setup_layout_v1'],
 };
 const PAGE_ICONS = {
   overview: 'grid',
@@ -145,6 +145,7 @@ const WIDGET_LABELS = {
   'logs-dashboard-dependencies': 'Dashboard-Dependencies',
   'quickstart-main': 'Schnellstart',
   'quickstart-edit-link': 'Bearbeitung',
+  'setup-launcher-dashboard': 'Launcher-Uebersicht',
   'setup-launchers': 'Launcher-Konfiguration',
   'tools-main': 'Tools',
   'setup-theme': 'Erscheinungsbild',
@@ -165,6 +166,7 @@ const WIDGET_ICONS = {
   'logs-dashboard-dependencies': 'layers',
   'quickstart-main': 'globe',
   'quickstart-edit-link': 'sliders',
+  'setup-launcher-dashboard': 'globe',
   'setup-launchers': 'sliders',
   'tools-main': 'wrench',
   'setup-theme': 'palette',

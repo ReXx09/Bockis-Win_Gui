@@ -917,6 +917,40 @@ input, select {
   color: var(--muted);
 }
 
+.launcher-list-setup .launcher-grid {
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 8px;
+}
+
+.launcher-list-setup .launcher-card {
+  border-radius: 9px;
+  padding: 8px;
+  gap: 8px;
+}
+
+.launcher-list-setup .launcher-icon-badge {
+  width: 46px;
+  height: 46px;
+  border-radius: 13px;
+}
+
+.launcher-list-setup .launcher-icon-badge .icon-inline {
+  width: 1.35rem;
+  height: 1.35rem;
+}
+
+.launcher-list-setup .launcher-run {
+  gap: 8px;
+}
+
+.launcher-list-setup .launcher-run strong {
+  font-size: 0.9rem;
+}
+
+.launcher-list-setup .launcher-note {
+  font-size: 0.72rem;
+}
+
 .launcher-form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

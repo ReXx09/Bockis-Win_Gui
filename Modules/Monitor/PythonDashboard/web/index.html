@@ -411,14 +411,18 @@
 
       <section class="page" data-page="setup">
         <section class="layout" id="setupGrid">
-        <section class="card" data-widget="setup-launchers" data-default-size="1-2" draggable="true">
-          <div class="card-head"><h2>Launcher-Konfiguration</h2><span class="drag-handle">⋮⋮</span></div>
+        <section class="card" data-widget="setup-launcher-dashboard" data-default-size="2-3" draggable="true">
+          <div class="card-head"><h2>Launcher-Uebersicht</h2><span class="drag-handle">⋮⋮</span></div>
           <div class="row">
             <button id="reloadLaunchersBtn" class="btn">Aktualisieren</button>
             <button id="toggleLauncherEditModeBtn" class="btn">Bearbeitungsmodus</button>
           </div>
           <div id="launcherSetupCategoryBar" class="launcher-category-bar"></div>
-          <div id="launcherSetupList"></div>
+          <div id="launcherSetupList" class="launcher-list-setup"></div>
+        </section>
+
+        <section class="card" data-widget="setup-launchers" data-default-size="1-3" draggable="true">
+          <div class="card-head"><h2>Launcher-Konfiguration</h2><span class="drag-handle">⋮⋮</span></div>
           <div class="launcher-form-grid">
             <label>
               <span>Name</span>
@@ -534,6 +538,6 @@
     </section>
   </main>
 
-  <script src="/web/app.js?v=20260409w"></script>
+  <script src="/web/app.js?v=20260409x"></script>
 </body>
 </html>
