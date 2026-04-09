@@ -164,9 +164,14 @@
               <h3>Benutzer-Programmzuordnung</h3>
               <p class="muted">Eigene Programme hinterlegen und bevorzugtes Ausgabegeraet speichern.</p>
               <div class="audio-user-routing-row">
-                <input id="userProgramName" type="text" placeholder="Programmname, z. B. Discord" />
+                <select id="openProgramSelect">
+                  <option value="">Offene Programme auswaehlen...</option>
+                </select>
+                <input id="userProgramName" list="openProgramHints" type="text" placeholder="Programmname, z. B. Discord oder Brave" />
+                <datalist id="openProgramHints"></datalist>
                 <select id="userProgramDevice"></select>
                 <button class="btn" id="addUserProgramBtn">Hinzufuegen</button>
+                <button class="btn" id="refreshOpenProgramsBtn">Programme aktualisieren</button>
                 <button class="btn" id="openRoutingSettingsBtn">Windows Routing</button>
               </div>
               <div id="userProgramRoutes" class="audio-user-route-list"></div>
@@ -244,6 +249,6 @@
     </section>
   </main>
 
-  <script src="/web/app.js?v=20260409b"></script>
+  <script src="/web/app.js?v=20260409c"></script>
 </body>
 </html>

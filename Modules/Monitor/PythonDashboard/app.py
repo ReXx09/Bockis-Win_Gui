@@ -345,6 +345,54 @@ def get_processes(top: int = 10) -> list[dict]:
     return sorted(items, key=lambda x: x["cpu"], reverse=True)[:top]
 
 
+SYSTEM_PROCESS_NAMES = {
+    "system idle process",
+    "system",
+    "registry",
+    "smss.exe",
+    "csrss.exe",
+    "wininit.exe",
+    "services.exe",
+    "lsass.exe",
+    "svchost.exe",
+    "fontdrvhost.exe",
+    "dwm.exe",
+    "sihost.exe",
+    "taskhostw.exe",
+    "conhost.exe",
+    "searchindexer.exe",
+    "wudfhost.exe",
+}
+
+
+def get_open_programs(limit: int = 300) -> list[str]:
+    names: list[str] = []
+    seen: set[str] = set()
+
+    for proc in psutil.process_iter(["name"]):
+        try:
+            name = str(proc.info.get("name") or "").strip()
+            if not name:
+                continue
+
+            low = name.lower()
+            if low in SYSTEM_PROCESS_NAMES:
+                continue
+
+            if low.startswith(("svchost", "fontdrvhost", "conhost")):
+                continue
+
+            if low not in seen:
+                seen.add(low)
+                names.append(name)
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+
+    names.sort(key=lambda x: x.lower())
+    safe_limit = max(10, min(int(limit or 300), 1000))
+    return names[:safe_limit]
+
+
 def get_git_status() -> dict:
     if not shutil_which("git"):
         return {
@@ -700,6 +748,14 @@ def api_audio_devices() -> dict:
 @app.get("/api/audio/sessions")
 def api_audio_sessions() -> dict:
     return get_audio_sessions()
+
+
+@app.get("/api/audio/open-programs")
+def api_audio_open_programs(limit: int = 300) -> dict:
+    try:
+        return {"available": True, "programs": get_open_programs(limit)}
+    except Exception as ex:
+        return {"available": False, "programs": [], "message": str(ex)}
 
 
 @app.post("/api/audio/session/{pid}/volume/{level}")

@@ -489,7 +489,7 @@ input, select {
 
 .audio-user-routing-row {
   display: grid;
-  grid-template-columns: minmax(180px, 1.2fr) minmax(220px, 1fr) auto auto;
+  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) minmax(220px, 1fr) auto auto auto;
   gap: 8px;
   margin-bottom: 8px;
 }

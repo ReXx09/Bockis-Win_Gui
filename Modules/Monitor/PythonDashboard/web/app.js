@@ -44,9 +44,12 @@ const audioMsg = document.getElementById('audioMsg');
 const audioDeviceInfo = document.getElementById('audioDeviceInfo');
 const audioDevices = document.getElementById('audioDevices');
 const audioSessions = document.getElementById('audioSessions');
+const openProgramSelect = document.getElementById('openProgramSelect');
+const openProgramHints = document.getElementById('openProgramHints');
 const userProgramName = document.getElementById('userProgramName');
 const userProgramDevice = document.getElementById('userProgramDevice');
 const addUserProgramBtn = document.getElementById('addUserProgramBtn');
+const refreshOpenProgramsBtn = document.getElementById('refreshOpenProgramsBtn');
 const openRoutingSettingsBtn = document.getElementById('openRoutingSettingsBtn');
 const userProgramRoutes = document.getElementById('userProgramRoutes');
 
@@ -85,6 +88,8 @@ const THEMES = [
 let draggedCard = null;
 let cachedAudioDevices = [];
 let lastAudioSessions = [];
+let cachedOpenPrograms = [];
+let lastOpenProgramsFetch = 0;
 const HISTORY_LEN = 45;
 const monitorHistory = {
   cpu: [],
@@ -570,6 +575,62 @@ function resolveDeviceNameById(id) {
   return dev ? dev.name : '(Unbekanntes Geraet)';
 }
 
+function normalizeProgramToken(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\.exe$/i, '')
+    .replace(/\s+/g, ' ');
+}
+
+function bestProgramMatch(input) {
+  const token = normalizeProgramToken(input);
+  if (!token) return '';
+  const normalized = cachedOpenPrograms.map((p) => ({
+    display: p,
+    token: normalizeProgramToken(p),
+  }));
+
+  const exact = normalized.find((p) => p.token === token);
+  if (exact) return exact.display;
+
+  const starts = normalized.find((p) => p.token.startsWith(token));
+  if (starts) return starts.display;
+
+  const includes = normalized.find((p) => p.token.includes(token));
+  if (includes) return includes.display;
+
+  return '';
+}
+
+function renderOpenProgramSuggestions() {
+  if (openProgramSelect) {
+    const options = ['<option value="">Offene Programme auswaehlen...</option>']
+      .concat(cachedOpenPrograms.map((p) => `<option value="${p}">${p}</option>`));
+    openProgramSelect.innerHTML = options.join('');
+  }
+
+  if (openProgramHints) {
+    openProgramHints.innerHTML = cachedOpenPrograms.map((p) => `<option value="${p}"></option>`).join('');
+  }
+}
+
+async function loadOpenPrograms(force = false) {
+  const now = Date.now();
+  if (!force && now - lastOpenProgramsFetch < 15000) return;
+
+  try {
+    const d = await jsonFetch('/api/audio/open-programs?limit=300');
+    cachedOpenPrograms = Array.isArray(d.programs) ? d.programs : [];
+    renderOpenProgramSuggestions();
+    lastOpenProgramsFetch = now;
+  } catch (err) {
+    if (force) {
+      audioMsg.textContent = `Offene Programme konnten nicht geladen werden: ${err.message}`;
+    }
+  }
+}
+
 function renderUserProgramRoutes() {
   if (!userProgramRoutes) return;
   const routes = readUserAudioRoutes();
@@ -579,7 +640,11 @@ function renderUserProgramRoutes() {
   }
 
   userProgramRoutes.innerHTML = routes.map((r, idx) => {
-    const match = lastAudioSessions.find((s) => (s.app || '').toLowerCase().includes((r.program || '').toLowerCase()));
+    const routeToken = normalizeProgramToken(r.program);
+    const match = lastAudioSessions.find((s) => {
+      const appToken = normalizeProgramToken(s.app);
+      return appToken.includes(routeToken) || routeToken.includes(appToken);
+    });
     const status = match ? `Aktiv als ${match.app} (PID ${match.pid})` : 'Aktuell nicht als Session erkannt';
     return `
       <div class="audio-user-route-item" data-route-index="${idx}">
@@ -624,10 +689,24 @@ function renderUserProgramRoutes() {
 function wireUserAudioRoutingControls() {
   if (!addUserProgramBtn || !openRoutingSettingsBtn) return;
 
+  if (openProgramSelect && userProgramName) {
+    openProgramSelect.addEventListener('change', () => {
+      if (!openProgramSelect.value) return;
+      userProgramName.value = openProgramSelect.value;
+    });
+  }
+
+  if (refreshOpenProgramsBtn) {
+    refreshOpenProgramsBtn.addEventListener('click', async () => {
+      await loadOpenPrograms(true);
+      audioMsg.textContent = `Offene Programme aktualisiert: ${cachedOpenPrograms.length}`;
+    });
+  }
+
   addUserProgramBtn.addEventListener('click', () => {
-    const program = (userProgramName?.value || '').trim();
+    const typedProgram = (userProgramName?.value || '').trim();
     const deviceId = userProgramDevice?.value || '';
-    if (!program) {
+    if (!typedProgram) {
       audioMsg.textContent = 'Bitte einen Programmnamen eingeben.';
       return;
     }
@@ -637,19 +716,26 @@ function wireUserAudioRoutingControls() {
     }
 
     const all = readUserAudioRoutes();
-    const key = program.toLowerCase();
-    const existing = all.find((r) => (r.program || '').toLowerCase() === key);
+    const autoDetectedProgram = bestProgramMatch(typedProgram);
+    const program = autoDetectedProgram || typedProgram;
+    const key = normalizeProgramToken(program);
+    const existing = all.find((r) => normalizeProgramToken(r.program) === key);
     const deviceName = resolveDeviceNameById(deviceId);
+    const detectionInfo = autoDetectedProgram && normalizeProgramToken(autoDetectedProgram) !== normalizeProgramToken(typedProgram)
+      ? ` (automatisch erkannt als ${autoDetectedProgram})`
+      : '';
+
     if (existing) {
       existing.deviceId = deviceId;
       existing.deviceName = deviceName;
-      audioMsg.textContent = `Zuordnung aktualisiert: ${program} -> ${deviceName}`;
+      audioMsg.textContent = `Zuordnung aktualisiert: ${program} -> ${deviceName}${detectionInfo}`;
     } else {
       all.push({ program, deviceId, deviceName });
-      audioMsg.textContent = `Programm hinzugefuegt: ${program} -> ${deviceName}`;
+      audioMsg.textContent = `Programm hinzugefuegt: ${program} -> ${deviceName}${detectionInfo}`;
     }
     saveUserAudioRoutes(all);
     if (userProgramName) userProgramName.value = '';
+    if (openProgramSelect) openProgramSelect.value = '';
     renderUserProgramRoutes();
   });
 
@@ -678,7 +764,7 @@ async function refreshAudio() {
     audioLevel.textContent = `${d.level}%`;
     audioMuted.textContent = d.muted ? 'Stumm' : 'Aktiv';
     audioSlider.value = d.level;
-    await Promise.all([loadAudioDevices(), loadAudioSessions()]);
+    await Promise.all([loadAudioDevices(), loadAudioSessions(), loadOpenPrograms(false)]);
   } catch (err) {
     audioMsg.textContent = `Audio-Status Fehler: ${err.message}`;
   }
