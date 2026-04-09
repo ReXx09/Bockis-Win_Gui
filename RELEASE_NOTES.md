@@ -1,48 +1,45 @@
 # Bockis System-Tool v4.2.1
 
-**Datum:** 2026-04-08  
+**Datum:** 2026-04-09  
 **Autor:** Bockis
 
 ---
 
 ## Neue Funktionen
 
-- **SmartRepair** (`Modules/Tools/SmartRepair.psm1`): Neues intelligentes Reparatur-Modul mit vollautomatischem Ablauf
-  - SFC Auto-Repair (Systemdateiprüfung mit automatischer Korrektur)
-  - DISM RestoreHealth (Online-Image-Reparatur)
-  - CHKDSK Online-Scan (Dateisystemprüfung ohne Neustart)
-  - Checks nach Sinnhaftigkeit geordnet — Neustart-Aufforderung erst am Ende
-- **GitHub Sponsors**: FUNDING.yml hinzugefügt, Sponsors-Badge im README integriert
-- **Release-Skript** (`Create-GitHubRelease.ps1`): Wiederverwendbares PowerShell-Skript zum automatisierten Erstellen von GitHub Releases per API
+- **Python-Dashboard: SVG-Icon-System** integriert für konsistente UI-Icons.
+- **Schnellstart-Launcher**: Frei konfigurierbare Kacheln für Tools, Apps/Dienste und URLs.
+- **Schnellstart als eigenes Menü**: Launcher aus dem Tools-Bereich in eine dedizierte Seite ausgelagert.
+- **Launcher-Kategorien** mit Filter-Chips, Gruppierung und Kategorie-Hints im Editor.
+- **Launcher-Icon-Picker**: Wählbare Logos/Icons für bessere visuelle Erkennbarkeit.
+- **Zentraler Bearbeitungsmodus** für Schnellstart-Kacheln mit Lösch-`x` in der Kartenecke.
 
 ## Verbesserungen
 
-- **UpdateManager** (`Modules/UpdateManager.psm1`): Textausgabe und Code-Formatierung verbessert, Catch-Blöcke vereinheitlicht
-- **Update-Link**: Wird nun auf das öffentliche Release-Repo (`Bockis-Win_Gui`) umgeleitet statt auf das DEV-Repo
-- **README**: Aktualisiert und um Sponsors-Abschnitt ergänzt
-- **Veraltete Lib-Dateien** bereinigt (nicht mehr benötigte DLLs entfernt)
+- **Audio-Routing/Anzeige**: Mikrofone werden stabil als Anzeige-Geräte geführt und aktive Mikrofone konsistent markiert.
+- **Theme-Setup**: Preset-Auswahl bleibt nach `Anwenden` erhalten.
+- **Layout-Persistenz**: Migration alter Layout-Keys, dadurch deutlich weniger unerwartete Dashboard-Resets.
+- **Launcher-Kompatibilität**: Browser-Fallback, wenn die neue Launcher-API auf einem noch alten Backend-Prozess fehlt.
 
 ## Sicherheit
 
-- **GitHub-Token vollständig entfernt**: Hardcodierter Token wurde aus `UpdateManager.psm1` und `DependencyChecker.psm1` entfernt
-- **`.env`-System eingeführt**: Token wird nun über Umgebungsvariable `GITHUB_TOKEN` geladen (`.env`-Datei ist in `.gitignore` eingetragen und wird nie committed)
-- **LICENSE**: Copyright-Jahr aktualisiert
+- Keine zusätzlichen Sicherheitsänderungen gegenüber v4.2.0.
 
-## Enthaltene Commits seit v4.1.8
+## Enthaltene Commits seit v4.2.0
 
 | Commit | Beschreibung |
 |--------|-------------|
-| `59405c9` | Update README.md |
-| `e97cf31` | Verbesserung der Textausgabe und Anpassungen |
-| `1b00c38` | Release: Version 4.1.9 |
-| `f19750d` | Cleanup: veraltete Lib-Dateien entfernt |
-| `bf8125d` | Refactor: SmartRepair - Checks neu geordnet, Neustart ans Ende |
-| `4e18c62` | Feature: SmartRepair - SFC, DISM und CHKDSK integriert |
-| `aed4e75` | Security: GitHub-Token entfernt, Update-Link angepasst |
-| `f06a5b2` | Docs: GitHub Sponsors Badge ergänzt |
-| `b0a4448` | Add: FUNDING.yml für GitHub Sponsors |
-| `ce53287` | Update: Module aktualisiert, SmartRepair.psm1 hinzugefügt |
-| `dcbe83d` | Add: GitHub Actions Workflow für Release-Sync |
+| `707ebef` | feat(dashboard): add shared svg icon system |
+| `78fc6cc` | fix(audio): mark active microphone as standard device |
+| `a792361` | fix(dashboard): migrate legacy layout storage keys |
+| `fe8ee62` | fix(audio): always render microphones as display-only |
+| `c705c48` | fix(theme): preserve selected preset on apply |
+| `396478d` | feat(tools): add configurable quick launch tiles |
+| `f6daf44` | fix(launchers): fall back when backend route is unavailable |
+| `52a2a6e` | feat(launchers): add icon picker and simplify cards |
+| `9669381` | Add quickstart page categories |
+| `f0b6360` | Refine quickstart edit mode |
+| `512e9ec` | Bump version to 4.2.1 |
 
 ---
 
