@@ -77,6 +77,13 @@ const LOGS_LAYOUT_KEY = 'bockis_logs_layout_v1';
 const TOOLS_LAYOUT_KEY = 'bockis_tools_layout_v1';
 const SETUP_LAYOUT_KEY = 'bockis_setup_layout_v1';
 const PAGE_KEY = 'bockis_dashboard_page_v1';
+const PAGE_ICONS = {
+  overview: 'grid',
+  audio: 'speaker',
+  logs: 'file',
+  tools: 'wrench',
+  setup: 'sliders',
+};
 const WIDGET_LABELS = {
   monitoring: 'Monitoring',
   'net-upload': 'Upload',
@@ -94,6 +101,23 @@ const WIDGET_LABELS = {
   'tools-main': 'Tools',
   'setup-theme': 'Erscheinungsbild',
   'setup-git': 'Git / Setup',
+};
+const WIDGET_ICONS = {
+  monitoring: 'activity',
+  'net-upload': 'upload',
+  'net-download': 'download',
+  disks: 'drive',
+  processes: 'cpu',
+  'audio-volume': 'speaker',
+  'audio-devices': 'headphones',
+  'audio-sessions': 'equalizer',
+  'audio-routing': 'route',
+  'logs-main': 'file',
+  'logs-dependencies': 'box',
+  'logs-dashboard-dependencies': 'layers',
+  'tools-main': 'wrench',
+  'setup-theme': 'palette',
+  'setup-git': 'git-branch',
 };
 const PAGE_LAYOUTS = {
   overview: { label: 'Uebersicht', layoutEl: dashboardGrid, storageKey: LAYOUT_KEY },
@@ -249,6 +273,31 @@ function getCurrentPage() {
   return document.querySelector('.page.active')?.dataset.page || (localStorage.getItem(PAGE_KEY) || 'overview');
 }
 
+function getIconMarkup(iconName) {
+  if (!iconName) return '';
+  return `<span class="icon-inline"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#icon-${iconName}"></use></svg></span>`;
+}
+
+function decoratePageMenuIcons() {
+  document.querySelectorAll('.menu-nav-btn').forEach((btn) => {
+    if (btn.dataset.iconDecorated === '1') return;
+    const page = btn.dataset.pageTarget || '';
+    const label = btn.textContent.trim();
+    btn.innerHTML = `${getIconMarkup(PAGE_ICONS[page] || 'grid')}<span>${label}</span>`;
+    btn.dataset.iconDecorated = '1';
+  });
+}
+
+function decorateCardIcons() {
+  document.querySelectorAll('.card[data-widget]').forEach((card) => {
+    const title = card.querySelector('.card-head h2');
+    const widget = card.dataset.widget || '';
+    const iconName = WIDGET_ICONS[widget] || null;
+    if (!title || !iconName || title.querySelector('.icon-inline')) return;
+    title.insertAdjacentHTML('afterbegin', getIconMarkup(iconName));
+  });
+}
+
 function getPageLayoutConfig(page = getCurrentPage()) {
   return PAGE_LAYOUTS[page] || null;
 }
@@ -398,7 +447,7 @@ function renderWidgetMenu(page = getCurrentPage()) {
     const w = card.dataset.widget;
     const item = document.createElement('label');
     item.className = 'menu-item';
-    item.innerHTML = `<input type="checkbox" /> <span>${WIDGET_LABELS[w] || w}</span>`;
+    item.innerHTML = `<input type="checkbox" /> <span class="menu-item-label">${getIconMarkup(WIDGET_ICONS[w] || null)}<span>${WIDGET_LABELS[w] || w}</span></span>`;
     const cb = item.querySelector('input');
     cb.checked = card.style.display !== 'none';
     cb.addEventListener('change', () => {
@@ -1436,6 +1485,8 @@ function wireThemeControls() {
 }
 
 async function init() {
+  decoratePageMenuIcons();
+  decorateCardIcons();
   document.getElementById('gitStatusBtn').onclick = refreshGit;
   document.getElementById('gitPullBtn').onclick = pullGit;
   document.getElementById('reloadLogBtn').onclick = () => openLog(logSelect.value);
