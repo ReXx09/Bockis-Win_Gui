@@ -155,6 +155,7 @@ const PAGE_LAYOUTS = {
 const SIZE_PRESETS = ['1-3', '1-2', '2-3', 'full', 'min'];
 const THEME_KEY = 'bockis_theme_v1';
 const AUDIO_USER_ROUTES_KEY = 'bockis_audio_user_routes_v1';
+const LAUNCHERS_FALLBACK_KEY = 'bockis_custom_launchers_v1';
 const THEMES = [
   { id: 'ozean',     label: 'Ozean',     s1: '#4aa3ff', s2: '#14315a',
     vars: { '--accent': '#4aa3ff', '--bg': '#071220', '--card': '#0f1b2e', '--line': '#223554', '--muted': '#8da3c7', '--grad-from': '#14315a', '--grad-to': '#071220' } },
@@ -180,6 +181,7 @@ let pendingThemeId = 'ozean';
 let availableTools = [];
 let customLaunchers = [];
 let editingLauncherId = '';
+let launcherApiAvailable = true;
 const masonryFrames = new Map();
 const HISTORY_LEN = 45;
 const monitorHistory = {
@@ -261,6 +263,10 @@ async function jsonFetch(url, opt = {}) {
   return res.json();
 }
 
+function isHttp404(err) {
+  return /(^|\s)404\s/i.test(String(err?.message || err || ''));
+}
+
 function isMasonryLayout(layoutEl) {
   return Boolean(layoutEl && layoutEl.classList && layoutEl.classList.contains('layout'));
 }
@@ -339,6 +345,20 @@ function escapeHtml(value) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+function readLauncherFallback() {
+  try {
+    const raw = localStorage.getItem(LAUNCHERS_FALLBACK_KEY);
+    const data = raw ? JSON.parse(raw) : [];
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLauncherFallback(items) {
+  localStorage.setItem(LAUNCHERS_FALLBACK_KEY, JSON.stringify(Array.isArray(items) ? items : []));
 }
 
 function formatUptime(s) {
@@ -955,6 +975,33 @@ async function runLauncher(launcherId) {
   if (!launcherId) return;
   const launcher = customLaunchers.find((item) => item.id === launcherId);
   if (launcherMsg) launcherMsg.textContent = `Starte ${launcher?.title || 'Launcher'}...`;
+
+  if (!launcherApiAvailable) {
+    if (!launcher) {
+      if (launcherMsg) launcherMsg.textContent = 'Launcher nicht gefunden.';
+      return;
+    }
+
+    if (launcher.kind === 'url') {
+      window.open(launcher.target, '_blank', 'noopener,noreferrer');
+      if (launcherMsg) launcherMsg.textContent = `${launcher.title} im Browser geoeffnet.`;
+      return;
+    }
+
+    if (launcher.kind === 'tool' && launcher.tool_id) {
+      try {
+        const result = await jsonFetch(`/api/tools/run/${encodeURIComponent(launcher.tool_id)}`, { method: 'POST' });
+        if (launcherMsg) launcherMsg.textContent = `${result.message || ''}\n${result.output || ''}`.trim();
+      } catch (err) {
+        if (launcherMsg) launcherMsg.textContent = `Launcher-Fehler: ${err.message}`;
+      }
+      return;
+    }
+
+    if (launcherMsg) launcherMsg.textContent = 'App-Launcher benoetigen den aktualisierten Python-Backend-Prozess. Bitte Dashboard/GUI neu starten.';
+    return;
+  }
+
   try {
     const result = await jsonFetch(`/api/launchers/run/${encodeURIComponent(launcherId)}`, { method: 'POST' });
     if (launcherMsg) launcherMsg.textContent = `${result.message || ''}\n${result.output || ''}`.trim();
@@ -1002,6 +1049,16 @@ function renderLaunchers() {
       const launcherId = btn.dataset.launcherDelete || '';
       const launcher = customLaunchers.find((item) => item.id === launcherId);
       if (!launcherId || !confirm(`Launcher '${launcher?.title || launcherId}' entfernen?`)) return;
+
+      if (!launcherApiAvailable) {
+        customLaunchers = customLaunchers.filter((item) => item.id !== launcherId);
+        saveLauncherFallback(customLaunchers);
+        if (launcherMsg) launcherMsg.textContent = 'Launcher lokal entfernt. Backend-API nicht verfuegbar.';
+        if (editingLauncherId === launcherId) resetLauncherForm();
+        renderLaunchers();
+        return;
+      }
+
       try {
         const result = await jsonFetch(`/api/launchers/${encodeURIComponent(launcherId)}`, { method: 'DELETE' });
         customLaunchers = Array.isArray(result.launchers) ? result.launchers : [];
@@ -1020,9 +1077,22 @@ function renderLaunchers() {
 async function loadLaunchers() {
   try {
     const data = await jsonFetch('/api/launchers');
+    launcherApiAvailable = true;
     customLaunchers = Array.isArray(data.launchers) ? data.launchers : [];
+    saveLauncherFallback(customLaunchers);
     renderLaunchers();
   } catch (err) {
+    if (isHttp404(err)) {
+      launcherApiAvailable = false;
+      customLaunchers = readLauncherFallback();
+      renderLaunchers();
+      if (launcherMsg) {
+        launcherMsg.textContent = customLaunchers.length
+          ? 'Launcher-API noch nicht verfuegbar. Lokale Browser-Speicherung aktiv, bis das Python-Dashboard neu gestartet wurde.'
+          : 'Launcher-API noch nicht verfuegbar. Lokale Browser-Speicherung aktiv. App-Launcher benoetigen nach wie vor einen Neustart des Python-Dashboards.';
+      }
+      return;
+    }
     if (launcherMsg) launcherMsg.textContent = `Launcher konnten nicht geladen werden: ${err.message}`;
     if (launcherList) launcherList.innerHTML = '<div class="audio-empty">Launcher konnten nicht geladen werden.</div>';
     scheduleMasonryLayout(toolsGrid);
@@ -1053,6 +1123,19 @@ async function saveLauncher() {
 
   if ((payload.kind === 'app' || payload.kind === 'url') && !payload.target) {
     if (launcherMsg) launcherMsg.textContent = 'Bitte ein Ziel angeben.';
+    return;
+  }
+
+  if (!launcherApiAvailable) {
+    const localId = editingLauncherId || `${(payload.title || 'launcher').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'launcher'}-${Date.now()}`;
+    const localLauncher = { ...payload, id: localId };
+    const existingIndex = customLaunchers.findIndex((item) => item.id === localId);
+    if (existingIndex >= 0) customLaunchers[existingIndex] = localLauncher;
+    else customLaunchers.push(localLauncher);
+    saveLauncherFallback(customLaunchers);
+    if (launcherMsg) launcherMsg.textContent = 'Launcher lokal gespeichert. Fuer App-Starts bitte Python-Dashboard neu starten.';
+    renderLaunchers();
+    resetLauncherForm();
     return;
   }
 
