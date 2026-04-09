@@ -438,29 +438,55 @@ def get_audio_devices() -> dict:
         return {"available": False, "active_output": None, "devices": []}
 
     devices: list[dict] = []
+    dedup_by_name: dict[str, dict] = {}
     active_output = None
+    active_output_id = None
 
     with _audio_com_context():
         try:
             active = AudioUtilities.GetSpeakers()
             active_output = getattr(active, "FriendlyName", None)
+            active_output_id = getattr(active, "id", None) or getattr(active, "Id", None)
         except Exception:
             active_output = None
+            active_output_id = None
 
         try:
             all_devices = AudioUtilities.GetAllDevices()
             for d in all_devices:
+                state = getattr(d, "state", None)
+                try:
+                    # IMMDevice state 1 = ACTIVE. We hide disabled/unplugged duplicates.
+                    if state is not None and int(state) != 1:
+                        continue
+                except Exception:
+                    pass
+
                 name = getattr(d, "FriendlyName", None) or getattr(d, "DeviceFriendlyName", None) or "Unknown"
                 dev_id = getattr(d, "id", None) or getattr(d, "Id", None) or name
-                devices.append(
-                    {
-                        "id": str(dev_id),
-                        "name": str(name),
-                        "is_active_output": bool(active_output and str(name) == str(active_output)),
-                    }
+                is_active = bool(
+                    (active_output_id and str(dev_id) == str(active_output_id))
+                    or (active_output and str(name) == str(active_output))
                 )
+
+                entry = {
+                    "id": str(dev_id),
+                    "name": str(name),
+                    "is_active_output": is_active,
+                }
+
+                key = str(name).strip().lower()
+                existing = dedup_by_name.get(key)
+                if existing is None:
+                    dedup_by_name[key] = entry
+                elif is_active and not existing.get("is_active_output"):
+                    # Prefer the active endpoint if same friendly name appears multiple times.
+                    dedup_by_name[key] = entry
         except Exception:
             pass
+
+    devices = list(dedup_by_name.values())
+    devices.sort(key=lambda x: (not x["is_active_output"], x["name"].lower()))
 
     return {"available": True, "active_output": active_output, "devices": devices}
 
