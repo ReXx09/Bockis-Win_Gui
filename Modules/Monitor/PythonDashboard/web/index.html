@@ -341,7 +341,33 @@
               <select id="logSelect"></select>
               <button id="reloadLogBtn" class="btn">Laden</button>
             </div>
-            <pre id="logContent" class="console large-console">Keine Log-Datei geladen.</pre>
+            <div class="log-filter-row">
+              <select id="logLevelFilter">
+                <option value="all">Level: alle</option>
+                <option value="INFO">INFO</option>
+                <option value="WARN">WARN</option>
+                <option value="ERROR">ERROR</option>
+                <option value="CRIT">CRIT</option>
+                <option value="DEBUG">DEBUG</option>
+                <option value="OK">OK</option>
+              </select>
+              <select id="logPhaseFilter">
+                <option value="all">Phase: alle</option>
+                <option value="start">start</option>
+                <option value="event">event</option>
+                <option value="end">end</option>
+              </select>
+              <select id="logExitFilter">
+                <option value="all">ExitCode: alle</option>
+                <option value="nonzero">nur Fehler (!=0)</option>
+                <option value="zero">nur Erfolg (=0)</option>
+                <option value="present">nur mit ExitCode</option>
+              </select>
+              <input id="logRunFilter" type="text" placeholder="RunId filtern (z.B. 0004)" />
+              <label class="log-focus-label"><input id="logErrorFocus" type="checkbox" /> Fehlerfokus (Run-Block)</label>
+            </div>
+            <div id="logStructured" class="log-structured-view">Keine Log-Datei geladen.</div>
+            <pre id="logContent" class="console large-console log-raw-view">Keine Log-Datei geladen.</pre>
           </section>
 
           <section class="card" data-widget="logs-dependencies" data-default-size="1-3" draggable="true">
