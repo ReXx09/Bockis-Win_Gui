@@ -947,9 +947,56 @@ input, select {
 }
 
 .audio-route-mute-btn {
-  min-width: 64px;
-  padding: 4px 8px;
-  font-size: 0.72rem;
+  min-width: 34px;
+  width: 34px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.audio-route-mute-btn .icon-inline {
+  width: 0.92rem;
+  height: 0.92rem;
+  color: var(--accent);
+}
+
+.audio-route-mute-btn.is-muted .icon-inline {
+  color: #f87171;
+}
+
+.audio-route-session-level {
+  color: var(--text);
+  font-size: 0.74rem;
+  min-width: 42px;
+}
+
+.audio-route-session-badge {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 7px;
+  font-size: 0.68rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.audio-route-session-badge.is-active {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: #8fc8ff;
+}
+
+.audio-route-session-badge.is-muted {
+  border-color: color-mix(in srgb, #f87171 50%, var(--line));
+  background: color-mix(in srgb, #f87171 15%, transparent);
+  color: #ffb4b4;
+}
+
+.audio-route-session-badge.is-offline {
+  border-color: color-mix(in srgb, var(--muted) 40%, var(--line));
+  background: color-mix(in srgb, var(--muted) 10%, transparent);
+  color: var(--muted);
 }
 
 .audio-fav-chip {

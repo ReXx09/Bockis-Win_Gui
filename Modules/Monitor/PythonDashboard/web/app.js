@@ -2778,11 +2778,14 @@ function renderUserProgramRoutes() {
       ? `
         <div class="audio-route-session-controls" data-route-session-controls="${idx}">
           <input type="range" min="0" max="100" value="${match.volume}" data-route-session-volume="${idx}" data-route-session-pid="${match.pid}" />
-          <button class="btn audio-route-mute-btn" data-route-session-mute="${idx}" data-route-session-pid="${match.pid}" data-route-session-state="${match.muted ? 0 : 1}">${match.muted ? 'Unmute' : 'Mute'}</button>
-          <span class="muted">${match.volume}% ${match.muted ? '| Stumm' : ''}</span>
+          <button class="btn audio-route-mute-btn${match.muted ? ' is-muted' : ''}" title="${match.muted ? 'Unmute' : 'Mute'}" data-route-session-mute="${idx}" data-route-session-pid="${match.pid}" data-route-session-state="${match.muted ? 0 : 1}">
+            <span class="icon-inline" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><use href="#icon-speaker"></use></svg></span>
+          </button>
+          <span class="audio-route-session-level">${match.volume}%</span>
+          <span class="audio-route-session-badge${match.muted ? ' is-muted' : ' is-active'}">${match.muted ? 'Stumm' : 'Aktiv'}</span>
         </div>
       `
-      : '<div class="audio-route-session-controls"><span class="muted">Keine aktive Audio-Session</span></div>';
+      : '<div class="audio-route-session-controls"><span class="audio-route-session-badge is-offline">Keine Session</span></div>';
 
     return `
       <div class="audio-user-route-item" data-route-index="${idx}">
