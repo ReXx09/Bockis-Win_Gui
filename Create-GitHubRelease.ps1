@@ -181,12 +181,23 @@ try {
         $Title = "Bockis System-Tool $Version"
     }
 
+    $targetCommitish = "master"
+    try {
+        $branch = (git -C $PSScriptRoot rev-parse --abbrev-ref HEAD 2>$null).Trim()
+        if (-not [string]::IsNullOrWhiteSpace($branch)) {
+            $targetCommitish = $branch
+        }
+    } catch {
+        # Fallback bleibt auf "master", falls git hier nicht verfuegbar ist.
+    }
+
     $releaseBody = Get-ReleaseBody -FilePath $ReleaseNotesFile
 
     Write-Host "Titel      : $Title"
     Write-Host "Tag        : $Version"
     Write-Host "Draft      : $($Draft.IsPresent)"
     Write-Host "Prerelease : $($Prerelease.IsPresent)"
+    Write-Host "Target     : $targetCommitish"
     Write-Host "Notes aus  : $ReleaseNotesFile"
     Write-Host ""
 
@@ -206,7 +217,7 @@ try {
 
         $releasePayload = @{
             tag_name         = $Version
-            target_commitish = "main"
+            target_commitish = $targetCommitish
             name             = $Title
             body             = $releaseBody
             draft            = $Draft.IsPresent
