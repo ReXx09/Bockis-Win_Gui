@@ -98,6 +98,10 @@ function global:Write-ToolLog {
     $isRunStartMessage = [string]$Message -match '(?i)\b(wird gestartet|scan gestartet|operation gestartet|started)\b'
     $isRunEndMessage = [string]$Message -match '(?i)\b(abgeschlossen|beendet|fehlgeschlagen|abgebrochen|completed|failed|finished)\b'
 
+    if (-not $script:LogSessionId) {
+        $script:LogSessionId = Get-Date -Format 'yyyyMMddHHmmss'
+    }
+
     # Web-Dashboard: Ausgabe in gemeinsamen Buffer schreiben (thread-safe)
     if ($null -ne $global:WebOutputBuffer) {
         $wbEntry = @{
@@ -166,17 +170,14 @@ function global:Write-ToolLog {
             default       { 'INFO ' }
         }
         $tagField = if ($ToolName) { "[$($ToolName.ToUpper())]" } else { '[APP]' }
-        $contextSuffix = if ($Context) { " | $Context" } else { '' }
-        $logEntry = if ($timestamp) {
-            "[$timestamp] [$levelPrefix] $tagField $Message$contextSuffix"
-        } else {
-            "[$levelPrefix] $tagField $Message$contextSuffix"
-        }
+        $contextSuffix = ''
+        $logEntry = ''
 
         # Laufzaehler je Tool fuer saubere Trennung je Scan-Durchlauf
         if (-not $script:ToolRunSequence) {
             $script:ToolRunSequence = @{}
         }
+
         if (-not $script:ToolRunActiveId) {
             $script:ToolRunActiveId = @{}
         }
@@ -207,6 +208,37 @@ function global:Write-ToolLog {
             $runFooter = "========== RUN $runId END   | $tagField | $runTimestamp | Dauer=$durationText =========="
             [void]$script:ToolRunActiveId.Remove($sanitizedToolName)
             [void]$script:ToolRunStartedAt.Remove($sanitizedToolName)
+        }
+
+        if (-not $script:ToolLogEntrySequence) {
+            $script:ToolLogEntrySequence = @{}
+        }
+        if (-not $script:ToolLogEntrySequence.ContainsKey($sanitizedToolName)) {
+            $script:ToolLogEntrySequence[$sanitizedToolName] = 0
+        }
+        $script:ToolLogEntrySequence[$sanitizedToolName]++
+        $entryId = '{0:D6}' -f [int]$script:ToolLogEntrySequence[$sanitizedToolName]
+
+        $phase = if ($isRunStartMessage) { 'start' } elseif ($isRunEndMessage) { 'end' } else { 'event' }
+        $activeRunId = if ($runId) { [string]$runId } elseif ($script:ToolRunActiveId.ContainsKey($sanitizedToolName)) { [string]$script:ToolRunActiveId[$sanitizedToolName] } else { 'none' }
+        $metaParts = @(
+            "SessionId=$($script:LogSessionId)",
+            "EntryId=$entryId",
+            "Phase=$phase",
+            "RunId=$activeRunId",
+            "ProcId=$PID"
+        )
+        $mergedContext = if ($Context) {
+            ($metaParts + @($Context)) -join ' | '
+        } else {
+            $metaParts -join ' | '
+        }
+
+        $contextSuffix = " | $mergedContext"
+        $logEntry = if ($timestamp) {
+            "[$timestamp] [$levelPrefix] $tagField $Message$contextSuffix"
+        } else {
+            "[$levelPrefix] $tagField $Message$contextSuffix"
         }
         
         # Schreibe in Log-Datei mit Retry-Logik
@@ -270,7 +302,7 @@ function global:Write-ToolLog {
                                 }
                                 $tsHtml = if ($timestamp) { $timestamp } else { Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff' }
                                 $msgHtml = [System.Security.SecurityElement]::Escape([string]$Message)
-                                $ctxHtml = [System.Security.SecurityElement]::Escape([string]$Context)
+                                $ctxHtml = [System.Security.SecurityElement]::Escape([string]$mergedContext)
                                 $tagHtml = [System.Security.SecurityElement]::Escape($tagField)
 
                                 $htmlLines = @()
