@@ -322,7 +322,7 @@ $ErrorActionPreference = 'Stop'
 $WarningPreference = 'SilentlyContinue'
 $VerbosePreference = 'SilentlyContinue'
 Import-Module {_ps_quote(str(dep_module))} -Force
-$result = Get-DependencyStatusForGUI -CurrentVersion '4.2.1' -RepoOwner 'ReXx09' -RepoName 'Bockis-Win_Gui-Release'
+$result = Get-DependencyStatusForGUI -CurrentVersion '4.2.2' -RepoOwner 'ReXx09' -RepoName 'Bockis-Win_Gui-Release'
 $result | ConvertTo-Json -Depth 8 -Compress
 """
     rc, out = _run_powershell(ps_script, timeout=120)

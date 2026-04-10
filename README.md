@@ -1,4 +1,4 @@
-﻿# Bockis System-Tool v4.2.1
+﻿# Bockis System-Tool v4.2.2
 
 Ein professionelles PowerShell-basiertes Systemwartungs-Tool mit moderner grafischer Benutzeroberfläche, WPF-Integration und umfassenden Diagnose- und Reparaturfunktionen für Windows 10/11.
 
@@ -17,7 +17,7 @@ Ein professionelles PowerShell-basiertes Systemwartungs-Tool mit moderner grafis
 - **SFC Check**: System File Checker zur Reparatur beschädigter Windows-Dateien
 - **Windows Update**: Automatische Suche und Installation verfügbarer System-Updates
 
-### 🔧 SmartRepair (NEU in v4.2.1)
+### 🔧 SmartRepair (NEU in v4.2.2)
 Vollautomatisches Reparaturmodul — führt alle Schritte in der sinnvollsten Reihenfolge aus:
 - **SFC Auto-Repair**: Systemdateiprüfung mit automatischer Korrektur
 - **DISM RestoreHealth**: Online-Image-Reparatur via Windows Update
@@ -243,7 +243,7 @@ Benutzerdefinierte Farbschemata werden in `config.json` gespeichert:
 
 ## 📋 Changelog
 
-### Version 4.2.1 (8. April 2026) — Aktuell
+### Version 4.2.2 (10. April 2026) — Aktuell
 - ✨ **SmartRepair**: Neues intelligentes Auto-Reparaturmodul (SFC → DISM → CHKDSK in optimaler Reihenfolge)
 - 🔐 **Security**: Hardcodierter GitHub-Token vollständig entfernt — Token-Verwaltung via `.env`-Datei
 - 🔗 **Update-Link**: Wird nun auf das öffentliche Release-Repo umgeleitet
@@ -326,4 +326,4 @@ A: Ja, das Tool hat spezielle Fehlerbehandlung für Cloud-Sync-Provider implemen
 
 
 
-**Entwickelt von Bocki | v4.2.1 | April 2026**
+**Entwickelt von Bocki | v4.2.2 | April 2026**

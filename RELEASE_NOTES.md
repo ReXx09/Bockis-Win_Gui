@@ -1,4 +1,4 @@
-# Bockis System-Tool v4.2.1
+# Bockis System-Tool v4.2.2
 
 **Datum:** 2026-04-09  
 **Autor:** Bockis
@@ -39,7 +39,7 @@
 | `52a2a6e` | feat(launchers): add icon picker and simplify cards |
 | `9669381` | Add quickstart page categories |
 | `f0b6360` | Refine quickstart edit mode |
-| `512e9ec` | Bump version to 4.2.1 |
+| `512e9ec` | Bump version to 4.2.2 |
 
 ---
 

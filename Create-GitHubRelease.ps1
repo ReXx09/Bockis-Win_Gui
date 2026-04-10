@@ -36,7 +36,7 @@
     .\Create-GitHubRelease.ps1 -Version "v4.3.0"
 
 .EXAMPLE
-    .\Create-GitHubRelease.ps1 -Version "v4.2.1-test" -RepoName "Bockis-Win_Gui-DEV" -Draft
+    .\Create-GitHubRelease.ps1 -Version "v4.2.2-test" -RepoName "Bockis-Win_Gui-DEV" -Draft
 
 .EXAMPLE
     .\Create-GitHubRelease.ps1 -Version "v4.3.0" -Assets ".\dist\BockisSystemTool-Setup.exe"
