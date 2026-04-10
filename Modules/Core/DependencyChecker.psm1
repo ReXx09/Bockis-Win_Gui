@@ -1742,6 +1742,31 @@ function Find-GitClient {
     return $result
 }
 
+function Find-PSWindowsUpdateModule {
+    $result = @{
+        Found          = $false
+        Version        = $null
+        ModuleBase     = $null
+        InstallCommand = "Install-Module -Name PSWindowsUpdate -Scope AllUsers -Force"
+    }
+
+    try {
+        $module = Get-Module -ListAvailable -Name PSWindowsUpdate |
+            Sort-Object Version -Descending |
+            Select-Object -First 1
+
+        if ($module) {
+            $result.Found = $true
+            $result.Version = [string]$module.Version
+            $result.ModuleBase = [string]$module.ModuleBase
+        }
+    } catch {
+        Write-Verbose "PSWindowsUpdate-Prüfung fehlgeschlagen: $_"
+    }
+
+    return $result
+}
+
 function Get-GitPullDependencyStatus {
     param(
         [Parameter(Mandatory = $false)]
@@ -1875,6 +1900,37 @@ function Get-DependencyStatusForGUI {
             Status      = "✓ Installiert"
             StatusColor = "Green"
             WingetId    = $null
+        }
+    }
+
+    # PSWindowsUpdate Modul (optional, verbessert Update-Workflow)
+    $psWindowsUpdate = Find-PSWindowsUpdateModule
+    if ($psWindowsUpdate.Found) {
+        $dependencies += @{
+            Name           = "PSWindowsUpdate Modul"
+            Description    = "PowerShell-Modul für erweitertes Windows Update Management"
+            Found          = $true
+            Required       = $false
+            Available      = $false
+            Version        = $psWindowsUpdate.Version
+            Status         = "✓ Installiert"
+            StatusColor    = "Green"
+            WingetId       = $null
+            ModuleBase     = $psWindowsUpdate.ModuleBase
+            InstallCommand = $psWindowsUpdate.InstallCommand
+        }
+    } else {
+        $dependencies += @{
+            Name           = "PSWindowsUpdate Modul"
+            Description    = "Optional für erweitertes Windows Update Management"
+            Found          = $false
+            Required       = $false
+            Available      = $true
+            Version        = $null
+            Status         = "⚠ Nicht installiert"
+            StatusColor    = "Yellow"
+            WingetId       = $null
+            InstallCommand = $psWindowsUpdate.InstallCommand
         }
     }
     
@@ -2309,6 +2365,34 @@ function Test-SystemDependencies {
             Path        = $null
         }
         Write-Host "  ❌ PowerShell 5.1+ nicht gefunden!" -ForegroundColor Red
+    }
+
+    # PSWindowsUpdate Modul (optional)
+    $psWindowsUpdate = Find-PSWindowsUpdateModule
+    if ($psWindowsUpdate.Found) {
+        $dependencies += @{
+            Name           = "PSWindowsUpdate Modul"
+            Description    = "PowerShell-Modul für erweitertes Windows Update Management"
+            Required       = $false
+            Available      = $false
+            Found          = $true
+            Version        = $psWindowsUpdate.Version
+            Path           = $psWindowsUpdate.ModuleBase
+            InstallCommand = $psWindowsUpdate.InstallCommand
+        }
+        Write-Host "  ✓ PSWindowsUpdate Modul $($psWindowsUpdate.Version) gefunden" -ForegroundColor Green
+    } else {
+        $dependencies += @{
+            Name           = "PSWindowsUpdate Modul"
+            Description    = "Optional für erweitertes Windows Update Management (Install-Module PSWindowsUpdate)"
+            Required       = $false
+            Available      = $true
+            Found          = $false
+            Version        = $null
+            Path           = $null
+            InstallCommand = $psWindowsUpdate.InstallCommand
+        }
+        Write-Host "  ⚠️  PSWindowsUpdate Modul nicht installiert (optional)" -ForegroundColor Yellow
     }
     
     # Windows Version
