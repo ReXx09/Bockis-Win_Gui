@@ -53,7 +53,9 @@ function Set-DependencyCacheValue {
 function Write-DependencyGuiUpdateDebugLog {
     param(
         [Parameter(Mandatory = $true)]
-        [string]$Message
+        [string]$Message,
+        [ValidateSet('DEBUG','INFO ','WARN ','ERROR','CRIT ')]
+        [string]$Level = 'DEBUG'
     )
 
     try {
@@ -64,8 +66,8 @@ function Write-DependencyGuiUpdateDebugLog {
         }
 
         $logPath = Join-Path $logDirectory "gui-update-debug.log"
-        $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-        Add-Content -Path $logPath -Value "[$timestamp] [DependencyChecker] $Message" -Encoding UTF8
+        $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
+        Add-Content -Path $logPath -Value "[$timestamp] [$Level] [DEPENDENCY] $Message" -Encoding UTF8
     } catch {
         # Debug-Logging darf die Update-Pruefung nicht blockieren.
     }

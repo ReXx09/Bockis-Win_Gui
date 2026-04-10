@@ -86,9 +86,10 @@ function global:Write-ToolLog {
         [string]$Message,
         [System.Windows.Forms.RichTextBox]$OutputBox,
         [System.Drawing.Color]$Color = [System.Drawing.Color]::Empty,
-        [ValidateSet('Information', 'Warning', 'Error', 'Success')]
+        [ValidateSet('Information', 'Warning', 'Error', 'Success', 'Debug', 'Critical')]
         [string]$Level = 'Information',
         [string]$Style,
+        [string]$Context = '',
         [switch]$NoTimestamp,
         [switch]$SaveToDatabase
     )
@@ -150,15 +151,23 @@ function global:Write-ToolLog {
         $logPath = Join-Path $logDirectory $logFileName
         
         # Log-Eintrag formatieren
-        $timestamp = if (-not $NoTimestamp) { "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - " } else { "" }
+        $timestamp = if (-not $NoTimestamp) { Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff' } else { $null }
         $levelPrefix = switch ($Level) {
-            'Information' { 'INFO' }
-            'Warning' { 'WARN' }
-            'Error' { 'ERROR' }
-            'Success' { 'SUCCESS' }
+            'Information' { 'INFO ' }
+            'Warning'     { 'WARN ' }
+            'Error'       { 'ERROR' }
+            'Success'     { 'OK   ' }
+            'Debug'       { 'DEBUG' }
+            'Critical'    { 'CRIT ' }
+            default       { 'INFO ' }
         }
-        
-        $logEntry = "$timestamp[$levelPrefix] $Message"
+        $tagField = if ($ToolName) { "[$($ToolName.ToUpper())]" } else { '[APP]' }
+        $contextSuffix = if ($Context) { " | $Context" } else { '' }
+        $logEntry = if ($timestamp) {
+            "[$timestamp] [$levelPrefix] $tagField $Message$contextSuffix"
+        } else {
+            "[$levelPrefix] $tagField $Message$contextSuffix"
+        }
         
         # Schreibe in Log-Datei mit Retry-Logik
         $retryCount = 0
@@ -558,10 +567,10 @@ for ($i = 0; $i -lt $totalModules; $i++) {
             New-Item -ItemType Directory -Path $logDir -Force | Out-Null
         }
         $logFile = Join-Path $logDir "module_errors.log"
-        $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-        "[$timestamp] $errorMessage" | Out-File -FilePath $logFile -Append -Encoding UTF8
-        "[$timestamp] StackTrace: $($_.ScriptStackTrace)" | Out-File -FilePath $logFile -Append -Encoding UTF8
-        "[$timestamp] ---" | Out-File -FilePath $logFile -Append -Encoding UTF8
+        $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
+        "[$timestamp] [ERROR] [MODULE] $errorMessage" | Out-File -FilePath $logFile -Append -Encoding UTF8
+        "[$timestamp] [DEBUG] [MODULE] StackTrace: $($_.ScriptStackTrace)" | Out-File -FilePath $logFile -Append -Encoding UTF8
+        "[$timestamp] [DEBUG] [MODULE] ---" | Out-File -FilePath $logFile -Append -Encoding UTF8
     }
 }
 
@@ -1635,8 +1644,9 @@ function Update-LogFile {
         } else {
             # Fallback: Direktes Schreiben in Log-Datei
             $logPath = Join-Path $PSScriptRoot "Data\Logs\GUI-Closing.log"
-            $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-            $logEntry = "$timestamp - [$level] $Message"
+            $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
+            $levelTag = if ($IsError) { 'ERROR' } else { 'INFO ' }
+            $logEntry = "[$timestamp] [$levelTag] [GUI-CLOSING] $Message"
             [System.IO.File]::AppendAllText($logPath, "$logEntry`r`n", [System.Text.Encoding]::UTF8)
         }
         
@@ -1663,6 +1673,15 @@ function Close-FormSafely {
         $script:isClosing = $true
         Write-Host "Close-FormSafely: Schließvorgang wird gestartet..."
         Update-LogFile -Message "Close-FormSafely: Schließvorgang gestartet"
+
+        # SHUTDOWN-Log: strukturierter Eintrag nach Logging-Spec
+        try {
+            $runtime = if ($script:GUIStartTime) {
+                $elapsed = (Get-Date) - $script:GUIStartTime
+                '{0:hh\:mm\:ss}' -f $elapsed
+            } else { 'unbekannt' }
+            Write-ToolLog -ToolName 'SHUTDOWN' -Message 'GUI wird beendet' -Level 'Information' -Context "Version=$($script:AppVersion) | Laufzeit=$runtime | ExitCode=0"
+        } catch { }
 
         # Python-Dashboard stoppen (falls aktiv)
         try { Stop-PythonDashboard } catch { }
@@ -1705,6 +1724,7 @@ function Close-FormSafely {
     } catch {
         Write-Warning "Close-FormSafely: Fehler beim Schließen: $_"
         Update-LogFile -Message "Close-FormSafely: Fehler beim Schließen: $_" -IsError
+        try { Write-ToolLog -ToolName 'SHUTDOWN' -Message 'GUI beendet mit Fehler' -Level 'Error' -Context "Error=$($_.Exception.Message) | ExitCode=0" } catch { }
         # Notfall-Beendigung
         [System.Environment]::Exit(0)
     }
@@ -7832,7 +7852,24 @@ $mainform.Add_Shown({
         if (Get-Command -Name Initialize-LogDirectory -ErrorAction SilentlyContinue) {
             Initialize-LogDirectory
         }
-        
+
+        # STARTUP-Log: strukturierter Eintrag nach Logging-Spec
+        $script:GUIStartTime = Get-Date
+        try {
+            $osInfo    = (Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction SilentlyContinue)
+            $osBuild   = if ($osInfo) { "$($osInfo.Caption) (Build $($osInfo.BuildNumber))" } else { 'unbekannt' }
+            $isAdmin   = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+            $dotNetVer = [System.Runtime.InteropServices.RuntimeEnvironment]::GetSystemVersion()
+            $arch      = if ([System.Environment]::Is64BitProcess) { 'x64' } else { 'x86' }
+            $locale    = [System.Globalization.CultureInfo]::CurrentCulture.Name
+            Write-ToolLog -ToolName 'STARTUP' `
+                          -Message 'GUI gestartet' `
+                          -Level 'Information' `
+                          -Context "Version=$($script:AppVersion) | OS=$osBuild | User=$($env:USERNAME) | Admin=$isAdmin | .NET=$dotNetVer | Arch=$arch | Locale=$locale"
+        } catch {
+            Write-ToolLog -ToolName 'STARTUP' -Message "GUI gestartet | Version=$($script:AppVersion)" -Level 'Information'
+        }
+
         # 3. Datenbank initialisieren (15%)
         Update-InitProgress -Value 15 -Text "Initialisiere Datenbank..."
         try {

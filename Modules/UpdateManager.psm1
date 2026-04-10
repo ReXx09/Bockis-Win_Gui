@@ -26,7 +26,9 @@ function Write-UpdateManagerGuiDebugLog {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)]
-        [string]$Message
+        [string]$Message,
+        [ValidateSet('DEBUG','INFO ','WARN ','ERROR','CRIT ')]
+        [string]$Level = 'DEBUG'
     )
 
     try {
@@ -37,8 +39,8 @@ function Write-UpdateManagerGuiDebugLog {
         }
 
         $logPath = Join-Path $logDirectory "gui-update-debug.log"
-        $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-        Add-Content -Path $logPath -Value "[$timestamp] [UpdateManager] $Message" -Encoding UTF8
+        $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
+        Add-Content -Path $logPath -Value "[$timestamp] [$Level] [UPDATEMGR] $Message" -Encoding UTF8
     } catch {
         # Debug-Logging darf keine Update-Funktion blockieren.
     }

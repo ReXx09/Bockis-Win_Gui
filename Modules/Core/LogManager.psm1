@@ -45,7 +45,7 @@ function Write-ToolLogInternal {
         [Parameter(Mandatory = $true)]
         [string]$Message,
         
-        [ValidateSet('Information', 'Warning', 'Error', 'Success')]
+        [ValidateSet('Information', 'Warning', 'Error', 'Success', 'Debug', 'Critical')]
         [string]$Level = 'Information',
         
         [switch]$NoTimestamp,
@@ -57,6 +57,8 @@ function Write-ToolLogInternal {
         [object]$Color,  # Geändert von [System.Drawing.Color] zu [object] für bessere Kompatibilität
         
         [string]$Style,
+        
+        [string]$Context = '',
         
         [switch]$SaveToDatabase
     )
@@ -75,15 +77,23 @@ function Write-ToolLogInternal {
     }
     
     # Log-Eintrag formatieren
-    $timestamp = if (-not $NoTimestamp) { "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - " } else { "" }
+    $timestamp = if (-not $NoTimestamp) { Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff' } else { $null }
     $levelPrefix = switch ($Level) {
-        'Information' { 'INFO' }
-        'Warning' { 'WARN' }
-        'Error' { 'ERROR' }
-        'Success' { 'SUCCESS' }
+        'Information' { 'INFO ' }
+        'Warning'     { 'WARN ' }
+        'Error'       { 'ERROR' }
+        'Success'     { 'OK   ' }
+        'Debug'       { 'DEBUG' }
+        'Critical'    { 'CRIT ' }
+        default       { 'INFO ' }
     }
-    
-    $logEntry = "$timestamp[$levelPrefix] $Message"
+    $tagField = if ($ToolName) { "[$($ToolName.ToUpper())]" } else { '[APP]' }
+    $contextSuffix = if ($Context) { " | $Context" } else { '' }
+    $logEntry = if ($timestamp) {
+        "[$timestamp] [$levelPrefix] $tagField $Message$contextSuffix"
+    } else {
+        "[$levelPrefix] $tagField $Message$contextSuffix"
+    }
     try {
         # Prüfe Log-Dateigröße
         if ((Test-Path $logPath) -and ((Get-Item $logPath).Length -gt $script:maxLogSize)) {
