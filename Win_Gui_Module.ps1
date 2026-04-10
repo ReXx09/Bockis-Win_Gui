@@ -94,8 +94,9 @@ function global:Write-ToolLog {
         [switch]$SaveToDatabase
     )
 
-    # Erkenne Start-Meldungen, um Log-Läufe visuell zu trennen
+    # Erkenne Start-/Ende-Meldungen, um Log-Läufe visuell zu trennen
     $isRunStartMessage = [string]$Message -match '(?i)\b(wird gestartet|scan gestartet|operation gestartet|started)\b'
+    $isRunEndMessage = [string]$Message -match '(?i)\b(abgeschlossen|beendet|fehlgeschlagen|abgebrochen|completed|failed|finished)\b'
 
     # Web-Dashboard: Ausgabe in gemeinsamen Buffer schreiben (thread-safe)
     if ($null -ne $global:WebOutputBuffer) {
@@ -176,7 +177,14 @@ function global:Write-ToolLog {
         if (-not $script:ToolRunSequence) {
             $script:ToolRunSequence = @{}
         }
+        if (-not $script:ToolRunActiveId) {
+            $script:ToolRunActiveId = @{}
+        }
+        if (-not $script:ToolRunStartedAt) {
+            $script:ToolRunStartedAt = @{}
+        }
         $runHeader = $null
+        $runFooter = $null
         if ($isRunStartMessage) {
             if (-not $script:ToolRunSequence.ContainsKey($sanitizedToolName)) {
                 $script:ToolRunSequence[$sanitizedToolName] = 0
@@ -185,6 +193,20 @@ function global:Write-ToolLog {
             $runId = '{0:D4}' -f [int]$script:ToolRunSequence[$sanitizedToolName]
             $runTimestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff'
             $runHeader = "========== RUN $runId START | $tagField | $runTimestamp =========="
+            $script:ToolRunActiveId[$sanitizedToolName] = $runId
+            $script:ToolRunStartedAt[$sanitizedToolName] = Get-Date
+        }
+        elseif ($isRunEndMessage -and $script:ToolRunActiveId.ContainsKey($sanitizedToolName)) {
+            $runId = [string]$script:ToolRunActiveId[$sanitizedToolName]
+            $runTimestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff'
+            $durationText = 'unbekannt'
+            if ($script:ToolRunStartedAt.ContainsKey($sanitizedToolName) -and $script:ToolRunStartedAt[$sanitizedToolName]) {
+                $elapsed = (Get-Date) - [datetime]$script:ToolRunStartedAt[$sanitizedToolName]
+                $durationText = '{0:hh\:mm\:ss}' -f $elapsed
+            }
+            $runFooter = "========== RUN $runId END   | $tagField | $runTimestamp | Dauer=$durationText =========="
+            [void]$script:ToolRunActiveId.Remove($sanitizedToolName)
+            [void]$script:ToolRunStartedAt.Remove($sanitizedToolName)
         }
         
         # Schreibe in Log-Datei mit Retry-Logik
@@ -192,11 +214,11 @@ function global:Write-ToolLog {
         $maxRetries = 3
         do {
             try {
-                $logPayload = if ($runHeader) {
-                    "`r`n$runHeader`r`n$logEntry`r`n"
-                } else {
-                    "$logEntry`r`n"
-                }
+                $payloadLines = @()
+                if ($runHeader) { $payloadLines += "`r`n$runHeader" }
+                $payloadLines += $logEntry
+                if ($runFooter) { $payloadLines += $runFooter }
+                $logPayload = ($payloadLines -join "`r`n") + "`r`n"
                 [System.IO.File]::AppendAllText($logPath, $logPayload, [System.Text.Encoding]::UTF8)
                 break
             } catch {
