@@ -346,18 +346,20 @@ $result | ConvertTo-Json -Depth 8 -Compress
     }
 
 
-def run_dependency_action(winget_id: str, action: str) -> dict:
+def run_dependency_action(winget_id: str, action: str, installer_type: str = "winget", module_name: str = "") -> dict:
     dep_module = REPO_ROOT / "Modules" / "Core" / "DependencyChecker.psm1"
     if not dep_module.exists():
         return {"success": False, "message": f"DependencyChecker nicht gefunden: {dep_module}"}
 
     safe_action = action if action in {"install", "upgrade"} else "install"
+    safe_installer_type = installer_type if installer_type in {"winget", "powershell-module"} else "winget"
+    safe_module_name = (module_name or "").strip()
     ps_script = f"""
 $ErrorActionPreference = 'Stop'
 $WarningPreference = 'SilentlyContinue'
 $VerbosePreference = 'SilentlyContinue'
 Import-Module {_ps_quote(str(dep_module))} -Force
-$result = Invoke-DependencyAction -WingetId {_ps_quote(winget_id)} -Action {safe_action}
+$result = Invoke-DependencyAction -WingetId {_ps_quote(winget_id)} -ModuleName {_ps_quote(safe_module_name)} -InstallerType {safe_installer_type} -Action {safe_action}
 $result | ConvertTo-Json -Depth 6 -Compress
 """
     rc, out = _run_powershell(ps_script, timeout=1800)
@@ -1883,12 +1885,21 @@ def api_dashboard_dependencies() -> dict:
 def api_dependency_action(payload: dict | None = None) -> dict:
     winget_id = str((payload or {}).get("winget_id") or "").strip()
     action = str((payload or {}).get("action") or "").strip().lower()
-    if not winget_id:
+    installer_type = str((payload or {}).get("installer_type") or "winget").strip().lower()
+    module_name = str((payload or {}).get("module_name") or "").strip()
+
+    if installer_type not in {"winget", "powershell-module"}:
+        return {"success": False, "message": "Installer-Typ ist ungultig"}
+
+    if installer_type == "winget" and not winget_id:
         return {"success": False, "message": "Winget-ID fehlt"}
+    if installer_type == "powershell-module" and not module_name:
+        return {"success": False, "message": "Module-Name fehlt"}
+
     if action not in {"install", "upgrade"}:
         return {"success": False, "message": "Aktion muss install oder upgrade sein"}
 
-    result = run_dependency_action(winget_id, action)
+    result = run_dependency_action(winget_id, action, installer_type=installer_type, module_name=module_name)
     result["status"] = get_dependency_status()
     return result
 

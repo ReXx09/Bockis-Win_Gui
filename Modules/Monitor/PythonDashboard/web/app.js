@@ -1195,7 +1195,11 @@ async function openLog(name) {
 }
 
 function getDependencyAction(dep) {
-  if (!dep || !dep.WingetId) return null;
+  if (!dep) return null;
+  const hasWinget = !!dep.WingetId;
+  const isPsModule = String(dep.Name || '').toLowerCase().includes('pswindowsupdate');
+
+  if (!hasWinget && !isPsModule) return null;
   if (!dep.Found && dep.Available) return 'install';
   if (dep.UpdateAvailable) return 'upgrade';
   return null;
@@ -1236,7 +1240,7 @@ function renderDependencyStatus(data) {
             </div>
             <span class="dependency-col-installed">${versionText}${nextVersion}</span>
             <span class="dependency-status">${dep.Status || '-'}</span>
-            <span class="dependency-col-action">${action ? `<button class="btn" data-dependency-action="${action}" data-winget-id="${dep.WingetId}" data-dependency-name="${dep.Name || ''}">${action === 'upgrade' ? 'Update' : 'Installieren'}</button>` : ''}</span>
+            <span class="dependency-col-action">${action ? `<button class="btn" data-dependency-action="${action}" data-winget-id="${dep.WingetId || ''}" data-dependency-name="${dep.Name || ''}" data-installer-type="${dep.WingetId ? 'winget' : 'powershell-module'}" data-module-name="${dep.WingetId ? '' : 'PSWindowsUpdate'}">${action === 'upgrade' ? 'Update' : 'Installieren'}</button>` : ''}</span>
           </div>
         `;
       }).join('')}
@@ -1247,15 +1251,18 @@ function renderDependencyStatus(data) {
     btn.addEventListener('click', async () => {
       const action = btn.dataset.dependencyAction || 'install';
       const wingetId = btn.dataset.wingetId || '';
+      const installerType = btn.dataset.installerType || 'winget';
+      const moduleName = btn.dataset.moduleName || '';
       const name = btn.dataset.dependencyName || wingetId;
-      if (!wingetId) return;
+      if (installerType === 'winget' && !wingetId) return;
+      if (installerType === 'powershell-module' && !moduleName) return;
       dependencyMsg.textContent = `${action === 'upgrade' ? 'Update' : 'Installation'} laeuft: ${name}`;
       btn.disabled = true;
       try {
         const result = await jsonFetch('/api/dependencies/action', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ winget_id: wingetId, action }),
+          body: JSON.stringify({ winget_id: wingetId, action, installer_type: installerType, module_name: moduleName }),
         });
         dependencyMsg.textContent = `${result.message || ''}\n${result.output || ''}`.trim();
         renderDependencyStatus(result.status || { available: false, message: 'Status konnte nicht aktualisiert werden.' });

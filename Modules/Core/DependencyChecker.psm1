@@ -1408,8 +1408,15 @@ Hashtable mit:
 #>
 function Invoke-DependencyAction {
     param(
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory = $false)]
         [string]$WingetId,
+
+        [Parameter(Mandatory = $false)]
+        [string]$ModuleName,
+
+        [Parameter(Mandatory = $false)]
+        [ValidateSet('winget', 'powershell-module')]
+        [string]$InstallerType = 'winget',
 
         [Parameter(Mandatory = $true)]
         [ValidateSet('install', 'upgrade')]
@@ -1428,22 +1435,70 @@ function Invoke-DependencyAction {
         ErrorMessage = $null
     }
 
-    if ([string]::IsNullOrWhiteSpace($WingetId)) {
-        $result.ErrorMessage = "WingetId fehlt"
-        if ($LogCallback) {
-            & $LogCallback "error" "WingetId fehlt"
+    if ($InstallerType -eq 'winget') {
+        if ([string]::IsNullOrWhiteSpace($WingetId)) {
+            $result.ErrorMessage = "WingetId fehlt"
+            if ($LogCallback) {
+                & $LogCallback "error" "WingetId fehlt"
+            }
+            return $result
         }
-        return $result
+    } else {
+        if ([string]::IsNullOrWhiteSpace($ModuleName)) {
+            $result.ErrorMessage = "ModuleName fehlt"
+            if ($LogCallback) {
+                & $LogCallback "error" "ModuleName fehlt"
+            }
+            return $result
+        }
     }
 
     try {
         $actionLabel = if ($Action -eq 'upgrade') { 'Aktualisierung' } else { 'Installation' }
-        Write-Host "`n[DependencyChecker] Starte $actionLabel für $WingetId..." -ForegroundColor Cyan
+        $targetName = if ($InstallerType -eq 'winget') { $WingetId } else { $ModuleName }
+        Write-Host "`n[DependencyChecker] Starte $actionLabel für $targetName..." -ForegroundColor Cyan
         if ($LogCallback) {
-            & $LogCallback "info" "Starte $actionLabel für $WingetId..."
+            & $LogCallback "info" "Starte $actionLabel für $targetName..."
         }
         if ($ProgressCallback) {
             & $ProgressCallback 5 "$actionLabel wird vorbereitet..."
+        }
+
+        if ($InstallerType -eq 'powershell-module') {
+            if ($ProgressCallback) {
+                & $ProgressCallback 20 "$actionLabel läuft (PowerShell Gallery)..."
+            }
+
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+            $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+            $moduleScope = if ($isAdmin) { 'AllUsers' } else { 'CurrentUser' }
+
+            $null = Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -ErrorAction SilentlyContinue
+            $null = Set-PSRepository -Name PSGallery -InstallationPolicy Trusted -ErrorAction SilentlyContinue
+
+            Install-Module -Name $ModuleName -Scope $moduleScope -Force -AllowClobber -ErrorAction Stop
+
+            $installedModule = Get-Module -ListAvailable -Name $ModuleName |
+                Sort-Object Version -Descending |
+                Select-Object -First 1
+
+            if ($installedModule) {
+                $result.Success = $true
+                $result.ExitCode = 0
+                $result.Note = "Modul installiert ($moduleScope)"
+                Clear-DependencyRuntimeCache
+                if ($LogCallback) {
+                    & $LogCallback "success" "$actionLabel erfolgreich: $ModuleName ($moduleScope)"
+                }
+                if ($ProgressCallback) {
+                    & $ProgressCallback 100 "$actionLabel erfolgreich" ([System.Drawing.Color]::LimeGreen)
+                }
+                Write-Host "[DependencyChecker] ✅ $actionLabel erfolgreich: $ModuleName ($moduleScope)" -ForegroundColor Green
+                return $result
+            }
+
+            throw "Modul wurde nach Installation nicht gefunden: $ModuleName"
         }
 
         $wingetCmd = Get-Command winget -ErrorAction SilentlyContinue
