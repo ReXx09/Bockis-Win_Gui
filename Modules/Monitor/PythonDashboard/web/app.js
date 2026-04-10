@@ -2721,19 +2721,30 @@ function applyGlassStrength(value) {
   const strength = normalizeGlassStrength(value);
   const root = document.documentElement;
 
-  const sidebarSolid = Math.max(30, Math.min(92, 100 - Math.round(strength * 0.45)));
-  const cardSolid = Math.max(30, Math.min(92, 100 - Math.round(strength * 0.4)));
-  const launcherSolid = Math.max(30, Math.min(92, 100 - Math.round(strength * 0.35)));
-  const chipSolid = Math.max(26, Math.min(88, 100 - Math.round(strength * 0.55)));
-  const iconSolid = Math.max(28, Math.min(90, 100 - Math.round(strength * 0.45)));
+  const t = strength / 100;
+  const lerp = (from, to) => from + (to - from) * t;
 
-  const blurMain = Math.max(0, Math.min(14, Math.round(strength * 0.08)));
-  const blurStrong = Math.max(0, Math.min(16, blurMain + (strength > 0 ? 1 : 0)));
-  const blurSoft = Math.max(0, Math.min(12, Math.max(0, blurMain - 1)));
+  const sidebarSolid = Math.round(lerp(96, 22));
+  const cardSolid = Math.round(lerp(97, 26));
+  const launcherSolid = Math.round(lerp(98, 18));
+  const topbarSolid = Math.round(lerp(95, 20));
+  const navSolid = Math.round(lerp(96, 28));
+  const buttonSolid = Math.round(lerp(96, 34));
+  const hoverAccent = Math.round(lerp(6, 24));
+  const chipSolid = Math.round(lerp(94, 20));
+  const iconSolid = Math.round(lerp(95, 24));
+
+  const blurMain = Math.round(lerp(0, 16));
+  const blurStrong = Math.round(lerp(0, 22));
+  const blurSoft = Math.round(lerp(0, 14));
 
   root.style.setProperty('--glass-sidebar-solid', `${sidebarSolid}%`);
   root.style.setProperty('--glass-card-solid', `${cardSolid}%`);
   root.style.setProperty('--glass-launcher-solid', `${launcherSolid}%`);
+  root.style.setProperty('--glass-topbar-solid', `${topbarSolid}%`);
+  root.style.setProperty('--glass-nav-solid', `${navSolid}%`);
+  root.style.setProperty('--glass-button-solid', `${buttonSolid}%`);
+  root.style.setProperty('--glass-hover-accent', `${hoverAccent}%`);
   root.style.setProperty('--glass-chip-solid', `${chipSolid}%`);
   root.style.setProperty('--glass-icon-solid', `${iconSolid}%`);
   root.style.setProperty('--glass-blur-main', `${blurMain}px`);

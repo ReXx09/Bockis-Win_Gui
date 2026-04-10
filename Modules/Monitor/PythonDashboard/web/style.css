@@ -13,6 +13,10 @@
   --glass-sidebar-solid: 82%;
   --glass-card-solid: 84%;
   --glass-launcher-solid: 86%;
+  --glass-topbar-solid: 82%;
+  --glass-nav-solid: 86%;
+  --glass-button-solid: 84%;
+  --glass-hover-accent: 12%;
   --glass-chip-solid: 74%;
   --glass-icon-solid: 82%;
   --glass-blur-main: 7px;
@@ -61,10 +65,10 @@ body {
   align-items: center;
   padding: 14px 20px;
   border-bottom: 1px solid var(--line);
-  background: rgba(9, 17, 31, 0.8);
+  background: color-mix(in srgb, var(--card) var(--glass-topbar-solid), transparent);
   position: sticky;
   top: 0;
-  backdrop-filter: blur(6px);
+  backdrop-filter: blur(var(--glass-blur-main)) saturate(112%);
 }
 
 .topbar h1 {
@@ -181,7 +185,7 @@ body {
   align-items: center;
   gap: 10px;
   border: 1px solid var(--line);
-  background: var(--bg);
+  background: color-mix(in srgb, var(--card) var(--glass-nav-solid), transparent);
   color: var(--text);
   border-radius: 8px;
   padding: 8px 10px;
@@ -191,7 +195,7 @@ body {
 
 .menu-nav-btn.active {
   border-color: var(--accent);
-  background: var(--card);
+  background: color-mix(in srgb, var(--accent) 9%, color-mix(in srgb, var(--card) var(--glass-nav-solid), transparent));
 }
 
 .menu-nav-btn .icon-inline {
@@ -524,7 +528,7 @@ input, select {
 
 .btn {
   border: 1px solid var(--line);
-  background: #13243d;
+  background: color-mix(in srgb, var(--card) var(--glass-button-solid), transparent);
   color: var(--text);
   border-radius: 8px;
   padding: 8px 10px;
@@ -533,7 +537,7 @@ input, select {
 }
 
 .btn:hover {
-  background: #1a3154;
+  background: color-mix(in srgb, var(--accent) var(--glass-hover-accent), color-mix(in srgb, var(--card) var(--glass-button-solid), transparent));
   border-color: color-mix(in srgb, var(--accent) 38%, var(--line));
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent),
               0 4px 14px color-mix(in srgb, var(--accent) 10%, transparent);
@@ -856,7 +860,7 @@ input, select {
   text-align: left;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: color-mix(in srgb, var(--card) 72%, transparent);
+  background: color-mix(in srgb, var(--card) var(--glass-card-solid), transparent);
   color: var(--text);
   padding: 9px 10px;
   cursor: pointer;
@@ -882,9 +886,11 @@ input, select {
 }
 
 .tool-tile:hover {
+  background: color-mix(in srgb, var(--accent) var(--glass-hover-accent), color-mix(in srgb, var(--card) var(--glass-card-solid), transparent));
   border-color: color-mix(in srgb, var(--accent) 50%, var(--line));
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 28%, transparent);
   transform: translateY(-1px);
+  backdrop-filter: blur(var(--glass-blur-soft)) saturate(120%);
 }
 
 .tool-tile.is-open {
@@ -1157,12 +1163,12 @@ input, select {
   height: 56px;
   border-radius: 16px;
   border: 1px solid color-mix(in srgb, var(--launcher-accent) 30%, var(--launcher-border));
-  background: color-mix(in srgb, var(--launcher-accent) 18%, transparent);
+  background: color-mix(in srgb, var(--launcher-accent) var(--glass-hover-accent), transparent);
   color: var(--launcher-accent);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  backdrop-filter: blur(4px) saturate(120%);
+  backdrop-filter: blur(var(--glass-blur-soft)) saturate(120%);
 }
 
 .launcher-icon-badge .icon-inline {
