@@ -2901,7 +2901,6 @@ function renderUserProgramRoutes() {
       const route = all[idx];
       route.deviceId = favId;
       route.deviceName = resolveDeviceNameById(favId);
-      route.favoriteDeviceIds = normalizeFavoriteDeviceIds([favId, ...(route.favoriteDeviceIds || [])]);
       saveUserAudioRoutes(all);
       await setDefaultAudioDevice(favId, route.deviceName);
       renderUserProgramRoutes();
