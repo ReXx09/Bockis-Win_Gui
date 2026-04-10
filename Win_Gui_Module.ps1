@@ -4595,7 +4595,7 @@ $btnCheckDependenciesH.Add_Click({
                     }
                 }
 
-                $groupOrder = @("system", "package", "repo", "dashboard", "hardware", "other")
+                $groupOrder = @("system", "package", "dashboard", "repo", "hardware", "other")
 
                 $sortedDependencies = @(
                     $depResult.Dependencies | Sort-Object `
