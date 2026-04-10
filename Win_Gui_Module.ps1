@@ -5051,11 +5051,13 @@ $btnCheckDependenciesH.Add_Click({
                         $actionButton.BackColor = [System.Drawing.Color]::FromArgb(70, 70, 70)
                         $actionButton.ForeColor = [System.Drawing.Color]::Silver
                         $actionButton.Enabled = $false
-                    } elseif (-not $dep.Found -and $dep.WingetId) {
+                    } elseif (-not $dep.Found -and ($dep.WingetId -or $dep.InstallCommand)) {
                         $actionButton.Text = "Installieren"
                         $actionButton.BackColor = [System.Drawing.Color]::FromArgb(46, 204, 113)
                         $actionButton.ForeColor = [System.Drawing.Color]::White
-                        $actionButton.Tag = @{ Dependency = $dep; Action = "install" }
+                        $installerType = if ($dep.InstallerType) { $dep.InstallerType } elseif ($dep.WingetId) { "winget" } elseif ($dep.InstallCommand) { "powershell-module" } else { "winget" }
+                        $moduleName = if ($dep.ModuleName) { $dep.ModuleName } else { $null }
+                        $actionButton.Tag = @{ Dependency = $dep; Action = "install"; InstallerType = $installerType; ModuleName = $moduleName }
                     } elseif ($dep.Found -and $dep.UpdateAvailable -and $dep.WingetId) {
                         $actionButton.Text = "Aktualisieren"
                         $actionButton.BackColor = [System.Drawing.Color]::FromArgb(52, 152, 219)
@@ -5162,7 +5164,9 @@ $btnCheckDependenciesH.Add_Click({
                                         ) | Out-Null
                                     }
                                 } else {
-                                    $actionResult = Invoke-DependencyAction -WingetId $depToHandle.WingetId -Action 'install' -ProgressCallback $uiProgressCallback -LogCallback $uiLogCallback
+                                    $installerType = if ($payload.InstallerType) { [string]$payload.InstallerType } elseif ($depToHandle.InstallerType) { [string]$depToHandle.InstallerType } else { "winget" }
+                                    $moduleName = if ($payload.ModuleName) { [string]$payload.ModuleName } elseif ($depToHandle.ModuleName) { [string]$depToHandle.ModuleName } else { $null }
+                                    $actionResult = Invoke-DependencyAction -WingetId $depToHandle.WingetId -ModuleName $moduleName -InstallerType $installerType -Action 'install' -ProgressCallback $uiProgressCallback -LogCallback $uiLogCallback
                                 }
 
                                 if ($actionResult -and $actionResult.Cancelled) {

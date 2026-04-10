@@ -1972,6 +1972,8 @@ function Get-DependencyStatusForGUI {
             StatusColor    = "Green"
             WingetId       = $null
             ModuleBase     = $psWindowsUpdate.ModuleBase
+            InstallerType  = "powershell-module"
+            ModuleName     = "PSWindowsUpdate"
             InstallCommand = $psWindowsUpdate.InstallCommand
         }
     } else {
@@ -1985,6 +1987,8 @@ function Get-DependencyStatusForGUI {
             Status         = "⚠ Nicht installiert"
             StatusColor    = "Yellow"
             WingetId       = $null
+            InstallerType  = "powershell-module"
+            ModuleName     = "PSWindowsUpdate"
             InstallCommand = $psWindowsUpdate.InstallCommand
         }
     }
