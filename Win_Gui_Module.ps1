@@ -345,15 +345,15 @@ function global:Write-ToolLog {
     <title>$htmlTitle</title>
     <style>
         body { font-family: Consolas, 'Courier New', monospace; background: #0d1117; color: #c9d1d9; margin: 0; }
-        .wrap { max-width: 1300px; margin: 0 auto; padding: 14px; }
-        .head { font-size: 14px; font-weight: 700; margin-bottom: 10px; color: #f0f6fc; }
-        .entry { display: grid; grid-template-columns: 210px 70px 150px 1fr; gap: 8px; padding: 6px 8px; border: 1px solid #30363d; border-radius: 6px; margin-bottom: 6px; background: #161b22; }
+        .wrap { max-width: 1280px; margin: 0 auto; padding: 10px; }
+        .head { font-size: 13px; font-weight: 700; margin-bottom: 8px; color: #f0f6fc; }
+        .entry { display: grid; grid-template-columns: 175px 58px 128px minmax(0,1fr); gap: 6px; padding: 5px 7px; border: 1px solid #30363d; border-radius: 6px; margin-bottom: 5px; background: #161b22; }
         .t { color: #8b949e; }
-        .lvl { font-weight: 700; text-align: center; border-radius: 4px; padding: 2px 4px; }
+        .lvl { font-weight: 700; text-align: center; border-radius: 4px; padding: 1px 3px; }
         .tag { color: #79c0ff; font-weight: 700; }
-        .msg { color: #e6edf3; }
-        .ctx { color: #8b949e; margin-top: 2px; font-size: 12px; }
-        .run { padding: 6px 8px; margin: 10px 0 6px; border-left: 4px solid #2ea043; background: #0f2417; color: #9be9a8; }
+        .msg { color: #e6edf3; line-height: 1.25; }
+        .ctx { color: #8b949e; margin-top: 1px; font-size: 11px; line-height: 1.2; white-space: pre-wrap; overflow-wrap: anywhere; }
+        .run { padding: 5px 7px; margin: 8px 0 5px; border-left: 4px solid #2ea043; background: #0f2417; color: #9be9a8; font-size: 12px; }
         .run.end { border-left-color: #d29922; background: #2a1f0f; color: #f2cc60; }
         .info { background: #0b2a4a; color: #79c0ff; }
         .warn { background: #3b2b0a; color: #f2cc60; }
@@ -361,6 +361,9 @@ function global:Write-ToolLog {
         .ok   { background: #0f2417; color: #9be9a8; }
         .dbg  { background: #21262d; color: #8b949e; }
         .crt  { background: #4c0f24; color: #ff7b72; }
+        @media (max-width: 1100px) {
+            .entry { grid-template-columns: 155px 52px 112px minmax(0,1fr); }
+        }
     </style>
 </head>
 <body>
