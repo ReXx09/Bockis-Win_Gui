@@ -2610,7 +2610,7 @@ async function loadAudioDevices() {
     const dedup = [];
     const byName = new Map();
     for (const dev of (d.devices || [])) {
-      const key = (dev.name || '').trim().toLowerCase();
+      const key = `${String(dev.kind || '').trim().toLowerCase()}:${(dev.name || '').trim().toLowerCase()}`;
       if (!key) continue;
       const idx = byName.get(key);
       if (idx == null) {

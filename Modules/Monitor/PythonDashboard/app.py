@@ -124,6 +124,9 @@ _tool_state_cache: dict[str, object] = {"ts": 0.0, "payload": None}
 _tool_state_cache_lock = threading.Lock()
 _tool_state_ttl_sec = 1.2
 
+# Fallback hint for default input device if backend cannot read active microphone reliably.
+_audio_default_hint: dict[str, str | None] = {"input_id": None, "input_name": None}
+
 def _get_god_mode_cached(cache_key: str, func, timeout_sec: float = 0.5) -> bool:
     """Get cached God Mode state or compute fresh if cache expired."""
     current = current_time()
@@ -1369,6 +1372,21 @@ def get_audio_devices() -> dict:
             pass
 
     devices = list(dedup_by_name.values())
+
+    # Some environments don't expose active microphone reliably via pycaw.
+    # If that happens, use the last successfully selected input as a display fallback.
+    if not active_input_id and _audio_default_hint.get("input_id"):
+        hinted_id = str(_audio_default_hint.get("input_id") or "")
+        for entry in devices:
+            if entry.get("kind") != "input":
+                continue
+            if str(entry.get("id") or "") != hinted_id:
+                continue
+            entry["is_active_input"] = True
+            active_input_id = str(entry.get("id") or "")
+            active_input = str(entry.get("name") or "")
+            break
+
     devices.sort(
         key=lambda x: (
             0 if x.get("kind") == "output" else 1,
@@ -1723,7 +1741,12 @@ def api_audio_default_device(payload: dict | None = None) -> dict:
         }
 
     ok, out = set_default_audio_device(target_id)
+    if ok and device_kind == "input":
+        _audio_default_hint["input_id"] = target_id
     updated = get_audio_devices()
+    if ok and device_kind == "input":
+        hinted = next((x for x in (updated.get("devices") or []) if str(x.get("id") or "") == target_id), None)
+        _audio_default_hint["input_name"] = str((hinted or {}).get("name") or "")
     return {
         "success": ok,
         "message": ("Standard-Mikrofon umgeschaltet." if device_kind == "input" else "Standard-Ausgabegeraet umgeschaltet.") if ok else "Umschalten fehlgeschlagen.",
