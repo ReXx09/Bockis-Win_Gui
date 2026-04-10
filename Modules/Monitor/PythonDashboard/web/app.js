@@ -121,6 +121,7 @@ const QUICKSTART_LAYOUT_KEY = 'bockis_quickstart_layout_v4';
 const TOOLS_LAYOUT_KEY = 'bockis_tools_layout_v2';
 const SETUP_LAYOUT_KEY = 'bockis_setup_layout_v4';
 const PAGE_KEY = 'bockis_dashboard_page_v1';
+const DEPENDENCY_TOP5_KEY = 'bockis_dependency_top5_v1';
 const LEGACY_STORAGE_KEYS = {
   [LAYOUT_KEY]: ['bockis_dashboard_layout_v3', 'bockis_dashboard_layout_v2', 'bockis_dashboard_layout_v1'],
   [AUDIO_LAYOUT_KEY]: [],
@@ -1207,6 +1208,38 @@ function getDependencyAction(dep) {
 }
 
 let dependencyExpanded = false;
+let dependencySelectionMode = false;
+let dependencyPreferredTop5 = [];
+
+function loadDependencyTop5Preferences() {
+  try {
+    const raw = localStorage.getItem(DEPENDENCY_TOP5_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((x) => typeof x === 'string' && x.trim()).slice(0, 5);
+  } catch {
+    return [];
+  }
+}
+
+function saveDependencyTop5Preferences(names) {
+  dependencyPreferredTop5 = Array.from(new Set((names || []).filter((x) => typeof x === 'string' && x.trim()))).slice(0, 5);
+  try {
+    localStorage.setItem(DEPENDENCY_TOP5_KEY, JSON.stringify(dependencyPreferredTop5));
+  } catch {
+    // ignore localStorage issues, fallback to session memory
+  }
+}
+
+function getTop5BaseDependencies(deps) {
+  const preferredOrder = dependencyPreferredTop5
+    .map((name) => deps.find((dep) => dep && dep.Name === name))
+    .filter(Boolean);
+
+  const fallbackOrder = deps.filter((dep) => !preferredOrder.some((picked) => picked.Name === dep.Name));
+  return [...preferredOrder, ...fallbackOrder].slice(0, 5);
+}
 
 function buildDependencyRows(deps) {
   return deps.map((dep) => {
@@ -1268,16 +1301,16 @@ function renderDependencyStatus(data) {
   }
 
   const deps = Array.isArray(data.dependencies) ? data.dependencies : [];
-  const topCount = 5;
-  const actionIndices = deps
-    .map((dep, idx) => ({ dep, idx }))
-    .filter((x) => !!getDependencyAction(x.dep))
-    .map((x) => x.idx);
+  const availableNames = new Set(deps.map((dep) => dep.Name).filter(Boolean));
+  dependencyPreferredTop5 = dependencyPreferredTop5.filter((name) => availableNames.has(name));
 
-  const compactIndices = new Set([...Array(Math.min(topCount, deps.length)).keys(), ...actionIndices]);
-  const compactDeps = deps.filter((_, idx) => compactIndices.has(idx));
+  const top5Base = getTop5BaseDependencies(deps);
+  const compactNames = new Set(top5Base.map((dep) => dep.Name));
+  deps.filter((dep) => !!getDependencyAction(dep)).forEach((dep) => compactNames.add(dep.Name));
+  const compactDeps = deps.filter((dep) => compactNames.has(dep.Name));
   const hiddenCount = Math.max(0, deps.length - compactDeps.length);
   const depsToRender = dependencyExpanded ? deps : compactDeps;
+  const selectedCount = dependencyPreferredTop5.length;
 
   dependencySummary.textContent = data.all_satisfied
     ? `Systemstatus ok | ${deps.length} Abhaengigkeiten geprueft${dependencyExpanded ? '' : ` | Kompaktansicht ${depsToRender.length}/${deps.length}`}`
@@ -1286,9 +1319,25 @@ function renderDependencyStatus(data) {
   dependencyList.innerHTML = deps.length
     ? `
       <div class="dependency-controls">
-        <span class="muted dependency-controls-info">${dependencyExpanded ? 'Alle Eintraege sichtbar' : `Top 5 + Aktionen sichtbar${hiddenCount > 0 ? ` | ${hiddenCount} ausgeblendet` : ''}`}</span>
-        ${hiddenCount > 0 || dependencyExpanded ? `<button class="btn dependency-toggle-btn" data-dependency-toggle="1">${dependencyExpanded ? 'Weniger anzeigen' : 'Alle anzeigen'}</button>` : ''}
+        <span class="muted dependency-controls-info">${dependencyExpanded ? 'Alle Eintraege sichtbar' : `Top 5 + Aktionen sichtbar${hiddenCount > 0 ? ` | ${hiddenCount} ausgeblendet` : ''}`} | Top-5 Auswahl: ${selectedCount}/5</span>
+        <span class="dependency-controls-buttons">
+          <button class="btn dependency-toggle-btn" data-dependency-select="1">${dependencySelectionMode ? 'Auswahl schliessen' : 'Top 5 waehlen'}</button>
+          ${hiddenCount > 0 || dependencyExpanded ? `<button class="btn dependency-toggle-btn" data-dependency-toggle="1">${dependencyExpanded ? 'Weniger anzeigen' : 'Alle anzeigen'}</button>` : ''}
+        </span>
       </div>
+      ${dependencySelectionMode ? `
+      <div class="dependency-top5-picker">
+        <div class="dependency-top5-title">Top 5 festlegen (maximal 5 Eintraege)</div>
+        <div class="dependency-top5-list">
+          ${deps.map((dep) => {
+            const name = dep.Name || 'Unbekannt';
+            const checked = dependencyPreferredTop5.includes(name);
+            const disabled = !checked && selectedCount >= 5;
+            return `<label class="dependency-top5-item${disabled ? ' is-disabled' : ''}"><input type="checkbox" data-dependency-pref="${name}" ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''}> <span>${name}</span></label>`;
+          }).join('')}
+        </div>
+      </div>
+      ` : ''}
       <div class="dependency-table-head dependency-table-head-actions">
         <span>Paket</span>
         <span>Version</span>
@@ -1307,12 +1356,44 @@ function renderDependencyStatus(data) {
     });
   }
 
+  const selectBtn = dependencyList.querySelector('[data-dependency-select="1"]');
+  if (selectBtn) {
+    selectBtn.addEventListener('click', () => {
+      dependencySelectionMode = !dependencySelectionMode;
+      renderDependencyStatus(data);
+    });
+  }
+
+  dependencyList.querySelectorAll('[data-dependency-pref]').forEach((checkbox) => {
+    checkbox.addEventListener('change', (ev) => {
+      const name = ev.target.dataset.dependencyPref || '';
+      if (!name) return;
+
+      const next = new Set(dependencyPreferredTop5);
+      if (ev.target.checked) {
+        if (next.size >= 5) {
+          ev.target.checked = false;
+          return;
+        }
+        next.add(name);
+      } else {
+        next.delete(name);
+      }
+
+      saveDependencyTop5Preferences(Array.from(next));
+      renderDependencyStatus(data);
+    });
+  });
+
   attachDependencyActionHandlers();
 
   scheduleMasonryLayout(logsGrid);
 }
 
 async function loadDependencyStatus() {
+  if (!dependencyPreferredTop5.length) {
+    dependencyPreferredTop5 = loadDependencyTop5Preferences();
+  }
   if (dependencyMsg) dependencyMsg.textContent = 'Dependency-Check laeuft...';
   try {
     const data = await jsonFetch('/api/dependencies');
