@@ -680,6 +680,25 @@ function saveLayout(layoutEl = dashboardGrid, storageKey = LAYOUT_KEY, notify = 
   }
 }
 
+function saveDashboardState(messageEl = layoutMsg) {
+  Object.values(PAGE_LAYOUTS).forEach((cfg) => {
+    if (!cfg || !cfg.layoutEl || !cfg.storageKey) return;
+    saveLayout(cfg.layoutEl, cfg.storageKey, false, null);
+  });
+
+  saveLauncherCategoryLayouts();
+  saveLauncherCategoryDensity();
+  saveLauncherCategoryOrder();
+  saveDependencyTop5Preferences(dependencyPreferredTop5);
+
+  if (messageEl) {
+    messageEl.textContent = 'Dashboard gespeichert.';
+    setTimeout(() => {
+      if (messageEl.textContent === 'Dashboard gespeichert.') messageEl.textContent = '';
+    }, 2200);
+  }
+}
+
 function applyLayout(layout, layoutEl = dashboardGrid) {
   if (!layout) return;
   const map = {};
@@ -3464,6 +3483,10 @@ async function init() {
   if (resetLauncherColorsBtn) resetLauncherColorsBtn.onclick = resetLauncherColorsToThemeDefaults;
   if (resetLauncherFormBtn) resetLauncherFormBtn.onclick = resetLauncherForm;
   document.getElementById('restartBtn').onclick = restartGui;
+  const saveDashboardBtn = document.getElementById('saveDashboardBtn');
+  if (saveDashboardBtn) {
+    saveDashboardBtn.onclick = () => saveDashboardState(layoutMsg);
+  }
   document.getElementById('saveLayoutBtn').onclick = () => {
     const pageConfig = getPageLayoutConfig();
     if (!pageConfig?.layoutEl) return;
