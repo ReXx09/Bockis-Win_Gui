@@ -1830,6 +1830,63 @@ def api_git_status() -> dict:
     return get_git_status()
 
 
+# Cache for git fetch results to avoid spamming network calls
+_git_fetch_cache: dict = {}
+_git_fetch_lock = threading.Lock()
+
+
+@app.get("/api/git/check-updates")
+def api_git_check_updates() -> dict:
+    """Fetch remotes and report how many commits are behind. Result cached for 2 minutes."""
+    with _git_fetch_lock:
+        cached = _git_fetch_cache.get("last")
+        if cached and (time.time() - cached["ts"]) < 120:
+            return cached["data"]
+
+    if not shutil_which("git"):
+        return {"available": False, "behind": 0, "message": "Git nicht gefunden"}
+
+    rc, inside = _run_git(["rev-parse", "--is-inside-work-tree"])
+    if rc != 0 or "true" not in inside:
+        return {"available": False, "behind": 0, "message": "Kein Git-Repository"}
+
+    _, branch = _run_git(["rev-parse", "--abbrev-ref", "HEAD"])
+    _, upstream = _run_git(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"])
+
+    if not upstream or "fatal:" in upstream.lower():
+        return {"available": True, "behind": 0, "message": "Kein Upstream konfiguriert"}
+
+    # Fetch vom Remote (holt aktuellen Remote-Stand ohne merge)
+    _run_git(["fetch", "--quiet"])
+
+    behind = 0
+    _, count = _run_git(["rev-list", "--left-right", "--count", f"{branch.strip()}...{upstream.strip()}"])
+    parts = count.strip().split()
+    if len(parts) == 2:
+        try:
+            behind = int(parts[1])
+        except ValueError:
+            behind = 0
+
+    latest_commits = ""
+    if behind > 0:
+        _, log = _run_git(["log", "--oneline", f"-{min(behind, 5)}", upstream.strip()])
+        latest_commits = log.strip()
+
+    result: dict = {
+        "available": True,
+        "behind": behind,
+        "branch": branch.strip() or "-",
+        "upstream": upstream.strip(),
+        "latest_commits": latest_commits,
+    }
+
+    with _git_fetch_lock:
+        _git_fetch_cache["last"] = {"ts": time.time(), "data": result}
+
+    return result
+
+
 @app.post("/api/git/pull")
 def api_git_pull(payload: dict | None = None) -> dict:
     status = get_git_status()

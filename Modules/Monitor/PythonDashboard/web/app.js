@@ -284,6 +284,7 @@ let toolStateTimer = null;
 let metricsRefreshTimer = null;
 let audioRefreshTimer = null;
 let gitRefreshTimer = null;
+let gitUpdateCheckTimer = null;
 let toolStateApiAvailable = true;
 let toolToggleApiAvailable = true;
 let toolStateRefreshInFlight = false;
@@ -985,6 +986,31 @@ async function refreshGit() {
   }
 }
 
+async function checkGitUpdates() {
+  try {
+    const d = await jsonFetch('/api/git/check-updates');
+    const banner = document.getElementById('gitUpdateBanner');
+    const logsBtn = document.querySelector('.menu-nav-btn[data-page-target="logs"]');
+    if (!d.available || d.behind === 0) {
+      if (banner) banner.style.display = 'none';
+      if (logsBtn) logsBtn.classList.remove('git-update-dot');
+      return;
+    }
+    // Neue Commits vorhanden
+    const commitLines = d.latest_commits
+      ? `\n\nNeuste Commits:\n${d.latest_commits}`
+      : '';
+    const msg = `\u26A0\uFE0F  ${d.behind} neue Commit(s) verfuegbar auf ${d.upstream}.${commitLines}\n\nDruecke Pull um zu aktualisieren.`;
+    if (banner) {
+      banner.textContent = msg;
+      banner.style.display = 'block';
+    }
+    if (logsBtn) logsBtn.classList.add('git-update-dot');
+  } catch {
+    // Netzwerkfehler still ignorieren – naechster Check in 5 Minuten
+  }
+}
+
 async function pullGit() {
   if (!confirm(`Git Pull von ${gitRemote.value}/${gitTarget.value} ausfuehren?`)) return;
   gitMsg.textContent = 'Git Pull laeuft...';
@@ -1007,6 +1033,11 @@ async function pullGit() {
     }
     lastPullTime = Date.now();
     await refreshGit();           // aktualisiert Ahead/Behind/Branch-Felder
+    // Update-Banner und Nav-Dot leeren da jetzt auf aktuellem Stand
+    const banner = document.getElementById('gitUpdateBanner');
+    if (banner) banner.style.display = 'none';
+    const logsBtn = document.querySelector('.menu-nav-btn[data-page-target="logs"]');
+    if (logsBtn) logsBtn.classList.remove('git-update-dot');
     gitMsg.textContent = pullResult; // Pull-Ausgabe danach wieder herstellen
   } catch (err) {
     gitMsg.textContent = `Git Pull Fehler: ${err.message}`;
@@ -3245,6 +3276,10 @@ async function init() {
   await Promise.all([refreshAll(), refreshGit(), loadLogs(), loadDependencyStatus(), loadDashboardDependencyStatus(), loadTools(), loadLaunchers()]);
   document.querySelectorAll('.layout').forEach((layoutEl) => scheduleMasonryLayout(layoutEl));
   updateScopedRefreshTimers();
+  // Git-Update-Check: sofort prüfen und danach alle 5 Minuten
+  checkGitUpdates().catch(() => {});
+  if (gitUpdateCheckTimer) clearInterval(gitUpdateCheckTimer);
+  gitUpdateCheckTimer = setInterval(() => checkGitUpdates().catch(() => {}), 5 * 60 * 1000);
 }
 
 init();

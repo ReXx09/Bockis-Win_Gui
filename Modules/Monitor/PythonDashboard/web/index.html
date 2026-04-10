@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Bockis Python Dashboard</title>
-  <link rel="stylesheet" href="/web/style.css?v=20260409ak" />
+  <link rel="stylesheet" href="/web/style.css?v=20260410aj" />
   <script>
     (function(){try{var t=localStorage.getItem('bockis_theme_v1');if(t){var d=JSON.parse(t);if(d&&d.vars){var r=document.documentElement;Object.keys(d.vars).forEach(function(k){r.style.setProperty(k,d.vars[k]);});}}}catch(e){}}());
   </script>
@@ -366,6 +366,7 @@
 
           <section class="card" data-widget="setup-git" data-default-size="1-3" draggable="true">
             <div class="card-head"><h2>Git / Setup</h2><span class="drag-handle">&#8942;&#8942;</span></div>
+            <div id="gitUpdateBanner" class="git-update-banner" style="display:none"></div>
             <div class="kv">
               <div>Branch</div><div id="gitBranch">-</div>
               <div>Upstream</div><div id="gitUpstream">-</div>
@@ -570,7 +571,7 @@
     </section>
   </main>
 
-  <script src="/web/app.js?v=20260410ai"></script>
+  <script src="/web/app.js?v=20260410aj"></script>
 </body>
 </html>
 

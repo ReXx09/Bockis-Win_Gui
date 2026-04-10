@@ -191,6 +191,7 @@ body {
   padding: 8px 10px;
   text-align: left;
   cursor: pointer;
+  position: relative;
 }
 
 .menu-nav-btn.active {
@@ -218,6 +219,41 @@ body {
   text-transform: uppercase;
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+/* Git-Update-Dot im Nav-Button */
+.git-update-dot {
+  position: relative;
+}
+.git-update-dot::after {
+  content: '';
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #f87171;
+  box-shadow: 0 0 6px 1px rgba(248, 113, 113, 0.55);
+  animation: git-dot-pulse 2s ease-in-out infinite;
+}
+@keyframes git-dot-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(0.85); }
+}
+
+/* Git-Update-Banner im Card */
+.git-update-banner {
+  margin: 0 0 8px 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: color-mix(in srgb, #f87171 14%, transparent);
+  border: 1px solid color-mix(in srgb, #f87171 44%, transparent);
+  color: #fca5a5;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 
 .menu-item-label {
