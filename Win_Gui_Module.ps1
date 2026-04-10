@@ -4542,8 +4542,108 @@ $btnCheckDependenciesH.Add_Click({
 
                 $script:dependencyTableHost.Controls.Add($headerPanel)
 
+                $resolveDependencyGroup = {
+                    param($Dependency)
+
+                    switch ($Dependency.Name) {
+                        ".NET Framework" { return "system" }
+                        "PowerShell" { return "system" }
+                        "Windows Version" { return "system" }
+                        "Administrator-Rechte" { return "system" }
+
+                        "Winget Package Manager" { return "package" }
+                        "App Installer (winget)" { return "package" }
+
+                        "Git" { return "repo" }
+                        "Git Pull" { return "repo" }
+                        "GUI-Update (GitHub)" { return "repo" }
+
+                        "Python Runtime" { return "dashboard" }
+
+                        "PawnIO Ring-0 Treiber" { return "hardware" }
+                        "Hardware-Monitoring" { return "hardware" }
+                        "LibreHardwareMonitor DLL" { return "hardware" }
+
+                        default { return "other" }
+                    }
+                }
+
+                $groupMeta = @{
+                    system = @{
+                        Title = "System-Basis"
+                        Color = [System.Drawing.Color]::FromArgb(64, 158, 255)
+                    }
+                    package = @{
+                        Title = "Paketverwaltung"
+                        Color = [System.Drawing.Color]::FromArgb(46, 204, 113)
+                    }
+                    repo = @{
+                        Title = "Repo & Updates"
+                        Color = [System.Drawing.Color]::FromArgb(255, 152, 0)
+                    }
+                    dashboard = @{
+                        Title = "Dashboard"
+                        Color = [System.Drawing.Color]::FromArgb(0, 188, 212)
+                    }
+                    hardware = @{
+                        Title = "Hardware-Monitor"
+                        Color = [System.Drawing.Color]::FromArgb(52, 152, 219)
+                    }
+                    other = @{
+                        Title = "Sonstiges"
+                        Color = [System.Drawing.Color]::FromArgb(189, 195, 199)
+                    }
+                }
+
+                $groupOrder = @("system", "package", "repo", "dashboard", "hardware", "other")
+
+                $sortedDependencies = @(
+                    $depResult.Dependencies | Sort-Object `
+                        @{ Expression = {
+                                $key = & $resolveDependencyGroup $_
+                                $index = [array]::IndexOf($groupOrder, $key)
+                                if ($index -lt 0) { return 999 }
+                                return $index
+                            }
+                        }, `
+                        @{ Expression = { $_.Name } }
+                )
+
                 $rowY = 30
-                foreach ($dep in $depResult.Dependencies) {
+                $lastGroup = $null
+                foreach ($dep in $sortedDependencies) {
+                    $groupKey = & $resolveDependencyGroup $dep
+                    if (-not $groupMeta.ContainsKey($groupKey)) {
+                        $groupKey = "other"
+                    }
+
+                    $groupColor = $groupMeta[$groupKey].Color
+
+                    if ($groupKey -ne $lastGroup) {
+                        $groupPanel = New-Object System.Windows.Forms.Panel
+                        $groupPanel.Location = New-Object System.Drawing.Point(0, $rowY)
+                        $groupPanel.Size = New-Object System.Drawing.Size(745, 24)
+                        $groupPanel.BackColor = [System.Drawing.Color]::FromArgb(38, 38, 38)
+
+                        $groupAccent = New-Object System.Windows.Forms.Panel
+                        $groupAccent.Location = New-Object System.Drawing.Point(0, 0)
+                        $groupAccent.Size = New-Object System.Drawing.Size(6, 24)
+                        $groupAccent.BackColor = $groupColor
+                        $groupPanel.Controls.Add($groupAccent)
+
+                        $groupLabel = New-Object System.Windows.Forms.Label
+                        $groupLabel.Text = $groupMeta[$groupKey].Title
+                        $groupLabel.Location = New-Object System.Drawing.Point(12, 4)
+                        $groupLabel.Size = New-Object System.Drawing.Size(300, 16)
+                        $groupLabel.ForeColor = $groupColor
+                        $groupLabel.Font = New-Object System.Drawing.Font("Segoe UI", 8.5, [System.Drawing.FontStyle]::Bold)
+                        $groupPanel.Controls.Add($groupLabel)
+
+                        $script:dependencyTableHost.Controls.Add($groupPanel)
+                        $rowY += 26
+                        $lastGroup = $groupKey
+                    }
+
                     $rowPanel = New-Object System.Windows.Forms.Panel
                     $rowPanel.Location = New-Object System.Drawing.Point(0, $rowY)
                     $rowPanel.Size = New-Object System.Drawing.Size(745, 32)
@@ -4562,14 +4662,23 @@ $btnCheckDependenciesH.Add_Click({
                         $rowPanel.BackColor = [System.Drawing.Color]::FromArgb(33, 33, 33)
                     }
 
+                    $groupIndicator = New-Object System.Windows.Forms.Panel
+                    $groupIndicator.Location = New-Object System.Drawing.Point(0, 0)
+                    $groupIndicator.Size = New-Object System.Drawing.Size(4, 32)
+                    $groupIndicator.BackColor = $groupColor
+                    $rowPanel.Controls.Add($groupIndicator)
+
                     $textColor = if ($isGray) { [System.Drawing.Color]::FromArgb(160, 160, 160) } else { [System.Drawing.Color]::White }
 
                     $nameLabel = New-Object System.Windows.Forms.Label
                     $nameLabel.Text = $dep.Name
-                    $nameLabel.Location = New-Object System.Drawing.Point(10, 8)
-                    $nameLabel.Size = New-Object System.Drawing.Size(250, 18)
+                    $nameLabel.Location = New-Object System.Drawing.Point(12, 8)
+                    $nameLabel.Size = New-Object System.Drawing.Size(248, 18)
                     $nameLabel.ForeColor = $textColor
                     $nameLabel.Font = New-Object System.Drawing.Font("Segoe UI", 8.5, [System.Drawing.FontStyle]::Bold)
+                    if ($tooltipObj -and $dep.Description) {
+                        $tooltipObj.SetToolTip($nameLabel, $dep.Description)
+                    }
                     $rowPanel.Controls.Add($nameLabel)
 
                     $versionText = if ($dep.Version) { "$($dep.Version)" } else { "-" }
@@ -4599,6 +4708,9 @@ $btnCheckDependenciesH.Add_Click({
                     $actionButton.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
                     $actionButton.FlatAppearance.BorderSize = 0
                     $actionButton.Font = New-Object System.Drawing.Font("Segoe UI", 8.5, [System.Drawing.FontStyle]::Bold)
+                    if ($tooltipObj -and $dep.Description) {
+                        $tooltipObj.SetToolTip($actionButton, $dep.Description)
+                    }
 
                     if ($dep.Name -eq "GUI-Update (GitHub)") {
                         $actionButton.Text = "Downgrade"
