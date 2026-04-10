@@ -2861,18 +2861,15 @@ async function loadAudioSessions() {
             <span>${s.app}</span>
             <span class="muted">${audioEditMode ? `PID ${s.pid} | ${s.device_name || 'Unbekannt'} | ${s.volume}% ${s.muted ? '| Stumm' : ''}` : `${s.volume}% ${s.muted ? '| Stumm' : ''}`}</span>
           </div>
-          ${audioEditMode ? `
-            <div class="row">
-              <input type="range" min="0" max="100" value="${s.volume}" data-session-volume="${s.pid}" />
-              <button class="btn" data-session-mute="${s.pid}" data-state="${s.muted ? 0 : 1}">${s.muted ? 'Unmute' : 'Mute'}</button>
-            </div>
-          ` : ''}
+          <div class="row">
+            <input type="range" min="0" max="100" value="${s.volume}" data-session-volume="${s.pid}" />
+            ${audioEditMode ? `<button class="btn" data-session-mute="${s.pid}" data-state="${s.muted ? 0 : 1}">${s.muted ? 'Unmute' : 'Mute'}</button>` : ''}
+          </div>
         </div>
       `).join('')
       : '<div class="audio-empty">Keine aktiven Audio-Programme gefunden.</div>';
 
-    if (audioEditMode) {
-      audioSessions.querySelectorAll('[data-session-volume]').forEach((slider) => {
+    audioSessions.querySelectorAll('[data-session-volume]').forEach((slider) => {
       slider.addEventListener('change', async () => {
         const pid = parseInt(slider.dataset.sessionVolume, 10);
         const level = parseInt(slider.value, 10) || 0;
@@ -2885,6 +2882,7 @@ async function loadAudioSessions() {
       });
     });
 
+    if (audioEditMode) {
       audioSessions.querySelectorAll('[data-session-mute]').forEach((btn) => {
       btn.addEventListener('click', async () => {
         const pid = parseInt(btn.dataset.sessionMute, 10);
