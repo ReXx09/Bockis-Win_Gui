@@ -4505,39 +4505,39 @@ $btnCheckDependenciesH.Add_Click({
 
                 $headerPanel = New-Object System.Windows.Forms.Panel
                 $headerPanel.Location = New-Object System.Drawing.Point(0, 0)
-                $headerPanel.Size = New-Object System.Drawing.Size(745, 28)
+                $headerPanel.Size = New-Object System.Drawing.Size(745, 24)
                 $headerPanel.BackColor = [System.Drawing.Color]::FromArgb(45, 45, 45)
 
                 $headerName = New-Object System.Windows.Forms.Label
                 $headerName.Text = "Abhängigkeit"
-                $headerName.Location = New-Object System.Drawing.Point(10, 6)
+                $headerName.Location = New-Object System.Drawing.Point(12, 4)
                 $headerName.Size = New-Object System.Drawing.Size(250, 18)
                 $headerName.ForeColor = [System.Drawing.Color]::White
-                $headerName.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+                $headerName.Font = New-Object System.Drawing.Font("Segoe UI", 8.5, [System.Drawing.FontStyle]::Bold)
                 $headerPanel.Controls.Add($headerName)
 
                 $headerVersion = New-Object System.Windows.Forms.Label
                 $headerVersion.Text = "Version"
-                $headerVersion.Location = New-Object System.Drawing.Point(270, 6)
-                $headerVersion.Size = New-Object System.Drawing.Size(130, 18)
+                $headerVersion.Location = New-Object System.Drawing.Point(265, 4)
+                $headerVersion.Size = New-Object System.Drawing.Size(125, 18)
                 $headerVersion.ForeColor = [System.Drawing.Color]::White
-                $headerVersion.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+                $headerVersion.Font = New-Object System.Drawing.Font("Segoe UI", 8.5, [System.Drawing.FontStyle]::Bold)
                 $headerPanel.Controls.Add($headerVersion)
 
                 $headerStatus = New-Object System.Windows.Forms.Label
                 $headerStatus.Text = "Status"
-                $headerStatus.Location = New-Object System.Drawing.Point(410, 6)
-                $headerStatus.Size = New-Object System.Drawing.Size(130, 18)
+                $headerStatus.Location = New-Object System.Drawing.Point(395, 4)
+                $headerStatus.Size = New-Object System.Drawing.Size(135, 18)
                 $headerStatus.ForeColor = [System.Drawing.Color]::White
-                $headerStatus.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+                $headerStatus.Font = New-Object System.Drawing.Font("Segoe UI", 8.5, [System.Drawing.FontStyle]::Bold)
                 $headerPanel.Controls.Add($headerStatus)
 
                 $headerAction = New-Object System.Windows.Forms.Label
                 $headerAction.Text = "Aktion"
-                $headerAction.Location = New-Object System.Drawing.Point(570, 6)
-                $headerAction.Size = New-Object System.Drawing.Size(158, 18)
+                $headerAction.Location = New-Object System.Drawing.Point(560, 4)
+                $headerAction.Size = New-Object System.Drawing.Size(150, 18)
                 $headerAction.ForeColor = [System.Drawing.Color]::White
-                $headerAction.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+                $headerAction.Font = New-Object System.Drawing.Font("Segoe UI", 8.5, [System.Drawing.FontStyle]::Bold)
                 $headerPanel.Controls.Add($headerAction)
 
                 $script:dependencyTableHost.Controls.Add($headerPanel)
@@ -4609,7 +4609,7 @@ $btnCheckDependenciesH.Add_Click({
                         @{ Expression = { $_.Name } }
                 )
 
-                $rowY = 30
+                $rowY = 26
                 $lastGroup = $null
                 foreach ($dep in $sortedDependencies) {
                     $groupKey = & $resolveDependencyGroup $dep
@@ -4622,31 +4622,31 @@ $btnCheckDependenciesH.Add_Click({
                     if ($groupKey -ne $lastGroup) {
                         $groupPanel = New-Object System.Windows.Forms.Panel
                         $groupPanel.Location = New-Object System.Drawing.Point(0, $rowY)
-                        $groupPanel.Size = New-Object System.Drawing.Size(745, 24)
+                        $groupPanel.Size = New-Object System.Drawing.Size(745, 20)
                         $groupPanel.BackColor = [System.Drawing.Color]::FromArgb(38, 38, 38)
 
                         $groupAccent = New-Object System.Windows.Forms.Panel
                         $groupAccent.Location = New-Object System.Drawing.Point(0, 0)
-                        $groupAccent.Size = New-Object System.Drawing.Size(6, 24)
+                        $groupAccent.Size = New-Object System.Drawing.Size(5, 20)
                         $groupAccent.BackColor = $groupColor
                         $groupPanel.Controls.Add($groupAccent)
 
                         $groupLabel = New-Object System.Windows.Forms.Label
                         $groupLabel.Text = $groupMeta[$groupKey].Title
-                        $groupLabel.Location = New-Object System.Drawing.Point(12, 4)
-                        $groupLabel.Size = New-Object System.Drawing.Size(300, 16)
+                        $groupLabel.Location = New-Object System.Drawing.Point(10, 2)
+                        $groupLabel.Size = New-Object System.Drawing.Size(300, 15)
                         $groupLabel.ForeColor = $groupColor
-                        $groupLabel.Font = New-Object System.Drawing.Font("Segoe UI", 8.5, [System.Drawing.FontStyle]::Bold)
+                        $groupLabel.Font = New-Object System.Drawing.Font("Segoe UI", 8, [System.Drawing.FontStyle]::Bold)
                         $groupPanel.Controls.Add($groupLabel)
 
                         $script:dependencyTableHost.Controls.Add($groupPanel)
-                        $rowY += 26
+                        $rowY += 22
                         $lastGroup = $groupKey
                     }
 
                     $rowPanel = New-Object System.Windows.Forms.Panel
                     $rowPanel.Location = New-Object System.Drawing.Point(0, $rowY)
-                    $rowPanel.Size = New-Object System.Drawing.Size(745, 32)
+                    $rowPanel.Size = New-Object System.Drawing.Size(745, 28)
 
                     $isError = ($dep.StatusColor -eq "Red")
                     $isWarning = ($dep.StatusColor -eq "Yellow")
@@ -4664,7 +4664,7 @@ $btnCheckDependenciesH.Add_Click({
 
                     $groupIndicator = New-Object System.Windows.Forms.Panel
                     $groupIndicator.Location = New-Object System.Drawing.Point(0, 0)
-                    $groupIndicator.Size = New-Object System.Drawing.Size(4, 32)
+                    $groupIndicator.Size = New-Object System.Drawing.Size(4, 28)
                     $groupIndicator.BackColor = $groupColor
                     $rowPanel.Controls.Add($groupIndicator)
 
@@ -4672,10 +4672,10 @@ $btnCheckDependenciesH.Add_Click({
 
                     $nameLabel = New-Object System.Windows.Forms.Label
                     $nameLabel.Text = $dep.Name
-                    $nameLabel.Location = New-Object System.Drawing.Point(12, 8)
-                    $nameLabel.Size = New-Object System.Drawing.Size(248, 18)
+                    $nameLabel.Location = New-Object System.Drawing.Point(12, 6)
+                    $nameLabel.Size = New-Object System.Drawing.Size(245, 16)
                     $nameLabel.ForeColor = $textColor
-                    $nameLabel.Font = New-Object System.Drawing.Font("Segoe UI", 8.5, [System.Drawing.FontStyle]::Bold)
+                    $nameLabel.Font = New-Object System.Drawing.Font("Segoe UI", 8.25, [System.Drawing.FontStyle]::Bold)
                     if ($tooltipObj -and $dep.Description) {
                         $tooltipObj.SetToolTip($nameLabel, $dep.Description)
                     }
@@ -4688,26 +4688,26 @@ $btnCheckDependenciesH.Add_Click({
 
                     $versionLabel = New-Object System.Windows.Forms.Label
                     $versionLabel.Text = $versionText
-                    $versionLabel.Location = New-Object System.Drawing.Point(270, 8)
-                    $versionLabel.Size = New-Object System.Drawing.Size(130, 18)
+                    $versionLabel.Location = New-Object System.Drawing.Point(265, 6)
+                    $versionLabel.Size = New-Object System.Drawing.Size(125, 16)
                     $versionLabel.ForeColor = $textColor
-                    $versionLabel.Font = New-Object System.Drawing.Font("Segoe UI", 8)
+                    $versionLabel.Font = New-Object System.Drawing.Font("Segoe UI", 7.75)
                     $rowPanel.Controls.Add($versionLabel)
 
                     $statusLabelRow = New-Object System.Windows.Forms.Label
                     $statusLabelRow.Text = $dep.Status
-                    $statusLabelRow.Location = New-Object System.Drawing.Point(410, 8)
-                    $statusLabelRow.Size = New-Object System.Drawing.Size(150, 18)
+                    $statusLabelRow.Location = New-Object System.Drawing.Point(395, 6)
+                    $statusLabelRow.Size = New-Object System.Drawing.Size(150, 16)
                     $statusLabelRow.ForeColor = if ($isError) { [System.Drawing.Color]::Tomato } elseif ($isWarning) { [System.Drawing.Color]::Gold } elseif ($dep.UpdateAvailable) { [System.Drawing.Color]::DeepSkyBlue } else { $textColor }
-                    $statusLabelRow.Font = New-Object System.Drawing.Font("Segoe UI", 8)
+                    $statusLabelRow.Font = New-Object System.Drawing.Font("Segoe UI", 7.75)
                     $rowPanel.Controls.Add($statusLabelRow)
 
                     $actionButton = New-Object System.Windows.Forms.Button
-                    $actionButton.Location = New-Object System.Drawing.Point(570, 4)
-                    $actionButton.Size = New-Object System.Drawing.Size(158, 24)
+                    $actionButton.Location = New-Object System.Drawing.Point(560, 3)
+                    $actionButton.Size = New-Object System.Drawing.Size(150, 22)
                     $actionButton.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
                     $actionButton.FlatAppearance.BorderSize = 0
-                    $actionButton.Font = New-Object System.Drawing.Font("Segoe UI", 8.5, [System.Drawing.FontStyle]::Bold)
+                    $actionButton.Font = New-Object System.Drawing.Font("Segoe UI", 8, [System.Drawing.FontStyle]::Bold)
                     if ($tooltipObj -and $dep.Description) {
                         $tooltipObj.SetToolTip($actionButton, $dep.Description)
                     }
@@ -4963,7 +4963,7 @@ $btnCheckDependenciesH.Add_Click({
 
                     $rowPanel.Controls.Add($actionButton)
                     $script:dependencyTableHost.Controls.Add($rowPanel)
-                    $rowY += 34
+                    $rowY += 30
                 }
             }
         
