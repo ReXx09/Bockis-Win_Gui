@@ -110,30 +110,48 @@ function Start-CheckDISM {
             Update-ProgressStatus -StatusText "DISM Check läuft..." -ProgressValue 60 -TextColor ([System.Drawing.Color]::White) -progressBarParam $progressBar
         }
         
-        $process = Start-Process "dism.exe" -ArgumentList $dismArgs -NoNewWindow -Wait -PassThru
+        $proc = New-Object System.Diagnostics.Process
+        $proc.StartInfo.FileName = 'dism.exe'
+        $proc.StartInfo.Arguments = $dismArgs
+        $proc.StartInfo.UseShellExecute = $false
+        $proc.StartInfo.RedirectStandardOutput = $true
+        $proc.StartInfo.RedirectStandardError  = $true
+        $proc.StartInfo.CreateNoWindow = $true
+        $proc.Start() | Out-Null
+        $dismOutput = $proc.StandardOutput.ReadToEnd()
+        $proc.WaitForExit()
         $duration = '{0:hh\:mm\:ss}' -f ((Get-Date) - $runStart)
 
-        # Ergebnis in JSON speichern
-        $result = @{
-            ExitCode  = $process.ExitCode
-            Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+        # Relevante DISM-Statuszeile extrahieren
+        $statusLine = ($dismOutput -split "[\r\n]+" | Where-Object {
+            $_ -match '(keine.*Besch|Besch.*erkannt|Wiederherstellung.*abge|Reparatur.*abge|Fehler im|Betrieb.*erfolgreich)'
+        } | Select-Object -Last 1)
+        if (-not $statusLine) {
+            $statusLine = ($dismOutput -split "[\r\n]+" | Where-Object { $_.Trim() -ne '' } | Select-Object -Last 2 | Select-Object -First 1)
         }
-        $result | ConvertTo-Json | Set-Content -Path $resultPath
-        Write-Host "`n" + ("═" * 70) -ForegroundColor Cyan 
+        $statusLine = if ($statusLine) { $statusLine.Trim() } else { '-' }
+
+        # Statuszeile in GUI + als Zwischeneintrag loggen (vor dem Abschlusseintrag)
+        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
+        $outputBox.AppendText("`t[i] $statusLine`r`n")
+        Write-ToolLog -ToolName "DISM-Check" -Message $statusLine -OutputBox $null -Level "Information" -Context "Operation=$operationName | Command=dism.exe $dismArgs | Process=dism.exe" -SaveToDatabase
+
+        # Ergebnis in JSON speichern
+        @{ ExitCode = $proc.ExitCode; Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss" } | ConvertTo-Json | Set-Content -Path $resultPath
+        Write-Host "`n" + ("=" * 70) -ForegroundColor Cyan
         # Ergebnis auswerten
-        switch ($process.ExitCode) {
-            0 { 
+        switch ($proc.ExitCode) {
+            0 {
                 Write-Host "`n`t[✓] DISM Check Health erfolgreich abgeschlossen!" -ForegroundColor Green
                 $outputBox.AppendText("`t[✓] DISM Check erfolgreich abgeschlossen.`r`n")
-                Write-ToolLog -ToolName "DISM-Check" -Message "DISM $operationName erfolgreich abgeschlossen" -OutputBox $outputBox -Style 'Success' -Level "Success" -Context "Operation=$operationName | ExitCode=$($process.ExitCode) | PID=$($process.Id) | Duration=$duration | Command=dism.exe $dismArgs" -SaveToDatabase
+                Write-ToolLog -ToolName "DISM-Check" -Message "DISM $operationName erfolgreich abgeschlossen" -OutputBox $outputBox -Style 'Success' -Level "Success" -Context "Operation=$operationName | ExitCode=$($proc.ExitCode) | PID=$($proc.Id) | Duration=$duration | Command=dism.exe $dismArgs" -SaveToDatabase
             }
             default {
-                Write-Host "`n`t[X] DISM Check Health fehlgeschlagen. Exit-Code: $($process.ExitCode)" -ForegroundColor Red
-                $outputBox.AppendText("`t[X] DISM Check fehlgeschlagen. Exit-Code: $($process.ExitCode)`r`n")
-                Write-ToolLog -ToolName "DISM-Check" -Message "DISM $operationName fehlgeschlagen" -OutputBox $outputBox -Style 'Error' -Level "Error" -Context "Operation=$operationName | ExitCode=$($process.ExitCode) | PID=$($process.Id) | Duration=$duration | Command=dism.exe $dismArgs" -SaveToDatabase
+                Write-Host "`n`t[X] DISM Check Health fehlgeschlagen. Exit-Code: $($proc.ExitCode)" -ForegroundColor Red
+                $outputBox.AppendText("`t[X] DISM Check fehlgeschlagen. Exit-Code: $($proc.ExitCode)`r`n")
+                Write-ToolLog -ToolName "DISM-Check" -Message "DISM $operationName fehlgeschlagen" -OutputBox $outputBox -Style 'Error' -Level "Error" -Context "Operation=$operationName | ExitCode=$($proc.ExitCode) | PID=$($proc.Id) | Duration=$duration | Command=dism.exe $dismArgs" -SaveToDatabase
             }
         }
-        Write-Host "`n" + ("═" * 70) -ForegroundColor Cyan 
         # ProgressBar zurücksetzen
         if ($progressBar) {
             $progressBar.Value = 100
@@ -254,7 +272,16 @@ function Start-ScanDISM {
             Update-ProgressStatus -StatusText "DISM Scan läuft..." -ProgressValue 50 -TextColor ([System.Drawing.Color]::White) -progressBarParam $progressBar
         }
     
-        $process = Start-Process "dism.exe" -ArgumentList $dismArgs -NoNewWindow -Wait -PassThru
+        $proc = New-Object System.Diagnostics.Process
+        $proc.StartInfo.FileName = 'dism.exe'
+        $proc.StartInfo.Arguments = $dismArgs
+        $proc.StartInfo.UseShellExecute = $false
+        $proc.StartInfo.RedirectStandardOutput = $true
+        $proc.StartInfo.RedirectStandardError  = $true
+        $proc.StartInfo.CreateNoWindow = $true
+        $proc.Start() | Out-Null
+        $dismOutput = $proc.StandardOutput.ReadToEnd()
+        $proc.WaitForExit()
         $duration = '{0:hh\:mm\:ss}' -f ((Get-Date) - $runStart)
 
         # ProgressBar aktualisieren
@@ -263,27 +290,37 @@ function Start-ScanDISM {
             Update-ProgressStatus -StatusText "DISM Scan wird abgeschlossen..." -ProgressValue 90 -TextColor ([System.Drawing.Color]::White) -progressBarParam $progressBar
         }
 
-        # Ergebnis in JSON speichern
-        $result = @{
-            ExitCode  = $process.ExitCode
-            Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+        # Relevante DISM-Statuszeile extrahieren
+        $statusLine = ($dismOutput -split "[\r\n]+" | Where-Object {
+            $_ -match '(keine.*Besch|Besch.*erkannt|Wiederherstellung.*abge|Reparatur.*abge|Fehler im|Betrieb.*erfolgreich)'
+        } | Select-Object -Last 1)
+        if (-not $statusLine) {
+            $statusLine = ($dismOutput -split "[\r\n]+" | Where-Object { $_.Trim() -ne '' } | Select-Object -Last 2 | Select-Object -First 1)
         }
-        $result | ConvertTo-Json | Set-Content -Path $resultPath
-        Write-Host "`n" + ("═" * 70) -ForegroundColor Cyan 
+        $statusLine = if ($statusLine) { $statusLine.Trim() } else { '-' }
+
+        # Statuszeile in GUI + als Zwischeneintrag loggen (vor dem Abschlusseintrag)
+        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
+        $outputBox.AppendText("`t[i] $statusLine`r`n")
+        Write-ToolLog -ToolName "DISM-Scan" -Message $statusLine -OutputBox $null -Level "Information" -Context "Operation=$operationName | Command=dism.exe $dismArgs | Process=dism.exe" -SaveToDatabase
+
+        # Ergebnis in JSON speichern
+        @{ ExitCode = $proc.ExitCode; Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss" } | ConvertTo-Json | Set-Content -Path $resultPath
+        Write-Host "`n" + ("=" * 70) -ForegroundColor Cyan
         # Ergebnis auswerten
-        switch ($process.ExitCode) {
-            0 { 
+        switch ($proc.ExitCode) {
+            0 {
                 Write-Host "`n`t[✓] DISM Scan Health erfolgreich abgeschlossen!" -ForegroundColor Green
                 $outputBox.AppendText("`t[✓] DISM Scan erfolgreich abgeschlossen.`r`n")
-                Write-ToolLog -ToolName "DISM-Scan" -Message "DISM $operationName erfolgreich abgeschlossen" -OutputBox $outputBox -Style 'Success' -Level "Success" -Context "Operation=$operationName | ExitCode=$($process.ExitCode) | PID=$($process.Id) | Duration=$duration | Command=dism.exe $dismArgs" -SaveToDatabase
+                Write-ToolLog -ToolName "DISM-Scan" -Message "DISM $operationName erfolgreich abgeschlossen" -OutputBox $outputBox -Style 'Success' -Level "Success" -Context "Operation=$operationName | ExitCode=$($proc.ExitCode) | PID=$($proc.Id) | Duration=$duration | Command=dism.exe $dismArgs" -SaveToDatabase
             }
             default {
-                Write-Host "`n`t[X] DISM Scan Health fehlgeschlagen. Exit-Code: $($process.ExitCode)" -ForegroundColor Red
-                $outputBox.AppendText("`t[X] DISM Scan fehlgeschlagen. Exit-Code: $($process.ExitCode)`r`n")
-                Write-ToolLog -ToolName "DISM-Scan" -Message "DISM $operationName fehlgeschlagen" -OutputBox $outputBox -Style 'Error' -Level "Error" -Context "Operation=$operationName | ExitCode=$($process.ExitCode) | PID=$($process.Id) | Duration=$duration | Command=dism.exe $dismArgs" -SaveToDatabase
+                Write-Host "`n`t[X] DISM Scan Health fehlgeschlagen. Exit-Code: $($proc.ExitCode)" -ForegroundColor Red
+                $outputBox.AppendText("`t[X] DISM Scan fehlgeschlagen. Exit-Code: $($proc.ExitCode)`r`n")
+                Write-ToolLog -ToolName "DISM-Scan" -Message "DISM $operationName fehlgeschlagen" -OutputBox $outputBox -Style 'Error' -Level "Error" -Context "Operation=$operationName | ExitCode=$($proc.ExitCode) | PID=$($proc.Id) | Duration=$duration | Command=dism.exe $dismArgs" -SaveToDatabase
             }
         }
-        Write-Host "`n" + ("═" * 70) -ForegroundColor Cyan 
+        Write-Host "`n" + ("=" * 70) -ForegroundColor Cyan
         # ProgressBar zurücksetzen
         if ($progressBar) {
             $progressBar.Value = 100
@@ -412,7 +449,16 @@ function Start-RestoreDISM {
             Update-ProgressStatus -StatusText "DISM Reparatur läuft..." -ProgressValue 60 -TextColor ([System.Drawing.Color]::White) -progressBarParam $progressBar
         }
         
-        $process = Start-Process "dism.exe" -ArgumentList $dismArgs -NoNewWindow -Wait -PassThru
+        $proc = New-Object System.Diagnostics.Process
+        $proc.StartInfo.FileName = 'dism.exe'
+        $proc.StartInfo.Arguments = $dismArgs
+        $proc.StartInfo.UseShellExecute = $false
+        $proc.StartInfo.RedirectStandardOutput = $true
+        $proc.StartInfo.RedirectStandardError  = $true
+        $proc.StartInfo.CreateNoWindow = $true
+        $proc.Start() | Out-Null
+        $dismOutput = $proc.StandardOutput.ReadToEnd()
+        $proc.WaitForExit()
         $duration = '{0:hh\:mm\:ss}' -f ((Get-Date) - $runStart)
 
         # ProgressBar aktualisieren
@@ -421,24 +467,34 @@ function Start-RestoreDISM {
             Update-ProgressStatus -StatusText "DISM Reparatur wird abgeschlossen..." -ProgressValue 90 -TextColor ([System.Drawing.Color]::White) -progressBarParam $progressBar
         }
 
-        # Ergebnis in JSON speichern
-        $result = @{
-            ExitCode  = $process.ExitCode
-            Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+        # Relevante DISM-Statuszeile extrahieren
+        $statusLine = ($dismOutput -split "[\r\n]+" | Where-Object {
+            $_ -match '(keine.*Besch|Besch.*erkannt|Wiederherstellung.*abge|Reparatur.*abge|Fehler im|Betrieb.*erfolgreich)'
+        } | Select-Object -Last 1)
+        if (-not $statusLine) {
+            $statusLine = ($dismOutput -split "[\r\n]+" | Where-Object { $_.Trim() -ne '' } | Select-Object -Last 2 | Select-Object -First 1)
         }
-        $result | ConvertTo-Json | Set-Content -Path $resultPath
-        Write-Host "`n" + ("═" * 70) -ForegroundColor Cyan 
+        $statusLine = if ($statusLine) { $statusLine.Trim() } else { '-' }
+
+        # Statuszeile in GUI + als Zwischeneintrag loggen (vor dem Abschlusseintrag)
+        Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
+        $outputBox.AppendText("`t[i] $statusLine`r`n")
+        Write-ToolLog -ToolName "DISM-Repair" -Message $statusLine -OutputBox $null -Level "Information" -Context "Operation=$operationName | Command=dism.exe $dismArgs | Process=dism.exe" -SaveToDatabase
+
+        # Ergebnis in JSON speichern
+        @{ ExitCode = $proc.ExitCode; Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss" } | ConvertTo-Json | Set-Content -Path $resultPath
+        Write-Host "`n" + ("=" * 70) -ForegroundColor Cyan
         # Ergebnis auswerten
-        switch ($process.ExitCode) {
-            0 { 
+        switch ($proc.ExitCode) {
+            0 {
                 Write-Host "`n`t[✓] DISM Restore Health erfolgreich abgeschlossen!" -ForegroundColor Green
                 $outputBox.AppendText("`t[✓] DISM Restore erfolgreich abgeschlossen.`r`n")
-                Write-ToolLog -ToolName "DISM-Repair" -Message "DISM $operationName erfolgreich abgeschlossen" -OutputBox $outputBox -Style 'Success' -Level "Success" -Context "Operation=$operationName | ExitCode=$($process.ExitCode) | PID=$($process.Id) | Duration=$duration | Command=dism.exe $dismArgs" -SaveToDatabase
+                Write-ToolLog -ToolName "DISM-Repair" -Message "DISM $operationName erfolgreich abgeschlossen" -OutputBox $outputBox -Style 'Success' -Level "Success" -Context "Operation=$operationName | ExitCode=$($proc.ExitCode) | PID=$($proc.Id) | Duration=$duration | Command=dism.exe $dismArgs" -SaveToDatabase
             }
             default {
-                Write-Host "`n`t[X] DISM Restore Health fehlgeschlagen. Exit-Code: $($process.ExitCode)" -ForegroundColor Red
-                $outputBox.AppendText("`t[X] DISM Restore fehlgeschlagen. Exit-Code: $($process.ExitCode)`r`n")
-                Write-ToolLog -ToolName "DISM-Repair" -Message "DISM $operationName fehlgeschlagen" -OutputBox $outputBox -Style 'Error' -Level "Error" -Context "Operation=$operationName | ExitCode=$($process.ExitCode) | PID=$($process.Id) | Duration=$duration | Command=dism.exe $dismArgs" -SaveToDatabase
+                Write-Host "`n`t[X] DISM Restore Health fehlgeschlagen. Exit-Code: $($proc.ExitCode)" -ForegroundColor Red
+                $outputBox.AppendText("`t[X] DISM Restore fehlgeschlagen. Exit-Code: $($proc.ExitCode)`r`n")
+                Write-ToolLog -ToolName "DISM-Repair" -Message "DISM $operationName fehlgeschlagen" -OutputBox $outputBox -Style 'Error' -Level "Error" -Context "Operation=$operationName | ExitCode=$($proc.ExitCode) | PID=$($proc.Id) | Duration=$duration | Command=dism.exe $dismArgs" -SaveToDatabase
             }
         }
         Write-Host "`n" + ("═" * 70) -ForegroundColor Cyan 
