@@ -95,7 +95,7 @@ function global:Write-ToolLog {
     )
 
     # Erkenne Start-/Ende-Meldungen, um Log-Läufe visuell zu trennen
-    $isRunStartMessage = [string]$Message -match '(?i)\b(wird gestartet|scan gestartet|operation gestartet|started)\b'
+    $isRunStartMessage = [string]$Message -match '(?i)\b(wird gestartet|wurde gestartet|scan gestartet|operation gestartet|gestartet|started)\b'
     $isRunEndMessage = [string]$Message -match '(?i)\b(abgeschlossen|beendet|fehlgeschlagen|abgebrochen|completed|failed|finished)\b'
 
     if (-not $script:LogSessionId) {
@@ -221,18 +221,97 @@ function global:Write-ToolLog {
 
         $phase = if ($isRunStartMessage) { 'start' } elseif ($isRunEndMessage) { 'end' } else { 'event' }
         $activeRunId = if ($runId) { [string]$runId } elseif ($script:ToolRunActiveId.ContainsKey($sanitizedToolName)) { [string]$script:ToolRunActiveId[$sanitizedToolName] } else { 'none' }
-        $metaParts = @(
-            "SessionId=$($script:LogSessionId)",
-            "EntryId=$entryId",
-            "Phase=$phase",
-            "RunId=$activeRunId",
-            "ProcId=$PID"
-        )
-        $mergedContext = if ($Context) {
-            ($metaParts + @($Context)) -join ' | '
-        } else {
-            $metaParts -join ' | '
+
+        # Context normalisieren: gleiche Felder, gleiche Reihenfolge fuer alle Logs.
+        $contextMap = [ordered]@{}
+        if ($Context) {
+            foreach ($segment in ([string]$Context -split '\|')) {
+                $part = $segment.Trim()
+                if (-not $part) { continue }
+                if ($part -match '^(?<k>[^=]+?)\s*=\s*(?<v>.*)$') {
+                    $contextMap[$Matches.k.Trim()] = $Matches.v.Trim()
+                }
+                else {
+                    $contextMap[$part] = ''
+                }
+            }
         }
+
+        $contextMap['SessionId'] = $script:LogSessionId
+        $contextMap['EntryId'] = $entryId
+        $contextMap['Phase'] = $phase
+        $contextMap['RunId'] = $activeRunId
+        $contextMap['ProcId'] = "$PID"
+
+        if (-not $contextMap.Contains('Operation')) {
+            if ([string]$Message -match '(CheckHealth|ScanHealth|RestoreHealth)') {
+                $contextMap['Operation'] = $Matches[1]
+            }
+            elseif ($ToolName -eq 'DISM-Check') { $contextMap['Operation'] = 'CheckHealth' }
+            elseif ($ToolName -eq 'DISM-Scan') { $contextMap['Operation'] = 'ScanHealth' }
+            elseif ($ToolName -eq 'DISM-Repair') { $contextMap['Operation'] = 'RestoreHealth' }
+            else { $contextMap['Operation'] = '-' }
+        }
+
+        if (-not $contextMap.Contains('Command')) {
+            if ($ToolName -match '(?i)^DISM') { $contextMap['Command'] = 'dism.exe' }
+            else { $contextMap['Command'] = '-' }
+        }
+
+        if (-not $contextMap.Contains('Process')) {
+            if ($contextMap['Command'] -and $contextMap['Command'] -ne '-') {
+                $contextMap['Process'] = ([string]$contextMap['Command'] -split '\s+')[0]
+            }
+            else {
+                $contextMap['Process'] = '-'
+            }
+        }
+
+        if (-not $contextMap.Contains('Status')) {
+            $derivedStatus = switch ($Level) {
+                'Success'  { 'OK' }
+                'Warning'  { 'WARN' }
+                'Error'    { 'ERROR' }
+                'Critical' { 'CRIT' }
+                default    { 'INFO' }
+            }
+            if ($phase -eq 'start') { $derivedStatus = 'START' }
+            if ($phase -eq 'end' -and ($Level -in @('Error', 'Critical'))) { $derivedStatus = 'FAILED' }
+            $contextMap['Status'] = $derivedStatus
+        }
+
+        if (-not $contextMap.Contains('Error')) {
+            if ($Level -in @('Error', 'Critical')) { $contextMap['Error'] = [string]$Message }
+            else { $contextMap['Error'] = '-' }
+        }
+
+        if (-not $contextMap.Contains('ExitCode')) {
+            $contextMap['ExitCode'] = switch ($Level) {
+                'Success'  { '0' }
+                'Error'    { '1' }
+                'Critical' { '1' }
+                'Warning'  { '2' }
+                default    { '0' }
+            }
+        }
+
+        if (-not $contextMap.Contains('Duration')) {
+            $contextMap['Duration'] = '-'
+        }
+
+        $orderedKeys = @('SessionId', 'EntryId', 'Phase', 'RunId', 'ProcId', 'Process', 'Command', 'Operation', 'Status', 'Error', 'ExitCode', 'Duration')
+        $orderedParts = New-Object System.Collections.Generic.List[string]
+        foreach ($key in $orderedKeys) {
+            if ($contextMap.Contains($key)) {
+                $orderedParts.Add("$key=$($contextMap[$key])")
+            }
+        }
+        foreach ($key in $contextMap.Keys) {
+            if (-not ($orderedKeys -contains [string]$key)) {
+                $orderedParts.Add("$key=$($contextMap[$key])")
+            }
+        }
+        $mergedContext = $orderedParts -join ' | '
 
         $contextSuffix = " | $mergedContext"
         $logEntry = if ($timestamp) {
