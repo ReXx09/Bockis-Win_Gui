@@ -4987,7 +4987,7 @@ $downloadsPanel = New-CollapsiblePanel -Title "Tool-Downloads" -YPosition 157 -T
     $outputBox.AppendText(" CODING / IT (10 Tools):`r`n")
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
     $outputBox.AppendText("  • Editoren: VS Code, Notepad++, Inno Setup 6`r`n")
-    $outputBox.AppendText("  • Terminal & VCS: PowerShell, GitHub CLI`r`n")
+    $outputBox.AppendText("  • Terminal & VCS: PowerShell, Git (für Git Pull)`r`n")
     $outputBox.AppendText("  • Netzwerk: PuTTY, WinSCP, WireGuard, Advanced IP Scanner, Nmap`r`n`r`n")
     
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
