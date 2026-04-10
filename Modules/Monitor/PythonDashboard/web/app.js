@@ -2761,13 +2761,14 @@ function renderUserProgramRoutes() {
     const favoriteButtons = favoriteIds.length
       ? favoriteIds.map((favId) => {
           const favDev = outputDeviceMap.get(String(favId || ''));
+          const isActiveTarget = String(r.deviceId || '') === String(favId || '');
           if (!favDev) {
             return `<button class="btn audio-fav-btn" type="button" disabled title="Geraet nicht verfuegbar">offline</button>`;
           }
           const short = String(favDev.name || 'Geraet').slice(0, 18);
           return `
-            <span class="audio-fav-chip">
-              <button class="btn audio-fav-btn" type="button" data-route-fav-apply="${idx}" data-route-fav-id="${favDev.id}" title="${favDev.name}">${short}</button>
+            <span class="audio-fav-chip${isActiveTarget ? ' is-active-target' : ''}">
+              <button class="btn audio-fav-btn${isActiveTarget ? ' is-active-target' : ''}" type="button" data-route-fav-apply="${idx}" data-route-fav-id="${favDev.id}" title="${favDev.name}${isActiveTarget ? ' (Aktuelles Ziel)' : ''}">${short}</button>
               ${audioEditMode ? `<button class="btn audio-fav-remove" type="button" data-route-fav-remove="${idx}" data-route-fav-remove-id="${favDev.id}" title="Favorit entfernen">x</button>` : ''}
             </span>
           `;
