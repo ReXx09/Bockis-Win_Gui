@@ -758,42 +758,21 @@ input, select {
   line-height: 1.2;
 }
 
-.dependency-top5-picker {
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #0a1424;
-  padding: 8px;
-  display: grid;
-  gap: 6px;
+.dependency-select-btn {
+  min-width: 84px;
+  padding: 3px 6px;
+  font-size: 0.72rem;
 }
 
-.dependency-top5-title {
-  color: var(--muted);
-  font-size: 0.74rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+.dependency-select-btn.is-selected {
+  border-color: color-mix(in srgb, var(--ok) 55%, var(--line));
+  background: color-mix(in srgb, var(--ok) 16%, #0b1628);
+  color: #8ff3be;
 }
 
-.dependency-top5-list {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 4px 10px;
-}
-
-.dependency-top5-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--text);
-  font-size: 0.78rem;
-}
-
-.dependency-top5-item.is-disabled {
-  opacity: 0.45;
-}
-
-.dependency-top5-item input {
-  margin: 0;
+.dependency-top5-selected {
+  border-color: color-mix(in srgb, var(--ok) 58%, var(--line));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ok) 24%, transparent);
 }
 
 .dependency-table-head,

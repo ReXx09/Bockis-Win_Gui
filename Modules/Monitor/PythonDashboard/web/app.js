@@ -1241,23 +1241,34 @@ function getTop5BaseDependencies(deps) {
   return [...preferredOrder, ...fallbackOrder].slice(0, 5);
 }
 
-function buildDependencyRows(deps) {
+function buildDependencyRows(deps, options = {}) {
+  const selectionMode = !!options.selectionMode;
+  const selectedSet = new Set(dependencyPreferredTop5);
+
   return deps.map((dep) => {
-    const action = getDependencyAction(dep);
+    const action = selectionMode ? null : getDependencyAction(dep);
     const versionText = dep.Version || dep.AvailableVersion || '-';
     const nextVersion = dep.UpdateAvailable && dep.AvailableVersion ? ` → ${dep.AvailableVersion}` : '';
     const installerType = dep.InstallerType || (dep.WingetId ? 'winget' : '');
     const moduleName = dep.ModuleName || '';
+    const depName = dep.Name || 'Unbekannt';
+    const isTop5Selected = selectedSet.has(depName);
+
+    const actionCell = selectionMode
+      ? `<button class="btn dependency-select-btn ${isTop5Selected ? 'is-selected' : ''}" data-dependency-top5-toggle="${depName}">${isTop5Selected ? 'Top 5 ✓' : 'Zu Top 5'}</button>`
+      : (action
+        ? `<button class="btn" data-dependency-action="${action}" data-winget-id="${dep.WingetId || ''}" data-dependency-name="${depName}" data-installer-type="${installerType}" data-module-name="${moduleName}">${action === 'upgrade' ? 'Update' : 'Installieren'}</button>`
+        : '');
 
     return `
-      <div class="dependency-table-row dependency-table-row-actions dependency-${String(dep.StatusColor || '').toLowerCase()}">
+      <div class="dependency-table-row dependency-table-row-actions dependency-${String(dep.StatusColor || '').toLowerCase()} ${isTop5Selected ? 'dependency-top5-selected' : ''}">
         <div class="dependency-col-name-wrap">
-          <strong class="dependency-col-name">${dep.Name || 'Unbekannt'}</strong>
+          <strong class="dependency-col-name">${depName}</strong>
           <span class="muted dependency-col-description">${dep.Description || ''}</span>
         </div>
         <span class="dependency-col-installed">${versionText}${nextVersion}</span>
         <span class="dependency-status">${dep.Status || '-'}</span>
-        <span class="dependency-col-action">${action ? `<button class="btn" data-dependency-action="${action}" data-winget-id="${dep.WingetId || ''}" data-dependency-name="${dep.Name || ''}" data-installer-type="${installerType}" data-module-name="${moduleName}">${action === 'upgrade' ? 'Update' : 'Installieren'}</button>` : ''}</span>
+        <span class="dependency-col-action">${actionCell}</span>
       </div>
     `;
   }).join('');
@@ -1309,42 +1320,29 @@ function renderDependencyStatus(data) {
   deps.filter((dep) => !!getDependencyAction(dep)).forEach((dep) => compactNames.add(dep.Name));
   const compactDeps = deps.filter((dep) => compactNames.has(dep.Name));
   const hiddenCount = Math.max(0, deps.length - compactDeps.length);
-  const depsToRender = dependencyExpanded ? deps : compactDeps;
+  const depsToRender = dependencySelectionMode ? deps : (dependencyExpanded ? deps : compactDeps);
   const selectedCount = dependencyPreferredTop5.length;
 
   dependencySummary.textContent = data.all_satisfied
-    ? `Systemstatus ok | ${deps.length} Abhaengigkeiten geprueft${dependencyExpanded ? '' : ` | Kompaktansicht ${depsToRender.length}/${deps.length}`}`
-    : `Pruefung abgeschlossen | ${deps.length} Abhaengigkeiten | Eingriffe empfohlen${dependencyExpanded ? '' : ` | Kompaktansicht ${depsToRender.length}/${deps.length}`}`;
+    ? `Systemstatus ok | ${deps.length} Abhaengigkeiten geprueft${dependencySelectionMode ? ' | Auswahlmodus aktiv' : (dependencyExpanded ? '' : ` | Kompaktansicht ${depsToRender.length}/${deps.length}`)}`
+    : `Pruefung abgeschlossen | ${deps.length} Abhaengigkeiten | Eingriffe empfohlen${dependencySelectionMode ? ' | Auswahlmodus aktiv' : (dependencyExpanded ? '' : ` | Kompaktansicht ${depsToRender.length}/${deps.length}`)}`;
 
   dependencyList.innerHTML = deps.length
     ? `
       <div class="dependency-controls">
-        <span class="muted dependency-controls-info">${dependencyExpanded ? 'Alle Eintraege sichtbar' : `Top 5 + Aktionen sichtbar${hiddenCount > 0 ? ` | ${hiddenCount} ausgeblendet` : ''}`} | Top-5 Auswahl: ${selectedCount}/5</span>
+        <span class="muted dependency-controls-info">${dependencySelectionMode ? `Waehle Top 5 direkt ueber Aktion | Auswahl: ${selectedCount}/5` : (dependencyExpanded ? 'Alle Eintraege sichtbar' : `Top 5 + Aktionen sichtbar${hiddenCount > 0 ? ` | ${hiddenCount} ausgeblendet` : ''}`)} | Top-5 Auswahl: ${selectedCount}/5</span>
         <span class="dependency-controls-buttons">
           <button class="btn dependency-toggle-btn" data-dependency-select="1">${dependencySelectionMode ? 'Auswahl schliessen' : 'Top 5 waehlen'}</button>
-          ${hiddenCount > 0 || dependencyExpanded ? `<button class="btn dependency-toggle-btn" data-dependency-toggle="1">${dependencyExpanded ? 'Weniger anzeigen' : 'Alle anzeigen'}</button>` : ''}
+          ${(!dependencySelectionMode && (hiddenCount > 0 || dependencyExpanded)) ? `<button class="btn dependency-toggle-btn" data-dependency-toggle="1">${dependencyExpanded ? 'Weniger anzeigen' : 'Alle anzeigen'}</button>` : ''}
         </span>
       </div>
-      ${dependencySelectionMode ? `
-      <div class="dependency-top5-picker">
-        <div class="dependency-top5-title">Top 5 festlegen (maximal 5 Eintraege)</div>
-        <div class="dependency-top5-list">
-          ${deps.map((dep) => {
-            const name = dep.Name || 'Unbekannt';
-            const checked = dependencyPreferredTop5.includes(name);
-            const disabled = !checked && selectedCount >= 5;
-            return `<label class="dependency-top5-item${disabled ? ' is-disabled' : ''}"><input type="checkbox" data-dependency-pref="${name}" ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''}> <span>${name}</span></label>`;
-          }).join('')}
-        </div>
-      </div>
-      ` : ''}
       <div class="dependency-table-head dependency-table-head-actions">
         <span>Paket</span>
         <span>Version</span>
         <span>Status</span>
         <span>Aktion</span>
       </div>
-      ${buildDependencyRows(depsToRender)}
+      ${buildDependencyRows(depsToRender, { selectionMode: dependencySelectionMode })}
     `
     : '<div class="audio-empty">Keine Dependency-Daten gefunden.</div>';
 
@@ -1364,15 +1362,15 @@ function renderDependencyStatus(data) {
     });
   }
 
-  dependencyList.querySelectorAll('[data-dependency-pref]').forEach((checkbox) => {
-    checkbox.addEventListener('change', (ev) => {
-      const name = ev.target.dataset.dependencyPref || '';
+  dependencyList.querySelectorAll('[data-dependency-top5-toggle]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const name = btn.dataset.dependencyTop5Toggle || '';
       if (!name) return;
 
       const next = new Set(dependencyPreferredTop5);
-      if (ev.target.checked) {
+      if (!next.has(name)) {
         if (next.size >= 5) {
-          ev.target.checked = false;
+          dependencyMsg.textContent = 'Maximal 5 Eintraege in Top 5 moeglich.';
           return;
         }
         next.add(name);
