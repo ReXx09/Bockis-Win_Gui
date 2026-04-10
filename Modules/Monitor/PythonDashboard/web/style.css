@@ -1010,10 +1010,7 @@ input, select {
 }
 
 .audio-fav-chip.is-active-target {
-  border: 1px solid color-mix(in srgb, var(--accent) 52%, var(--line));
-  border-radius: 999px;
-  padding: 1px 3px;
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  background: transparent;
 }
 
 .audio-fav-btn,
@@ -1026,7 +1023,7 @@ input, select {
 .audio-fav-btn.is-active-target {
   border-color: color-mix(in srgb, var(--accent) 58%, var(--line));
   color: #9fd0ff;
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
+  box-shadow: none;
 }
 
 .audio-fav-remove {
