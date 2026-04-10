@@ -2930,9 +2930,13 @@ function renderUserProgramRoutes() {
       const pid = parseInt(slider.dataset.routeSessionPid, 10);
       const level = parseInt(slider.value, 10) || 0;
       if (!Number.isInteger(pid)) return;
+      // Optimistic: update % label immediately
+      const controlsEl = slider.closest('[data-route-session-controls]');
+      const levelLabel = controlsEl && controlsEl.querySelector('.audio-route-session-level');
+      if (levelLabel) levelLabel.textContent = `${level}%`;
       try {
         await jsonFetch(`/api/audio/session/${pid}/volume/${Math.max(0, Math.min(100, level))}`, { method: 'POST' });
-        await loadAudioSessions();
+        scheduleRouteSessionRefresh(400);
       } catch (err) {
         audioMsg.textContent = `Session-Volume Fehler: ${err.message}`;
       }
@@ -3246,8 +3250,19 @@ async function loadAudioSessions() {
 
     lastAudioSessions = groupAudioSessionsByProcess(Array.isArray(d.sessions) ? d.sessions : []);
 
-    audioSessions.innerHTML = lastAudioSessions.length
-      ? lastAudioSessions.map((s) => `
+    // Exclude programs that already have a dedicated routing row — they show controls there.
+    const routedTokens = new Set(
+      normalizeAllUserRoutes(readUserAudioRoutes()).map((r) => normalizeProgramToken(r.program))
+    );
+    const displaySessions = routedTokens.size
+      ? lastAudioSessions.filter((s) => {
+          const token = normalizeProgramToken(s.app);
+          return !Array.from(routedTokens).some((rp) => token.includes(rp) || rp.includes(token));
+        })
+      : lastAudioSessions;
+
+    audioSessions.innerHTML = displaySessions.length
+      ? displaySessions.map((s) => `
         <div class="audio-session-item" data-pid="${s.pid}">
           <div class="audio-session-head">
             <span>${s.app}</span>
@@ -3267,7 +3282,7 @@ async function loadAudioSessions() {
         const level = parseInt(slider.value, 10) || 0;
         try {
           await jsonFetch(`/api/audio/session/${pid}/volume/${Math.max(0, Math.min(100, level))}`, { method: 'POST' });
-          await loadAudioSessions();
+          scheduleRouteSessionRefresh(400);
         } catch (err) {
           audioMsg.textContent = `Session-Volume Fehler: ${err.message}`;
         }
@@ -3279,16 +3294,23 @@ async function loadAudioSessions() {
       btn.addEventListener('click', async () => {
         const pid = parseInt(btn.dataset.sessionMute, 10);
         const state = parseInt(btn.dataset.state, 10) || 0;
+        // Optimistic toggle
+        btn.textContent = state === 1 ? 'Unmute' : 'Mute';
+        btn.dataset.state = state === 1 ? '0' : '1';
         try {
           await jsonFetch(`/api/audio/session/${pid}/mute/${state}`, { method: 'POST' });
-          await loadAudioSessions();
+          scheduleRouteSessionRefresh(350);
         } catch (err) {
+          // Revert on failure
+          btn.textContent = state === 1 ? 'Mute' : 'Unmute';
+          btn.dataset.state = String(state);
           audioMsg.textContent = `Session-Mute Fehler: ${err.message}`;
         }
       });
     });
     }
 
+    renderUserProgramRoutes();
     scheduleMasonryLayout(audioGrid);
   } catch (err) {
     lastAudioSessions = [];
