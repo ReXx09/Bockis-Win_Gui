@@ -94,6 +94,9 @@ function global:Write-ToolLog {
         [switch]$SaveToDatabase
     )
 
+    # Erkenne Start-Meldungen, um Log-Läufe visuell zu trennen
+    $isRunStartMessage = [string]$Message -match '(?i)\b(wird gestartet|scan gestartet|operation gestartet|started)\b'
+
     # Web-Dashboard: Ausgabe in gemeinsamen Buffer schreiben (thread-safe)
     if ($null -ne $global:WebOutputBuffer) {
         $wbEntry = @{
@@ -168,13 +171,33 @@ function global:Write-ToolLog {
         } else {
             "[$levelPrefix] $tagField $Message$contextSuffix"
         }
+
+        # Laufzaehler je Tool fuer saubere Trennung je Scan-Durchlauf
+        if (-not $script:ToolRunSequence) {
+            $script:ToolRunSequence = @{}
+        }
+        $runHeader = $null
+        if ($isRunStartMessage) {
+            if (-not $script:ToolRunSequence.ContainsKey($sanitizedToolName)) {
+                $script:ToolRunSequence[$sanitizedToolName] = 0
+            }
+            $script:ToolRunSequence[$sanitizedToolName]++
+            $runId = '{0:D4}' -f [int]$script:ToolRunSequence[$sanitizedToolName]
+            $runTimestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff'
+            $runHeader = "========== RUN $runId START | $tagField | $runTimestamp =========="
+        }
         
         # Schreibe in Log-Datei mit Retry-Logik
         $retryCount = 0
         $maxRetries = 3
         do {
             try {
-                [System.IO.File]::AppendAllText($logPath, "$logEntry`r`n", [System.Text.Encoding]::UTF8)
+                $logPayload = if ($runHeader) {
+                    "`r`n$runHeader`r`n$logEntry`r`n"
+                } else {
+                    "$logEntry`r`n"
+                }
+                [System.IO.File]::AppendAllText($logPath, $logPayload, [System.Text.Encoding]::UTF8)
                 break
             } catch {
                 $retryCount++
