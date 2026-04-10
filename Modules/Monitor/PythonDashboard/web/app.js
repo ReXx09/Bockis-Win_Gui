@@ -580,12 +580,6 @@ function updateScopedRefreshTimers() {
       if (!hasVisibleWidgetsOnPage('audio', ['audio-volume', 'audio-devices', 'audio-sessions', 'audio-routing'])) return;
       refreshAudio().catch(() => {});
     }, REFRESH_INTERVALS.audioMs);
-    // Input metering at faster rate for live level display
-    inputMeteringTimer = setInterval(() => {
-      if (getCurrentPage() !== 'audio') return;
-      if (!hasVisibleWidgetsOnPage('audio', ['audio-routing'])) return;
-      loadInputMetering().catch(() => {});
-    }, 500);
   }
 
   if (page === 'tools' && toolStateApiAvailable && hasVisibleWidgetsOnPage('tools', ['tools-sys', 'tools-net', 'tools-diag', 'tools-disk', 'tools-priv', 'tools-dev'])) {
@@ -2846,7 +2840,6 @@ function renderUserProgramRoutes() {
           </button>
           <span class="audio-route-session-level">${match.volume}%</span>
           <span class="audio-route-session-badge${match.muted ? ' is-muted' : ' is-active'}">${match.muted ? 'Stumm' : 'Aktiv'}</span>
-          ${lastInputMeteringData.available && lastInputMeteringData.level > 5 ? `<div class="audio-input-meter"><div class="audio-input-meter-bar" style="width: ${lastInputMeteringData.level}%"></div></div>` : ''}
         </div>
       `
       : '<div class="audio-route-session-controls"><span class="audio-route-session-badge is-offline">Keine Session</span></div>';
