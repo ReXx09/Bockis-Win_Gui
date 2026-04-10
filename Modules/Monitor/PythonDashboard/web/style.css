@@ -756,6 +756,20 @@ input, select {
   font-size: 0.74rem;
 }
 
+.audio-fav-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.audio-fav-btn,
+.audio-fav-add {
+  padding: 4px 8px;
+  font-size: 0.72rem;
+  line-height: 1.2;
+}
+
 .list {
   margin-top: 8px;
   display: grid;

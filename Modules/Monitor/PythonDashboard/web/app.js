@@ -263,6 +263,7 @@ let cachedOpenPrograms = [];
 let lastOpenProgramsFetch = 0;
 let showAllAudioDevices = false;
 let hiddenAudioDeviceIds = new Set();
+let audioSwitchInFlight = false;
 let pendingThemeId = 'ozean';
 let availableTools = [];
 let customLaunchers = [];
@@ -2138,6 +2139,58 @@ function saveUserAudioRoutes(routes) {
   localStorage.setItem(AUDIO_USER_ROUTES_KEY, JSON.stringify(routes));
 }
 
+function normalizeFavoriteDeviceIds(ids) {
+  const seen = new Set();
+  const result = [];
+  (Array.isArray(ids) ? ids : []).forEach((id) => {
+    const normalized = String(id || '').trim();
+    if (!normalized || seen.has(normalized)) return;
+    seen.add(normalized);
+    result.push(normalized);
+  });
+  return result.slice(0, 3);
+}
+
+function normalizeUserRoute(route) {
+  const normalized = {
+    program: String(route?.program || '').trim(),
+    deviceId: String(route?.deviceId || '').trim(),
+    deviceName: String(route?.deviceName || '').trim(),
+    favoriteDeviceIds: normalizeFavoriteDeviceIds(route?.favoriteDeviceIds),
+  };
+  if (!normalized.favoriteDeviceIds.length && normalized.deviceId) {
+    normalized.favoriteDeviceIds = [normalized.deviceId];
+  }
+  return normalized;
+}
+
+function normalizeAllUserRoutes(routes) {
+  return (Array.isArray(routes) ? routes : []).map((r) => normalizeUserRoute(r)).filter((r) => r.program);
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForActiveAudioDevice(deviceId, deviceKind = 'output', maxAttempts = 6, waitMs = 180) {
+  const isInput = deviceKind === 'input';
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    try {
+      const d = await jsonFetch('/api/audio/devices');
+      const devices = Array.isArray(d.devices) ? d.devices : [];
+      const target = devices.find((dev) => String(dev.id || '') === String(deviceId || ''));
+      if (target) {
+        const active = isInput ? !!target.is_active_input : !!target.is_active_output;
+        if (active) return true;
+      }
+    } catch {
+      // keep retrying
+    }
+    await delay(waitMs);
+  }
+  return false;
+}
+
 function readHiddenAudioDevices() {
   try {
     const raw = localStorage.getItem(AUDIO_HIDDEN_DEVICES_KEY);
@@ -2194,7 +2247,14 @@ async function setDefaultAudioDevice(deviceId, deviceName = '', deviceKind = 'ou
     audioMsg.textContent = deviceKind === 'input' ? 'Kein Mikrofon ausgewaehlt.' : 'Kein Ausgabegeraet ausgewaehlt.';
     return false;
   }
+  if (audioSwitchInFlight) {
+    audioMsg.textContent = 'Audio-Umschaltung laeuft bereits...';
+    return false;
+  }
+  audioSwitchInFlight = true;
   try {
+    const kindLabel = deviceKind === 'input' ? 'Mikrofon' : 'Ausgabe';
+    audioMsg.textContent = `${kindLabel} wird umgeschaltet...`;
     const d = await jsonFetch('/api/audio/default-device', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -2204,13 +2264,30 @@ async function setDefaultAudioDevice(deviceId, deviceName = '', deviceKind = 'ou
       audioMsg.textContent = `Umschalten fehlgeschlagen: ${d.output || d.message || 'Unbekannter Fehler'}`;
       return false;
     }
+
+    let verified = await waitForActiveAudioDevice(deviceId, deviceKind, 6, 180);
+    if (!verified) {
+      const retry = await jsonFetch('/api/audio/default-device', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ device_id: deviceId, device_kind: deviceKind }),
+      });
+      if (retry.success) {
+        verified = await waitForActiveAudioDevice(deviceId, deviceKind, 6, 220);
+      }
+    }
+
     const activeName = deviceKind === 'input' ? (d.active_input || '') : (d.active_output || '');
-    audioMsg.textContent = `Umschaltung erfolgreich: ${deviceName || activeName || 'Neues Standardgeraet aktiv'}`;
+    audioMsg.textContent = verified
+      ? `Umschaltung erfolgreich: ${deviceName || activeName || 'Neues Standardgeraet aktiv'}`
+      : `Umschaltung ausgeloest, aber Rueckmeldung verzoegert: ${deviceName || activeName || 'Geraet'}`;
     await refreshAudio();
-    return true;
+    return verified;
   } catch (err) {
     audioMsg.textContent = `Umschalten-Fehler: ${err.message}`;
     return false;
+  } finally {
+    audioSwitchInFlight = false;
   }
 }
 
@@ -2317,12 +2394,15 @@ async function loadOpenPrograms(force = false) {
 
 function renderUserProgramRoutes() {
   if (!userProgramRoutes) return;
-  const routes = readUserAudioRoutes();
+  const routes = normalizeAllUserRoutes(readUserAudioRoutes());
   if (!routes.length) {
     userProgramRoutes.innerHTML = '<div class="audio-empty">Noch keine Benutzer-Programme hinterlegt.</div>';
     scheduleMasonryLayout(audioGrid);
     return;
   }
+
+  const outputDevices = getOutputAudioDevices();
+  const outputDeviceMap = new Map(outputDevices.map((dev) => [String(dev.id || ''), dev]));
 
   userProgramRoutes.innerHTML = routes.map((r, idx) => {
     const routeToken = normalizeProgramToken(r.program);
@@ -2340,14 +2420,30 @@ function renderUserProgramRoutes() {
     } else if (runningProgram) {
       status = `${runningProgram} laeuft, aber Windows meldet derzeit keine aktive Audio-Session`;
     }
+    const favoriteIds = normalizeFavoriteDeviceIds(r.favoriteDeviceIds || []);
+    const favoriteButtons = favoriteIds.length
+      ? favoriteIds.map((favId) => {
+          const favDev = outputDeviceMap.get(String(favId || ''));
+          if (!favDev) {
+            return `<button class="btn audio-fav-btn" type="button" disabled title="Geraet nicht verfuegbar">offline</button>`;
+          }
+          const short = String(favDev.name || 'Geraet').slice(0, 18);
+          return `<button class="btn audio-fav-btn" type="button" data-route-fav-apply="${idx}" data-route-fav-id="${favDev.id}" title="${favDev.name}">${short}</button>`;
+        }).join('')
+      : '<span class="muted">Keine Favoriten</span>';
+    const canAddFavorite = favoriteIds.length < 3 && !!String(r.deviceId || '').trim();
     return `
       <div class="audio-user-route-item" data-route-index="${idx}">
         <div>
           <strong>${r.program}</strong>
           <p class="muted">${status}</p>
+          <div class="audio-fav-row" data-route-favs="${idx}">
+            ${favoriteButtons}
+            ${canAddFavorite ? `<button class="btn audio-fav-add" type="button" data-route-fav-add="${idx}" title="Aktuelles Ziel zu Favoriten">+ Fav</button>` : ''}
+          </div>
         </div>
         <select data-route-device="${idx}">
-          ${getOutputAudioDevices().map((d) => `<option value="${d.id}" ${d.id === r.deviceId ? 'selected' : ''}>${d.name}${d.is_active_output ? ' (Aktiv)' : ''}</option>`).join('')}
+          ${outputDevices.map((d) => `<option value="${d.id}" ${d.id === r.deviceId ? 'selected' : ''}>${d.name}${d.is_active_output ? ' (Aktiv)' : ''}</option>`).join('')}
         </select>
         <button class="btn" data-route-apply="${idx}">Jetzt umschalten</button>
         <button class="btn" data-route-remove="${idx}">Entfernen</button>
@@ -2358,10 +2454,11 @@ function renderUserProgramRoutes() {
   userProgramRoutes.querySelectorAll('[data-route-device]').forEach((sel) => {
     sel.addEventListener('change', () => {
       const idx = parseInt(sel.dataset.routeDevice, 10);
-      const all = readUserAudioRoutes();
+      const all = normalizeAllUserRoutes(readUserAudioRoutes());
       if (!Number.isInteger(idx) || !all[idx]) return;
       all[idx].deviceId = sel.value;
       all[idx].deviceName = resolveDeviceNameById(sel.value);
+      all[idx].favoriteDeviceIds = normalizeFavoriteDeviceIds([...(all[idx].favoriteDeviceIds || []), sel.value]);
       saveUserAudioRoutes(all);
       audioMsg.textContent = `Zuordnung gespeichert: ${all[idx].program} -> ${all[idx].deviceName}`;
       renderUserProgramRoutes();
@@ -2371,7 +2468,7 @@ function renderUserProgramRoutes() {
   userProgramRoutes.querySelectorAll('[data-route-remove]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const idx = parseInt(btn.dataset.routeRemove, 10);
-      const all = readUserAudioRoutes();
+      const all = normalizeAllUserRoutes(readUserAudioRoutes());
       if (!Number.isInteger(idx) || !all[idx]) return;
       const removed = all.splice(idx, 1)[0];
       saveUserAudioRoutes(all);
@@ -2383,11 +2480,41 @@ function renderUserProgramRoutes() {
   userProgramRoutes.querySelectorAll('[data-route-apply]').forEach((btn) => {
     btn.addEventListener('click', async () => {
       const idx = parseInt(btn.dataset.routeApply, 10);
-      const all = readUserAudioRoutes();
+      const all = normalizeAllUserRoutes(readUserAudioRoutes());
       if (!Number.isInteger(idx) || !all[idx]) return;
       const route = all[idx];
       const devName = route.deviceName || resolveDeviceNameById(route.deviceId);
       await setDefaultAudioDevice(route.deviceId, devName);
+    });
+  });
+
+  userProgramRoutes.querySelectorAll('[data-route-fav-add]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt(btn.dataset.routeFavAdd, 10);
+      const all = normalizeAllUserRoutes(readUserAudioRoutes());
+      if (!Number.isInteger(idx) || !all[idx]) return;
+      const route = all[idx];
+      if (!route.deviceId) return;
+      route.favoriteDeviceIds = normalizeFavoriteDeviceIds([...(route.favoriteDeviceIds || []), route.deviceId]);
+      saveUserAudioRoutes(all);
+      audioMsg.textContent = `Favorit hinzugefuegt: ${route.program}`;
+      renderUserProgramRoutes();
+    });
+  });
+
+  userProgramRoutes.querySelectorAll('[data-route-fav-apply]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const idx = parseInt(btn.dataset.routeFavApply, 10);
+      const favId = String(btn.dataset.routeFavId || '').trim();
+      const all = normalizeAllUserRoutes(readUserAudioRoutes());
+      if (!Number.isInteger(idx) || !all[idx] || !favId) return;
+      const route = all[idx];
+      route.deviceId = favId;
+      route.deviceName = resolveDeviceNameById(favId);
+      route.favoriteDeviceIds = normalizeFavoriteDeviceIds([favId, ...(route.favoriteDeviceIds || [])]);
+      saveUserAudioRoutes(all);
+      await setDefaultAudioDevice(favId, route.deviceName);
+      renderUserProgramRoutes();
     });
   });
 
@@ -2423,7 +2550,7 @@ function wireUserAudioRoutingControls() {
       return;
     }
 
-    const all = readUserAudioRoutes();
+    const all = normalizeAllUserRoutes(readUserAudioRoutes());
     const autoDetectedProgram = bestProgramMatch(typedProgram);
     const program = autoDetectedProgram || typedProgram;
     const key = normalizeProgramToken(program);
@@ -2436,9 +2563,10 @@ function wireUserAudioRoutingControls() {
     if (existing) {
       existing.deviceId = deviceId;
       existing.deviceName = deviceName;
+      existing.favoriteDeviceIds = normalizeFavoriteDeviceIds([...(existing.favoriteDeviceIds || []), deviceId]);
       audioMsg.textContent = `Zuordnung gespeichert: ${program} -> ${deviceName}${detectionInfo}. Hinweis: Die echte Ausgabe-Zuweisung erfolgt in Windows-Routing.`;
     } else {
-      all.push({ program, deviceId, deviceName });
+      all.push({ program, deviceId, deviceName, favoriteDeviceIds: [deviceId] });
       audioMsg.textContent = `Programm gespeichert: ${program} -> ${deviceName}${detectionInfo}. Hinweis: Die echte Ausgabe-Zuweisung erfolgt in Windows-Routing.`;
     }
     saveUserAudioRoutes(all);
