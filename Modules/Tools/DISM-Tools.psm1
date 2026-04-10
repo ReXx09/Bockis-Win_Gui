@@ -19,8 +19,12 @@ function Start-CheckDISM {
         Initialize-ProgressComponents -ProgressBar $progressBar -StatusLabel $null
     }
     
+    $operationName = 'CheckHealth'
+    $dismArgs = '/Online /Cleanup-Image /CheckHealth'
+    $runStart = Get-Date
+
     # In Log-Datei und Datenbank schreiben, dass der DISM Check startet
-    Write-ToolLog -ToolName "DISM-Check" -Message "`n`t[►]DISM Check Health wird gestartet" -OutputBox $outputBox -Style 'Action' -Level "Information" -SaveToDatabase
+    Write-ToolLog -ToolName "DISM-Check" -Message "DISM $operationName wird gestartet" -OutputBox $outputBox -Style 'Action' -Level "Information" -Context "Operation=$operationName | Command=dism.exe $dismArgs" -SaveToDatabase
     
     # Rahmen und Systeminformationen erstellen
     #$computerName = $env:COMPUTERNAME
@@ -106,7 +110,8 @@ function Start-CheckDISM {
             Update-ProgressStatus -StatusText "DISM Check läuft..." -ProgressValue 60 -TextColor ([System.Drawing.Color]::White) -progressBarParam $progressBar
         }
         
-        $process = Start-Process "dism.exe" -ArgumentList "/Online /Cleanup-Image /CheckHealth" -NoNewWindow -Wait -PassThru
+        $process = Start-Process "dism.exe" -ArgumentList $dismArgs -NoNewWindow -Wait -PassThru
+        $duration = '{0:hh\:mm\:ss}' -f ((Get-Date) - $runStart)
 
         # Ergebnis in JSON speichern
         $result = @{
@@ -120,10 +125,12 @@ function Start-CheckDISM {
             0 { 
                 Write-Host "`n`t[✓] DISM Check Health erfolgreich abgeschlossen!" -ForegroundColor Green
                 $outputBox.AppendText("`t[✓] DISM Check erfolgreich abgeschlossen.`r`n")
+                Write-ToolLog -ToolName "DISM-Check" -Message "DISM $operationName erfolgreich abgeschlossen" -OutputBox $outputBox -Style 'Success' -Level "Success" -Context "Operation=$operationName | ExitCode=$($process.ExitCode) | PID=$($process.Id) | Duration=$duration | Command=dism.exe $dismArgs" -SaveToDatabase
             }
             default {
                 Write-Host "`n`t[X] DISM Check Health fehlgeschlagen. Exit-Code: $($process.ExitCode)" -ForegroundColor Red
                 $outputBox.AppendText("`t[X] DISM Check fehlgeschlagen. Exit-Code: $($process.ExitCode)`r`n")
+                Write-ToolLog -ToolName "DISM-Check" -Message "DISM $operationName fehlgeschlagen" -OutputBox $outputBox -Style 'Error' -Level "Error" -Context "Operation=$operationName | ExitCode=$($process.ExitCode) | PID=$($process.Id) | Duration=$duration | Command=dism.exe $dismArgs" -SaveToDatabase
             }
         }
         Write-Host "`n" + ("═" * 70) -ForegroundColor Cyan 
@@ -138,6 +145,7 @@ function Start-CheckDISM {
     catch {
         Write-Host "`n`t[X] Fehler beim DISM Check: $_" -ForegroundColor Red
         $outputBox.AppendText("`t[X] Fehler beim DISM Check: $_`r`n")
+        Write-ToolLog -ToolName "DISM-Check" -Message "DISM $operationName Fehler" -OutputBox $outputBox -Style 'Error' -Level "Error" -Context "Operation=$operationName | Error=$($_.Exception.Message) | Command=dism.exe $dismArgs" -SaveToDatabase
         if ($progressBar) {
             $progressBar.Value = 0
         }
@@ -160,8 +168,12 @@ function Start-ScanDISM {
         Initialize-ProgressComponents -ProgressBar $progressBar -StatusLabel $null
     }
     
+    $operationName = 'ScanHealth'
+    $dismArgs = '/Online /Cleanup-Image /ScanHealth'
+    $runStart = Get-Date
+
     # In Log-Datei und Datenbank schreiben, dass der DISM Scan startet
-    Write-ToolLog -ToolName "DISM-Scan" -Message "`n`t[►]DISM Scan wird gestartet" -OutputBox $outputBox -Style 'Action' -Level "Information" -SaveToDatabase
+    Write-ToolLog -ToolName "DISM-Scan" -Message "DISM $operationName wird gestartet" -OutputBox $outputBox -Style 'Action' -Level "Information" -Context "Operation=$operationName | Command=dism.exe $dismArgs" -SaveToDatabase
     
     # Rahmen und Systeminformationen erstellen
     #$computerName = $env:COMPUTERNAME
@@ -242,7 +254,8 @@ function Start-ScanDISM {
             Update-ProgressStatus -StatusText "DISM Scan läuft..." -ProgressValue 50 -TextColor ([System.Drawing.Color]::White) -progressBarParam $progressBar
         }
     
-        $process = Start-Process "dism.exe" -ArgumentList "/Online /Cleanup-Image /ScanHealth" -NoNewWindow -Wait -PassThru
+        $process = Start-Process "dism.exe" -ArgumentList $dismArgs -NoNewWindow -Wait -PassThru
+        $duration = '{0:hh\:mm\:ss}' -f ((Get-Date) - $runStart)
 
         # ProgressBar aktualisieren
         if ($progressBar) {
@@ -262,10 +275,12 @@ function Start-ScanDISM {
             0 { 
                 Write-Host "`n`t[✓] DISM Scan Health erfolgreich abgeschlossen!" -ForegroundColor Green
                 $outputBox.AppendText("`t[✓] DISM Scan erfolgreich abgeschlossen.`r`n")
+                Write-ToolLog -ToolName "DISM-Scan" -Message "DISM $operationName erfolgreich abgeschlossen" -OutputBox $outputBox -Style 'Success' -Level "Success" -Context "Operation=$operationName | ExitCode=$($process.ExitCode) | PID=$($process.Id) | Duration=$duration | Command=dism.exe $dismArgs" -SaveToDatabase
             }
             default {
                 Write-Host "`n`t[X] DISM Scan Health fehlgeschlagen. Exit-Code: $($process.ExitCode)" -ForegroundColor Red
                 $outputBox.AppendText("`t[X] DISM Scan fehlgeschlagen. Exit-Code: $($process.ExitCode)`r`n")
+                Write-ToolLog -ToolName "DISM-Scan" -Message "DISM $operationName fehlgeschlagen" -OutputBox $outputBox -Style 'Error' -Level "Error" -Context "Operation=$operationName | ExitCode=$($process.ExitCode) | PID=$($process.Id) | Duration=$duration | Command=dism.exe $dismArgs" -SaveToDatabase
             }
         }
         Write-Host "`n" + ("═" * 70) -ForegroundColor Cyan 
@@ -280,6 +295,7 @@ function Start-ScanDISM {
     catch {
         Write-Host "`n`t[X] Fehler beim DISM Scan: $_" -ForegroundColor Red
         $outputBox.AppendText("`t[X] Fehler beim DISM Scan: $_`r`n")
+        Write-ToolLog -ToolName "DISM-Scan" -Message "DISM $operationName Fehler" -OutputBox $outputBox -Style 'Error' -Level "Error" -Context "Operation=$operationName | Error=$($_.Exception.Message) | Command=dism.exe $dismArgs" -SaveToDatabase
         if ($progressBar) {
             $progressBar.Value = 0
         }
@@ -302,8 +318,12 @@ function Start-RestoreDISM {
         Initialize-ProgressComponents -ProgressBar $progressBar -StatusLabel $null
     }
     
+    $operationName = 'RestoreHealth'
+    $dismArgs = '/Online /Cleanup-Image /RestoreHealth'
+    $runStart = Get-Date
+
     # In Log-Datei und Datenbank schreiben, dass die DISM Reparatur startet
-    Write-ToolLog -ToolName "DISM-Repair" -Message "`n`t[►]DISM Restore Health wird gestartet" -OutputBox $outputBox -Style 'Action' -Level "Information" -SaveToDatabase
+    Write-ToolLog -ToolName "DISM-Repair" -Message "DISM $operationName wird gestartet" -OutputBox $outputBox -Style 'Action' -Level "Information" -Context "Operation=$operationName | Command=dism.exe $dismArgs" -SaveToDatabase
     
     # Rahmen und Systeminformationen erstellen
     #$computerName = $env:COMPUTERNAME
@@ -392,7 +412,8 @@ function Start-RestoreDISM {
             Update-ProgressStatus -StatusText "DISM Reparatur läuft..." -ProgressValue 60 -TextColor ([System.Drawing.Color]::White) -progressBarParam $progressBar
         }
         
-        $process = Start-Process "dism.exe" -ArgumentList "/Online /Cleanup-Image /RestoreHealth" -NoNewWindow -Wait -PassThru
+        $process = Start-Process "dism.exe" -ArgumentList $dismArgs -NoNewWindow -Wait -PassThru
+        $duration = '{0:hh\:mm\:ss}' -f ((Get-Date) - $runStart)
 
         # ProgressBar aktualisieren
         if ($progressBar) {
@@ -412,10 +433,12 @@ function Start-RestoreDISM {
             0 { 
                 Write-Host "`n`t[✓] DISM Restore Health erfolgreich abgeschlossen!" -ForegroundColor Green
                 $outputBox.AppendText("`t[✓] DISM Restore erfolgreich abgeschlossen.`r`n")
+                Write-ToolLog -ToolName "DISM-Repair" -Message "DISM $operationName erfolgreich abgeschlossen" -OutputBox $outputBox -Style 'Success' -Level "Success" -Context "Operation=$operationName | ExitCode=$($process.ExitCode) | PID=$($process.Id) | Duration=$duration | Command=dism.exe $dismArgs" -SaveToDatabase
             }
             default {
                 Write-Host "`n`t[X] DISM Restore Health fehlgeschlagen. Exit-Code: $($process.ExitCode)" -ForegroundColor Red
                 $outputBox.AppendText("`t[X] DISM Restore fehlgeschlagen. Exit-Code: $($process.ExitCode)`r`n")
+                Write-ToolLog -ToolName "DISM-Repair" -Message "DISM $operationName fehlgeschlagen" -OutputBox $outputBox -Style 'Error' -Level "Error" -Context "Operation=$operationName | ExitCode=$($process.ExitCode) | PID=$($process.Id) | Duration=$duration | Command=dism.exe $dismArgs" -SaveToDatabase
             }
         }
         Write-Host "`n" + ("═" * 70) -ForegroundColor Cyan 
@@ -430,6 +453,7 @@ function Start-RestoreDISM {
     catch {
         Write-Host "`n`t[X] Fehler beim DISM Restore: $_" -ForegroundColor Red
         $outputBox.AppendText("`t[X] Fehler beim DISM Restore: $_`r`n")
+        Write-ToolLog -ToolName "DISM-Repair" -Message "DISM $operationName Fehler" -OutputBox $outputBox -Style 'Error' -Level "Error" -Context "Operation=$operationName | Error=$($_.Exception.Message) | Command=dism.exe $dismArgs" -SaveToDatabase
         if ($progressBar) {
             $progressBar.Value = 0
         }
