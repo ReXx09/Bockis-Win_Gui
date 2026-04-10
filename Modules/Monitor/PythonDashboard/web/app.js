@@ -2902,7 +2902,7 @@ function renderUserProgramRoutes() {
       route.deviceId = favId;
       route.deviceName = resolveDeviceNameById(favId);
       saveUserAudioRoutes(all);
-      await setDefaultAudioDevice(favId, route.deviceName);
+      scheduleRouteSessionRefresh(300);
       renderUserProgramRoutes();
     });
   });
