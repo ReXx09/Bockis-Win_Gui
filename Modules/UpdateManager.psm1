@@ -307,7 +307,7 @@ function Invoke-ReleaseSelectionUpdate {
         [string]$RepoOwner = "ReXx09",
 
         [Parameter(Mandatory=$false)]
-        [string]$RepoName = "Bockis-Win_Gui-DEV",
+        [string]$RepoName = "Bockis-Win_Gui",
 
         [Parameter(Mandatory=$false)]
         [string]$GitHubToken = $env:GITHUB_TOKEN

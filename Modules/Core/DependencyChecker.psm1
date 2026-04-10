@@ -1153,7 +1153,7 @@ function Get-GuiReleaseDependencyStatus {
         [string]$RepoOwner = "ReXx09",
 
         [Parameter(Mandatory = $false)]
-        [string]$RepoName = "Bockis-Win_Gui-DEV",
+        [string]$RepoName = "Bockis-Win_Gui",
 
         [Parameter(Mandatory = $false)]
         [string]$GitHubToken = $env:GITHUB_TOKEN
@@ -1762,7 +1762,7 @@ function Get-DependencyStatusForGUI {
         [string]$RepoOwner = "ReXx09",
 
         [Parameter(Mandatory = $false)]
-        [string]$RepoName = "Bockis-Win_Gui-DEV",
+        [string]$RepoName = "Bockis-Win_Gui",
 
         [Parameter(Mandatory = $false)]
         [string]$GitHubToken
