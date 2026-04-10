@@ -1351,7 +1351,7 @@ function renderDependencyStatus(data) {
       <div class="dependency-controls">
         <span class="muted dependency-controls-info">${dependencySelectionMode ? `Waehle Top 5 direkt ueber Aktion | Auswahl: ${selectedCount}/5` : (dependencyExpanded ? 'Alle Eintraege sichtbar' : `Top 5 + Aktionen sichtbar${hiddenCount > 0 ? ` | ${hiddenCount} ausgeblendet` : ''}`)} | Top-5 Auswahl: ${selectedCount}/5</span>
         <span class="dependency-controls-buttons">
-          <button class="btn dependency-toggle-btn" data-dependency-select="1">${dependencySelectionMode ? 'Auswahl schliessen' : 'Top 5 waehlen'}</button>
+          <button class="btn dependency-toggle-btn" data-dependency-select="1">${dependencySelectionMode ? 'Auswahl schliessen' : 'Top 5 wählen'}</button>
           ${(!dependencySelectionMode && (hiddenCount > 0 || dependencyExpanded)) ? `<button class="btn dependency-toggle-btn" data-dependency-toggle="1">${dependencyExpanded ? 'Weniger anzeigen' : 'Alle anzeigen'}</button>` : ''}
         </span>
       </div>
@@ -2740,10 +2740,13 @@ function renderUserProgramRoutes() {
 
   userProgramRoutes.innerHTML = routes.map((r, idx) => {
     const routeToken = normalizeProgramToken(r.program);
-    const match = lastAudioSessions.find((s) => {
+    const routeSessions = lastAudioSessions.filter((s) => {
       const appToken = normalizeProgramToken(s.app);
       return appToken.includes(routeToken) || routeToken.includes(appToken);
     });
+    const match = routeSessions.length
+      ? routeSessions.sort((a, b) => (Number(b.state || 0) - Number(a.state || 0)) || (Number(b.volume || 0) - Number(a.volume || 0)))[0]
+      : null;
     const runningProgram = cachedOpenPrograms.find((p) => {
       const processToken = normalizeProgramToken(p);
       return processToken.includes(routeToken) || routeToken.includes(processToken);
@@ -2771,6 +2774,16 @@ function renderUserProgramRoutes() {
         }).join('')
       : '<span class="muted">Keine Favoriten</span>';
     const canAddFavorite = audioEditMode && favoriteIds.length < 3 && !!String(r.deviceId || '').trim();
+    const sessionControls = match
+      ? `
+        <div class="audio-route-session-controls" data-route-session-controls="${idx}">
+          <input type="range" min="0" max="100" value="${match.volume}" data-route-session-volume="${idx}" data-route-session-pid="${match.pid}" />
+          <button class="btn audio-route-mute-btn" data-route-session-mute="${idx}" data-route-session-pid="${match.pid}" data-route-session-state="${match.muted ? 0 : 1}">${match.muted ? 'Unmute' : 'Mute'}</button>
+          <span class="muted">${match.volume}% ${match.muted ? '| Stumm' : ''}</span>
+        </div>
+      `
+      : '<div class="audio-route-session-controls"><span class="muted">Keine aktive Audio-Session</span></div>';
+
     return `
       <div class="audio-user-route-item" data-route-index="${idx}">
         <div>
@@ -2780,6 +2793,7 @@ function renderUserProgramRoutes() {
             ${favoriteButtons}
             ${canAddFavorite ? `<button class="btn audio-fav-add" type="button" data-route-fav-add="${idx}" title="Aktuelles Ziel zu Favoriten">+ Fav</button>` : ''}
           </div>
+          ${sessionControls}
         </div>
         <select ${audioEditMode ? '' : 'class="audio-hidden"'} data-route-device="${idx}">
           ${outputDevices.map((d) => `<option value="${d.id}" ${d.id === r.deviceId ? 'selected' : ''}>${d.name}${d.is_active_output ? ' (Aktiv)' : ''}</option>`).join('')}
@@ -2872,6 +2886,34 @@ function renderUserProgramRoutes() {
       saveUserAudioRoutes(all);
       audioMsg.textContent = `Favorit entfernt: ${route.program}`;
       renderUserProgramRoutes();
+    });
+  });
+
+  userProgramRoutes.querySelectorAll('[data-route-session-volume]').forEach((slider) => {
+    slider.addEventListener('change', async () => {
+      const pid = parseInt(slider.dataset.routeSessionPid, 10);
+      const level = parseInt(slider.value, 10) || 0;
+      if (!Number.isInteger(pid)) return;
+      try {
+        await jsonFetch(`/api/audio/session/${pid}/volume/${Math.max(0, Math.min(100, level))}`, { method: 'POST' });
+        await loadAudioSessions();
+      } catch (err) {
+        audioMsg.textContent = `Session-Volume Fehler: ${err.message}`;
+      }
+    });
+  });
+
+  userProgramRoutes.querySelectorAll('[data-route-session-mute]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const pid = parseInt(btn.dataset.routeSessionPid, 10);
+      const state = parseInt(btn.dataset.routeSessionState, 10) || 0;
+      if (!Number.isInteger(pid)) return;
+      try {
+        await jsonFetch(`/api/audio/session/${pid}/mute/${state}`, { method: 'POST' });
+        await loadAudioSessions();
+      } catch (err) {
+        audioMsg.textContent = `Session-Mute Fehler: ${err.message}`;
+      }
     });
   });
 
