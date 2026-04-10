@@ -35,6 +35,7 @@ const gitMsg = document.getElementById('gitMsg');
 const logSelect = document.getElementById('logSelect');
 const logContent = document.getElementById('logContent');
 const logHtmlFrame = document.getElementById('logHtmlFrame');
+const logJsonView = document.getElementById('logJsonView');
 const reloadDependenciesBtn = document.getElementById('reloadDependenciesBtn');
 const dependencySummary = document.getElementById('dependencySummary');
 const dependencyList = document.getElementById('dependencyList');
@@ -1051,22 +1052,118 @@ async function loadLogs() {
     logSelect.innerHTML = files.map((f) => `<option value="${f}">${f}</option>`).join('');
     if (files.length > 0) await openLog(files[0]);
     else {
+      if (logJsonView) {
+        logJsonView.style.display = 'none';
+        logJsonView.innerHTML = '';
+      }
       if (logHtmlFrame) logHtmlFrame.style.display = 'none';
       logContent.style.display = 'block';
       logContent.textContent = 'Keine Logs gefunden.';
     }
   } catch (err) {
+    if (logJsonView) {
+      logJsonView.style.display = 'none';
+      logJsonView.innerHTML = '';
+    }
     if (logHtmlFrame) logHtmlFrame.style.display = 'none';
     logContent.style.display = 'block';
     logContent.textContent = `Log-Liste Fehler: ${err.message}`;
   }
 }
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function formatContext(ctx) {
+  if (!ctx || typeof ctx !== 'object') return '';
+  return Object.entries(ctx)
+    .filter(([, v]) => {
+      const s = String(v ?? '').trim().toLowerCase();
+      return s !== '' && s !== '-' && s !== 'none';
+    })
+    .map(([k, v]) => `${k}=${v}`)
+    .join(' | ');
+}
+
+function toLevelClass(level) {
+  const l = String(level || '').toLowerCase();
+  if (l === 'error' || l === 'critical') return 'is-error';
+  if (l === 'warning') return 'is-warn';
+  if (l === 'success') return 'is-ok';
+  return 'is-info';
+}
+
+function renderJsonLog(entries) {
+  if (!logJsonView) return;
+  const items = Array.isArray(entries) ? entries : [];
+  if (items.length === 0) {
+    logJsonView.innerHTML = '<div class="log-json-empty">Keine JSON-Eintraege gefunden.</div>';
+    return;
+  }
+
+  const html = items.map((entry) => {
+    const type = String(entry?.Type || 'entry').toLowerCase();
+    const message = escapeHtml(entry?.Message || '-');
+    const ts = escapeHtml(entry?.Timestamp || '-');
+    const level = escapeHtml(entry?.LevelPrefix || entry?.Level || 'INFO');
+    const levelClass = toLevelClass(entry?.Level);
+    const tag = escapeHtml(entry?.TagDisplay || `[${entry?.Tag || 'LOG'}]`);
+    const ctx = escapeHtml(formatContext(entry?.Context));
+
+    if (type === 'run-start' || type === 'run-end') {
+      const runClass = type === 'run-end' ? ' end' : '';
+      return `<div class="log-json-run${runClass}">${message}</div>`;
+    }
+
+    const ctxBlock = ctx ? `<div class="log-json-ctx">${ctx}</div>` : '';
+    return `<div class="log-json-entry">
+      <div class="log-json-ts">${ts}</div>
+      <div class="log-json-level ${levelClass}">${level}</div>
+      <div class="log-json-tag">${tag}</div>
+      <div class="log-json-msg">${message}${ctxBlock}</div>
+    </div>`;
+  }).join('');
+
+  logJsonView.innerHTML = html;
+}
+
 async function openLog(name) {
   if (!name) return;
 
+  const isJson = String(name).toLowerCase().endsWith('.log.json');
+  if (isJson) {
+    if (logHtmlFrame) {
+      logHtmlFrame.style.display = 'none';
+      logHtmlFrame.removeAttribute('src');
+    }
+    logContent.style.display = 'none';
+    if (logJsonView) logJsonView.style.display = 'block';
+
+    try {
+      const d = await jsonFetch(`/api/logs/json?file=${encodeURIComponent(name)}&lines=400`);
+      renderJsonLog(d.entries || []);
+    } catch (err) {
+      if (logJsonView) {
+        logJsonView.innerHTML = `<div class="log-json-empty">JSON-Log Laden fehlgeschlagen: ${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    scheduleMasonryLayout(logsGrid);
+    return;
+  }
+
   const isHtml = String(name).toLowerCase().endsWith('.html');
   if (isHtml) {
+    if (logJsonView) {
+      logJsonView.style.display = 'none';
+      logJsonView.innerHTML = '';
+    }
     logContent.style.display = 'none';
     if (logHtmlFrame) {
       logHtmlFrame.style.display = 'block';
@@ -1077,6 +1174,10 @@ async function openLog(name) {
   }
 
   try {
+    if (logJsonView) {
+      logJsonView.style.display = 'none';
+      logJsonView.innerHTML = '';
+    }
     if (logHtmlFrame) {
       logHtmlFrame.style.display = 'none';
       logHtmlFrame.removeAttribute('src');

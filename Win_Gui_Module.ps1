@@ -404,6 +404,46 @@ function global:Write-ToolLog {
                                 }
 
                                 [System.IO.File]::AppendAllText($htmlPath, (($htmlLines -join "`r`n") + "`r`n"), [System.Text.Encoding]::UTF8)
+
+                                # Zusaetzlich strukturierte JSON-Ansicht schreiben (ein JSON-Objekt pro Zeile)
+                                $jsonPath = Join-Path $logDirectory "$sanitizedToolName.log.json"
+                                $jsonLines = New-Object System.Collections.Generic.List[string]
+                                if ($runHeader) {
+                                    $jsonLines.Add((([ordered]@{
+                                                Type = 'run-start'
+                                                Timestamp = $tsHtml
+                                                Level = 'Information'
+                                                LevelPrefix = 'INFO'
+                                                Tag = $ToolName
+                                                TagDisplay = $tagField
+                                                Message = [string]$runHeader
+                                            }) | ConvertTo-Json -Compress -Depth 8))
+                                }
+
+                                $jsonLines.Add((([ordered]@{
+                                                Type = 'entry'
+                                                Timestamp = $tsHtml
+                                                Level = [string]$Level
+                                                LevelPrefix = [string]$levelPrefix
+                                                Tag = [string]$ToolName
+                                                TagDisplay = [string]$tagField
+                                                Message = [string]$Message
+                                                Context = $contextMap
+                                            }) | ConvertTo-Json -Compress -Depth 8))
+
+                                if ($runFooter) {
+                                    $jsonLines.Add((([ordered]@{
+                                                Type = 'run-end'
+                                                Timestamp = $tsHtml
+                                                Level = 'Information'
+                                                LevelPrefix = 'INFO'
+                                                Tag = $ToolName
+                                                TagDisplay = $tagField
+                                                Message = [string]$runFooter
+                                            }) | ConvertTo-Json -Compress -Depth 8))
+                                }
+
+                                [System.IO.File]::AppendAllText($jsonPath, (($jsonLines -join "`r`n") + "`r`n"), [System.Text.Encoding]::UTF8)
                 break
             } catch {
                 $retryCount++

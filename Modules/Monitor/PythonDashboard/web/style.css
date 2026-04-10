@@ -610,135 +610,97 @@ input, select {
   min-height: 420px;
 }
 
-.log-raw-view {
-  margin-top: 8px;
-  min-height: 120px;
-  max-height: 170px;
-  opacity: 0.8;
-}
-
-.log-filter-row {
+.log-json-view {
   display: grid;
-  grid-template-columns: repeat(5, minmax(120px, 1fr));
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.log-focus-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 8px 10px;
-  font-size: 0.8rem;
-  color: var(--muted);
-  background: #0b1628;
-}
-
-.log-focus-label input {
-  width: auto;
-  margin: 0;
-}
-
-.log-structured-view {
-  min-height: 250px;
-  max-height: 410px;
-  overflow: auto;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #08101d;
-  padding: 10px;
-  display: grid;
-  gap: 8px;
-}
-
-.log-run-marker {
-  border-left: 4px solid var(--ok);
-  background: color-mix(in srgb, var(--ok) 15%, #08101d);
-  color: color-mix(in srgb, var(--ok) 90%, white);
-  border-radius: 6px;
-  padding: 6px 8px;
-  font-family: Consolas, monospace;
-  font-size: 0.77rem;
-  white-space: pre-wrap;
-}
-
-.log-run-marker.end {
-  border-left-color: var(--warn);
-  background: color-mix(in srgb, var(--warn) 12%, #08101d);
-  color: color-mix(in srgb, var(--warn) 90%, white);
-}
-
-.log-entry-card {
-  border: 1px solid color-mix(in srgb, var(--line) 85%, transparent);
-  border-radius: 8px;
-  background: #0b1628;
+  gap: 6px;
   padding: 8px;
-  display: grid;
-  gap: 6px;
+  white-space: normal;
 }
 
-.log-entry-head {
-  display: grid;
-  grid-template-columns: 180px 70px 130px 1fr;
-  gap: 8px;
-  align-items: center;
-  font-family: Consolas, monospace;
-  font-size: 0.75rem;
-}
-
-.log-entry-ts {
+.log-json-empty {
   color: var(--muted);
+  font-size: 0.82rem;
 }
 
-.log-badge {
-  border-radius: 6px;
-  padding: 2px 6px;
-  text-align: center;
-  font-weight: 700;
-}
-
-.log-lvl-info { background: #0b2a4a; color: #79c0ff; }
-.log-lvl-warn { background: #3b2b0a; color: #f2cc60; }
-.log-lvl-error { background: #3d1515; color: #ffa198; }
-.log-lvl-crit { background: #4c0f24; color: #ff7b72; }
-.log-lvl-debug { background: #21262d; color: #8b949e; }
-.log-lvl-ok { background: #0f2417; color: #9be9a8; }
-
-.log-entry-tag {
-  color: var(--accent);
-  font-weight: 700;
-  font-family: Consolas, monospace;
-}
-
-.log-entry-msg {
-  color: var(--text);
-  font-size: 0.84rem;
-  white-space: pre-wrap;
-}
-
-.log-context {
-  display: flex;
-  flex-wrap: wrap;
+.log-json-entry {
+  display: grid;
+  grid-template-columns: 170px 60px 124px minmax(0, 1fr);
   gap: 6px;
-}
-
-.log-kv-chip {
-  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--card) var(--glass-chip-solid), transparent);
-  color: var(--muted);
-  font-size: 0.72rem;
-  padding: 2px 8px;
-}
-
-.log-empty {
-  border: 1px dashed var(--line);
+  align-items: start;
+  border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 10px;
+  background: #0b1628;
+  padding: 6px 8px;
+}
+
+.log-json-ts {
   color: var(--muted);
-  font-size: 0.85rem;
+}
+
+.log-json-level {
+  text-align: center;
+  border-radius: 4px;
+  padding: 1px 3px;
+  font-weight: 700;
+}
+
+.log-json-level.is-info {
+  background: color-mix(in srgb, var(--accent) 20%, #0b1628);
+  color: #7dc3ff;
+}
+
+.log-json-level.is-ok {
+  background: color-mix(in srgb, var(--ok) 24%, #0b1628);
+  color: #8ff3be;
+}
+
+.log-json-level.is-warn {
+  background: color-mix(in srgb, var(--warn) 24%, #0b1628);
+  color: #ffd07a;
+}
+
+.log-json-level.is-error {
+  background: color-mix(in srgb, var(--danger) 24%, #0b1628);
+  color: #ffb2b2;
+}
+
+.log-json-tag {
+  color: #79c0ff;
+  font-weight: 700;
+}
+
+.log-json-msg {
+  color: var(--text);
+  line-height: 1.25;
+}
+
+.log-json-ctx {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.log-json-run {
+  border-left: 4px solid #2ea043;
+  background: #0f2417;
+  color: #9be9a8;
+  border-radius: 6px;
+  padding: 5px 7px;
+  font-size: 0.76rem;
+}
+
+.log-json-run.end {
+  border-left-color: #d29922;
+  background: #2a1f0f;
+  color: #f2cc60;
+}
+
+@media (max-width: 1100px) {
+  .log-json-entry {
+    grid-template-columns: 150px 52px 108px minmax(0, 1fr);
+  }
 }
 
 .audio-main {

@@ -1786,16 +1786,48 @@ def api_logs() -> list[str]:
     if not LOG_DIR.exists():
         return []
 
+    json_logs = sorted([p.name for p in LOG_DIR.glob("*.log.json")])
     html_logs = sorted([p.name for p in LOG_DIR.glob("*.log.html")])
     text_logs = sorted([p.name for p in LOG_DIR.glob("*.log")])
 
-    # HTML-Logs bevorzugen. Falls zu einer .log auch eine .log.html existiert,
-    # wird nur die HTML-Variante in der Auswahl angezeigt.
+    # JSON-Logs bevorzugen. Falls zu einer .log auch eine .log.json/.log.html existiert,
+    # wird nur die bevorzugte Variante in der Auswahl angezeigt.
+    json_backing_logs = {name[:-5] for name in json_logs}  # strip trailing ".json"
     html_backing_logs = {name[:-5] for name in html_logs}  # strip trailing ".html"
     merged: list[str] = []
-    merged.extend(html_logs)
-    merged.extend([name for name in text_logs if name not in html_backing_logs])
+    merged.extend(json_logs)
+    merged.extend([name for name in html_logs if name[:-5] not in json_backing_logs])
+    merged.extend([name for name in text_logs if name not in json_backing_logs and name not in html_backing_logs])
     return sorted(merged, reverse=True)
+
+
+@app.get("/api/logs/json")
+def api_log_json(file: str, lines: int = 300) -> dict:
+    target = (LOG_DIR / file).resolve()
+    root = LOG_DIR.resolve()
+    file_l = str(file).lower()
+
+    if not str(target).startswith(str(root)):
+        raise HTTPException(status_code=400, detail="Ungultiger Dateiname")
+    if not target.exists() or not target.is_file():
+        raise HTTPException(status_code=404, detail="Datei nicht gefunden")
+    if not file_l.endswith(".log.json"):
+        raise HTTPException(status_code=400, detail="Bitte .log.json Datei angeben")
+
+    entries: list[dict] = []
+    for raw_line in target.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        try:
+            obj = json.loads(line)
+        except Exception:
+            continue
+        if isinstance(obj, dict):
+            entries.append(obj)
+
+    tail = entries[-max(1, min(lines, 3000)) :]
+    return {"file": file, "entries": tail}
 
 
 @app.get("/api/logs/content")
@@ -1805,6 +1837,8 @@ def api_log_content(file: str, lines: int = 300) -> dict:
         raise HTTPException(status_code=400, detail="Ungultiger Dateiname")
     if not target.exists() or not target.is_file():
         raise HTTPException(status_code=404, detail="Datei nicht gefunden")
+    if str(file).lower().endswith(".json"):
+        raise HTTPException(status_code=400, detail="JSON-Logs ueber /api/logs/json laden")
     if str(file).lower().endswith(".html"):
         raise HTTPException(status_code=400, detail="HTML-Logs ueber /api/logs/raw laden")
 
@@ -1823,10 +1857,15 @@ def api_log_raw(file: str):
         raise HTTPException(status_code=400, detail="Ungultiger Dateiname")
     if not target.exists() or not target.is_file():
         raise HTTPException(status_code=404, detail="Datei nicht gefunden")
-    if not (file_l.endswith(".log") or file_l.endswith(".log.html")):
+    if not (file_l.endswith(".log") or file_l.endswith(".log.html") or file_l.endswith(".log.json")):
         raise HTTPException(status_code=400, detail="Dateityp nicht erlaubt")
 
-    media = "text/html" if file_l.endswith(".html") else "text/plain"
+    if file_l.endswith(".html"):
+        media = "text/html"
+    elif file_l.endswith(".json"):
+        media = "application/json"
+    else:
+        media = "text/plain"
     return FileResponse(target, media_type=media)
 
 
