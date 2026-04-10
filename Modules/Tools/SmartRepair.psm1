@@ -565,20 +565,31 @@ function Invoke-SmartRepair {
     Write-SR "[ 12 / 22 ]  Kritische Windows-Dienste" "Header"
 
     try {
+        # AllowStopped = $true  → Dienst darf gestoppt sein (On-Demand/Trigger),
+        #                          nur Disabled ist ein Fehler.
+        # AllowStopped = $false → Dienst muss laufen.
         $criticalServices = @(
-            @{ Name = 'wuauserv';  Display = 'Windows Update' },
-            @{ Name = 'CryptSvc';  Display = 'Kryptografiedienste' },
-            @{ Name = 'WinDefend'; Display = 'Windows Defender' },
-            @{ Name = 'EventLog';  Display = 'Windows-Ereignisprotokoll' },
-            @{ Name = 'LanmanServer'; Display = 'Server (Datei-/Druckerfreigabe)' }
+            @{ Name = 'wuauserv';     Display = 'Windows Update';                   AllowStopped = $true  },
+            @{ Name = 'CryptSvc';     Display = 'Kryptografiedienste';              AllowStopped = $false },
+            @{ Name = 'WinDefend';    Display = 'Windows Defender';                 AllowStopped = $false },
+            @{ Name = 'EventLog';     Display = 'Windows-Ereignisprotokoll';        AllowStopped = $false },
+            @{ Name = 'LanmanServer'; Display = 'Server (Datei-/Druckerfreigabe)'; AllowStopped = $true  }
         )
         $stoppedServices = [System.Collections.Generic.List[string]]::new()
 
         foreach ($svc in $criticalServices) {
             $s = Get-Service -Name $svc.Name -ErrorAction SilentlyContinue
-            if (-not $s -or $s.Status -ne 'Running') {
+            if (-not $s) {
                 $stoppedServices.Add($svc.Display)
-                Write-SR "     ✗  $($svc.Display) – gestoppt!" "Error"
+                Write-SR "     ✗  $($svc.Display) – Dienst nicht gefunden!" "Error"
+            } elseif ($s.Status -ne 'Running') {
+                if ($svc.AllowStopped -and $s.StartType -ne 'Disabled') {
+                    # Gestoppt, aber nicht deaktiviert → On-Demand, ist normal
+                    Write-SR "     ✓  $($svc.Display) – bereit (On-Demand)" "Success"
+                } else {
+                    $stoppedServices.Add($svc.Display)
+                    Write-SR "     ✗  $($svc.Display) – gestoppt$(if ($s.StartType -eq 'Disabled') { ' (deaktiviert)' })!" "Error"
+                }
             } else {
                 Write-SR "     ✓  $($svc.Display) – läuft" "Success"
             }
