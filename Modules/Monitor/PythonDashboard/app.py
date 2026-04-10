@@ -1709,13 +1709,27 @@ def api_audio_devices() -> dict:
 @app.post("/api/audio/default-device")
 def api_audio_default_device(payload: dict | None = None) -> dict:
     target_id = str((payload or {}).get("device_id") or "").strip()
+    device_kind = str((payload or {}).get("device_kind") or "output").strip().lower()
+    if device_kind not in {"output", "input"}:
+        device_kind = "output"
+
+    if not target_id:
+        return {
+            "success": False,
+            "message": "Keine Device-ID uebergeben.",
+            "output": "",
+            "active_output": None,
+            "active_input": None,
+        }
+
     ok, out = set_default_audio_device(target_id)
     updated = get_audio_devices()
     return {
         "success": ok,
-        "message": "Standard-Ausgabegeraet umgeschaltet." if ok else "Umschalten fehlgeschlagen.",
+        "message": ("Standard-Mikrofon umgeschaltet." if device_kind == "input" else "Standard-Ausgabegeraet umgeschaltet.") if ok else "Umschalten fehlgeschlagen.",
         "output": out,
         "active_output": updated.get("active_output"),
+        "active_input": updated.get("active_input"),
     }
 
 

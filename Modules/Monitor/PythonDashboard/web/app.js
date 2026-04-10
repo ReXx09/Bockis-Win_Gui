@@ -2155,22 +2155,23 @@ function resolveDeviceNameById(id) {
   return dev ? dev.name : '(Unbekanntes Geraet)';
 }
 
-async function setDefaultAudioDevice(deviceId, deviceName = '') {
+async function setDefaultAudioDevice(deviceId, deviceName = '', deviceKind = 'output') {
   if (!deviceId) {
-    audioMsg.textContent = 'Kein Ausgabegeraet ausgewaehlt.';
+    audioMsg.textContent = deviceKind === 'input' ? 'Kein Mikrofon ausgewaehlt.' : 'Kein Ausgabegeraet ausgewaehlt.';
     return false;
   }
   try {
     const d = await jsonFetch('/api/audio/default-device', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ device_id: deviceId }),
+      body: JSON.stringify({ device_id: deviceId, device_kind: deviceKind }),
     });
     if (!d.success) {
       audioMsg.textContent = `Umschalten fehlgeschlagen: ${d.output || d.message || 'Unbekannter Fehler'}`;
       return false;
     }
-    audioMsg.textContent = `Umschaltung erfolgreich: ${deviceName || d.active_output || 'Neues Standardgeraet aktiv'}`;
+    const activeName = deviceKind === 'input' ? (d.active_input || '') : (d.active_output || '');
+    audioMsg.textContent = `Umschaltung erfolgreich: ${deviceName || activeName || 'Neues Standardgeraet aktiv'}`;
     await refreshAudio();
     return true;
   } catch (err) {
@@ -2486,7 +2487,13 @@ function renderAudioDevicesList(activeOutput = '', activeInput = '', routingMess
       <div class="audio-device-item${dev.is_active_output || dev.is_active_input ? ' active' : ''}">
         <span>${dev.name} <small class="muted">${dev.kind === 'input' ? 'Mikrofon' : 'Ausgabe'}</small></span>
         <div class="row">
-          ${dev.kind === 'input' ? '<span class="muted">Nur Anzeige</span>' : dev.is_active_output ? '<strong>Standard Ausgabe</strong>' : `<button class="btn" data-switch-device="${dev.id}" data-switch-name="${dev.name}">Als Standard</button>`}
+          ${dev.kind === 'input'
+            ? (dev.is_active_input
+                ? '<strong>Standard Mikrofon</strong>'
+                : `<button class="btn" data-switch-device="${dev.id}" data-switch-name="${dev.name}" data-switch-kind="input">Als Standard</button>`)
+            : (dev.is_active_output
+                ? '<strong>Standard Ausgabe</strong>'
+                : `<button class="btn" data-switch-device="${dev.id}" data-switch-name="${dev.name}" data-switch-kind="output">Als Standard</button>`)}
         </div>
       </div>
     `).join('')}
@@ -2497,7 +2504,8 @@ function renderAudioDevicesList(activeOutput = '', activeInput = '', routingMess
     btn.addEventListener('click', async () => {
       const id = btn.dataset.switchDevice || '';
       const name = btn.dataset.switchName || '';
-      await setDefaultAudioDevice(id, name);
+      const kind = btn.dataset.switchKind || 'output';
+      await setDefaultAudioDevice(id, name, kind);
     });
   });
 
