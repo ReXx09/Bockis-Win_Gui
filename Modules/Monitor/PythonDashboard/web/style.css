@@ -966,6 +966,10 @@ input, select {
   color: #f87171;
 }
 
+.audio-route-mute-btn.is-pending {
+  opacity: 0.6;
+}
+
 .audio-route-session-level {
   color: var(--text);
   font-size: 0.74rem;

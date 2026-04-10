@@ -271,6 +271,8 @@ let hiddenAudioDeviceIds = new Set();
 let audioSwitchInFlight = false;
 let audioEditMode = false;
 let lastAudioDeviceSummary = { activeOutput: '', activeInput: '', routingMessage: '' };
+let routeMuteInFlight = new Set();
+let routeSessionRefreshTimer = null;
 let pendingThemeId = 'ozean';
 let availableTools = [];
 let customLaunchers = [];
@@ -2698,6 +2700,37 @@ function groupAudioSessionsByProcess(sessions) {
     .sort((a, b) => a.app.localeCompare(b.app, 'de') || a.pid - b.pid);
 }
 
+function scheduleRouteSessionRefresh(delayMs = 500) {
+  if (routeSessionRefreshTimer) {
+    clearTimeout(routeSessionRefreshTimer);
+  }
+  routeSessionRefreshTimer = setTimeout(() => {
+    loadAudioSessions().catch(() => {});
+    routeSessionRefreshTimer = null;
+  }, Math.max(120, delayMs));
+}
+
+function setRouteSessionMuteUi(controlsEl, muted, pending = false) {
+  if (!controlsEl) return;
+
+  const muteBtn = controlsEl.querySelector('[data-route-session-mute]');
+  const badge = controlsEl.querySelector('.audio-route-session-badge');
+
+  if (muteBtn) {
+    muteBtn.classList.toggle('is-muted', !!muted);
+    muteBtn.classList.toggle('is-pending', !!pending);
+    muteBtn.title = muted ? 'Unmute' : 'Mute';
+    muteBtn.dataset.routeSessionState = muted ? '0' : '1';
+    muteBtn.disabled = !!pending;
+  }
+
+  if (badge) {
+    badge.classList.remove('is-active', 'is-muted');
+    badge.classList.add(muted ? 'is-muted' : 'is-active');
+    badge.textContent = muted ? 'Stumm' : 'Aktiv';
+  }
+}
+
 function renderOpenProgramSuggestions() {
   if (openProgramSelect) {
     const options = ['<option value="">Offene Programme auswaehlen...</option>']
@@ -2912,11 +2945,25 @@ function renderUserProgramRoutes() {
       const pid = parseInt(btn.dataset.routeSessionPid, 10);
       const state = parseInt(btn.dataset.routeSessionState, 10) || 0;
       if (!Number.isInteger(pid)) return;
+
+      if (routeMuteInFlight.has(pid)) return;
+
+      const controlsEl = btn.closest('[data-route-session-controls]');
+      const currentMuted = (state === 0);
+      const nextMuted = (state === 1);
+
+      routeMuteInFlight.add(pid);
+      setRouteSessionMuteUi(controlsEl, nextMuted, true);
+
       try {
         await jsonFetch(`/api/audio/session/${pid}/mute/${state}`, { method: 'POST' });
-        await loadAudioSessions();
+        setRouteSessionMuteUi(controlsEl, nextMuted, false);
+        scheduleRouteSessionRefresh(450);
       } catch (err) {
+        setRouteSessionMuteUi(controlsEl, currentMuted, false);
         audioMsg.textContent = `Session-Mute Fehler: ${err.message}`;
+      } finally {
+        routeMuteInFlight.delete(pid);
       }
     });
   });
