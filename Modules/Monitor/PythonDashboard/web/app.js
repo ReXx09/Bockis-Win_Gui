@@ -2902,9 +2902,15 @@ function renderUserProgramRoutes() {
       route.deviceId = favId;
       route.deviceName = resolveDeviceNameById(favId);
       saveUserAudioRoutes(all);
-      await setDefaultAudioDevice(favId, route.deviceName);
-      // Immediately refresh sessions to pick up the new routing
-      await loadAudioSessions();
+      btn.disabled = true;
+      try {
+        await setDefaultAudioDevice(favId, route.deviceName);
+        // Wait for Windows to propagate the device change before querying sessions
+        await delay(600);
+        await loadAudioSessions();
+      } finally {
+        btn.disabled = false;
+      }
       renderUserProgramRoutes();
     });
   });
