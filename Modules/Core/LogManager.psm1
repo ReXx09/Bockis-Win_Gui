@@ -320,7 +320,9 @@ function Write-ToolLogInternal {
                                 }
                                 $tsHtml = if ($timestamp) { $timestamp } else { Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff' }
                                 $msgHtml = [System.Security.SecurityElement]::Escape([string]$Message)
-                                $ctxHtml = [System.Security.SecurityElement]::Escape([string]$mergedContext)
+                                # Leere/bedeutungslose Kontextfelder (Wert - oder none) aus HTML herausfiltern
+                                $ctxFiltered = ($mergedContext -split ' \| ' | Where-Object { $_ -notmatch '=-$' -and $_ -notmatch '=none$' }) -join ' | '
+                                $ctxHtml = [System.Security.SecurityElement]::Escape($ctxFiltered)
                                 $tagHtml = [System.Security.SecurityElement]::Escape($tagField)
 
                                 $htmlLines = @()
