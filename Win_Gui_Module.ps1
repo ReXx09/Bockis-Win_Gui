@@ -220,6 +220,74 @@ function global:Write-ToolLog {
                 if ($runFooter) { $payloadLines += $runFooter }
                 $logPayload = ($payloadLines -join "`r`n") + "`r`n"
                 [System.IO.File]::AppendAllText($logPath, $logPayload, [System.Text.Encoding]::UTF8)
+
+                                # Zusaetzlich farbige HTML-Ansicht schreiben (lesefreundlich fuer Nutzer)
+                                $htmlPath = Join-Path $logDirectory "$sanitizedToolName.log.html"
+                                if (-not (Test-Path $htmlPath)) {
+                                        $htmlTitle = [System.Security.SecurityElement]::Escape("$sanitizedToolName Log")
+                                        $htmlHeader = @"
+<!doctype html>
+<html lang="de">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>$htmlTitle</title>
+    <style>
+        body { font-family: Consolas, 'Courier New', monospace; background: #0d1117; color: #c9d1d9; margin: 0; }
+        .wrap { max-width: 1300px; margin: 0 auto; padding: 14px; }
+        .head { font-size: 14px; font-weight: 700; margin-bottom: 10px; color: #f0f6fc; }
+        .entry { display: grid; grid-template-columns: 210px 70px 150px 1fr; gap: 8px; padding: 6px 8px; border: 1px solid #30363d; border-radius: 6px; margin-bottom: 6px; background: #161b22; }
+        .t { color: #8b949e; }
+        .lvl { font-weight: 700; text-align: center; border-radius: 4px; padding: 2px 4px; }
+        .tag { color: #79c0ff; font-weight: 700; }
+        .msg { color: #e6edf3; }
+        .ctx { color: #8b949e; margin-top: 2px; font-size: 12px; }
+        .run { padding: 6px 8px; margin: 10px 0 6px; border-left: 4px solid #2ea043; background: #0f2417; color: #9be9a8; }
+        .run.end { border-left-color: #d29922; background: #2a1f0f; color: #f2cc60; }
+        .info { background: #0b2a4a; color: #79c0ff; }
+        .warn { background: #3b2b0a; color: #f2cc60; }
+        .err  { background: #3d1515; color: #ffa198; }
+        .ok   { background: #0f2417; color: #9be9a8; }
+        .dbg  { background: #21262d; color: #8b949e; }
+        .crt  { background: #4c0f24; color: #ff7b72; }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <div class="head">$htmlTitle</div>
+"@
+                                        [System.IO.File]::WriteAllText($htmlPath, $htmlHeader, [System.Text.Encoding]::UTF8)
+                                }
+
+                                $levelClass = switch ($Level) {
+                                        'Information' { 'info' }
+                                        'Warning'     { 'warn' }
+                                        'Error'       { 'err' }
+                                        'Success'     { 'ok' }
+                                        'Debug'       { 'dbg' }
+                                        'Critical'    { 'crt' }
+                                        default       { 'info' }
+                                }
+                                $tsHtml = if ($timestamp) { $timestamp } else { Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff' }
+                                $msgHtml = [System.Security.SecurityElement]::Escape([string]$Message)
+                                $ctxHtml = [System.Security.SecurityElement]::Escape([string]$Context)
+                                $tagHtml = [System.Security.SecurityElement]::Escape($tagField)
+
+                                $htmlLines = @()
+                                if ($runHeader) {
+                                        $runHeaderHtml = [System.Security.SecurityElement]::Escape($runHeader)
+                                        $htmlLines += "<div class='run'>$runHeaderHtml</div>"
+                                }
+
+                                $ctxBlock = if ($ctxHtml) { "<div class='ctx'>$ctxHtml</div>" } else { '' }
+                                $htmlLines += "<div class='entry'><div class='t'>$tsHtml</div><div class='lvl $levelClass'>$levelPrefix</div><div class='tag'>$tagHtml</div><div class='msg'>$msgHtml$ctxBlock</div></div>"
+
+                                if ($runFooter) {
+                                        $runFooterHtml = [System.Security.SecurityElement]::Escape($runFooter)
+                                        $htmlLines += "<div class='run end'>$runFooterHtml</div>"
+                                }
+
+                                [System.IO.File]::AppendAllText($htmlPath, (($htmlLines -join "`r`n") + "`r`n"), [System.Text.Encoding]::UTF8)
                 break
             } catch {
                 $retryCount++
