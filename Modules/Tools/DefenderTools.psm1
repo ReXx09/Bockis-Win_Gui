@@ -14,8 +14,9 @@ function Start-WindowsDefender {
     # outputBox zurücksetzen
     $outputBox.Clear()
     
+    $runStart = Get-Date
     # In Log-Datei und Datenbank schreiben, dass Windows Defender gestartet wird
-    Write-ToolLog -ToolName "WindowsDefender" -Message "Windows Defender Status-Check wird gestartet" -OutputBox $outputBox -Style 'Action' -Level "Information" -SaveToDatabase
+    Write-ToolLog -ToolName "WindowsDefender" -Message "Windows Defender Status-Check wird gestartet" -OutputBox $outputBox -Style 'Action' -Level "Information" -SaveToDatabase -Context "Operation=StatusCheck | Command=Get-MpComputerStatus | Process=MsMpEng.exe"
     
     # PowerShell-Fenster aktivieren und Konsole leeren
     try {
@@ -369,9 +370,13 @@ function Start-WindowsDefender {
         # Status setzen basierend auf Scan-Erfolg
         if ($scanSuccessful) {
             Update-ProgressStatus -StatusText "Windows Defender Scan abgeschlossen" -ProgressValue 100 -TextColor ([System.Drawing.Color]::LimeGreen) -progressBarParam $progressBar
+            $duration = '{0:mm\:ss}' -f ((Get-Date) - $runStart)
+            Write-ToolLog -ToolName "WindowsDefender" -Message "Windows Defender Scan erfolgreich abgeschlossen" -OutputBox $null -Level "Success" -SaveToDatabase -Context "Operation=QuickScan | Command=Start-MpScan -ScanType QuickScan | Process=MsMpEng.exe | Status=OK | Duration=$duration"
         }
         else {
             Update-ProgressStatus -StatusText "Scan fehlgeschlagen - siehe Details oben" -ProgressValue 100 -TextColor ([System.Drawing.Color]::Orange) -progressBarParam $progressBar
+            $duration = '{0:mm\:ss}' -f ((Get-Date) - $runStart)
+            Write-ToolLog -ToolName "WindowsDefender" -Message "Windows Defender Scan nicht erfolgreich abgeschlossen" -OutputBox $null -Level "Warning" -SaveToDatabase -Context "Operation=QuickScan | Command=Start-MpScan -ScanType QuickScan | Process=MsMpEng.exe | Status=WARN | Duration=$duration"
         }
     }
     catch {
@@ -628,7 +633,7 @@ function Start-DefenderOfflineScan {
     $outputBox.Clear()
     
     # In Log-Datei und Datenbank schreiben, dass der Offline-Scan gestartet wird
-    Write-ToolLog -ToolName "DefenderOfflineScan" -Message "Windows Defender Offline-Scan wird gestartet" -OutputBox $outputBox -Style 'Action' -Level "Information" -SaveToDatabase
+    Write-ToolLog -ToolName "DefenderOfflineScan" -Message "Windows Defender Offline-Scan wird gestartet" -OutputBox $outputBox -Style 'Action' -Level "Information" -SaveToDatabase -Context "Operation=OfflineScan | Command=MpCmdRun.exe -Scan -ScanType 3 | Process=MpCmdRun.exe"
     
     # PowerShell-Fenster aktivieren und Konsole leeren
     try {

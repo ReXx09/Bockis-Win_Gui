@@ -37,8 +37,9 @@ function Start-QuickMRT {
         Initialize-ProgressComponents -ProgressBar $progressBar -StatusLabel $null
     }
     
+    $runStart = Get-Date
     # In Log-Datei und Datenbank schreiben, dass der Scan startet
-    Write-ToolLog -ToolName "QuickMRT" -Message "Quick MRT Scan wird gestartet" -OutputBox $outputBox -Style 'Action' -Level "Information" -SaveToDatabase
+    Write-ToolLog -ToolName "QuickMRT" -Message "Quick MRT Scan wird gestartet" -OutputBox $outputBox -Style 'Action' -Level "Information" -SaveToDatabase -Context "Operation=QuickScan | Command=mrt.exe /Q | Process=mrt.exe"
     
     # Rahmen und Systeminformationen erstellen
     #$computerName = $env:COMPUTERNAME
@@ -302,7 +303,7 @@ function Start-QuickMRT {
         
         # Debug-Information in die Log-Datei schreiben
         try {
-            Write-ToolLog -ToolName "QuickMRT" -Message "Debug: MRT-Prozess beendet mit Exit-Code: $exitCode" -OutputBox $null -Level "Information" -SaveToDatabase
+            Write-ToolLog -ToolName "QuickMRT" -Message "Debug: MRT-Prozess beendet mit Exit-Code: $exitCode" -OutputBox $null -Level "Information" -SaveToDatabase -Context "Operation=QuickScan | Command=mrt.exe /Q | Process=mrt.exe | ExitCode=$exitCode"
         }
         catch {
             # Stille Fehlerbehandlung für Debug-Log
@@ -334,7 +335,8 @@ function Start-QuickMRT {
             # Versuche das Ergebnis zu loggen, merke dir den Erfolg
             $logSuccess = $false
             try {
-                $logSuccess = Write-ToolLog -ToolName "QuickMRT" -Message $resultMessage -OutputBox $outputBox -Style 'Action' -Level "Information" -SaveToDatabase
+                $duration = '{0:mm\:ss}' -f ((Get-Date) - $runStart)
+                $logSuccess = Write-ToolLog -ToolName "QuickMRT" -Message $resultMessage -OutputBox $outputBox -Style 'Action' -Level "Information" -SaveToDatabase -Context "Operation=QuickScan | Command=mrt.exe /Q | Process=mrt.exe | ExitCode=$exitCode | Duration=$duration"
             }
             catch {
                 $logSuccess = $false
@@ -376,7 +378,7 @@ function Start-QuickMRT {
             
             # Versuche trotzdem eine Nachricht zu loggen
             try {
-                Write-ToolLog -ToolName "QuickMRT" -Message "Quick MRT Scan abgeschlossen mit Fehler bei der Ergebnisprotokollierung: $_" -OutputBox $outputBox -Style 'Error' -Level "Error" -SaveToDatabase
+                Write-ToolLog -ToolName "QuickMRT" -Message "Quick MRT Scan abgeschlossen mit Fehler bei der Ergebnisprotokollierung: $_" -OutputBox $outputBox -Style 'Error' -Level "Error" -SaveToDatabase -Context "Operation=QuickScan | Command=mrt.exe /Q | Process=mrt.exe | ExitCode=$exitCode | Error=$_"
             }
             catch {
                 # Stille Fehlerbehandlung
@@ -655,8 +657,9 @@ function Start-FullMRT {
         Initialize-ProgressComponents -ProgressBar $progressBar -StatusLabel $null
     }
     
+    $runStart = Get-Date
     # In Log-Datei und Datenbank schreiben, dass der Full MRT Scan startet
-    Write-ToolLog -ToolName "FullMRT" -Message "Full MRT Scan wird gestartet" -OutputBox $outputBox -Style 'Action' -Level "Information" -SaveToDatabase
+    Write-ToolLog -ToolName "FullMRT" -Message "Full MRT Scan wird gestartet" -OutputBox $outputBox -Style 'Action' -Level "Information" -SaveToDatabase -Context "Operation=FullScan | Command=mrt.exe /F | Process=mrt.exe"
     
     # Essentielle Informationen sammeln
     #$computerName = $env:COMPUTERNAME
@@ -789,7 +792,8 @@ function Start-FullMRT {
     # Ergebnis in die Log-Datei schreiben
     try {
         # Debug-Eintrag für Nachverfolgung (nur in Log-Datei, nicht in UI)
-        Write-ToolLog -ToolName "FullMRT" -Message "Debug: MRT Full-Scan beendet mit Exit-Code: $exitCode" -OutputBox $null -Level "Information" -SaveToDatabase
+        $duration = '{0:mm\:ss}' -f ((Get-Date) - $runStart)
+        Write-ToolLog -ToolName "FullMRT" -Message "Debug: MRT Full-Scan beendet mit Exit-Code: $exitCode" -OutputBox $null -Level "Information" -SaveToDatabase -Context "Operation=FullScan | Command=mrt.exe /F | Process=mrt.exe | ExitCode=$exitCode | Duration=$duration"
         
         # Ergebnismeldung basierend auf Exit-Code generieren
         $resultMessage = switch ($exitCode) {
@@ -808,7 +812,7 @@ function Start-FullMRT {
         }
         
         # Ergebnis in die Log-Datei schreiben
-        Write-ToolLog -ToolName "FullMRT" -Message $resultMessage -OutputBox $null -Level "Information" -SaveToDatabase
+        Write-ToolLog -ToolName "FullMRT" -Message $resultMessage -OutputBox $null -Level "Information" -SaveToDatabase -Context "Operation=FullScan | Command=mrt.exe /F | Process=mrt.exe | ExitCode=$exitCode | Duration=$duration"
         
         # Timestamp für Log-Dateien
         $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
@@ -1013,8 +1017,9 @@ function Start-MemoryDiagnostic {
     # 3 Sekunden warten vor dem Start
     Start-Sleep -Seconds 3
 
+    $runStart = Get-Date
     # In Log-Datei und Datenbank schreiben, dass Memory Diagnostic gestartet wird
-    Write-ToolLog -ToolName "MemoryDiagnostic" -Message "Windows Memory Diagnostic wird gestartet" -OutputBox $outputBox -Style 'Action' -Level "Information" -SaveToDatabase
+    Write-ToolLog -ToolName "MemoryDiagnostic" -Message "Windows Memory Diagnostic wird gestartet" -OutputBox $outputBox -Style 'Action' -Level "Information" -SaveToDatabase -Context "Operation=ScheduleMdsched | Command=mdsched.exe | Process=mdsched.exe"
     
     $outputBox.Clear()
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Action'
@@ -1131,8 +1136,9 @@ function Start-MemoryDiagnostic {
                 }
             }
             
-            # Log-Eintrag für Abbruch
-            Write-ToolLog -ToolName "MemoryDiagnostic" -Message "Memory Diagnostic wurde durch Cancel-Button abgebrochen" -OutputBox $outputBox -Style 'Alert' -Level "Warning" -SaveToDatabase
+            # Log-Eintrag für Abbruch (null exitCode)
+            $duration = '{0:mm\:ss}' -f ((Get-Date) - $runStart)
+            Write-ToolLog -ToolName "MemoryDiagnostic" -Message "Memory Diagnostic wurde durch Cancel-Button abgebrochen" -OutputBox $outputBox -Style 'Alert' -Level "Warning" -SaveToDatabase -Context "Operation=ScheduleMdsched | Command=mdsched.exe | Process=mdsched.exe | ExitCode=null | Duration=$duration"
         }
         else {
             switch ($exitCode) {
@@ -1169,7 +1175,8 @@ function Start-MemoryDiagnostic {
                     }
                 
                     # Log-Eintrag für erfolgreiche Planung
-                    Write-ToolLog -ToolName "MemoryDiagnostic" -Message "Memory Diagnostic erfolgreich geplant" -OutputBox $outputBox -Style 'Success' -Level "Information" -SaveToDatabase
+                    $duration = '{0:mm\:ss}' -f ((Get-Date) - $runStart)
+                    Write-ToolLog -ToolName "MemoryDiagnostic" -Message "Memory Diagnostic erfolgreich geplant" -OutputBox $outputBox -Style 'Success' -Level "Information" -SaveToDatabase -Context "Operation=ScheduleMdsched | Command=mdsched.exe | Process=mdsched.exe | ExitCode=$exitCode | Duration=$duration"
                 } { $_ -in @(1, 2, 3, 1223, -1073741510, -1073741819, 1, 0xC000013A, 0xC0000005) } {
                     # Verschiedene Exit-Codes für Abbruch/Cancel
                     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Alert'
@@ -1189,7 +1196,8 @@ function Start-MemoryDiagnostic {
                     }
                 
                     # Log-Eintrag für Abbruch
-                    Write-ToolLog -ToolName "MemoryDiagnostic" -Message "Memory Diagnostic wurde durch Cancel-Button abgebrochen (Exit-Code: $exitCode)" -OutputBox $outputBox -Style 'Alert' -Level "Warning" -SaveToDatabase
+                    $duration = '{0:mm\:ss}' -f ((Get-Date) - $runStart)
+                    Write-ToolLog -ToolName "MemoryDiagnostic" -Message "Memory Diagnostic wurde durch Cancel-Button abgebrochen (Exit-Code: $exitCode)" -OutputBox $outputBox -Style 'Alert' -Level "Warning" -SaveToDatabase -Context "Operation=ScheduleMdsched | Command=mdsched.exe | Process=mdsched.exe | ExitCode=$exitCode | Duration=$duration"
                 }
                 default {
                     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
@@ -1203,7 +1211,8 @@ function Start-MemoryDiagnostic {
                     Write-Host "`n" + ("═" * 70) -ForegroundColor Red
                     Write-Host
                     # Log-Eintrag für unerwarteten Exit-Code
-                    Write-ToolLog -ToolName "MemoryDiagnostic" -Message "Unerwarteter Exit-Code: $exitCode" -OutputBox $outputBox -Style 'Error' -Level "Warning" -SaveToDatabase
+                    $duration = '{0:mm\:ss}' -f ((Get-Date) - $runStart)
+                    Write-ToolLog -ToolName "MemoryDiagnostic" -Message "Unerwarteter Exit-Code: $exitCode" -OutputBox $outputBox -Style 'Error' -Level "Warning" -SaveToDatabase -Context "Operation=ScheduleMdsched | Command=mdsched.exe | Process=mdsched.exe | ExitCode=$exitCode | Duration=$duration"
                 }
             }
         } # Ende der if-else Struktur für null-Check
@@ -1212,9 +1221,9 @@ function Start-MemoryDiagnostic {
         $errorMessage = "Fehler beim Starten des Memory Diagnostics: $_"
         Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
         $outputBox.AppendText("[-] $errorMessage`r`n")
-        
+        $duration = '{0:mm\:ss}' -f ((Get-Date) - $runStart)
         # Log-Eintrag für Fehler
-        Write-ToolLog -ToolName "MemoryDiagnostic" -Message $errorMessage -OutputBox $null -Style 'Error' -Level "Error" -SaveToDatabase
+        Write-ToolLog -ToolName "MemoryDiagnostic" -Message $errorMessage -OutputBox $null -Style 'Error' -Level "Error" -SaveToDatabase -Context "Operation=ScheduleMdsched | Command=mdsched.exe | Process=mdsched.exe | ExitCode=$exitCode | Error=$_ | Duration=$duration"
     }
     finally {
         # ProgressBar NICHT zurücksetzen, damit die Abbruch-/Erfolgs-Meldung sichtbar bleibt
@@ -1314,8 +1323,9 @@ function Start-SFCCheck {
     # Stelle sicher, dass die ProgressBar initialisiert ist
     Ensure-ProgressBarInitialized -ProgressBar $progressBar
     
+    $runStart = Get-Date
     # In Log-Datei und Datenbank schreiben, dass der Scan startet
-    Write-ToolLog -ToolName "SFCCheck" -Message "System File Checker wird gestartet" -OutputBox $outputBox -Style 'Action' -Level "Information" -SaveToDatabase
+    Write-ToolLog -ToolName "SFCCheck" -Message "System File Checker wird gestartet" -OutputBox $outputBox -Style 'Action' -Level "Information" -SaveToDatabase -Context "Operation=Scannow | Command=sfc.exe /scannow | Process=sfc.exe"
     
     # Rahmen und Systeminformationen erstellen
     #$computerName = $env:COMPUTERNAME
@@ -1596,7 +1606,7 @@ function Start-SFCCheck {
                 # Ergebnis in die Log-Datei schreiben
                 $logSuccess = $false
                 try {
-                    $logSuccess = Write-ToolLog -ToolName "SFCCheck" -Message $resultMessage -OutputBox $outputBox -Style 'Success' -Level "Success" -SaveToDatabase
+                    $logSuccess = Write-ToolLog -ToolName "SFCCheck" -Message $resultMessage -OutputBox $outputBox -Style 'Success' -Level "Success" -SaveToDatabase -Context "Operation=Scannow | Command=sfc.exe /scannow | Process=sfc.exe | ExitCode=$($process.ExitCode) | Duration=$formattedTotalTime"
                 }
                 catch {
                     $logSuccess = $false
@@ -1644,7 +1654,7 @@ function Start-SFCCheck {
                 # Ergebnis in die Log-Datei schreiben
                 $logSuccess = $false
                 try {
-                    $logSuccess = Write-ToolLog -ToolName "SFCCheck" -Message $resultMessage -OutputBox $outputBox -Style 'Warning' -Level "Warning" -SaveToDatabase
+                    $logSuccess = Write-ToolLog -ToolName "SFCCheck" -Message $resultMessage -OutputBox $outputBox -Style 'Warning' -Level "Warning" -SaveToDatabase -Context "Operation=Scannow | Command=sfc.exe /scannow | Process=sfc.exe | ExitCode=$($process.ExitCode) | Duration=$formattedTotalTime"
                 }
                 catch {
                     $logSuccess = $false
@@ -1706,7 +1716,7 @@ function Start-SFCCheck {
                 # Ergebnis in die Log-Datei schreiben
                 $logSuccess = $false
                 try {
-                    $logSuccess = Write-ToolLog -ToolName "SFCCheck" -Message $resultMessage -OutputBox $outputBox -Style 'Error' -Level "Error" -SaveToDatabase
+                    $logSuccess = Write-ToolLog -ToolName "SFCCheck" -Message $resultMessage -OutputBox $outputBox -Style 'Error' -Level "Error" -SaveToDatabase -Context "Operation=Scannow | Command=sfc.exe /scannow | Process=sfc.exe | ExitCode=$($process.ExitCode) | Duration=$formattedTotalTime"
                 }
                 catch {
                     $logSuccess = $false
@@ -1772,7 +1782,7 @@ function Start-SFCCheck {
                 # Ergebnis in die Log-Datei schreiben
                 $logSuccess = $false
                 try {
-                    $logSuccess = Write-ToolLog -ToolName "SFCCheck" -Message $resultMessage -OutputBox $outputBox -Style 'Error' -Level "Error" -SaveToDatabase
+                    $logSuccess = Write-ToolLog -ToolName "SFCCheck" -Message $resultMessage -OutputBox $outputBox -Style 'Error' -Level "Error" -SaveToDatabase -Context "Operation=Scannow | Command=sfc.exe /scannow | Process=sfc.exe | ExitCode=$($process.ExitCode) | Duration=$formattedTotalTime"
                 }
                 catch {
                     $logSuccess = $false

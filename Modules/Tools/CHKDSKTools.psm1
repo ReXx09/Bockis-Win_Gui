@@ -23,8 +23,9 @@ function Start-CHKDSK {
         Initialize-ProgressComponents -ProgressBar $progressBar -StatusLabel $null
     }
     
+    $runStart = Get-Date
     # In Log-Datei und Datenbank schreiben, dass CHKDSK gestartet wird
-    Write-ToolLog -ToolName "CHKDSK" -Message "CHKDSK wird gestartet" -OutputBox $outputBox -Style 'Action' -Level "Information" -SaveToDatabase
+    Write-ToolLog -ToolName "CHKDSK" -Message "CHKDSK wird gestartet" -OutputBox $outputBox -Style 'Action' -Level "Information" -SaveToDatabase -Context "Operation=DiskCheck | Command=chkdsk.exe | Process=chkdsk.exe"
     
     # Rahmen und Systeminformationen erstellen
     #$computerName = $env:COMPUTERNAME
@@ -650,6 +651,7 @@ function Start-CHKDSK {
                 Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
                 $outputBox.AppendText("____________________________________________________`r`n`r`n")
                 Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
+                Write-ToolLog -ToolName "CHKDSK" -Message "CHKDSK für Laufwerk $drive beim nächsten Neustart geplant" -OutputBox $null -Level "Information" -SaveToDatabase -Context "Operation=DiskCheck | Command=chkdsk.exe $drive$chkdskParams | Process=chkdsk.exe | Drive=$drive | Status=RestartScheduled | Duration=${formattedTime}s"
             } catch {
                 $outputBox.AppendText("Fehler beim Setzen des CHKDSK-Neustarts: $_`r`n")
                 # Alternativer Ansatz mit direktem Befehl
@@ -716,6 +718,7 @@ function Start-CHKDSK {
                         
                 # Farbe zurücksetzen
                 Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
+                Write-ToolLog -ToolName "CHKDSK" -Message "CHKDSK Laufwerk $drive abgeschlossen: $exitCodeMessage" -OutputBox $null -Level $(if ($exitCode -le 1) { 'Success' } elseif ($exitCode -eq 2) { 'Warning' } else { 'Error' }) -SaveToDatabase -Context "Operation=DiskCheck | Command=chkdsk.exe $drive$chkdskParams | Process=chkdsk.exe | Drive=$drive | ExitCode=$exitCode | Duration=${formattedTime}s"
             } catch {
                 # Stopwatch anhalten auch bei Fehlern
                 $driveStopwatch.Stop()
@@ -728,6 +731,7 @@ function Start-CHKDSK {
                 Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
                 $outputBox.AppendText("____________________________________________________`r`n`r`n")
                 Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Default'
+                Write-ToolLog -ToolName "CHKDSK" -Message "CHKDSK Laufwerk $drive Fehler: $($_.Exception.Message)" -OutputBox $null -Level "Error" -SaveToDatabase -Context "Operation=DiskCheck | Command=chkdsk.exe $drive$chkdskParams | Process=chkdsk.exe | Drive=$drive | ExitCode=-1 | Error=$($_.Exception.Message) | Duration=${formattedTime}s"
             }
         }
     }
