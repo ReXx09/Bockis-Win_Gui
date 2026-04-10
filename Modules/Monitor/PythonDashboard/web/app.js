@@ -1197,7 +1197,8 @@ async function openLog(name) {
 function getDependencyAction(dep) {
   if (!dep) return null;
   const hasWinget = !!dep.WingetId;
-  const isPsModule = String(dep.Name || '').toLowerCase().includes('pswindowsupdate');
+  const isPsModule = String(dep.InstallerType || '').toLowerCase() === 'powershell-module'
+    || String(dep.Name || '').toLowerCase().includes('pswindowsupdate');
 
   if (!hasWinget && !isPsModule) return null;
   if (!dep.Found && dep.Available) return 'install';
@@ -1205,55 +1206,38 @@ function getDependencyAction(dep) {
   return null;
 }
 
-function renderDependencyStatus(data) {
-  if (!dependencySummary || !dependencyList) return;
+let dependencyExpanded = false;
 
-  if (!data?.available) {
-    dependencySummary.textContent = data?.message || 'Dependency-Check nicht verfuegbar.';
-    dependencyList.innerHTML = '<div class="audio-empty">Keine Dependency-Daten verfuegbar.</div>';
-    scheduleMasonryLayout(logsGrid);
-    return;
-  }
+function buildDependencyRows(deps) {
+  return deps.map((dep) => {
+    const action = getDependencyAction(dep);
+    const versionText = dep.Version || dep.AvailableVersion || '-';
+    const nextVersion = dep.UpdateAvailable && dep.AvailableVersion ? ` → ${dep.AvailableVersion}` : '';
+    const installerType = dep.InstallerType || (dep.WingetId ? 'winget' : '');
+    const moduleName = dep.ModuleName || '';
 
-  const deps = Array.isArray(data.dependencies) ? data.dependencies : [];
-  dependencySummary.textContent = data.all_satisfied
-    ? `Systemstatus ok | ${deps.length} Abhaengigkeiten geprueft`
-    : `Pruefung abgeschlossen | ${deps.length} Abhaengigkeiten | Eingriffe empfohlen`;
-
-  dependencyList.innerHTML = deps.length
-    ? `
-      <div class="dependency-table-head dependency-table-head-actions">
-        <span>Paket</span>
-        <span>Version</span>
-        <span>Status</span>
-        <span>Aktion</span>
+    return `
+      <div class="dependency-table-row dependency-table-row-actions dependency-${String(dep.StatusColor || '').toLowerCase()}">
+        <div class="dependency-col-name-wrap">
+          <strong class="dependency-col-name">${dep.Name || 'Unbekannt'}</strong>
+          <span class="muted dependency-col-description">${dep.Description || ''}</span>
+        </div>
+        <span class="dependency-col-installed">${versionText}${nextVersion}</span>
+        <span class="dependency-status">${dep.Status || '-'}</span>
+        <span class="dependency-col-action">${action ? `<button class="btn" data-dependency-action="${action}" data-winget-id="${dep.WingetId || ''}" data-dependency-name="${dep.Name || ''}" data-installer-type="${installerType}" data-module-name="${moduleName}">${action === 'upgrade' ? 'Update' : 'Installieren'}</button>` : ''}</span>
       </div>
-      ${deps.map((dep) => {
-        const action = getDependencyAction(dep);
-        const versionText = dep.Version || dep.AvailableVersion || '-';
-        const nextVersion = dep.UpdateAvailable && dep.AvailableVersion ? ` → ${dep.AvailableVersion}` : '';
-        return `
-          <div class="dependency-table-row dependency-table-row-actions dependency-${String(dep.StatusColor || '').toLowerCase()}">
-            <div class="dependency-col-name-wrap">
-              <strong class="dependency-col-name">${dep.Name || 'Unbekannt'}</strong>
-              <span class="muted dependency-col-description">${dep.Description || ''}</span>
-            </div>
-            <span class="dependency-col-installed">${versionText}${nextVersion}</span>
-            <span class="dependency-status">${dep.Status || '-'}</span>
-            <span class="dependency-col-action">${action ? `<button class="btn" data-dependency-action="${action}" data-winget-id="${dep.WingetId || ''}" data-dependency-name="${dep.Name || ''}" data-installer-type="${dep.WingetId ? 'winget' : 'powershell-module'}" data-module-name="${dep.WingetId ? '' : 'PSWindowsUpdate'}">${action === 'upgrade' ? 'Update' : 'Installieren'}</button>` : ''}</span>
-          </div>
-        `;
-      }).join('')}
-    `
-    : '<div class="audio-empty">Keine Dependency-Daten gefunden.</div>';
+    `;
+  }).join('');
+}
 
+function attachDependencyActionHandlers() {
   dependencyList.querySelectorAll('[data-dependency-action]').forEach((btn) => {
     btn.addEventListener('click', async () => {
       const action = btn.dataset.dependencyAction || 'install';
       const wingetId = btn.dataset.wingetId || '';
       const installerType = btn.dataset.installerType || 'winget';
       const moduleName = btn.dataset.moduleName || '';
-      const name = btn.dataset.dependencyName || wingetId;
+      const name = btn.dataset.dependencyName || wingetId || moduleName;
       if (installerType === 'winget' && !wingetId) return;
       if (installerType === 'powershell-module' && !moduleName) return;
       dependencyMsg.textContent = `${action === 'upgrade' ? 'Update' : 'Installation'} laeuft: ${name}`;
@@ -1271,6 +1255,59 @@ function renderDependencyStatus(data) {
       }
     });
   });
+}
+
+function renderDependencyStatus(data) {
+  if (!dependencySummary || !dependencyList) return;
+
+  if (!data?.available) {
+    dependencySummary.textContent = data?.message || 'Dependency-Check nicht verfuegbar.';
+    dependencyList.innerHTML = '<div class="audio-empty">Keine Dependency-Daten verfuegbar.</div>';
+    scheduleMasonryLayout(logsGrid);
+    return;
+  }
+
+  const deps = Array.isArray(data.dependencies) ? data.dependencies : [];
+  const topCount = 5;
+  const actionIndices = deps
+    .map((dep, idx) => ({ dep, idx }))
+    .filter((x) => !!getDependencyAction(x.dep))
+    .map((x) => x.idx);
+
+  const compactIndices = new Set([...Array(Math.min(topCount, deps.length)).keys(), ...actionIndices]);
+  const compactDeps = deps.filter((_, idx) => compactIndices.has(idx));
+  const hiddenCount = Math.max(0, deps.length - compactDeps.length);
+  const depsToRender = dependencyExpanded ? deps : compactDeps;
+
+  dependencySummary.textContent = data.all_satisfied
+    ? `Systemstatus ok | ${deps.length} Abhaengigkeiten geprueft${dependencyExpanded ? '' : ` | Kompaktansicht ${depsToRender.length}/${deps.length}`}`
+    : `Pruefung abgeschlossen | ${deps.length} Abhaengigkeiten | Eingriffe empfohlen${dependencyExpanded ? '' : ` | Kompaktansicht ${depsToRender.length}/${deps.length}`}`;
+
+  dependencyList.innerHTML = deps.length
+    ? `
+      <div class="dependency-controls">
+        <span class="muted dependency-controls-info">${dependencyExpanded ? 'Alle Eintraege sichtbar' : `Top 5 + Aktionen sichtbar${hiddenCount > 0 ? ` | ${hiddenCount} ausgeblendet` : ''}`}</span>
+        ${hiddenCount > 0 || dependencyExpanded ? `<button class="btn dependency-toggle-btn" data-dependency-toggle="1">${dependencyExpanded ? 'Weniger anzeigen' : 'Alle anzeigen'}</button>` : ''}
+      </div>
+      <div class="dependency-table-head dependency-table-head-actions">
+        <span>Paket</span>
+        <span>Version</span>
+        <span>Status</span>
+        <span>Aktion</span>
+      </div>
+      ${buildDependencyRows(depsToRender)}
+    `
+    : '<div class="audio-empty">Keine Dependency-Daten gefunden.</div>';
+
+  const toggleBtn = dependencyList.querySelector('[data-dependency-toggle="1"]');
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', () => {
+      dependencyExpanded = !dependencyExpanded;
+      renderDependencyStatus(data);
+    });
+  }
+
+  attachDependencyActionHandlers();
 
   scheduleMasonryLayout(logsGrid);
 }
