@@ -2490,8 +2490,9 @@ function renderAudioDevicesList(activeOutput = '', activeInput = '', routingMess
   const primaryDevices = [];
   const activeOutputDevice = devicesVisibleByUser.find((dev) => dev.is_active_output) || null;
   const activeInputDevice = devicesVisibleByUser.find((dev) => dev.is_active_input) || null;
+  const fallbackInputDevice = activeInputDevice || devicesVisibleByUser.find((dev) => dev.kind === 'input') || null;
   if (activeOutputDevice) primaryDevices.push(activeOutputDevice);
-  if (activeInputDevice && (!activeOutputDevice || activeInputDevice.id !== activeOutputDevice.id)) primaryDevices.push(activeInputDevice);
+  if (fallbackInputDevice && (!activeOutputDevice || fallbackInputDevice.id !== activeOutputDevice.id)) primaryDevices.push(fallbackInputDevice);
   if (!primaryDevices.length && devicesVisibleByUser[0]) primaryDevices.push(devicesVisibleByUser[0]);
 
   const primaryIds = new Set(primaryDevices.map((dev) => dev.id));
