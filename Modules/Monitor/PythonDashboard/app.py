@@ -1785,7 +1785,17 @@ def api_audio_session_mute(pid: int, state: int) -> dict:
 def api_logs() -> list[str]:
     if not LOG_DIR.exists():
         return []
-    return sorted([p.name for p in LOG_DIR.glob("*.log")], reverse=True)
+
+    html_logs = sorted([p.name for p in LOG_DIR.glob("*.log.html")])
+    text_logs = sorted([p.name for p in LOG_DIR.glob("*.log")])
+
+    # HTML-Logs bevorzugen. Falls zu einer .log auch eine .log.html existiert,
+    # wird nur die HTML-Variante in der Auswahl angezeigt.
+    html_backing_logs = {name[:-5] for name in html_logs}  # strip trailing ".html"
+    merged: list[str] = []
+    merged.extend(html_logs)
+    merged.extend([name for name in text_logs if name not in html_backing_logs])
+    return sorted(merged, reverse=True)
 
 
 @app.get("/api/logs/content")
@@ -1795,10 +1805,29 @@ def api_log_content(file: str, lines: int = 300) -> dict:
         raise HTTPException(status_code=400, detail="Ungultiger Dateiname")
     if not target.exists() or not target.is_file():
         raise HTTPException(status_code=404, detail="Datei nicht gefunden")
+    if str(file).lower().endswith(".html"):
+        raise HTTPException(status_code=400, detail="HTML-Logs ueber /api/logs/raw laden")
 
     data = target.read_text(encoding="utf-8", errors="replace").splitlines()
     tail = data[-max(1, min(lines, 3000)) :]
     return {"file": file, "content": "\n".join(tail)}
+
+
+@app.get("/api/logs/raw")
+def api_log_raw(file: str):
+    target = (LOG_DIR / file).resolve()
+    root = LOG_DIR.resolve()
+    file_l = str(file).lower()
+
+    if not str(target).startswith(str(root)):
+        raise HTTPException(status_code=400, detail="Ungultiger Dateiname")
+    if not target.exists() or not target.is_file():
+        raise HTTPException(status_code=404, detail="Datei nicht gefunden")
+    if not (file_l.endswith(".log") or file_l.endswith(".log.html")):
+        raise HTTPException(status_code=400, detail="Dateityp nicht erlaubt")
+
+    media = "text/html" if file_l.endswith(".html") else "text/plain"
+    return FileResponse(target, media_type=media)
 
 
 @app.get("/api/dependencies")

@@ -34,12 +34,7 @@ const gitMsg = document.getElementById('gitMsg');
 
 const logSelect = document.getElementById('logSelect');
 const logContent = document.getElementById('logContent');
-const logStructured = document.getElementById('logStructured');
-const logLevelFilter = document.getElementById('logLevelFilter');
-const logPhaseFilter = document.getElementById('logPhaseFilter');
-const logRunFilter = document.getElementById('logRunFilter');
-const logExitFilter = document.getElementById('logExitFilter');
-const logErrorFocus = document.getElementById('logErrorFocus');
+const logHtmlFrame = document.getElementById('logHtmlFrame');
 const reloadDependenciesBtn = document.getElementById('reloadDependenciesBtn');
 const dependencySummary = document.getElementById('dependencySummary');
 const dependencyList = document.getElementById('dependencyList');
@@ -291,7 +286,6 @@ let metricsRefreshTimer = null;
 let audioRefreshTimer = null;
 let gitRefreshTimer = null;
 let gitUpdateCheckTimer = null;
-let currentLogEntries = [];
 let toolStateApiAvailable = true;
 let toolToggleApiAvailable = true;
 let toolStateRefreshInFlight = false;
@@ -1057,203 +1051,44 @@ async function loadLogs() {
     logSelect.innerHTML = files.map((f) => `<option value="${f}">${f}</option>`).join('');
     if (files.length > 0) await openLog(files[0]);
     else {
+      if (logHtmlFrame) logHtmlFrame.style.display = 'none';
+      logContent.style.display = 'block';
       logContent.textContent = 'Keine Logs gefunden.';
-      if (logStructured) logStructured.innerHTML = '<div class="log-empty">Keine Logs gefunden.</div>';
     }
   } catch (err) {
+    if (logHtmlFrame) logHtmlFrame.style.display = 'none';
+    logContent.style.display = 'block';
     logContent.textContent = `Log-Liste Fehler: ${err.message}`;
-    if (logStructured) logStructured.innerHTML = `<div class="log-empty">Log-Liste Fehler: ${escapeHtml(err.message)}</div>`;
   }
-}
-
-function normalizeLevel(levelText) {
-  const lvl = String(levelText || '').trim().toUpperCase();
-  if (lvl.startsWith('INFO')) return 'INFO';
-  if (lvl.startsWith('WARN')) return 'WARN';
-  if (lvl.startsWith('ERR')) return 'ERROR';
-  if (lvl.startsWith('CRIT')) return 'CRIT';
-  if (lvl.startsWith('DBG') || lvl.startsWith('DEBUG')) return 'DEBUG';
-  if (lvl.startsWith('OK')) return 'OK';
-  return lvl || 'INFO';
-}
-
-function levelClass(level) {
-  const lvl = normalizeLevel(level);
-  if (lvl === 'WARN') return 'log-lvl-warn';
-  if (lvl === 'ERROR') return 'log-lvl-error';
-  if (lvl === 'CRIT') return 'log-lvl-crit';
-  if (lvl === 'DEBUG') return 'log-lvl-debug';
-  if (lvl === 'OK') return 'log-lvl-ok';
-  return 'log-lvl-info';
-}
-
-function parseLogContent(content) {
-  const lines = String(content || '').split(/\r?\n/);
-  const entries = [];
-  let currentRunId = 'none';
-
-  const runRegex = /^=+\s*RUN\s+(\d+)\s+(START|END)\s+\|\s+\[([^\]]+)\]\s+\|\s+([0-9:\-\.\s]+)(?:\s+\|\s+Dauer=([^=]+?)\s*)?=+$/i;
-  const entryRegex = /^\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+(.*)$/;
-
-  lines.forEach((line) => {
-    const raw = String(line || '');
-    if (!raw.trim()) return;
-
-    const runMatch = raw.match(runRegex);
-    if (runMatch) {
-      const runId = String(runMatch[1]).padStart(4, '0');
-      const phase = String(runMatch[2] || '').toLowerCase();
-      if (phase === 'start') currentRunId = runId;
-      if (phase === 'end') currentRunId = 'none';
-      entries.push({
-        type: 'run',
-        raw,
-        runId,
-        phase,
-      });
-      return;
-    }
-
-    const logMatch = raw.match(entryRegex);
-    if (!logMatch) {
-      entries.push({ type: 'raw', raw, runId: currentRunId, phase: 'event' });
-      return;
-    }
-
-    const ts = logMatch[1] || '';
-    const level = normalizeLevel(logMatch[2] || '');
-    const tag = logMatch[3] || '';
-    const rest = logMatch[4] || '';
-    const parts = rest.split(' | ');
-    const message = parts[0] || '';
-    const context = {};
-    for (const part of parts.slice(1)) {
-      const idx = part.indexOf('=');
-      if (idx > 0) {
-        const key = part.slice(0, idx).trim();
-        const value = part.slice(idx + 1).trim();
-        if (key) context[key] = value;
-      }
-    }
-
-    const runId = (context.RunId && context.RunId !== 'none') ? context.RunId : currentRunId;
-    const phase = (context.Phase || 'event').toLowerCase();
-
-    entries.push({
-      type: 'entry',
-      raw,
-      ts,
-      level,
-      tag,
-      message,
-      context,
-      runId,
-      phase,
-    });
-  });
-
-  return entries;
-}
-
-function shouldIncludeByExitFilter(entry, mode) {
-  if (mode === 'all') return true;
-  const hasExit = Object.prototype.hasOwnProperty.call(entry.context || {}, 'ExitCode');
-  if (mode === 'present') return hasExit;
-  if (!hasExit) return false;
-  const code = String(entry.context.ExitCode || '').trim();
-  if (mode === 'zero') return code === '0';
-  if (mode === 'nonzero') return code !== '' && code !== '0';
-  return true;
-}
-
-function renderStructuredLog() {
-  if (!logStructured) return;
-  if (!Array.isArray(currentLogEntries) || currentLogEntries.length === 0) {
-    logStructured.innerHTML = '<div class="log-empty">Keine Log-Daten verfuegbar.</div>';
-    return;
-  }
-
-  const levelFilter = logLevelFilter?.value || 'all';
-  const phaseFilter = logPhaseFilter?.value || 'all';
-  const runFilter = String(logRunFilter?.value || '').trim();
-  const exitFilter = logExitFilter?.value || 'all';
-  const errorFocus = !!logErrorFocus?.checked;
-  const errorLevels = new Set(['WARN', 'ERROR', 'CRIT']);
-
-  const errorRunIds = new Set();
-  if (errorFocus) {
-    currentLogEntries.forEach((entry) => {
-      if (entry.type === 'entry' && errorLevels.has(normalizeLevel(entry.level)) && entry.runId && entry.runId !== 'none') {
-        errorRunIds.add(entry.runId);
-      }
-    });
-  }
-
-  const filtered = currentLogEntries.filter((entry) => {
-    const runIdText = String(entry.runId || 'none');
-    const matchesRun = !runFilter || runIdText.includes(runFilter);
-    if (!matchesRun) return false;
-
-    if (errorFocus) {
-      if (entry.runId === 'none') return false;
-      return errorRunIds.has(entry.runId);
-    }
-
-    const phase = String(entry.phase || 'event').toLowerCase();
-    if (phaseFilter !== 'all' && phase !== phaseFilter) return false;
-
-    if (entry.type !== 'entry') return true;
-    if (levelFilter !== 'all' && normalizeLevel(entry.level) !== levelFilter) return false;
-    if (!shouldIncludeByExitFilter(entry, exitFilter)) return false;
-    return true;
-  });
-
-  if (filtered.length === 0) {
-    logStructured.innerHTML = '<div class="log-empty">Keine Eintraege fuer den aktuellen Filter.</div>';
-    return;
-  }
-
-  logStructured.innerHTML = filtered.map((entry) => {
-    if (entry.type === 'run') {
-      const cls = entry.phase === 'end' ? 'log-run-marker end' : 'log-run-marker';
-      return `<div class="${cls}">${escapeHtml(entry.raw)}</div>`;
-    }
-
-    if (entry.type === 'raw') {
-      return `<div class="log-entry-card"><div class="log-entry-msg">${escapeHtml(entry.raw)}</div></div>`;
-    }
-
-    const contextHtml = Object.entries(entry.context || {})
-      .map(([k, v]) => `<span class="log-kv-chip">${escapeHtml(k)}=${escapeHtml(v)}</span>`)
-      .join('');
-
-    return `
-      <article class="log-entry-card">
-        <div class="log-entry-head">
-          <span class="log-entry-ts">${escapeHtml(entry.ts || '-')}</span>
-          <span class="log-badge ${levelClass(entry.level)}">${escapeHtml(normalizeLevel(entry.level))}</span>
-          <span class="log-entry-tag">[${escapeHtml(entry.tag || '-')}]</span>
-          <span class="log-entry-msg">${escapeHtml(entry.message || '')}</span>
-        </div>
-        <div class="log-context">${contextHtml || '<span class="log-kv-chip">keine Kontextdaten</span>'}</div>
-      </article>
-    `;
-  }).join('');
 }
 
 async function openLog(name) {
   if (!name) return;
+
+  const isHtml = String(name).toLowerCase().endsWith('.html');
+  if (isHtml) {
+    logContent.style.display = 'none';
+    if (logHtmlFrame) {
+      logHtmlFrame.style.display = 'block';
+      logHtmlFrame.src = `/api/logs/raw?file=${encodeURIComponent(name)}&t=${Date.now()}`;
+    }
+    scheduleMasonryLayout(logsGrid);
+    return;
+  }
+
   try {
+    if (logHtmlFrame) {
+      logHtmlFrame.style.display = 'none';
+      logHtmlFrame.removeAttribute('src');
+    }
+    logContent.style.display = 'block';
     const d = await jsonFetch(`/api/logs/content?file=${encodeURIComponent(name)}&lines=250`);
-    const content = d.content || '(leer)';
-    logContent.textContent = content;
-    currentLogEntries = parseLogContent(content);
-    renderStructuredLog();
+    logContent.textContent = d.content || '(leer)';
     scheduleMasonryLayout(logsGrid);
   } catch (err) {
+    if (logHtmlFrame) logHtmlFrame.style.display = 'none';
+    logContent.style.display = 'block';
     logContent.textContent = `Log-Laden fehlgeschlagen: ${err.message}`;
-    currentLogEntries = [];
-    if (logStructured) logStructured.innerHTML = `<div class="log-empty">Log-Laden fehlgeschlagen: ${escapeHtml(err.message)}</div>`;
     scheduleMasonryLayout(logsGrid);
   }
 }
@@ -3416,11 +3251,6 @@ async function init() {
     resetLayout(pageConfig.storageKey);
   };
   logSelect.onchange = () => openLog(logSelect.value);
-  if (logLevelFilter) logLevelFilter.onchange = renderStructuredLog;
-  if (logPhaseFilter) logPhaseFilter.onchange = renderStructuredLog;
-  if (logExitFilter) logExitFilter.onchange = renderStructuredLog;
-  if (logRunFilter) logRunFilter.oninput = renderStructuredLog;
-  if (logErrorFocus) logErrorFocus.onchange = renderStructuredLog;
 
   wireSizeControls(dashboardGrid, LAYOUT_KEY, layoutMsg);
   wireSizeControls(audioGrid, AUDIO_LAYOUT_KEY);
