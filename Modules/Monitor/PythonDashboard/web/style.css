@@ -692,6 +692,17 @@ input, select {
   justify-self: start;
 }
 
+.audio-device-hide {
+  min-width: 34px;
+  width: 34px;
+  padding: 8px 0;
+  text-transform: uppercase;
+}
+
+.audio-device-unhide {
+  justify-self: start;
+}
+
 .audio-device-item.active {
   border-color: var(--accent);
 }

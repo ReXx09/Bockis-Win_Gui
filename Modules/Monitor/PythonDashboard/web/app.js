@@ -218,6 +218,7 @@ const SIZE_PRESETS = ['1-3', '1-2', '2-3', 'full', 'min'];
 const THEME_KEY = 'bockis_theme_v1';
 const GLASS_STRENGTH_KEY = 'bockis_glass_strength_v1';
 const AUDIO_USER_ROUTES_KEY = 'bockis_audio_user_routes_v1';
+const AUDIO_HIDDEN_DEVICES_KEY = 'bockis_audio_hidden_devices_v1';
 const LAUNCHERS_FALLBACK_KEY = 'bockis_custom_launchers_v1';
 const LAUNCHER_STYLE_PRESETS_KEY = 'bockis_launcher_style_presets_v1';
 const LAUNCHER_CATEGORY_LAYOUTS_KEY = 'bockis_launcher_category_layouts_v1';
@@ -261,6 +262,7 @@ let lastAudioSessions = [];
 let cachedOpenPrograms = [];
 let lastOpenProgramsFetch = 0;
 let showAllAudioDevices = false;
+let hiddenAudioDeviceIds = new Set();
 let pendingThemeId = 'ozean';
 let availableTools = [];
 let customLaunchers = [];
@@ -2136,8 +2138,40 @@ function saveUserAudioRoutes(routes) {
   localStorage.setItem(AUDIO_USER_ROUTES_KEY, JSON.stringify(routes));
 }
 
+function readHiddenAudioDevices() {
+  try {
+    const raw = localStorage.getItem(AUDIO_HIDDEN_DEVICES_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((id) => String(id || '').trim()).filter((id) => id);
+  } catch {
+    return [];
+  }
+}
+
+function saveHiddenAudioDevices() {
+  try {
+    localStorage.setItem(AUDIO_HIDDEN_DEVICES_KEY, JSON.stringify(Array.from(hiddenAudioDeviceIds)));
+  } catch {
+    // ignore storage failures
+  }
+}
+
+function hideAudioDevice(deviceId) {
+  const id = String(deviceId || '').trim();
+  if (!id) return false;
+  hiddenAudioDeviceIds.add(id);
+  saveHiddenAudioDevices();
+  return true;
+}
+
+function clearHiddenAudioDevices() {
+  hiddenAudioDeviceIds.clear();
+  saveHiddenAudioDevices();
+}
+
 function getOutputAudioDevices() {
-  return cachedAudioDevices.filter((d) => d.is_output !== false && d.kind !== 'input');
+  return cachedAudioDevices.filter((d) => d.is_output !== false && d.kind !== 'input' && !hiddenAudioDeviceIds.has(String(d.id || '')));
 }
 
 function refreshUserProgramDeviceSelect(selected = '') {
@@ -2450,36 +2484,54 @@ async function refreshAudio() {
 function renderAudioDevicesList(activeOutput = '', activeInput = '', routingMessage = '') {
   if (!audioDevices) return;
 
+  const devicesVisibleByUser = cachedAudioDevices.filter((dev) => !hiddenAudioDeviceIds.has(String(dev.id || '')));
+  const hiddenByUserCount = Math.max(0, cachedAudioDevices.length - devicesVisibleByUser.length);
+
   const primaryDevices = [];
-  const activeOutputDevice = cachedAudioDevices.find((dev) => dev.is_active_output) || null;
-  const activeInputDevice = cachedAudioDevices.find((dev) => dev.is_active_input) || null;
+  const activeOutputDevice = devicesVisibleByUser.find((dev) => dev.is_active_output) || null;
+  const activeInputDevice = devicesVisibleByUser.find((dev) => dev.is_active_input) || null;
   if (activeOutputDevice) primaryDevices.push(activeOutputDevice);
   if (activeInputDevice && (!activeOutputDevice || activeInputDevice.id !== activeOutputDevice.id)) primaryDevices.push(activeInputDevice);
-  if (!primaryDevices.length && cachedAudioDevices[0]) primaryDevices.push(cachedAudioDevices[0]);
+  if (!primaryDevices.length && devicesVisibleByUser[0]) primaryDevices.push(devicesVisibleByUser[0]);
 
   const primaryIds = new Set(primaryDevices.map((dev) => dev.id));
-  const hiddenDevices = cachedAudioDevices.filter((dev) => !primaryIds.has(dev.id));
-  const visibleDevices = showAllAudioDevices ? cachedAudioDevices : primaryDevices;
+  const hiddenDevices = devicesVisibleByUser.filter((dev) => !primaryIds.has(dev.id));
+  const visibleDevices = showAllAudioDevices ? devicesVisibleByUser : primaryDevices;
   const extraCount = hiddenDevices.length;
-  const outputCount = cachedAudioDevices.filter((dev) => dev.kind === 'output').length;
-  const inputCount = cachedAudioDevices.filter((dev) => dev.kind === 'input').length;
+  const outputCount = devicesVisibleByUser.filter((dev) => dev.kind === 'output').length;
+  const inputCount = devicesVisibleByUser.filter((dev) => dev.kind === 'input').length;
   const activeDevicesCount = primaryDevices.filter((dev) => dev.is_active_output || dev.is_active_input).length;
 
   if (audioDeviceInfo) {
     const shownText = showAllAudioDevices || extraCount === 0
       ? `${visibleDevices.length} angezeigt`
       : `kompakt: ${activeDevicesCount} aktive Geraete sichtbar, ${extraCount} weitere ausblendbar`;
-    audioDeviceInfo.textContent = `Ausgabe: ${activeOutput || 'Unbekannt'} | Mikrofon: ${activeInput || 'Unbekannt'} | ${cachedAudioDevices.length} eindeutige Geraete (${outputCount} Output, ${inputCount} Input) | ${shownText}${routingMessage ? ` | ${routingMessage}` : ''}`;
+    const hiddenText = hiddenByUserCount > 0 ? ` | ${hiddenByUserCount} per X ausgeblendet` : '';
+    audioDeviceInfo.textContent = `Ausgabe: ${activeOutput || 'Unbekannt'} | Mikrofon: ${activeInput || 'Unbekannt'} | ${devicesVisibleByUser.length} eindeutige Geraete (${outputCount} Output, ${inputCount} Input) | ${shownText}${hiddenText}${routingMessage ? ` | ${routingMessage}` : ''}`;
   }
 
   if (!visibleDevices.length) {
-    audioDevices.innerHTML = '<div class="audio-empty">Keine Audio-Geraete gefunden.</div>';
+    audioDevices.innerHTML = hiddenByUserCount > 0
+      ? '<div class="audio-empty">Alle Audio-Geraete wurden ausgeblendet. Mit "Ausgeblendete anzeigen" kannst du sie wieder einblenden.</div><button class="btn audio-device-unhide" data-audio-device-unhide="all">Ausgeblendete anzeigen</button>'
+      : '<div class="audio-empty">Keine Audio-Geraete gefunden.</div>';
+    const restoreBtn = audioDevices.querySelector('[data-audio-device-unhide]');
+    if (restoreBtn) {
+      restoreBtn.addEventListener('click', () => {
+        clearHiddenAudioDevices();
+        refreshUserProgramDeviceSelect();
+        renderUserProgramRoutes();
+        renderAudioDevicesList(activeOutput, activeInput, routingMessage);
+      });
+    }
     scheduleMasonryLayout(audioGrid);
     return;
   }
 
   const toggleMarkup = extraCount > 0
     ? `<button class="btn audio-device-toggle" data-audio-device-toggle="${showAllAudioDevices ? 'collapse' : 'expand'}">${showAllAudioDevices ? `Weitere Geraete ausblenden (${extraCount})` : `Weitere Geraete anzeigen (${extraCount})`}</button>`
+    : '';
+  const unhideMarkup = hiddenByUserCount > 0
+    ? `<button class="btn audio-device-unhide" data-audio-device-unhide="all">Ausgeblendete anzeigen (${hiddenByUserCount})</button>`
     : '';
 
   audioDevices.innerHTML = `
@@ -2494,10 +2546,12 @@ function renderAudioDevicesList(activeOutput = '', activeInput = '', routingMess
             : (dev.is_active_output
                 ? '<strong>Standard Ausgabe</strong>'
                 : `<button class="btn" data-switch-device="${dev.id}" data-switch-name="${dev.name}" data-switch-kind="output">Als Standard</button>`)}
+          ${(dev.is_active_output || dev.is_active_input) ? '' : `<button class="btn audio-device-hide" data-hide-device="${dev.id}" data-hide-name="${dev.name}">x</button>`}
         </div>
       </div>
     `).join('')}
     ${toggleMarkup}
+    ${unhideMarkup}
   `;
 
   audioDevices.querySelectorAll('[data-switch-device]').forEach((btn) => {
@@ -2509,10 +2563,33 @@ function renderAudioDevicesList(activeOutput = '', activeInput = '', routingMess
     });
   });
 
+  audioDevices.querySelectorAll('[data-hide-device]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.hideDevice || '';
+      const name = btn.dataset.hideName || 'Geraet';
+      if (!id) return;
+      if (!hideAudioDevice(id)) return;
+      audioMsg.textContent = `${name} wurde ausgeblendet.`;
+      refreshUserProgramDeviceSelect();
+      renderUserProgramRoutes();
+      renderAudioDevicesList(activeOutput, activeInput, routingMessage);
+    });
+  });
+
   const toggleBtn = audioDevices.querySelector('[data-audio-device-toggle]');
   if (toggleBtn) {
     toggleBtn.addEventListener('click', () => {
       showAllAudioDevices = !showAllAudioDevices;
+      renderAudioDevicesList(activeOutput, activeInput, routingMessage);
+    });
+  }
+
+  const restoreBtn = audioDevices.querySelector('[data-audio-device-unhide]');
+  if (restoreBtn) {
+    restoreBtn.addEventListener('click', () => {
+      clearHiddenAudioDevices();
+      refreshUserProgramDeviceSelect();
+      renderUserProgramRoutes();
       renderAudioDevicesList(activeOutput, activeInput, routingMessage);
     });
   }
@@ -2548,6 +2625,18 @@ async function loadAudioDevices() {
       || a.name.localeCompare(b.name, 'de')
     ));
     cachedAudioDevices = dedup;
+
+    // Clean up stale hidden IDs that no longer exist in current device list.
+    const currentIds = new Set(cachedAudioDevices.map((dev) => String(dev.id || '')));
+    let hiddenChanged = false;
+    Array.from(hiddenAudioDeviceIds).forEach((id) => {
+      if (!currentIds.has(id)) {
+        hiddenAudioDeviceIds.delete(id);
+        hiddenChanged = true;
+      }
+    });
+    if (hiddenChanged) saveHiddenAudioDevices();
+
     refreshUserProgramDeviceSelect();
     renderUserProgramRoutes();
     renderAudioDevicesList(d.active_output || '', d.active_input || '', d.routing_message || '');
@@ -2935,6 +3024,7 @@ async function init() {
   });
   wireAudioControls();
   wireUserAudioRoutingControls();
+  hiddenAudioDeviceIds = new Set(readHiddenAudioDevices());
   wireThemeControls();
   launcherCategoryLayouts = readLauncherCategoryLayouts();
   launcherCategoryDensity = readLauncherCategoryDensity();
