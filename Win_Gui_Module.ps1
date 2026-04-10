@@ -4670,14 +4670,22 @@ $btnCheckDependenciesH.Add_Click({
 
                     $textColor = if ($isGray) { [System.Drawing.Color]::FromArgb(160, 160, 160) } else { [System.Drawing.Color]::White }
 
+                    $dependencyTooltipText = $dep.Description
+                    if ($dep.ToolLibraryName) {
+                        $dependencyTooltipText += "`n`nTool-Downloads: $($dep.ToolLibraryName)"
+                        if ($dep.ToolLibraryCategory) {
+                            $dependencyTooltipText += " ($($dep.ToolLibraryCategory))"
+                        }
+                    }
+
                     $nameLabel = New-Object System.Windows.Forms.Label
                     $nameLabel.Text = $dep.Name
                     $nameLabel.Location = New-Object System.Drawing.Point(12, 6)
                     $nameLabel.Size = New-Object System.Drawing.Size(245, 16)
                     $nameLabel.ForeColor = $textColor
                     $nameLabel.Font = New-Object System.Drawing.Font("Segoe UI", 8.25, [System.Drawing.FontStyle]::Bold)
-                    if ($tooltipObj -and $dep.Description) {
-                        $tooltipObj.SetToolTip($nameLabel, $dep.Description)
+                    if ($tooltipObj -and $dependencyTooltipText) {
+                        $tooltipObj.SetToolTip($nameLabel, $dependencyTooltipText)
                     }
                     $rowPanel.Controls.Add($nameLabel)
 
@@ -4708,8 +4716,8 @@ $btnCheckDependenciesH.Add_Click({
                     $actionButton.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
                     $actionButton.FlatAppearance.BorderSize = 0
                     $actionButton.Font = New-Object System.Drawing.Font("Segoe UI", 8, [System.Drawing.FontStyle]::Bold)
-                    if ($tooltipObj -and $dep.Description) {
-                        $tooltipObj.SetToolTip($actionButton, $dep.Description)
+                    if ($tooltipObj -and $dependencyTooltipText) {
+                        $tooltipObj.SetToolTip($actionButton, $dependencyTooltipText)
                     }
 
                     if ($dep.Name -eq "GUI-Update (GitHub)") {

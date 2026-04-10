@@ -50,6 +50,27 @@ function Set-DependencyCacheValue {
     }
 }
 
+function Write-DependencyGuiUpdateDebugLog {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Message
+    )
+
+    try {
+        $projectRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+        $logDirectory = Join-Path $projectRoot "Data\Logs"
+        if (-not (Test-Path $logDirectory)) {
+            New-Item -Path $logDirectory -ItemType Directory -Force | Out-Null
+        }
+
+        $logPath = Join-Path $logDirectory "gui-update-debug.log"
+        $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+        Add-Content -Path $logPath -Value "[$timestamp] [DependencyChecker] $Message" -Encoding UTF8
+    } catch {
+        # Debug-Logging darf die Update-Pruefung nicht blockieren.
+    }
+}
+
 function Clear-DependencyRuntimeCache {
     $script:DependencyRuntimeCache.Clear()
 }
@@ -984,6 +1005,30 @@ function Get-ToolLibraryEntryByWingetId {
     return $null
 }
 
+function Add-DependencyToolLibraryMetadata {
+    param(
+        [Parameter(Mandatory = $true)]
+        [array]$Dependencies
+    )
+
+    foreach ($dependency in $Dependencies) {
+        if (-not $dependency -or -not $dependency.WingetId) {
+            continue
+        }
+
+        $toolEntry = Get-ToolLibraryEntryByWingetId -WingetId $dependency.WingetId
+        if (-not $toolEntry) {
+            continue
+        }
+
+        $dependency['ToolLibraryName'] = $toolEntry.Name
+        $dependency['ToolLibraryCategory'] = $toolEntry.Category
+        $dependency['ToolLibraryDownloadUrl'] = $toolEntry.DownloadUrl
+    }
+
+    return $Dependencies
+}
+
 <#
 .SYNOPSIS
 Prüft ob Microsoft App Installer installiert ist.
@@ -1163,6 +1208,7 @@ function Get-GuiReleaseDependencyStatus {
     $cacheKey = "github-release-$RepoOwner-$RepoName-$CurrentVersion-$cacheTokenState"
     $cachedStatus = Get-DependencyCacheValue -Key $cacheKey -MaxAgeSeconds 60
     if ($cachedStatus) {
+        Write-DependencyGuiUpdateDebugLog -Message "Cache hit | Repo=$RepoOwner/$RepoName | CurrentVersion=$CurrentVersion | TokenState=$cacheTokenState"
         return $cachedStatus.Clone()
     }
 
@@ -1181,6 +1227,8 @@ function Get-GuiReleaseDependencyStatus {
     }
 
     try {
+        Write-DependencyGuiUpdateDebugLog -Message "Start update check | Repo=$RepoOwner/$RepoName | CurrentVersion=$CurrentVersion | TokenState=$cacheTokenState"
+
         $headers = @{
             "User-Agent" = "Bockis-System-Tool"
             "Accept"     = "application/vnd.github+json"
@@ -1199,30 +1247,41 @@ function Get-GuiReleaseDependencyStatus {
             $repoCandidates.Add(($RepoName -replace '_', '-'))
         }
 
+        Write-DependencyGuiUpdateDebugLog -Message "Repo candidates: $((($repoCandidates | Select-Object -Unique) -join ', '))"
+
         $latestRelease = $null
         $lastStatusCode = $null
+        $resolvedRepoCandidate = $null
 
         foreach ($repoCandidate in ($repoCandidates | Select-Object -Unique)) {
             try {
                 $apiUrl = "https://api.github.com/repos/$RepoOwner/$repoCandidate/releases/latest"
+                Write-DependencyGuiUpdateDebugLog -Message "Try latest release endpoint: $apiUrl"
                 $latestRelease = Invoke-RestMethod -Uri $apiUrl -Headers $headers -ErrorAction Stop
-                if ($latestRelease) { break }
+                if ($latestRelease) {
+                    $resolvedRepoCandidate = $repoCandidate
+                    break
+                }
             } catch {
                 $statusCode = $null
                 if ($_.Exception -and $_.Exception.Response) {
                     try { $statusCode = [int]$_.Exception.Response.StatusCode.value__ } catch { $statusCode = $null }
                 }
                 $lastStatusCode = $statusCode
+                Write-DependencyGuiUpdateDebugLog -Message "Latest endpoint failed | Repo=$repoCandidate | StatusCode=$statusCode | Error=$($_.Exception.Message)"
 
                 if ($statusCode -eq 404) {
                     try {
                         $fallbackUrl = "https://api.github.com/repos/$RepoOwner/$repoCandidate/releases"
+                        Write-DependencyGuiUpdateDebugLog -Message "Fallback to releases list: $fallbackUrl"
                         $allReleases = Invoke-RestMethod -Uri $fallbackUrl -Headers $headers -ErrorAction Stop
                         if ($allReleases -and $allReleases.Count -gt 0) {
                             $latestRelease = $allReleases[0]
+                            $resolvedRepoCandidate = $repoCandidate
                             break
                         }
                     } catch {
+                        Write-DependencyGuiUpdateDebugLog -Message "Fallback releases list failed | Repo=$repoCandidate | Error=$($_.Exception.Message)"
                         # Nächsten Candidate testen
                     }
                 } elseif ($statusCode -eq 401 -or $statusCode -eq 403) {
@@ -1237,27 +1296,37 @@ function Get-GuiReleaseDependencyStatus {
                 "Accept"     = "application/vnd.github+json"
             }
 
+            Write-DependencyGuiUpdateDebugLog -Message "Retry without token because authenticated request did not yield a release"
+
             foreach ($repoCandidate in ($repoCandidates | Select-Object -Unique)) {
                 try {
                     $apiUrl = "https://api.github.com/repos/$RepoOwner/$repoCandidate/releases/latest"
+                    Write-DependencyGuiUpdateDebugLog -Message "Try latest release endpoint without token: $apiUrl"
                     $latestRelease = Invoke-RestMethod -Uri $apiUrl -Headers $headersNoAuth -ErrorAction Stop
-                    if ($latestRelease) { break }
+                    if ($latestRelease) {
+                        $resolvedRepoCandidate = $repoCandidate
+                        break
+                    }
                 } catch {
                     $statusCode = $null
                     if ($_.Exception -and $_.Exception.Response) {
                         try { $statusCode = [int]$_.Exception.Response.StatusCode.value__ } catch { $statusCode = $null }
                     }
                     $lastStatusCode = $statusCode
+                    Write-DependencyGuiUpdateDebugLog -Message "Unauthenticated latest endpoint failed | Repo=$repoCandidate | StatusCode=$statusCode | Error=$($_.Exception.Message)"
 
                     if ($statusCode -eq 404) {
                         try {
                             $fallbackUrl = "https://api.github.com/repos/$RepoOwner/$repoCandidate/releases"
+                            Write-DependencyGuiUpdateDebugLog -Message "Fallback to releases list without token: $fallbackUrl"
                             $allReleases = Invoke-RestMethod -Uri $fallbackUrl -Headers $headersNoAuth -ErrorAction Stop
                             if ($allReleases -and $allReleases.Count -gt 0) {
                                 $latestRelease = $allReleases[0]
+                                $resolvedRepoCandidate = $repoCandidate
                                 break
                             }
                         } catch {
+                            Write-DependencyGuiUpdateDebugLog -Message "Unauthenticated fallback releases list failed | Repo=$repoCandidate | Error=$($_.Exception.Message)"
                             # Nächsten Candidate testen
                         }
                     }
@@ -1269,10 +1338,12 @@ function Get-GuiReleaseDependencyStatus {
             if ($lastStatusCode -eq 401 -or $lastStatusCode -eq 403) {
                 $status.Status = "⚠ GitHub-Zugriff blockiert"
                 $status.StatusColor = "Red"
+                Write-DependencyGuiUpdateDebugLog -Message "No release found due to access restriction | LastStatusCode=$lastStatusCode"
                 Set-DependencyCacheValue -Key $cacheKey -Value $status
                 return $status
             }
             $status.Status = "⚠ Kein Release gefunden"
+            Write-DependencyGuiUpdateDebugLog -Message "No release found | Repo=$RepoOwner/$RepoName | LastStatusCode=$lastStatusCode"
             Set-DependencyCacheValue -Key $cacheKey -Value $status
             return $status
         }
@@ -1282,6 +1353,7 @@ function Get-GuiReleaseDependencyStatus {
         $currentVersionNormalized = "$CurrentVersion" -replace '^v', ''
 
         $status.AvailableVersion = $latestVersion
+        Write-DependencyGuiUpdateDebugLog -Message "Release resolved | Repo=$RepoOwner/$resolvedRepoCandidate | Tag=$latestVersionRaw | ParsedVersion=$latestVersion"
 
         try {
             if ([version]$latestVersion -gt [version]$currentVersionNormalized) {
@@ -1308,6 +1380,7 @@ function Get-GuiReleaseDependencyStatus {
     } catch {
         $status.Status = "⚠ Update-Prüfung fehlgeschlagen"
         $status.StatusColor = "Yellow"
+        Write-DependencyGuiUpdateDebugLog -Message "Unhandled exception during update check | Repo=$RepoOwner/$RepoName | Error=$($_.Exception.Message)"
     }
 
     Set-DependencyCacheValue -Key $cacheKey -Value $status
@@ -2143,6 +2216,8 @@ function Get-DependencyStatusForGUI {
         -RepoOwner $RepoOwner `
         -RepoName $RepoName `
         -GitHubToken $GitHubToken
+
+    $dependencies = Add-DependencyToolLibraryMetadata -Dependencies $dependencies
     
     # Prüfe ob installierbare Items vorhanden sind
     $hasInstallableItems = ($dependencies | Where-Object { -not $_.Found -and $_.Available }).Count -gt 0

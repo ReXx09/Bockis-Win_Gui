@@ -22,6 +22,28 @@
 # VERSIONSAUSWAHL UND INSTALLATION
 # ===================================================================
 
+function Write-UpdateManagerGuiDebugLog {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Message
+    )
+
+    try {
+        $projectRoot = Split-Path -Parent $PSScriptRoot
+        $logDirectory = Join-Path $projectRoot "Data\Logs"
+        if (-not (Test-Path $logDirectory)) {
+            New-Item -Path $logDirectory -ItemType Directory -Force | Out-Null
+        }
+
+        $logPath = Join-Path $logDirectory "gui-update-debug.log"
+        $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+        Add-Content -Path $logPath -Value "[$timestamp] [UpdateManager] $Message" -Encoding UTF8
+    } catch {
+        # Debug-Logging darf keine Update-Funktion blockieren.
+    }
+}
+
 function Install-Update {
     [CmdletBinding()]
     param(
@@ -39,6 +61,7 @@ function Install-Update {
     
     Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Success'
     $OutputBox.AppendText("[✓] Update verfügbar: v$LatestVersion`r`n`r`n")
+    Write-UpdateManagerGuiDebugLog -Message "Install-Update start | CurrentVersion=$CurrentVersion | TargetVersion=$LatestVersion | Operation=$Operation"
     
     # Asset-URL ermitteln
     $asset = $LatestRelease.assets | Where-Object { $_.name -like "*.zip" } | Select-Object -First 1
@@ -46,8 +69,11 @@ function Install-Update {
     if (-not $asset) {
         Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Error'
         $OutputBox.AppendText("[✗] Kein Download-Asset gefunden!`r`n")
+        Write-UpdateManagerGuiDebugLog -Message "No ZIP asset found for release tag $($LatestRelease.tag_name)"
         return $false
     }
+
+    Write-UpdateManagerGuiDebugLog -Message "Selected asset | Name=$($asset.name) | ApiUrl=$($asset.url) | BrowserUrl=$($asset.browser_download_url)"
     
     # Benutzer fragen
     $releaseNotesPreview = if ($LatestRelease.body.Length -gt 200) {
@@ -79,6 +105,7 @@ function Install-Update {
         $tempPath = [System.IO.Path]::GetTempPath()
         $zipPath = Join-Path $tempPath "Bockis-Update-v$LatestVersion.zip"
         $extractPath = Join-Path $tempPath "Bockis-Update-Extract"
+        Write-UpdateManagerGuiDebugLog -Message "User confirmed update | ZipPath=$zipPath | ExtractPath=$extractPath"
         
         Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Info'
         $OutputBox.AppendText("[i] Download wird gestartet...`r`n")
@@ -122,6 +149,9 @@ function Get-ReleaseListWithFallback {
         "Accept" = "application/vnd.github+json"
     }
 
+    $tokenState = if ([string]::IsNullOrWhiteSpace($GitHubToken) -or $GitHubToken -eq 'ghp_DEIN_TOKEN_HIER') { 'none' } else { 'set' }
+    Write-UpdateManagerGuiDebugLog -Message "Get-ReleaseListWithFallback start | Repo=$RepoOwner/$RepoName | TokenState=$tokenState"
+
     if (-not [string]::IsNullOrWhiteSpace($GitHubToken) -and $GitHubToken -ne "ghp_DEIN_TOKEN_HIER") {
         $headers["Authorization"] = "token $GitHubToken"
     }
@@ -135,18 +165,23 @@ function Get-ReleaseListWithFallback {
         $repoCandidates.Add(($RepoName -replace '_', '-'))
     }
 
+    Write-UpdateManagerGuiDebugLog -Message "Repo candidates: $((($repoCandidates | Select-Object -Unique) -join ', '))"
+
     $lastError = $null
 
     foreach ($candidate in ($repoCandidates | Select-Object -Unique)) {
         try {
             $allReleasesUrl = "https://api.github.com/repos/$RepoOwner/$candidate/releases"
+            Write-UpdateManagerGuiDebugLog -Message "Try release list endpoint: $allReleasesUrl"
             $releases = Invoke-RestMethod -Uri $allReleasesUrl -Headers $headers -ErrorAction Stop
             if ($releases -and $releases.Count -gt 0) {
+                Write-UpdateManagerGuiDebugLog -Message "Release list resolved | Repo=$RepoOwner/$candidate | Count=$($releases.Count)"
                 return @($releases)
             }
         }
         catch {
             $lastError = $_
+            Write-UpdateManagerGuiDebugLog -Message "Release list endpoint failed | Repo=$RepoOwner/$candidate | Error=$($_.Exception.Message)"
         }
     }
 
@@ -159,13 +194,16 @@ function Get-ReleaseListWithFallback {
         foreach ($candidate in ($repoCandidates | Select-Object -Unique)) {
             try {
                 $allReleasesUrl = "https://api.github.com/repos/$RepoOwner/$candidate/releases"
+                Write-UpdateManagerGuiDebugLog -Message "Retry release list endpoint without token: $allReleasesUrl"
                 $releases = Invoke-RestMethod -Uri $allReleasesUrl -Headers $headersNoAuth -ErrorAction Stop
                 if ($releases -and $releases.Count -gt 0) {
+                    Write-UpdateManagerGuiDebugLog -Message "Release list resolved without token | Repo=$RepoOwner/$candidate | Count=$($releases.Count)"
                     return @($releases)
                 }
             }
             catch {
                 $lastError = $_
+                Write-UpdateManagerGuiDebugLog -Message "Unauthenticated release list endpoint failed | Repo=$RepoOwner/$candidate | Error=$($_.Exception.Message)"
             }
         }
     }
@@ -179,6 +217,9 @@ function Get-ReleaseListWithFallback {
             $OutputBox.AppendText("[✗] Keine Releases gefunden.`r`n")
         }
     }
+
+    $lastErrorMessage = if ($lastError) { $lastError.Exception.Message } else { 'kein Fehlertext vorhanden' }
+    Write-UpdateManagerGuiDebugLog -Message "No releases resolved | Repo=$RepoOwner/$RepoName | LastError=$lastErrorMessage"
 
     return @()
 }
@@ -314,6 +355,9 @@ function Invoke-ReleaseSelectionUpdate {
     )
 
     try {
+        $tokenState = if ([string]::IsNullOrWhiteSpace($GitHubToken) -or $GitHubToken -eq 'ghp_DEIN_TOKEN_HIER') { 'none' } else { 'set' }
+        Write-UpdateManagerGuiDebugLog -Message "Invoke-ReleaseSelectionUpdate start | Repo=$RepoOwner/$RepoName | CurrentVersion=$CurrentVersion | TokenState=$tokenState"
+
         Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Info'
         $OutputBox.AppendText("[i] Lade verfügbare Releases...`r`n")
 
@@ -326,8 +370,11 @@ function Invoke-ReleaseSelectionUpdate {
         if (-not $selection) {
             Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Info'
             $OutputBox.AppendText("[i] Versionsauswahl abgebrochen.`r`n")
+            Write-UpdateManagerGuiDebugLog -Message "Release selection cancelled by user"
             return @{ Success = $false; Cancelled = $true; Message = "Abgebrochen" }
         }
+
+        Write-UpdateManagerGuiDebugLog -Message "Release selected | Version=$($selection.Version) | Mode=$($selection.Mode) | Tag=$($selection.Release.tag_name)"
 
         $operationMode = switch ($selection.Mode) {
             'Downgrade' { 'Downgrade' }
@@ -367,6 +414,8 @@ function Start-AsyncDownload {
         "User-Agent" = "Bockis-System-Tool"
         "Accept" = "application/octet-stream"
     }
+
+    Write-UpdateManagerGuiDebugLog -Message "Start async download | AssetName=$($Asset.name) | ApiUrl=$downloadUrl | BrowserUrl=$($Asset.browser_download_url) | ZipPath=$ZipPath"
     
     if ($GitHubToken -and $GitHubToken -ne "ghp_DEIN_TOKEN_HIER") {
         $downloadHeaders["Authorization"] = "token $GitHubToken"
@@ -436,6 +485,7 @@ function Start-AsyncDownload {
             throw $jobResult.Error
         }
         
+        Write-UpdateManagerGuiDebugLog -Message "Download finished successfully | ZipPath=$ZipPath"
         Update-ProgressStatus -StatusText "Download: 100%" -ProgressValue 95 -TextColor ([System.Drawing.Color]::White) -ProgressBar $ProgressBar
         [System.Windows.Forms.Application]::DoEvents()
         
@@ -446,6 +496,7 @@ function Start-AsyncDownload {
         return $true
     }
     catch {
+        Write-UpdateManagerGuiDebugLog -Message "Download failed | Error=$($_.Exception.Message)"
         Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Error'
         $OutputBox.AppendText("[✗] Download fehlgeschlagen: $($_.Exception.Message)`r`n")
         return $false

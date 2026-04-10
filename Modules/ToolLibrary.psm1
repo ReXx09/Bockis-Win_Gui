@@ -484,6 +484,15 @@ $script:toolLibrary['coding'] = @(
         Winget      = 'JRSoftware.InnoSetup'
     },
     @{
+        Name        = 'Git'
+        Description = 'Verteilte Versionsverwaltung für Repositories, Branches und Pull-Workflows'
+        Version     = 'Aktuell'
+        DownloadUrl = 'https://git-scm.com/download/win'
+        Category    = 'Coding / IT'
+        Tags        = @('Git', 'Version Control', 'Repository', 'CLI', 'Development')
+        Winget      = 'Git.Git'
+    },
+    @{
         Name        = 'GitHub CLI'
         Description = 'Offizielles GitHub-Kommandozeilenwerkzeug für Repositories, PRs und Issues'
         Version     = 'Aktuell'
