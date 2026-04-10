@@ -274,9 +274,18 @@ let launcherCategoryDensity = {};
 let launcherCategoryOrder = [];
 let dragArmedCard = null;
 let toolStateTimer = null;
+let metricsRefreshTimer = null;
+let audioRefreshTimer = null;
+let gitRefreshTimer = null;
 let toolStateApiAvailable = true;
 let toolToggleApiAvailable = true;
 let toolStateRefreshInFlight = false;
+const REFRESH_INTERVALS = {
+  overviewMetricsMs: 4000,
+  audioMs: 7000,
+  toolsStateMs: 5000,
+  gitMs: 30000,
+};
 const masonryFrames = new Map();
 const HISTORY_LEN = 45;
 const monitorHistory = {
@@ -484,6 +493,93 @@ function getPageLayoutConfig(page = getCurrentPage()) {
   return PAGE_LAYOUTS[page] || null;
 }
 
+function isWidgetVisibleOnPage(page, widgetId) {
+  const pageConfig = getPageLayoutConfig(page);
+  const layoutEl = pageConfig?.layoutEl || null;
+  if (!layoutEl || !widgetId) return false;
+  const card = getCards(layoutEl).find((entry) => entry.dataset.widget === widgetId);
+  return !!card && card.style.display !== 'none';
+}
+
+function hasVisibleWidgetsOnPage(page, widgetIds = []) {
+  return widgetIds.some((widgetId) => isWidgetVisibleOnPage(page, widgetId));
+}
+
+function clearScopedRefreshTimers() {
+  if (metricsRefreshTimer) {
+    clearInterval(metricsRefreshTimer);
+    metricsRefreshTimer = null;
+  }
+  if (audioRefreshTimer) {
+    clearInterval(audioRefreshTimer);
+    audioRefreshTimer = null;
+  }
+  if (gitRefreshTimer) {
+    clearInterval(gitRefreshTimer);
+    gitRefreshTimer = null;
+  }
+  if (toolStateTimer) {
+    clearInterval(toolStateTimer);
+    toolStateTimer = null;
+  }
+}
+
+function refreshActivePageOnce(page = getCurrentPage()) {
+  if (page === 'overview' && hasVisibleWidgetsOnPage('overview', ['monitoring', 'net-upload', 'net-download', 'disks', 'processes'])) {
+    loadMetrics().catch(() => setOnline(false));
+    return;
+  }
+  if (page === 'audio' && hasVisibleWidgetsOnPage('audio', ['audio-volume', 'audio-devices', 'audio-sessions', 'audio-routing'])) {
+    refreshAudio().catch(() => {});
+    return;
+  }
+  if (page === 'tools' && toolStateApiAvailable && hasVisibleWidgetsOnPage('tools', ['tools-sys', 'tools-net', 'tools-diag', 'tools-disk', 'tools-priv', 'tools-dev'])) {
+    refreshToolButtonStates().catch(() => {});
+    return;
+  }
+  if (page === 'logs' && isWidgetVisibleOnPage('logs', 'setup-git')) {
+    refreshGit().catch(() => {});
+  }
+}
+
+function updateScopedRefreshTimers() {
+  clearScopedRefreshTimers();
+
+  const page = getCurrentPage();
+
+  if (page === 'overview' && hasVisibleWidgetsOnPage('overview', ['monitoring', 'net-upload', 'net-download', 'disks', 'processes'])) {
+    metricsRefreshTimer = setInterval(() => {
+      if (getCurrentPage() !== 'overview') return;
+      if (!hasVisibleWidgetsOnPage('overview', ['monitoring', 'net-upload', 'net-download', 'disks', 'processes'])) return;
+      loadMetrics().catch(() => setOnline(false));
+    }, REFRESH_INTERVALS.overviewMetricsMs);
+  }
+
+  if (page === 'audio' && hasVisibleWidgetsOnPage('audio', ['audio-volume', 'audio-devices', 'audio-sessions', 'audio-routing'])) {
+    audioRefreshTimer = setInterval(() => {
+      if (getCurrentPage() !== 'audio') return;
+      if (!hasVisibleWidgetsOnPage('audio', ['audio-volume', 'audio-devices', 'audio-sessions', 'audio-routing'])) return;
+      refreshAudio().catch(() => {});
+    }, REFRESH_INTERVALS.audioMs);
+  }
+
+  if (page === 'tools' && toolStateApiAvailable && hasVisibleWidgetsOnPage('tools', ['tools-sys', 'tools-net', 'tools-diag', 'tools-disk', 'tools-priv', 'tools-dev'])) {
+    toolStateTimer = setInterval(() => {
+      if (getCurrentPage() !== 'tools') return;
+      if (!hasVisibleWidgetsOnPage('tools', ['tools-sys', 'tools-net', 'tools-diag', 'tools-disk', 'tools-priv', 'tools-dev'])) return;
+      refreshToolButtonStates();
+    }, REFRESH_INTERVALS.toolsStateMs);
+  }
+
+  if (page === 'logs' && isWidgetVisibleOnPage('logs', 'setup-git')) {
+    gitRefreshTimer = setInterval(() => {
+      if (getCurrentPage() !== 'logs') return;
+      if (!isWidgetVisibleOnPage('logs', 'setup-git')) return;
+      refreshGit();
+    }, REFRESH_INTERVALS.gitMs);
+  }
+}
+
 function escapeHtml(value) {
   return String(value || '')
     .replace(/&/g, '&amp;')
@@ -669,6 +765,7 @@ function renderWidgetMenu(page = getCurrentPage()) {
     cb.addEventListener('change', () => {
       card.style.display = cb.checked ? '' : 'none';
       saveLayout(layoutEl, pageConfig.storageKey, false, layoutMsg);
+      updateScopedRefreshTimers();
     });
     widgetMenu.appendChild(item);
   });
@@ -745,6 +842,8 @@ function showPage(page, options = {}) {
   localStorage.setItem(PAGE_KEY, resolvedPage);
   if (updateUrl) updateBrowserLocation(resolvedPage, replaceUrl);
   renderWidgetMenu(resolvedPage);
+  refreshActivePageOnce(resolvedPage);
+  updateScopedRefreshTimers();
   document.querySelectorAll('.page.active .layout').forEach((layoutEl) => scheduleMasonryLayout(layoutEl));
 }
 
@@ -1215,12 +1314,7 @@ async function loadTools() {
     });
 
     await refreshToolButtonStates();
-    if (toolStateApiAvailable) {
-      if (toolStateTimer) clearInterval(toolStateTimer);
-      toolStateTimer = setInterval(() => {
-        refreshToolButtonStates();
-      }, 5000);
-    }
+    updateScopedRefreshTimers();
 
     populateLauncherToolSelect();
   } catch (err) {
@@ -2839,8 +2933,7 @@ async function init() {
 
   await Promise.all([refreshAll(), refreshGit(), loadLogs(), loadDependencyStatus(), loadDashboardDependencyStatus(), loadTools(), loadLaunchers()]);
   document.querySelectorAll('.layout').forEach((layoutEl) => scheduleMasonryLayout(layoutEl));
-  setInterval(refreshAll, 5000);
-  setInterval(refreshGit, 20000);
+  updateScopedRefreshTimers();
 }
 
 init();
