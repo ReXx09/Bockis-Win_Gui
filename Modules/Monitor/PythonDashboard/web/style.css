@@ -970,6 +970,26 @@ input, select {
   opacity: 0.6;
 }
 
+.audio-session-mute-btn {
+  min-width: 34px;
+  width: 34px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.audio-session-mute-btn .icon-inline {
+  width: 0.92rem;
+  height: 0.92rem;
+  color: var(--accent);
+}
+
+.audio-session-mute-btn.is-muted .icon-inline {
+  color: #f87171;
+}
+
 .audio-route-session-level {
   color: var(--text);
   font-size: 0.74rem;

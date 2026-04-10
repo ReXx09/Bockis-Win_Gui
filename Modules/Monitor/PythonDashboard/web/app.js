@@ -3270,7 +3270,9 @@ async function loadAudioSessions() {
           </div>
           <div class="row">
             <input type="range" min="0" max="100" value="${s.volume}" data-session-volume="${s.pid}" />
-            ${audioEditMode ? `<button class="btn" data-session-mute="${s.pid}" data-state="${s.muted ? 0 : 1}">${s.muted ? 'Unmute' : 'Mute'}</button>` : ''}
+            <button class="btn audio-session-mute-btn" data-session-mute="${s.pid}" data-state="${s.muted ? 0 : 1}" title="${s.muted ? 'Unmute' : 'Mute'}">
+              <span class="icon-inline" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><use href="#icon-speaker"></use></svg></span>
+            </button>
           </div>
         </div>
       `).join('')
@@ -3289,26 +3291,27 @@ async function loadAudioSessions() {
       });
     });
 
-    if (audioEditMode) {
-      audioSessions.querySelectorAll('[data-session-mute]').forEach((btn) => {
+    audioSessions.querySelectorAll('[data-session-mute]').forEach((btn) => {
       btn.addEventListener('click', async () => {
         const pid = parseInt(btn.dataset.sessionMute, 10);
         const state = parseInt(btn.dataset.state, 10) || 0;
-        // Optimistic toggle
-        btn.textContent = state === 1 ? 'Unmute' : 'Mute';
+        // Optimistic toggle with CSS class
+        btn.classList.toggle('is-muted', state === 1);
         btn.dataset.state = state === 1 ? '0' : '1';
+        btn.disabled = true;
         try {
           await jsonFetch(`/api/audio/session/${pid}/mute/${state}`, { method: 'POST' });
           scheduleRouteSessionRefresh(350);
         } catch (err) {
           // Revert on failure
-          btn.textContent = state === 1 ? 'Mute' : 'Unmute';
+          btn.classList.toggle('is-muted', state === 0);
           btn.dataset.state = String(state);
           audioMsg.textContent = `Session-Mute Fehler: ${err.message}`;
+        } finally {
+          btn.disabled = false;
         }
       });
     });
-    }
 
     renderUserProgramRoutes();
     scheduleMasonryLayout(audioGrid);
