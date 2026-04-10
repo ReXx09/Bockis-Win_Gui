@@ -763,11 +763,29 @@ input, select {
   margin-top: 6px;
 }
 
+.audio-fav-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .audio-fav-btn,
 .audio-fav-add {
   padding: 4px 8px;
   font-size: 0.72rem;
   line-height: 1.2;
+}
+
+.audio-fav-remove {
+  min-width: 28px;
+  width: 28px;
+  padding: 4px 0;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.audio-hidden {
+  display: none !important;
 }
 
 .list {

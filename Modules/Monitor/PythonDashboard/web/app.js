@@ -98,6 +98,7 @@ const userProgramDevice = document.getElementById('userProgramDevice');
 const addUserProgramBtn = document.getElementById('addUserProgramBtn');
 const refreshOpenProgramsBtn = document.getElementById('refreshOpenProgramsBtn');
 const openRoutingSettingsBtn = document.getElementById('openRoutingSettingsBtn');
+const audioEditModeBtn = document.getElementById('audioEditModeBtn');
 const userProgramRoutes = document.getElementById('userProgramRoutes');
 const userRoutingHint = document.getElementById('userRoutingHint');
 
@@ -219,6 +220,7 @@ const THEME_KEY = 'bockis_theme_v1';
 const GLASS_STRENGTH_KEY = 'bockis_glass_strength_v1';
 const AUDIO_USER_ROUTES_KEY = 'bockis_audio_user_routes_v1';
 const AUDIO_HIDDEN_DEVICES_KEY = 'bockis_audio_hidden_devices_v1';
+const AUDIO_EDIT_MODE_KEY = 'bockis_audio_edit_mode_v1';
 const LAUNCHERS_FALLBACK_KEY = 'bockis_custom_launchers_v1';
 const LAUNCHER_STYLE_PRESETS_KEY = 'bockis_launcher_style_presets_v1';
 const LAUNCHER_CATEGORY_LAYOUTS_KEY = 'bockis_launcher_category_layouts_v1';
@@ -264,6 +266,8 @@ let lastOpenProgramsFetch = 0;
 let showAllAudioDevices = false;
 let hiddenAudioDeviceIds = new Set();
 let audioSwitchInFlight = false;
+let audioEditMode = false;
+let lastAudioDeviceSummary = { activeOutput: '', activeInput: '', routingMessage: '' };
 let pendingThemeId = 'ozean';
 let availableTools = [];
 let customLaunchers = [];
@@ -2168,6 +2172,36 @@ function normalizeAllUserRoutes(routes) {
   return (Array.isArray(routes) ? routes : []).map((r) => normalizeUserRoute(r)).filter((r) => r.program);
 }
 
+function readAudioEditMode() {
+  try {
+    return localStorage.getItem(AUDIO_EDIT_MODE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function saveAudioEditMode(enabled) {
+  try {
+    localStorage.setItem(AUDIO_EDIT_MODE_KEY, enabled ? '1' : '0');
+  } catch {
+    // ignore storage failures
+  }
+}
+
+function setAudioEditMode(enabled) {
+  audioEditMode = !!enabled;
+  saveAudioEditMode(audioEditMode);
+
+  if (audioEditModeBtn) {
+    audioEditModeBtn.textContent = audioEditMode ? 'Bearbeitungsmodus: An' : 'Bearbeitungsmodus: Aus';
+    audioEditModeBtn.classList.toggle('warn', audioEditMode);
+  }
+
+  renderUserProgramRoutes();
+  renderAudioDevicesList(lastAudioDeviceSummary.activeOutput, lastAudioDeviceSummary.activeInput, lastAudioDeviceSummary.routingMessage);
+  loadAudioSessions().catch(() => {});
+}
+
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -2428,25 +2462,30 @@ function renderUserProgramRoutes() {
             return `<button class="btn audio-fav-btn" type="button" disabled title="Geraet nicht verfuegbar">offline</button>`;
           }
           const short = String(favDev.name || 'Geraet').slice(0, 18);
-          return `<button class="btn audio-fav-btn" type="button" data-route-fav-apply="${idx}" data-route-fav-id="${favDev.id}" title="${favDev.name}">${short}</button>`;
+          return `
+            <span class="audio-fav-chip">
+              <button class="btn audio-fav-btn" type="button" data-route-fav-apply="${idx}" data-route-fav-id="${favDev.id}" title="${favDev.name}">${short}</button>
+              ${audioEditMode ? `<button class="btn audio-fav-remove" type="button" data-route-fav-remove="${idx}" data-route-fav-remove-id="${favDev.id}" title="Favorit entfernen">x</button>` : ''}
+            </span>
+          `;
         }).join('')
       : '<span class="muted">Keine Favoriten</span>';
-    const canAddFavorite = favoriteIds.length < 3 && !!String(r.deviceId || '').trim();
+    const canAddFavorite = audioEditMode && favoriteIds.length < 3 && !!String(r.deviceId || '').trim();
     return `
       <div class="audio-user-route-item" data-route-index="${idx}">
         <div>
           <strong>${r.program}</strong>
-          <p class="muted">${status}</p>
+          ${audioEditMode ? `<p class="muted">${status}</p>` : ''}
           <div class="audio-fav-row" data-route-favs="${idx}">
             ${favoriteButtons}
             ${canAddFavorite ? `<button class="btn audio-fav-add" type="button" data-route-fav-add="${idx}" title="Aktuelles Ziel zu Favoriten">+ Fav</button>` : ''}
           </div>
         </div>
-        <select data-route-device="${idx}">
+        <select ${audioEditMode ? '' : 'class="audio-hidden"'} data-route-device="${idx}">
           ${outputDevices.map((d) => `<option value="${d.id}" ${d.id === r.deviceId ? 'selected' : ''}>${d.name}${d.is_active_output ? ' (Aktiv)' : ''}</option>`).join('')}
         </select>
-        <button class="btn" data-route-apply="${idx}">Jetzt umschalten</button>
-        <button class="btn" data-route-remove="${idx}">Entfernen</button>
+        <button class="btn${audioEditMode ? '' : ' audio-hidden'}" data-route-apply="${idx}">Jetzt umschalten</button>
+        <button class="btn${audioEditMode ? '' : ' audio-hidden'}" data-route-remove="${idx}">Entfernen</button>
       </div>
     `;
   }).join('');
@@ -2514,6 +2553,24 @@ function renderUserProgramRoutes() {
       route.favoriteDeviceIds = normalizeFavoriteDeviceIds([favId, ...(route.favoriteDeviceIds || [])]);
       saveUserAudioRoutes(all);
       await setDefaultAudioDevice(favId, route.deviceName);
+      renderUserProgramRoutes();
+    });
+  });
+
+  userProgramRoutes.querySelectorAll('[data-route-fav-remove]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt(btn.dataset.routeFavRemove, 10);
+      const removeId = String(btn.dataset.routeFavRemoveId || '').trim();
+      const all = normalizeAllUserRoutes(readUserAudioRoutes());
+      if (!Number.isInteger(idx) || !all[idx] || !removeId) return;
+      const route = all[idx];
+      route.favoriteDeviceIds = normalizeFavoriteDeviceIds((route.favoriteDeviceIds || []).filter((id) => String(id) !== removeId));
+      if (String(route.deviceId || '') === removeId) {
+        route.deviceId = route.favoriteDeviceIds[0] || route.deviceId;
+        route.deviceName = resolveDeviceNameById(route.deviceId);
+      }
+      saveUserAudioRoutes(all);
+      audioMsg.textContent = `Favorit entfernt: ${route.program}`;
       renderUserProgramRoutes();
     });
   });
@@ -2632,11 +2689,15 @@ function renderAudioDevicesList(activeOutput = '', activeInput = '', routingMess
   const activeDevicesCount = primaryDevices.filter((dev) => dev.is_active_output || dev.is_active_input).length;
 
   if (audioDeviceInfo) {
-    const shownText = showAllAudioDevices || extraCount === 0
-      ? `${visibleDevices.length} angezeigt`
-      : `kompakt: ${activeDevicesCount} aktive Geraete sichtbar, ${extraCount} weitere ausblendbar`;
-    const hiddenText = hiddenByUserCount > 0 ? ` | ${hiddenByUserCount} per X ausgeblendet` : '';
-    audioDeviceInfo.textContent = `Ausgabe: ${activeOutput || 'Unbekannt'} | Mikrofon: ${activeInput || 'Unbekannt'} | ${devicesVisibleByUser.length} eindeutige Geraete (${outputCount} Output, ${inputCount} Input) | ${shownText}${hiddenText}${routingMessage ? ` | ${routingMessage}` : ''}`;
+    if (audioEditMode) {
+      const shownText = showAllAudioDevices || extraCount === 0
+        ? `${visibleDevices.length} angezeigt`
+        : `kompakt: ${activeDevicesCount} aktive Geraete sichtbar, ${extraCount} weitere ausblendbar`;
+      const hiddenText = hiddenByUserCount > 0 ? ` | ${hiddenByUserCount} per X ausgeblendet` : '';
+      audioDeviceInfo.textContent = `Ausgabe: ${activeOutput || 'Unbekannt'} | Mikrofon: ${activeInput || 'Unbekannt'} | ${devicesVisibleByUser.length} eindeutige Geraete (${outputCount} Output, ${inputCount} Input) | ${shownText}${hiddenText}${routingMessage ? ` | ${routingMessage}` : ''}`;
+    } else {
+      audioDeviceInfo.textContent = `Ausgabe: ${activeOutput || 'Unbekannt'} | Mikrofon: ${activeInput || 'Unbekannt'}`;
+    }
   }
 
   if (!visibleDevices.length) {
@@ -2656,10 +2717,10 @@ function renderAudioDevicesList(activeOutput = '', activeInput = '', routingMess
     return;
   }
 
-  const toggleMarkup = extraCount > 0
+  const toggleMarkup = audioEditMode && extraCount > 0
     ? `<button class="btn audio-device-toggle" data-audio-device-toggle="${showAllAudioDevices ? 'collapse' : 'expand'}">${showAllAudioDevices ? `Weitere Geraete ausblenden (${extraCount})` : `Weitere Geraete anzeigen (${extraCount})`}</button>`
     : '';
-  const unhideMarkup = hiddenByUserCount > 0
+  const unhideMarkup = audioEditMode && hiddenByUserCount > 0
     ? `<button class="btn audio-device-unhide" data-audio-device-unhide="all">Ausgeblendete anzeigen (${hiddenByUserCount})</button>`
     : '';
 
@@ -2671,11 +2732,11 @@ function renderAudioDevicesList(activeOutput = '', activeInput = '', routingMess
           ${dev.kind === 'input'
             ? (dev.is_active_input
                 ? '<strong>Standard Mikrofon</strong>'
-                : `<button class="btn" data-switch-device="${dev.id}" data-switch-name="${dev.name}" data-switch-kind="input">Als Standard</button>`)
+                : (audioEditMode ? `<button class="btn" data-switch-device="${dev.id}" data-switch-name="${dev.name}" data-switch-kind="input">Als Standard</button>` : '<span class="muted">Mikrofon</span>'))
             : (dev.is_active_output
                 ? '<strong>Standard Ausgabe</strong>'
-                : `<button class="btn" data-switch-device="${dev.id}" data-switch-name="${dev.name}" data-switch-kind="output">Als Standard</button>`)}
-          ${(dev.is_active_output || dev.is_active_input) ? '' : `<button class="btn audio-device-hide" data-hide-device="${dev.id}" data-hide-name="${dev.name}">x</button>`}
+                : (audioEditMode ? `<button class="btn" data-switch-device="${dev.id}" data-switch-name="${dev.name}" data-switch-kind="output">Als Standard</button>` : '<span class="muted">Ausgabe</span>'))}
+          ${(audioEditMode && !(dev.is_active_output || dev.is_active_input)) ? `<button class="btn audio-device-hide" data-hide-device="${dev.id}" data-hide-name="${dev.name}">x</button>` : ''}
         </div>
       </div>
     `).join('')}
@@ -2754,6 +2815,11 @@ async function loadAudioDevices() {
       || a.name.localeCompare(b.name, 'de')
     ));
     cachedAudioDevices = dedup;
+    lastAudioDeviceSummary = {
+      activeOutput: d.active_output || '',
+      activeInput: d.active_input || '',
+      routingMessage: d.routing_message || '',
+    };
 
     // Clean up stale hidden IDs that no longer exist in current device list.
     const currentIds = new Set(cachedAudioDevices.map((dev) => String(dev.id || '')));
@@ -2793,17 +2859,20 @@ async function loadAudioSessions() {
         <div class="audio-session-item" data-pid="${s.pid}">
           <div class="audio-session-head">
             <span>${s.app}</span>
-            <span class="muted">PID ${s.pid} | ${s.device_name || 'Unbekannt'} | ${s.volume}% ${s.muted ? '| Stumm' : ''}</span>
+            <span class="muted">${audioEditMode ? `PID ${s.pid} | ${s.device_name || 'Unbekannt'} | ${s.volume}% ${s.muted ? '| Stumm' : ''}` : `${s.volume}% ${s.muted ? '| Stumm' : ''}`}</span>
           </div>
-          <div class="row">
-            <input type="range" min="0" max="100" value="${s.volume}" data-session-volume="${s.pid}" />
-            <button class="btn" data-session-mute="${s.pid}" data-state="${s.muted ? 0 : 1}">${s.muted ? 'Unmute' : 'Mute'}</button>
-          </div>
+          ${audioEditMode ? `
+            <div class="row">
+              <input type="range" min="0" max="100" value="${s.volume}" data-session-volume="${s.pid}" />
+              <button class="btn" data-session-mute="${s.pid}" data-state="${s.muted ? 0 : 1}">${s.muted ? 'Unmute' : 'Mute'}</button>
+            </div>
+          ` : ''}
         </div>
       `).join('')
       : '<div class="audio-empty">Keine aktiven Audio-Programme gefunden.</div>';
 
-    audioSessions.querySelectorAll('[data-session-volume]').forEach((slider) => {
+    if (audioEditMode) {
+      audioSessions.querySelectorAll('[data-session-volume]').forEach((slider) => {
       slider.addEventListener('change', async () => {
         const pid = parseInt(slider.dataset.sessionVolume, 10);
         const level = parseInt(slider.value, 10) || 0;
@@ -2816,7 +2885,7 @@ async function loadAudioSessions() {
       });
     });
 
-    audioSessions.querySelectorAll('[data-session-mute]').forEach((btn) => {
+      audioSessions.querySelectorAll('[data-session-mute]').forEach((btn) => {
       btn.addEventListener('click', async () => {
         const pid = parseInt(btn.dataset.sessionMute, 10);
         const state = parseInt(btn.dataset.state, 10) || 0;
@@ -2828,6 +2897,7 @@ async function loadAudioSessions() {
         }
       });
     });
+    }
 
     scheduleMasonryLayout(audioGrid);
   } catch (err) {
@@ -3154,6 +3224,11 @@ async function init() {
   wireAudioControls();
   wireUserAudioRoutingControls();
   hiddenAudioDeviceIds = new Set(readHiddenAudioDevices());
+  audioEditMode = readAudioEditMode();
+  if (audioEditModeBtn) {
+    audioEditModeBtn.onclick = () => setAudioEditMode(!audioEditMode);
+  }
+  setAudioEditMode(audioEditMode);
   wireThemeControls();
   launcherCategoryLayouts = readLauncherCategoryLayouts();
   launcherCategoryDensity = readLauncherCategoryDensity();
