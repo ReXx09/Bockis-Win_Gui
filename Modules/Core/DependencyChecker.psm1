@@ -83,6 +83,28 @@ function Get-WingetListOutputCached {
     return [string]$listOutput
 }
 
+function Test-WingetPackageInstalled {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$WingetId
+    )
+
+    if ([string]::IsNullOrWhiteSpace($WingetId)) {
+        return $false
+    }
+
+    try {
+        $listOutput = Get-WingetListOutputCached -WingetId $WingetId
+        if ([string]::IsNullOrWhiteSpace($listOutput)) {
+            return $false
+        }
+
+        return $listOutput -match [regex]::Escape($WingetId)
+    } catch {
+        return $false
+    }
+}
+
 # ===================================================================
 # HILFSFUNKTIONEN FÜR DLL-UPDATE
 # ===================================================================
@@ -1406,6 +1428,20 @@ function Invoke-DependencyAction {
         $result.ExitCode = $process.ExitCode
         $result.Success = ($process.ExitCode -eq 0)
 
+        # winget 0x8A15002B: Paket bereits installiert / kein anwendbares Upgrade.
+        # In diesem Fall ist die Abhängigkeit bereits erfüllt und soll nicht als Fehler gelten.
+        if (-not $result.Success) {
+            $wingetNoApplicableUpgradeExitCode = -1978335189
+            $isInstalledAfterAction = Test-WingetPackageInstalled -WingetId $WingetId
+
+            if (($Action -eq 'upgrade' -and $process.ExitCode -eq $wingetNoApplicableUpgradeExitCode -and $isInstalledAfterAction) -or
+                ($Action -eq 'install' -and $isInstalledAfterAction)) {
+                $result.Success = $true
+                $result.ErrorMessage = $null
+                $result.Note = "Bereits installiert bzw. aktuell"
+            }
+        }
+
         if (-not $result.Success) {
             $result.ErrorMessage = "Exit Code: $($process.ExitCode)"
             Write-Host "[DependencyChecker] ❌ $actionLabel fehlgeschlagen ($($result.ErrorMessage))" -ForegroundColor Red
@@ -1416,13 +1452,25 @@ function Invoke-DependencyAction {
                 & $ProgressCallback 100 "$actionLabel fehlgeschlagen" ([System.Drawing.Color]::Red)
             }
         } else {
-            Write-Host "[DependencyChecker] ✅ $actionLabel erfolgreich" -ForegroundColor Green
+            if ($result.Note) {
+                Write-Host "[DependencyChecker] ✅ $actionLabel nicht erforderlich: $($result.Note)" -ForegroundColor Green
+            } else {
+                Write-Host "[DependencyChecker] ✅ $actionLabel erfolgreich" -ForegroundColor Green
+            }
             Clear-DependencyRuntimeCache
             if ($LogCallback) {
-                & $LogCallback "success" "$actionLabel erfolgreich"
+                if ($result.Note) {
+                    & $LogCallback "success" "$actionLabel nicht erforderlich: $($result.Note)"
+                } else {
+                    & $LogCallback "success" "$actionLabel erfolgreich"
+                }
             }
             if ($ProgressCallback) {
-                & $ProgressCallback 100 "$actionLabel erfolgreich" ([System.Drawing.Color]::LimeGreen)
+                if ($result.Note) {
+                    & $ProgressCallback 100 "$actionLabel nicht erforderlich" ([System.Drawing.Color]::LimeGreen)
+                } else {
+                    & $ProgressCallback 100 "$actionLabel erfolgreich" ([System.Drawing.Color]::LimeGreen)
+                }
             }
         }
     } catch {
