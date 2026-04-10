@@ -1023,6 +1023,22 @@ input, select {
   color: var(--muted);
 }
 
+.audio-input-meter {
+  height: 4px;
+  width: 60px;
+  background: color-mix(in srgb, var(--line) 30%, transparent);
+  border-radius: 2px;
+  overflow: hidden;
+  flex-shrink: 0;
+  transition: opacity 150ms ease-out;
+}
+
+.audio-input-meter-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #4ade80 0%, #22c55e 100%);
+  transition: width 50ms linear;
+}
+
 .audio-fav-chip {
   display: inline-flex;
   align-items: center;

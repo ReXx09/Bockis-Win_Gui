@@ -273,6 +273,8 @@ let audioEditMode = false;
 let lastAudioDeviceSummary = { activeOutput: '', activeInput: '', routingMessage: '' };
 let routeMuteInFlight = new Set();
 let routeSessionRefreshTimer = null;
+let lastInputMeteringData = { level: 0, peak: 0, available: false };
+let inputMeteringTimer = null;
 let pendingThemeId = 'ozean';
 let availableTools = [];
 let customLaunchers = [];
@@ -527,6 +529,10 @@ function clearScopedRefreshTimers() {
     clearInterval(audioRefreshTimer);
     audioRefreshTimer = null;
   }
+  if (inputMeteringTimer) {
+    clearInterval(inputMeteringTimer);
+    inputMeteringTimer = null;
+  }
   if (gitRefreshTimer) {
     clearInterval(gitRefreshTimer);
     gitRefreshTimer = null;
@@ -574,6 +580,12 @@ function updateScopedRefreshTimers() {
       if (!hasVisibleWidgetsOnPage('audio', ['audio-volume', 'audio-devices', 'audio-sessions', 'audio-routing'])) return;
       refreshAudio().catch(() => {});
     }, REFRESH_INTERVALS.audioMs);
+    // Input metering at faster rate for live level display
+    inputMeteringTimer = setInterval(() => {
+      if (getCurrentPage() !== 'audio') return;
+      if (!hasVisibleWidgetsOnPage('audio', ['audio-routing'])) return;
+      loadInputMetering().catch(() => {});
+    }, 500);
   }
 
   if (page === 'tools' && toolStateApiAvailable && hasVisibleWidgetsOnPage('tools', ['tools-sys', 'tools-net', 'tools-diag', 'tools-disk', 'tools-priv', 'tools-dev'])) {
@@ -2504,6 +2516,23 @@ function setAudioEditMode(enabled) {
   loadAudioSessions().catch(() => {});
 }
 
+async function loadInputMetering() {
+  try {
+    const d = await jsonFetch('/api/audio/input-level');
+    lastInputMeteringData = {
+      level: Math.max(0, Math.min(100, parseInt(d.level || 0, 10))),
+      peak: Math.max(0, Math.min(100, parseInt(d.peak || 0, 10))),
+      available: !!d.available,
+    };
+    // Trigger render to update meter display
+    if (userProgramRoutes) {
+      renderUserProgramRoutes();
+    }
+  } catch {
+    // Keep last known state
+  }
+}
+
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -2817,6 +2846,7 @@ function renderUserProgramRoutes() {
           </button>
           <span class="audio-route-session-level">${match.volume}%</span>
           <span class="audio-route-session-badge${match.muted ? ' is-muted' : ' is-active'}">${match.muted ? 'Stumm' : 'Aktiv'}</span>
+          ${lastInputMeteringData.available && lastInputMeteringData.level > 5 ? `<div class="audio-input-meter"><div class="audio-input-meter-bar" style="width: ${lastInputMeteringData.level}%"></div></div>` : ''}
         </div>
       `
       : '<div class="audio-route-session-controls"><span class="audio-route-session-badge is-offline">Keine Session</span></div>';
