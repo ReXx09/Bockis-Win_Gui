@@ -223,7 +223,7 @@ const ROUTE_PAGE_MAP = {
   '/tools': 'tools',
   '/setup': 'setup',
 };
-const SIZE_PRESETS = ['1-4', '1-3', '1-2', '2-3', 'full', 'min'];
+const SIZE_PRESETS = ['1-8', '1-4', '1-3', '1-2', '2-3', 'full', 'min'];
 const THEME_KEY = 'bockis_theme_v1';
 const GLASS_STRENGTH_KEY = 'bockis_glass_strength_v1';
 const AUDIO_USER_ROUTES_KEY = 'bockis_audio_user_routes_v1';
@@ -757,6 +757,7 @@ function wireSizeControls(layoutEl = dashboardGrid, storageKey = LAYOUT_KEY, mes
     controls.className = 'size-controls';
 
     const specs = [
+      { key: '1-8', label: '1/8' },
       { key: '1-4', label: '1/4' },
       { key: '1-3', label: '1/3' },
       { key: '1-2', label: '1/2' },
