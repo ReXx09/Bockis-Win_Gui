@@ -282,6 +282,8 @@ let routeMuteInFlight = new Set();
 let routeSessionRefreshTimer = null;
 let routeOutputMeteringTimer = null;
 let routeOutputMeteringInFlight = false;
+let routeOutputMeteringFailCount = 0;
+let routeOutputMeteringDisabledUntil = 0;
 let routeDebugEvents = [];
 let persistedRouteByPid = new Map();
 let persistedReadbackApiAvailable = true;
@@ -2951,19 +2953,23 @@ function scheduleRouteSessionRefresh(delayMs = 500) {
 
 async function refreshRouteOutputMetersFast() {
   if (routeOutputMeteringInFlight || !userProgramRoutes) return;
+  if (Date.now() < routeOutputMeteringDisabledUntil) return;
 
   const bars = Array.from(userProgramRoutes.querySelectorAll('.audio-route-output-meter-bar[data-route-output-meter-pid]'));
   if (!bars.length) return;
 
   routeOutputMeteringInFlight = true;
   try {
-    const d = await jsonFetch('/api/audio/sessions');
-    if (!d || !d.available) return;
+    const d = await jsonFetch('/api/audio/session-levels');
+    if (!d || !d.available) {
+      routeOutputMeteringFailCount += 1;
+      return;
+    }
 
-    const grouped = groupAudioSessionsByProcess(Array.isArray(d.sessions) ? d.sessions : []);
+    routeOutputMeteringFailCount = 0;
     const levelByPid = new Map(
-      grouped
-        .map((s) => [String(s.pid || ''), Math.max(0, Math.min(100, Number(s.output_level ?? s.volume ?? 0)))])
+      (Array.isArray(d.levels) ? d.levels : [])
+        .map((s) => [String(s.pid || ''), Math.max(0, Math.min(100, Number(s.output_level ?? 0)))])
         .filter(([pid]) => !!pid)
     );
 
@@ -2980,6 +2986,13 @@ async function refreshRouteOutputMetersFast() {
       const meterWrap = bar.closest('.audio-route-output-meter');
       if (meterWrap) meterWrap.title = `Output-Peak ${levelText}%`;
     });
+  } catch (err) {
+    routeOutputMeteringFailCount += 1;
+    if (routeOutputMeteringFailCount >= 3) {
+      routeOutputMeteringDisabledUntil = Date.now() + 15000;
+      appendRouteDebugEntry('warn', 'Output-Meter kurz pausiert (API instabil). Wiederaufnahme in 15s.');
+      routeOutputMeteringFailCount = 0;
+    }
   } finally {
     routeOutputMeteringInFlight = false;
   }
