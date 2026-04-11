@@ -317,24 +317,24 @@
             </div>
             <p class="muted">Per-App Routing wird direkt gesetzt. Falls Windows blockiert, kannst du auf den nativen Mixer-Fallback wechseln.</p>
             <div class="audio-user-routing-row">
-              <select id="openProgramSelect">
+              <select id="openProgramSelect" class="audio-edit-only">
                 <option value="">Offene Programme auswaehlen...</option>
               </select>
-              <input id="userProgramName" list="openProgramHints" type="text" placeholder="Programmname, z. B. Discord oder Brave" />
+              <input id="userProgramName" class="audio-edit-only" list="openProgramHints" type="text" placeholder="Programmname, z. B. Discord oder Brave" />
               <datalist id="openProgramHints"></datalist>
-              <select id="userProgramDevice"></select>
-              <button class="btn" id="addUserProgramBtn">Hinzufuegen</button>
+              <select id="userProgramDevice" class="audio-edit-only"></select>
+              <button class="btn audio-edit-only" id="addUserProgramBtn">Hinzufuegen</button>
               <button class="btn" id="refreshOpenProgramsBtn">Programme aktualisieren</button>
               <button class="btn" id="openRoutingSettingsBtn">Windows Routing</button>
             </div>
             <p id="userRoutingHint" class="muted">Tipp: Nach dem Speichern "Jetzt umschalten" klicken. Falls es fehlschlaegt, nutzt du den nativen Windows-Fallback.</p>
-            <div class="row audio-route-debug-actions">
-              <button class="btn" id="syncRoutesBtn">Sync/Repair aktive Sessions</button>
-              <button class="btn" id="clearAllRoutesBtn">Alle Persisted-Routes loeschen</button>
+            <div class="row audio-route-debug-actions audio-edit-only">
+              <button class="btn audio-edit-only" id="syncRoutesBtn">Sync/Repair aktive Sessions</button>
+              <button class="btn audio-edit-only" id="clearAllRoutesBtn">Alle Persisted-Routes loeschen</button>
               <button class="btn" id="routeFallbackBtn">Fallback: Windows Routing</button>
-              <button class="btn" id="clearRouteDebugBtn">Route-Log leeren</button>
+              <button class="btn audio-edit-only" id="clearRouteDebugBtn">Route-Log leeren</button>
             </div>
-            <pre id="routeDebugLog" class="console small-console compact-console">Route-Diagnose bereit.</pre>
+            <pre id="routeDebugLog" class="console small-console compact-console audio-edit-only">Route-Diagnose bereit.</pre>
             <div id="userProgramRoutes" class="audio-user-route-list"></div>
           </section>
 

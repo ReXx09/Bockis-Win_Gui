@@ -2504,6 +2504,12 @@ function saveAudioEditMode(enabled) {
   }
 }
 
+function setRoutingEditOnlyVisibility(enabled) {
+  document.querySelectorAll('.audio-edit-only').forEach((el) => {
+    el.hidden = !enabled;
+  });
+}
+
 function setAudioEditMode(enabled) {
   audioEditMode = !!enabled;
   saveAudioEditMode(audioEditMode);
@@ -2511,6 +2517,13 @@ function setAudioEditMode(enabled) {
   if (audioEditModeBtn) {
     audioEditModeBtn.textContent = audioEditMode ? 'Bearbeitungsmodus: An' : 'Bearbeitungsmodus: Aus';
     audioEditModeBtn.classList.toggle('warn', audioEditMode);
+  }
+
+  setRoutingEditOnlyVisibility(audioEditMode);
+  if (userRoutingHint) {
+    userRoutingHint.textContent = audioEditMode
+      ? 'Edit-Modus: Programme zuordnen, Sync/Repair ausfuehren und Debug-Log nutzen.'
+      : 'Live-Modus: Nutze "Jetzt umschalten" in den Routen. Fuer Konfiguration den Bearbeitungsmodus aktivieren.';
   }
 
   renderUserProgramRoutes();
