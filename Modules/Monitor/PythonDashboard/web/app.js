@@ -3044,7 +3044,12 @@ function renderUserProgramRoutes() {
     const sessionControls = match
       ? `
         <div class="audio-route-session-controls" data-route-session-controls="${idx}">
-          <input type="range" min="0" max="100" value="${match.volume}" data-route-session-volume="${idx}" data-route-session-pid="${match.pid}" />
+          <div class="audio-route-slider-wrap">
+            <input type="range" min="0" max="100" value="${match.volume}" data-route-session-volume="${idx}" data-route-session-pid="${match.pid}" />
+            <div class="audio-route-output-meter" title="Output-Peak ${Math.max(0, Math.min(100, Number(match.output_level ?? match.volume ?? 0)))}%">
+              <div class="audio-route-output-meter-bar" style="width:${Math.max(0, Math.min(100, Number(match.output_level ?? match.volume ?? 0)))}%"></div>
+            </div>
+          </div>
           <button class="btn audio-route-mute-btn${match.muted ? ' is-muted' : ''}" title="${match.muted ? 'Unmute' : 'Mute'}" data-route-session-mute="${idx}" data-route-session-pid="${match.pid}" data-route-session-state="${match.muted ? 0 : 1}">
             <span class="icon-inline" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><use href="#icon-speaker"></use></svg></span>
           </button>
@@ -3591,9 +3596,6 @@ async function loadAudioSessions() {
           <div class="audio-session-head">
             <span>${s.app}</span>
             <span class="muted">${audioEditMode ? `PID ${s.pid} | ${s.device_name || 'Unbekannt'} | ${s.volume}% ${s.muted ? '| Stumm' : ''}` : `${s.volume}% ${s.muted ? '| Stumm' : ''}`}</span>
-          </div>
-          <div class="audio-output-meter" title="Programm-Ausgabepegel">
-            <div class="audio-output-meter-bar" style="width:${Math.max(0, Math.min(100, Number(s.output_level ?? s.volume ?? 0)))}%"></div>
           </div>
           <div class="row">
             <input type="range" min="0" max="100" value="${s.volume}" data-session-volume="${s.pid}" />
