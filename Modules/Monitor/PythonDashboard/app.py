@@ -203,6 +203,13 @@ _audio_diag_stats: dict[str, object] = {
 }
 _audio_last_error: dict[str, object] = {"ts": 0.0, "action": "", "message": ""}
 
+# Python 3.14 + comtypes/pycaw can crash in AudioUtilities.GetAllDevices() (native AV).
+# Keep dashboard stable by avoiding that code path unless explicitly enabled.
+_audio_disable_device_enumeration = (
+    sys.version_info >= (3, 14)
+    and os.getenv("BOCKIS_AUDIO_ALLOW_DEVICE_ENUM", "0").strip().lower() not in ("1", "true", "yes", "on")
+)
+
 _POLICY_CONFIG_ACTIVATION_CLASS = "Windows.Media.Internal.AudioPolicyConfig"
 _POLICY_CONFIG_FACTORY_IIDS = (
     "ab3d4648-e242-459f-b02f-541c70306324",  # 21H2+
@@ -1922,11 +1929,30 @@ def _iter_render_audio_devices() -> list:
     return devices
 
 
-def _iter_audio_sessions_with_devices() -> list[tuple[object, str, str, object, int]]:
+def _iter_audio_sessions_with_devices() -> list[tuple[object, str, str, object | None, int | None]]:
     if not _ensure_audio_backend():
         return []
 
-    sessions: list[tuple[object, str, str, object, int]] = []
+    sessions: list[tuple[object, str, str, object | None, int | None]] = []
+
+    # Safe mode: do not enumerate endpoint devices (unstable on some Python/comtypes builds).
+    if _audio_disable_device_enumeration:
+        seen_ids: set[str] = set()
+        for audio_session in _iter_audio_sessions():
+            try:
+                instance_id = str(getattr(audio_session, "InstanceIdentifier", None) or getattr(audio_session, "Identifier", None) or "")
+                if not instance_id:
+                    pid = int(getattr(audio_session, "ProcessId", 0) or 0)
+                    instance_id = f"pid:{pid}"
+                if instance_id in seen_ids:
+                    continue
+                seen_ids.add(instance_id)
+                ctl2 = getattr(audio_session, "_ctl", None)
+                sessions.append((audio_session, "Current Output", "unknown", ctl2, None))
+            except Exception:
+                continue
+        return sessions
+
     seen: set[tuple[str, str]] = set()
     for device in _iter_render_audio_devices():
         try:
@@ -2148,6 +2174,7 @@ def health() -> dict:
         "service": "python-dashboard",
         "audio": {
             "backend_available": bool(_ensure_audio_backend()),
+            "device_enumeration_safe_mode": bool(_audio_disable_device_enumeration),
             "write_lock_busy": _audio_write_lock.locked(),
             "stats": audio_diag.get("stats", {}),
             "last_error": audio_diag.get("last_error", {}),
