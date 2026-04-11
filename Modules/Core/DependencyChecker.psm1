@@ -1845,6 +1845,8 @@ function Get-GitPullDependencyStatus {
         Branch           = $null
         Remote           = $null
         Dirty            = $false
+        ToolLibraryName  = "Git"
+        ToolLibraryCategory = "Coding / IT"
     }
 
     if (-not $gitClient.Found) {
@@ -2110,6 +2112,8 @@ function Get-DependencyStatusForGUI {
             Status      = "✓ Installiert"
             StatusColor = "Green"
             WingetId    = if ($winget.Found) { $gitClient.WingetId } else { $null }
+            ToolLibraryName = "Git"
+            ToolLibraryCategory = "Coding / IT"
         }
     } else {
         $dependencies += @{
@@ -2122,6 +2126,8 @@ function Get-DependencyStatusForGUI {
             Status      = "⚠ Nicht installiert"
             StatusColor = "Yellow"
             WingetId    = if ($winget.Found) { $gitClient.WingetId } else { $null }
+            ToolLibraryName = "Git"
+            ToolLibraryCategory = "Coding / IT"
         }
     }
 
