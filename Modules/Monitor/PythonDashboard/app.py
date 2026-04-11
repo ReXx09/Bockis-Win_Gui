@@ -25,7 +25,7 @@ from fastapi.staticfiles import StaticFiles
 try:
     from ctypes import POINTER, cast
     from comtypes import CLSCTX_ALL
-    from pycaw.pycaw import AudioSession, AudioUtilities, IAudioEndpointVolume, IAudioSessionControl2
+    from pycaw.pycaw import AudioSession, AudioUtilities, IAudioEndpointVolume, IAudioSessionControl2, IAudioMeterInformation
 
     AUDIO_AVAILABLE = True
 except Exception:
@@ -36,11 +36,12 @@ except Exception:
     AudioUtilities = None
     IAudioEndpointVolume = None
     IAudioSessionControl2 = None
+    IAudioMeterInformation = None
     AUDIO_AVAILABLE = False
 
 
 def _ensure_audio_backend() -> bool:
-    global AUDIO_AVAILABLE, POINTER, cast, CLSCTX_ALL, AudioSession, AudioUtilities, IAudioEndpointVolume, IAudioSessionControl2
+    global AUDIO_AVAILABLE, POINTER, cast, CLSCTX_ALL, AudioSession, AudioUtilities, IAudioEndpointVolume, IAudioSessionControl2, IAudioMeterInformation
 
     if AUDIO_AVAILABLE:
         return True
@@ -48,7 +49,7 @@ def _ensure_audio_backend() -> bool:
     try:
         from ctypes import POINTER as _POINTER, cast as _cast
         from comtypes import CLSCTX_ALL as _CLSCTX_ALL
-        from pycaw.pycaw import AudioSession as _AudioSession, AudioUtilities as _AudioUtilities, IAudioEndpointVolume as _IAudioEndpointVolume, IAudioSessionControl2 as _IAudioSessionControl2
+        from pycaw.pycaw import AudioSession as _AudioSession, AudioUtilities as _AudioUtilities, IAudioEndpointVolume as _IAudioEndpointVolume, IAudioSessionControl2 as _IAudioSessionControl2, IAudioMeterInformation as _IAudioMeterInformation
 
         POINTER = _POINTER
         cast = _cast
@@ -57,10 +58,55 @@ def _ensure_audio_backend() -> bool:
         AudioUtilities = _AudioUtilities
         IAudioEndpointVolume = _IAudioEndpointVolume
         IAudioSessionControl2 = _IAudioSessionControl2
+        IAudioMeterInformation = _IAudioMeterInformation
         AUDIO_AVAILABLE = True
         return True
     except Exception:
         return False
+
+
+def _to_percent_level(value: float) -> int:
+    try:
+        return int(max(0, min(100, round(float(value) * 100.0))))
+    except Exception:
+        return 0
+
+
+def _get_endpoint_peak_percent(device_obj) -> int:
+    if not _ensure_audio_backend() or not device_obj:
+        return 0
+    try:
+        interface = device_obj.Activate(IAudioMeterInformation._iid_, CLSCTX_ALL, None)
+        meter = cast(interface, POINTER(IAudioMeterInformation))
+        peak = float(meter.GetPeakValue())
+        return _to_percent_level(peak)
+    except Exception:
+        return 0
+
+
+def _get_session_output_level_percent(session_obj) -> int:
+    if not _ensure_audio_backend() or not session_obj:
+        return 0
+
+    # Try direct session metering when exposed by pycaw session wrapper.
+    try:
+        meter_obj = getattr(session_obj, "_ctl", None)
+        if meter_obj is not None:
+            meter = meter_obj.QueryInterface(IAudioMeterInformation)
+            if meter is not None:
+                peak = float(meter.GetPeakValue())
+                return _to_percent_level(peak)
+    except Exception:
+        pass
+
+    # Fallback: use current session volume as stable level indicator.
+    try:
+        vol_obj = session_obj.SimpleAudioVolume
+        if bool(vol_obj.GetMute()):
+            return 0
+        return _to_percent_level(float(vol_obj.GetMasterVolume()))
+    except Exception:
+        return 0
 
 
 @contextmanager
@@ -1840,16 +1886,7 @@ def _iter_audio_sessions() -> list:
         return []
 
 
-def _get_device_kind_from_id(device_id: str) -> str:
-    raw = str(device_id or "")
-    if raw.startswith("{0.0.0."):
-        return "output"
-    if raw.startswith("{0.0.1."):
-        return "input"
-    return "unknown"
-
-
-def _iter_audio_devices(include_inputs: bool = False) -> list:
+def _iter_render_audio_devices() -> list:
     if not _ensure_audio_backend():
         return []
 
@@ -1859,10 +1896,7 @@ def _iter_audio_devices(include_inputs: bool = False) -> list:
             try:
                 device_id = str(getattr(device, "id", None) or getattr(device, "Id", None) or "")
                 state = str(getattr(device, "state", None) or "")
-                kind = _get_device_kind_from_id(device_id)
-                if kind == "unknown":
-                    continue
-                if kind == "input" and not include_inputs:
+                if not device_id.startswith("{0.0.0."):
                     continue
                 if "active" not in state.lower() and state != "1":
                     continue
@@ -1874,17 +1908,16 @@ def _iter_audio_devices(include_inputs: bool = False) -> list:
     return devices
 
 
-def _iter_audio_sessions_with_devices(include_inputs: bool = False) -> list[tuple[object, str, str, str]]:
+def _iter_audio_sessions_with_devices() -> list[tuple[object, str, str]]:
     if not _ensure_audio_backend():
         return []
 
-    sessions: list[tuple[object, str, str, str]] = []
+    sessions: list[tuple[object, str, str]] = []
     seen: set[tuple[str, str]] = set()
-    for device in _iter_audio_devices(include_inputs=include_inputs):
+    for device in _iter_render_audio_devices():
         try:
             device_name = str(getattr(device, "FriendlyName", None) or "Unknown")
             device_id = str(getattr(device, "id", None) or getattr(device, "Id", None) or device_name)
-            device_kind = _get_device_kind_from_id(device_id)
             manager = getattr(device, "AudioSessionManager", None)
             if manager is None:
                 continue
@@ -1903,7 +1936,7 @@ def _iter_audio_sessions_with_devices(include_inputs: bool = False) -> list[tupl
                 if dedup_key in seen:
                     continue
                 seen.add(dedup_key)
-                sessions.append((audio_session, device_name, device_id, device_kind))
+                sessions.append((audio_session, device_name, device_id))
         except Exception:
             continue
     return sessions
@@ -1915,7 +1948,7 @@ def get_audio_sessions() -> dict:
 
     result: list[dict] = []
     with _audio_com_context():
-        for sess, device_name, device_id, device_kind in _iter_audio_sessions_with_devices(include_inputs=True):
+        for sess, device_name, device_id in _iter_audio_sessions_with_devices():
             try:
                 pid = int(getattr(sess, "ProcessId", 0) or 0)
                 proc = getattr(sess, "Process", None)
@@ -1924,14 +1957,15 @@ def get_audio_sessions() -> dict:
                 vol = int(round(vol_obj.GetMasterVolume() * 100))
                 muted = bool(vol_obj.GetMute())
                 state = int(getattr(sess, "State", 0) or 0)
+                output_level = _get_session_output_level_percent(sess)
                 result.append(
                     {
                         "pid": pid,
                         "app": app,
-                        "device_kind": device_kind,
                         "device_name": device_name,
                         "device_id": device_id,
                         "volume": max(0, min(100, vol)),
+                        "output_level": max(0, min(100, int(output_level))),
                         "muted": muted,
                         "state": state,
                     }
@@ -1939,7 +1973,7 @@ def get_audio_sessions() -> dict:
             except Exception:
                 continue
 
-    result = sorted(result, key=lambda x: (x.get("device_kind") != "output", x["app"].lower(), x["device_name"].lower(), x["pid"]))
+    result = sorted(result, key=lambda x: (x["app"].lower(), x["device_name"].lower(), x["pid"]))
     return {"available": True, "sessions": result}
 
 
@@ -1950,7 +1984,7 @@ def set_audio_session_volume(pid: int, level: int) -> bool:
     target = max(0.0, min(1.0, level / 100.0))
     changed = False
     with _audio_com_context():
-        for sess, _, _, _ in _iter_audio_sessions_with_devices(include_inputs=False):
+        for sess, _, _ in _iter_audio_sessions_with_devices():
             try:
                 session_pid = int(getattr(sess, "ProcessId", 0) or 0)
                 if session_pid != pid:
@@ -1968,7 +2002,7 @@ def set_audio_session_mute(pid: int, muted: bool) -> bool:
 
     changed = False
     with _audio_com_context():
-        for sess, _, _, _ in _iter_audio_sessions_with_devices(include_inputs=False):
+        for sess, _, _ in _iter_audio_sessions_with_devices():
             try:
                 session_pid = int(getattr(sess, "ProcessId", 0) or 0)
                 if session_pid != pid:
@@ -2014,15 +2048,13 @@ def get_input_metering_level() -> dict:
             active_mic_getter = getattr(AudioUtilities, "GetMicrophone", None)
             if not callable(active_mic_getter):
                 return {"available": False, "level": 0}
-            
+
             mic_dev = active_mic_getter()
             if not mic_dev:
                 return {"available": False, "level": 0}
-            
-            # Microphone is connected and active - return availability
-            # Actual metering would require IAudioMeterInformation which is complex
-            # For now, return constant to show input is active
-            return {"available": True, "level": 0}
+
+            level = _get_endpoint_peak_percent(mic_dev)
+            return {"available": True, "level": int(level)}
 
     except Exception:
         return {"available": False, "level": 0}

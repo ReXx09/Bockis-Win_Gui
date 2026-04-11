@@ -90,6 +90,8 @@ const audioLevel = document.getElementById('audioLevel');
 const audioMuted = document.getElementById('audioMuted');
 const audioSlider = document.getElementById('audioSlider');
 const audioMsg = document.getElementById('audioMsg');
+const audioInputLevelTxt = document.getElementById('audioInputLevelTxt');
+const audioInputMeterBar = document.getElementById('audioInputMeterBar');
 const audioDeviceInfo = document.getElementById('audioDeviceInfo');
 const audioDevices = document.getElementById('audioDevices');
 const audioSessions = document.getElementById('audioSessions');
@@ -269,7 +271,6 @@ const LAUNCHER_ICON_OPTIONS = [
 let draggedCard = null;
 let cachedAudioDevices = [];
 let lastAudioSessions = [];
-let lastAudioInputSessions = [];
 let cachedOpenPrograms = [];
 let lastOpenProgramsFetch = 0;
 let showAllAudioDevices = false;
@@ -589,6 +590,12 @@ function updateScopedRefreshTimers() {
       if (!hasVisibleWidgetsOnPage('audio', ['audio-volume', 'audio-devices', 'audio-sessions', 'audio-routing'])) return;
       refreshAudio().catch(() => {});
     }, REFRESH_INTERVALS.audioMs);
+
+    inputMeteringTimer = setInterval(() => {
+      if (getCurrentPage() !== 'audio') return;
+      if (!hasVisibleWidgetsOnPage('audio', ['audio-volume', 'audio-devices', 'audio-sessions', 'audio-routing'])) return;
+      loadInputMetering().catch(() => {});
+    }, 320);
   }
 
   if (page === 'tools' && toolStateApiAvailable && hasVisibleWidgetsOnPage('tools', ['tools-sys', 'tools-net', 'tools-diag', 'tools-disk', 'tools-priv', 'tools-dev'])) {
@@ -2532,6 +2539,17 @@ function setAudioEditMode(enabled) {
   loadAudioSessions().catch(() => {});
 }
 
+function renderInputMeterLevel(level, available = true) {
+  const pct = Math.max(0, Math.min(100, Number(level || 0)));
+  if (audioInputLevelTxt) {
+    audioInputLevelTxt.textContent = available ? `${pct}%` : 'N/A';
+  }
+  if (audioInputMeterBar) {
+    audioInputMeterBar.style.width = `${available ? pct : 0}%`;
+    audioInputMeterBar.style.opacity = available ? '1' : '0.3';
+  }
+}
+
 async function loadInputMetering() {
   try {
     const d = await jsonFetch('/api/audio/input-level');
@@ -2540,12 +2558,9 @@ async function loadInputMetering() {
       peak: Math.max(0, Math.min(100, parseInt(d.peak || 0, 10))),
       available: !!d.available,
     };
-    // Trigger render to update meter display
-    if (userProgramRoutes) {
-      renderUserProgramRoutes();
-    }
+    renderInputMeterLevel(lastInputMeteringData.level, lastInputMeteringData.available);
   } catch {
-    // Keep last known state
+    renderInputMeterLevel(0, false);
   }
 }
 
@@ -2872,6 +2887,7 @@ function groupAudioSessionsByProcess(sessions) {
       groups.set(key, {
         ...session,
         devices: session.device_name ? [session.device_name] : [],
+        output_level: Number(session.output_level || 0),
       });
       continue;
     }
@@ -2884,6 +2900,8 @@ function groupAudioSessionsByProcess(sessions) {
     const currentState = Number(session.state || 0);
     const existingVolume = Number(existing.volume || 0);
     const currentVolume = Number(session.volume || 0);
+    const existingOutputLevel = Number(existing.output_level || 0);
+    const currentOutputLevel = Number(session.output_level || 0);
     const preferCurrent = currentState > existingState || (currentState === existingState && currentVolume > existingVolume);
 
     if (preferCurrent) {
@@ -2892,10 +2910,12 @@ function groupAudioSessionsByProcess(sessions) {
       existing.volume = session.volume;
       existing.muted = session.muted;
       existing.state = session.state;
+      existing.output_level = currentOutputLevel;
     } else {
       existing.muted = Boolean(existing.muted && session.muted);
       existing.volume = Math.max(existingVolume, currentVolume);
       existing.state = Math.max(existingState, currentState);
+      existing.output_level = Math.max(existingOutputLevel, currentOutputLevel);
     }
   }
 
@@ -2984,10 +3004,6 @@ function renderUserProgramRoutes() {
       const appToken = normalizeProgramToken(s.app);
       return appToken.includes(routeToken) || routeToken.includes(appToken);
     });
-    const routeInputSessions = lastAudioInputSessions.filter((s) => {
-      const appToken = normalizeProgramToken(s.app);
-      return appToken.includes(routeToken) || routeToken.includes(appToken);
-    });
     const match = routeSessions.length
       ? routeSessions.sort((a, b) => (Number(b.state || 0) - Number(a.state || 0)) || (Number(b.volume || 0) - Number(a.volume || 0)))[0]
       : null;
@@ -3003,20 +3019,9 @@ function renderUserProgramRoutes() {
             ? ` | Persistiert: ${persisted.persisted_device_name || persisted.persisted_device_id || 'Unbekannt'}`
             : ' | Persistiert: keine')
         : '';
-      const micMatch = routeInputSessions.length
-        ? routeInputSessions.sort((a, b) => (Number(b.state || 0) - Number(a.state || 0)) || (Number(b.volume || 0) - Number(a.volume || 0)))[0]
-        : null;
-      const micInfo = micMatch
-        ? ` | Mic aktiv (${micMatch.volume}% auf ${micMatch.device_name || 'Unbekannt'})`
-        : ' | Mic inaktiv';
-      status = `Aktiv als ${match.app} (PID ${match.pid}) auf ${match.device_name || 'Unbekannt'}${persistedInfo}${micInfo}`;
+      status = `Aktiv als ${match.app} (PID ${match.pid}) auf ${match.device_name || 'Unbekannt'}${persistedInfo}`;
     } else if (runningProgram) {
-      const micMatch = routeInputSessions.length
-        ? routeInputSessions.sort((a, b) => (Number(b.state || 0) - Number(a.state || 0)) || (Number(b.volume || 0) - Number(a.volume || 0)))[0]
-        : null;
-      status = micMatch
-        ? `${runningProgram} laeuft | Mic aktiv (${micMatch.volume}% auf ${micMatch.device_name || 'Unbekannt'})`
-        : `${runningProgram} laeuft, aber Windows meldet derzeit keine aktive Audio-Session`;
+      status = `${runningProgram} laeuft, aber Windows meldet derzeit keine aktive Audio-Session`;
     }
     const favoriteIds = normalizeFavoriteDeviceIds(r.favoriteDeviceIds || []);
     const favoriteButtons = favoriteIds.length
@@ -3374,7 +3379,7 @@ async function refreshAudio() {
     audioLevel.textContent = `${d.level}%`;
     audioMuted.textContent = d.muted ? 'Stumm' : 'Aktiv';
     audioSlider.value = d.level;
-    await Promise.all([loadAudioDevices(), loadAudioSessions(), loadOpenPrograms(false)]);
+    await Promise.all([loadAudioDevices(), loadAudioSessions(), loadOpenPrograms(false), loadInputMetering()]);
   } catch (err) {
     audioMsg.textContent = `Audio-Status Fehler: ${err.message}`;
   }
@@ -3561,17 +3566,12 @@ async function loadAudioSessions() {
     if (!d.available) {
       audioSessions.innerHTML = '<div class="audio-empty">Programm-Sessions nicht verfuegbar.</div>';
       lastAudioSessions = [];
-      lastAudioInputSessions = [];
       renderUserProgramRoutes();
       scheduleMasonryLayout(audioGrid);
       return;
     }
 
-    const rawSessions = Array.isArray(d.sessions) ? d.sessions : [];
-    const outputSessions = rawSessions.filter((s) => String(s.device_kind || 'output') !== 'input');
-    const inputSessions = rawSessions.filter((s) => String(s.device_kind || '') === 'input');
-    lastAudioSessions = groupAudioSessionsByProcess(outputSessions);
-    lastAudioInputSessions = groupAudioSessionsByProcess(inputSessions);
+    lastAudioSessions = groupAudioSessionsByProcess(Array.isArray(d.sessions) ? d.sessions : []);
     await refreshPersistedRoutesReadback();
 
     // Exclude programs that already have a dedicated routing row — they show controls there.
@@ -3591,6 +3591,9 @@ async function loadAudioSessions() {
           <div class="audio-session-head">
             <span>${s.app}</span>
             <span class="muted">${audioEditMode ? `PID ${s.pid} | ${s.device_name || 'Unbekannt'} | ${s.volume}% ${s.muted ? '| Stumm' : ''}` : `${s.volume}% ${s.muted ? '| Stumm' : ''}`}</span>
+          </div>
+          <div class="audio-output-meter" title="Programm-Ausgabepegel">
+            <div class="audio-output-meter-bar" style="width:${Math.max(0, Math.min(100, Number(s.output_level ?? s.volume ?? 0)))}%"></div>
           </div>
           <div class="row">
             <input type="range" min="0" max="100" value="${s.volume}" data-session-volume="${s.pid}" />
@@ -3641,7 +3644,6 @@ async function loadAudioSessions() {
     scheduleMasonryLayout(audioGrid);
   } catch (err) {
     lastAudioSessions = [];
-    lastAudioInputSessions = [];
     persistedRouteByPid = new Map();
     renderUserProgramRoutes();
     audioSessions.innerHTML = `<div class="audio-empty">Session-Fehler: ${err.message}</div>`;

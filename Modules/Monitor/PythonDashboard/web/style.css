@@ -708,6 +708,13 @@ input, select {
   gap: 8px;
 }
 
+.audio-mic-meter-row {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: center;
+  gap: 8px;
+}
+
 .audio-device-list,
 .audio-session-list,
 .dependency-list {
@@ -722,6 +729,22 @@ input, select {
   border-radius: 8px;
   padding: 8px;
   background: #0b1628;
+}
+
+.audio-output-meter {
+  height: 5px;
+  width: 100%;
+  border-radius: 999px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--line) 48%, transparent);
+  margin: 6px 0 8px;
+}
+
+.audio-output-meter-bar {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #38bdf8 0%, #22c55e 65%, #f59e0b 100%);
+  transition: width 120ms linear;
 }
 
 .dependency-item {
