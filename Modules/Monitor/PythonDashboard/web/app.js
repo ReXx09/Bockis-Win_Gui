@@ -106,6 +106,8 @@ const userRoutingHint = document.getElementById('userRoutingHint');
 const routeDebugLog = document.getElementById('routeDebugLog');
 const clearRouteDebugBtn = document.getElementById('clearRouteDebugBtn');
 const routeFallbackBtn = document.getElementById('routeFallbackBtn');
+const syncRoutesBtn = document.getElementById('syncRoutesBtn');
+const clearAllRoutesBtn = document.getElementById('clearAllRoutesBtn');
 
 const dashboardGrid = document.getElementById('dashboardGrid');
 const audioGrid = document.getElementById('audioGrid');
@@ -277,6 +279,7 @@ let lastAudioDeviceSummary = { activeOutput: '', activeInput: '', routingMessage
 let routeMuteInFlight = new Set();
 let routeSessionRefreshTimer = null;
 let routeDebugEvents = [];
+let persistedRouteByPid = new Map();
 let lastInputMeteringData = { level: 0, peak: 0, available: false };
 let inputMeteringTimer = null;
 let pendingThemeId = 'ozean';
@@ -2622,6 +2625,31 @@ function clearRouteDebugEntries() {
   }
 }
 
+async function refreshPersistedRoutesReadback() {
+  const pids = [...new Set(lastAudioSessions.map((s) => Number(s.pid || 0)).filter((pid) => pid > 0))];
+  if (!pids.length) {
+    persistedRouteByPid = new Map();
+    return;
+  }
+
+  try {
+    const d = await jsonFetch('/api/audio/route-app/readback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pids, device_kind: 'output' }),
+    });
+    const next = new Map();
+    (Array.isArray(d.routes) ? d.routes : []).forEach((row) => {
+      const key = String(row.pid || '');
+      if (!key) return;
+      next.set(key, row);
+    });
+    persistedRouteByPid = next;
+  } catch (err) {
+    appendRouteDebugEntry('warn', `Readback konnte nicht geladen werden: ${err.message}`);
+  }
+}
+
 async function setDefaultAudioDevice(deviceId, deviceName = '', deviceKind = 'output') {
   if (!deviceId) {
     audioMsg.textContent = deviceKind === 'input' ? 'Kein Mikrofon ausgewaehlt.' : 'Kein Ausgabegeraet ausgewaehlt.';
@@ -2744,6 +2772,7 @@ async function applyPerAppRouteForProgram(programName, deviceId, deviceName = ''
       ? `${programName}: teilweise gesetzt (${okCount}/${pids.length})`
       : `${programName}: erfolgreich gesetzt (${okCount}/${pids.length})`
   );
+  await refreshPersistedRoutesReadback();
   scheduleRouteSessionRefresh(500);
   return true;
 }
@@ -2939,7 +2968,13 @@ function renderUserProgramRoutes() {
     });
     let status = 'Aktuell nicht als Session erkannt';
     if (match) {
-      status = `Aktiv als ${match.app} (PID ${match.pid}) auf ${match.device_name || 'Unbekannt'}`;
+      const persisted = persistedRouteByPid.get(String(match.pid || ''));
+      const persistedInfo = persisted
+        ? (persisted.configured
+            ? ` | Persistiert: ${persisted.persisted_device_name || persisted.persisted_device_id || 'Unbekannt'}`
+            : ' | Persistiert: keine')
+        : '';
+      status = `Aktiv als ${match.app} (PID ${match.pid}) auf ${match.device_name || 'Unbekannt'}${persistedInfo}`;
     } else if (runningProgram) {
       status = `${runningProgram} laeuft, aber Windows meldet derzeit keine aktive Audio-Session`;
     }
@@ -3135,6 +3170,57 @@ function renderUserProgramRoutes() {
 
 function wireUserAudioRoutingControls() {
   if (!addUserProgramBtn || !openRoutingSettingsBtn) return;
+
+  if (syncRoutesBtn) {
+    syncRoutesBtn.addEventListener('click', async () => {
+      const routes = normalizeAllUserRoutes(readUserAudioRoutes());
+      if (!routes.length) {
+        audioMsg.textContent = 'Keine gespeicherten Routen zum Synchronisieren.';
+        return;
+      }
+
+      syncRoutesBtn.disabled = true;
+      let ok = 0;
+      for (const route of routes) {
+        const targetId = String(route.deviceId || '').trim();
+        if (!targetId) continue;
+        const targetName = route.deviceName || resolveDeviceNameById(targetId);
+        const changed = await applyPerAppRouteForProgram(route.program, targetId, targetName);
+        if (changed) ok += 1;
+      }
+      await loadAudioSessions();
+      renderUserProgramRoutes();
+      audioMsg.textContent = `Sync/Repair abgeschlossen: ${ok} Route${ok === 1 ? '' : 'n'} angewendet.`;
+      appendRouteDebugEntry('info', `Sync/Repair abgeschlossen (${ok} erfolgreich).`);
+      syncRoutesBtn.disabled = false;
+    });
+  }
+
+  if (clearAllRoutesBtn) {
+    clearAllRoutesBtn.addEventListener('click', async () => {
+      const confirmed = window.confirm('Alle persistierten App-Routen in Windows loeschen?');
+      if (!confirmed) return;
+
+      clearAllRoutesBtn.disabled = true;
+      try {
+        const d = await jsonFetch('/api/audio/route-app/clear-all', { method: 'POST' });
+        if (d.success) {
+          persistedRouteByPid = new Map();
+          appendRouteDebugEntry('ok', `Clear-All erfolgreich (${d.duration_ms || 0} ms).`);
+          audioMsg.textContent = 'Alle persistierten App-Routen wurden geloescht.';
+          renderUserProgramRoutes();
+        } else {
+          appendRouteDebugEntry('error', `Clear-All fehlgeschlagen: ${d.message || 'Unbekannter Fehler'}`);
+          audioMsg.textContent = `Clear-All fehlgeschlagen: ${d.message || 'Unbekannter Fehler'}`;
+        }
+      } catch (err) {
+        appendRouteDebugEntry('error', `Clear-All Exception: ${err.message}`);
+        audioMsg.textContent = `Clear-All Fehler: ${err.message}`;
+      } finally {
+        clearAllRoutesBtn.disabled = false;
+      }
+    });
+  }
 
   if (clearRouteDebugBtn) {
     clearRouteDebugBtn.addEventListener('click', () => {
@@ -3441,6 +3527,7 @@ async function loadAudioSessions() {
     }
 
     lastAudioSessions = groupAudioSessionsByProcess(Array.isArray(d.sessions) ? d.sessions : []);
+    await refreshPersistedRoutesReadback();
 
     // Exclude programs that already have a dedicated routing row — they show controls there.
     const routedTokens = new Set(
@@ -3509,6 +3596,7 @@ async function loadAudioSessions() {
     scheduleMasonryLayout(audioGrid);
   } catch (err) {
     lastAudioSessions = [];
+    persistedRouteByPid = new Map();
     renderUserProgramRoutes();
     audioSessions.innerHTML = `<div class="audio-empty">Session-Fehler: ${err.message}</div>`;
     scheduleMasonryLayout(audioGrid);

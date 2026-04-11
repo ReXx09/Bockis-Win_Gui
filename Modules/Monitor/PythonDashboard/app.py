@@ -150,6 +150,8 @@ _POLICY_CONFIG_FACTORY_IIDS = (
 )
 # IUnknown (3) + IInspectable (3) + 19 placeholder methods before SetPersistedDefaultAudioEndpoint.
 _POLICY_CONFIG_METHOD_INDEX_SET_PERSISTED = 25
+_POLICY_CONFIG_METHOD_INDEX_GET_PERSISTED = 26
+_POLICY_CONFIG_METHOD_INDEX_CLEAR_ALL = 27
 _POLICY_CONFIG_METHOD_INDEX_RELEASE = 2
 _MMDEVAPI_TOKEN = r"\\?\SWD#MMDEVAPI#"
 _DEVINTERFACE_AUDIO_RENDER = "#{e6327cad-dcec-4949-ae8a-991e976a79d2}"
@@ -178,6 +180,19 @@ def _hresult_hex(value: int) -> str:
 def _pack_policy_device_id(device_id: str, flow: int) -> str:
     suffix = _DEVINTERFACE_AUDIO_CAPTURE if int(flow) == 1 else _DEVINTERFACE_AUDIO_RENDER
     return f"{_MMDEVAPI_TOKEN}{device_id}{suffix}"
+
+
+def _unpack_policy_device_id(packed_device_id: str) -> str:
+    value = str(packed_device_id or "").strip()
+    if not value:
+        return ""
+    if value.startswith(_MMDEVAPI_TOKEN):
+        value = value[len(_MMDEVAPI_TOKEN):]
+    if value.endswith(_DEVINTERFACE_AUDIO_RENDER):
+        value = value[: -len(_DEVINTERFACE_AUDIO_RENDER)]
+    if value.endswith(_DEVINTERFACE_AUDIO_CAPTURE):
+        value = value[: -len(_DEVINTERFACE_AUDIO_CAPTURE)]
+    return value
 
 
 def _windows_create_hstring(value: str) -> tuple[bool, ctypes.c_void_p, str]:
@@ -210,6 +225,25 @@ def _windows_delete_hstring(handle: ctypes.c_void_p | None) -> None:
         delete_fn(handle)
     except Exception:
         pass
+
+
+def _windows_hstring_to_text(handle: ctypes.c_void_p | None) -> str:
+    if not handle:
+        return ""
+    raw = int(getattr(handle, "value", 0) or 0)
+    if raw == 0:
+        return ""
+    try:
+        get_raw = ctypes.windll.combase.WindowsGetStringRawBuffer
+        get_raw.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32)]
+        get_raw.restype = ctypes.c_wchar_p
+        length = ctypes.c_uint32(0)
+        ptr = get_raw(handle, ctypes.byref(length))
+        if not ptr:
+            return ""
+        return str(ptr)[: int(length.value)]
+    except Exception:
+        return ""
 
 
 def _ro_get_policy_config_factory() -> tuple[bool, ctypes.c_void_p, str]:
@@ -323,6 +357,77 @@ def set_persisted_app_audio_endpoint(process_id: int, device_id: str, device_kin
                 return True, f"Per-App Routing {mode} OK ({factory_msg}, pid={pid}, flow={flow})."
             finally:
                 _windows_delete_hstring(endpoint_hstr)
+                _policy_factory_release(factory)
+
+
+def get_persisted_app_audio_endpoint(process_id: int, device_kind: str = "output") -> tuple[bool, str, str]:
+    pid = int(process_id or 0)
+    if pid <= 0:
+        return False, "", "Ungueltige PID."
+    if platform.system().lower() != "windows":
+        return False, "", "Nur unter Windows verfuegbar."
+
+    kind = str(device_kind or "output").strip().lower()
+    flow = 1 if kind == "input" else 0
+
+    with _audio_com_context():
+        with _winrt_context():
+            ok, factory, factory_msg = _ro_get_policy_config_factory()
+            if not ok:
+                return False, "", factory_msg
+
+            try:
+                vtbl = ctypes.cast(factory, ctypes.POINTER(ctypes.POINTER(ctypes.c_void_p))).contents
+                get_ptr = vtbl[_POLICY_CONFIG_METHOD_INDEX_GET_PERSISTED]
+                get_fn = ctypes.WINFUNCTYPE(
+                    ctypes.c_long,
+                    ctypes.c_void_p,
+                    ctypes.c_uint32,
+                    ctypes.c_int32,
+                    ctypes.c_int32,
+                    ctypes.POINTER(ctypes.c_void_p),
+                )(get_ptr)
+
+                role_candidates = (3, 1, 0)
+                errors: list[str] = []
+                for role in role_candidates:
+                    endpoint_hstr = ctypes.c_void_p()
+                    try:
+                        hr = int(get_fn(factory, ctypes.c_uint32(pid), ctypes.c_int32(flow), ctypes.c_int32(role), ctypes.byref(endpoint_hstr)))
+                        if hr != 0:
+                            errors.append(f"role {role}: {_hresult_hex(hr)}")
+                            continue
+
+                        packed_value = _windows_hstring_to_text(endpoint_hstr)
+                        unpacked = _unpack_policy_device_id(packed_value)
+                        return True, unpacked, f"Per-App Routing read OK ({factory_msg}, pid={pid}, flow={flow}, role={role})."
+                    finally:
+                        _windows_delete_hstring(endpoint_hstr)
+
+                return False, "", "GetPersistedDefaultAudioEndpoint fehlgeschlagen (" + ", ".join(errors) + ")"
+            finally:
+                _policy_factory_release(factory)
+
+
+def clear_all_persisted_app_audio_endpoints() -> tuple[bool, str]:
+    if platform.system().lower() != "windows":
+        return False, "Nur unter Windows verfuegbar."
+
+    with _audio_com_context():
+        with _winrt_context():
+            ok, factory, factory_msg = _ro_get_policy_config_factory()
+            if not ok:
+                return False, factory_msg
+
+            try:
+                vtbl = ctypes.cast(factory, ctypes.POINTER(ctypes.POINTER(ctypes.c_void_p))).contents
+                clear_ptr = vtbl[_POLICY_CONFIG_METHOD_INDEX_CLEAR_ALL]
+                clear_fn = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p)(clear_ptr)
+                hr = int(clear_fn(factory))
+                if hr != 0:
+                    return False, f"ClearAllPersistedApplicationDefaultEndpoints fehlgeschlagen ({_hresult_hex(hr)})."
+                return True, f"Persisted App Routing geloescht ({factory_msg})."
+            finally:
                 _policy_factory_release(factory)
 
 def _get_god_mode_cached(cache_key: str, func, timeout_sec: float = 0.5) -> bool:
@@ -2104,6 +2209,82 @@ def api_audio_route_app(payload: dict | None = None) -> dict:
         "device_id": device_id,
         "device_kind": device_kind,
         "note": "Aenderung greift fuer neue oder neu aufgebaute Audio-Sessions am zuverlaessigsten.",
+    }
+
+
+@app.get("/api/audio/route-app/{pid}")
+def api_audio_route_app_read(pid: int, device_kind: str = "output") -> dict:
+    kind = str(device_kind or "output").strip().lower()
+    if kind not in {"output", "input"}:
+        kind = "output"
+
+    ok, persisted_id, message = get_persisted_app_audio_endpoint(pid, kind)
+    devices_data = get_audio_devices()
+    devices = devices_data.get("devices") or []
+    mapped = next((x for x in devices if str(x.get("id") or "") == str(persisted_id or "")), None)
+    persisted_name = str((mapped or {}).get("name") or "")
+
+    return {
+        "success": ok,
+        "pid": int(pid),
+        "device_kind": kind,
+        "configured": bool(persisted_id),
+        "persisted_device_id": persisted_id,
+        "persisted_device_name": persisted_name,
+        "message": message,
+    }
+
+
+@app.post("/api/audio/route-app/readback")
+def api_audio_route_app_readback(payload: dict | None = None) -> dict:
+    body = payload or {}
+    kind = str(body.get("device_kind") or "output").strip().lower()
+    if kind not in {"output", "input"}:
+        kind = "output"
+
+    raw_pids = body.get("pids")
+    pids: list[int] = []
+    if isinstance(raw_pids, list):
+        for item in raw_pids:
+            try:
+                pid = int(item)
+                if pid > 0:
+                    pids.append(pid)
+            except Exception:
+                continue
+    pids = sorted(set(pids))[:300]
+
+    devices_data = get_audio_devices()
+    device_map = {str(d.get("id") or ""): str(d.get("name") or "") for d in (devices_data.get("devices") or [])}
+
+    routes: list[dict] = []
+    for pid in pids:
+        ok, persisted_id, msg = get_persisted_app_audio_endpoint(pid, kind)
+        routes.append(
+            {
+                "pid": pid,
+                "success": ok,
+                "configured": bool(persisted_id),
+                "persisted_device_id": persisted_id,
+                "persisted_device_name": device_map.get(str(persisted_id), ""),
+                "message": msg,
+            }
+        )
+
+    return {
+        "success": True,
+        "device_kind": kind,
+        "routes": routes,
+    }
+
+
+@app.post("/api/audio/route-app/clear-all")
+def api_audio_route_app_clear_all() -> dict:
+    result = _run_audio_write_action("route_app_clear_all", clear_all_persisted_app_audio_endpoints)
+    return {
+        "success": result.get("success", False),
+        "message": result.get("message", ""),
+        "duration_ms": result.get("duration_ms", 0),
     }
 
 
