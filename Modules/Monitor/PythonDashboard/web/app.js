@@ -280,6 +280,7 @@ let routeMuteInFlight = new Set();
 let routeSessionRefreshTimer = null;
 let routeDebugEvents = [];
 let persistedRouteByPid = new Map();
+let persistedReadbackApiAvailable = true;
 let lastInputMeteringData = { level: 0, peak: 0, available: false };
 let inputMeteringTimer = null;
 let pendingThemeId = 'ozean';
@@ -2626,6 +2627,10 @@ function clearRouteDebugEntries() {
 }
 
 async function refreshPersistedRoutesReadback() {
+  if (!persistedReadbackApiAvailable) {
+    return;
+  }
+
   const pids = [...new Set(lastAudioSessions.map((s) => Number(s.pid || 0)).filter((pid) => pid > 0))];
   if (!pids.length) {
     persistedRouteByPid = new Map();
@@ -2646,6 +2651,12 @@ async function refreshPersistedRoutesReadback() {
     });
     persistedRouteByPid = next;
   } catch (err) {
+    if (isHttp404(err)) {
+      persistedReadbackApiAvailable = false;
+      persistedRouteByPid = new Map();
+      appendRouteDebugEntry('info', 'Readback-API (noch) nicht verfuegbar. Bitte Python-Dashboard neu starten, um Persisted-Status zu sehen.');
+      return;
+    }
     appendRouteDebugEntry('warn', `Readback konnte nicht geladen werden: ${err.message}`);
   }
 }
