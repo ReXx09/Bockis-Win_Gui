@@ -2650,6 +2650,72 @@ async function setDefaultAudioDevice(deviceId, deviceName = '', deviceKind = 'ou
   }
 }
 
+async function setPerAppAudioRoute(pid, deviceId, deviceName = '', deviceKind = 'output') {
+  const parsedPid = Number(pid || 0);
+  if (!parsedPid || parsedPid <= 0) {
+    return { success: false, message: 'Ungueltige PID.' };
+  }
+  if (!deviceId) {
+    return { success: false, message: 'Kein Zielgeraet angegeben.' };
+  }
+
+  try {
+    const d = await jsonFetch('/api/audio/route-app', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pid: parsedPid, device_id: deviceId, device_kind: deviceKind }),
+    });
+    if (!d.success) {
+      return { success: false, message: d.message || 'Per-App Routing fehlgeschlagen.' };
+    }
+    return { success: true, message: d.message || `Per-App Routing gesetzt: PID ${parsedPid} -> ${deviceName || deviceId}` };
+  } catch (err) {
+    return { success: false, message: `Per-App Routing Fehler: ${err.message}` };
+  }
+}
+
+function findSessionsForProgram(programName) {
+  const token = normalizeProgramToken(programName);
+  if (!token) return [];
+
+  return lastAudioSessions.filter((s) => {
+    const appToken = normalizeProgramToken(s.app);
+    return appToken.includes(token) || token.includes(appToken);
+  });
+}
+
+async function applyPerAppRouteForProgram(programName, deviceId, deviceName = '') {
+  const sessions = findSessionsForProgram(programName);
+  const pids = [...new Set(sessions.map((s) => Number(s.pid || 0)).filter((p) => p > 0))];
+
+  if (!pids.length) {
+    audioMsg.textContent = `Zuordnung gespeichert: ${programName} -> ${deviceName || resolveDeviceNameById(deviceId)}. Wird angewendet, sobald eine Audio-Session der App aktiv ist.`;
+    return false;
+  }
+
+  let okCount = 0;
+  const failures = [];
+  for (const pid of pids) {
+    const result = await setPerAppAudioRoute(pid, deviceId, deviceName, 'output');
+    if (result.success) {
+      okCount += 1;
+    } else {
+      failures.push(`PID ${pid}: ${result.message}`);
+    }
+  }
+
+  if (!okCount) {
+    audioMsg.textContent = `Per-App Routing fehlgeschlagen fuer ${programName}: ${failures[0] || 'Unbekannter Fehler'}`;
+    return false;
+  }
+
+  audioMsg.textContent = failures.length
+    ? `Per-App Routing teilweise gesetzt (${okCount}/${pids.length}) fuer ${programName}.`
+    : `Per-App Routing gesetzt fuer ${programName} (${okCount} Session${okCount === 1 ? '' : 's'}).`;
+  scheduleRouteSessionRefresh(500);
+  return true;
+}
+
 function normalizeProgramToken(value) {
   return String(value || '')
     .trim()
@@ -2928,14 +2994,8 @@ function renderUserProgramRoutes() {
       const all = normalizeAllUserRoutes(readUserAudioRoutes());
       if (!Number.isInteger(idx) || !all[idx]) return;
       const route = all[idx];
-      const conflicts = findRoutingConflicts(route.program, route.deviceId);
-      if (conflicts.length) {
-        const preview = conflicts.slice(0, 2).map((c) => `${c.program} (${c.preferredDevice})`).join(', ');
-        audioMsg.textContent = `Switch blockiert: aktive Route-Konflikte mit ${preview}. Erst stummschalten oder Windows-Routing nutzen.`;
-        return;
-      }
       const devName = route.deviceName || resolveDeviceNameById(route.deviceId);
-      await setDefaultAudioDevice(route.deviceId, devName);
+      await applyPerAppRouteForProgram(route.program, route.deviceId, devName);
     });
   });
 
@@ -2960,20 +3020,12 @@ function renderUserProgramRoutes() {
       const all = normalizeAllUserRoutes(readUserAudioRoutes());
       if (!Number.isInteger(idx) || !all[idx] || !favId) return;
       const route = all[idx];
-      const conflicts = findRoutingConflicts(route.program, favId);
-      if (conflicts.length) {
-        const preview = conflicts.slice(0, 2).map((c) => `${c.program} (${c.preferredDevice})`).join(', ');
-        audioMsg.textContent = `Switch blockiert: aktive Route-Konflikte mit ${preview}. Erst stummschalten oder Windows-Routing nutzen.`;
-        return;
-      }
       route.deviceId = favId;
       route.deviceName = resolveDeviceNameById(favId);
       saveUserAudioRoutes(all);
       btn.disabled = true;
       try {
-        await setDefaultAudioDevice(favId, route.deviceName);
-        // Wait for Windows to propagate the device change before querying sessions
-        await delay(600);
+        await applyPerAppRouteForProgram(route.program, favId, route.deviceName);
         await loadAudioSessions();
       } finally {
         btn.disabled = false;
@@ -3092,16 +3144,16 @@ function wireUserAudioRoutingControls() {
       existing.deviceId = deviceId;
       existing.deviceName = deviceName;
       existing.favoriteDeviceIds = normalizeFavoriteDeviceIds([...(existing.favoriteDeviceIds || []), deviceId]);
-      audioMsg.textContent = `Zuordnung gespeichert: ${program} -> ${deviceName}${detectionInfo}. Hinweis: Die echte Ausgabe-Zuweisung erfolgt in Windows-Routing.`;
+      audioMsg.textContent = `Zuordnung gespeichert: ${program} -> ${deviceName}${detectionInfo}.`;
     } else {
       all.push({ program, deviceId, deviceName, favoriteDeviceIds: [deviceId] });
-      audioMsg.textContent = `Programm gespeichert: ${program} -> ${deviceName}${detectionInfo}. Hinweis: Die echte Ausgabe-Zuweisung erfolgt in Windows-Routing.`;
+      audioMsg.textContent = `Programm gespeichert: ${program} -> ${deviceName}${detectionInfo}.`;
     }
     saveUserAudioRoutes(all);
     if (userProgramName) userProgramName.value = '';
     if (openProgramSelect) openProgramSelect.value = '';
     if (userRoutingHint) {
-      userRoutingHint.textContent = `Gespeichert fuer ${program}. Jetzt "Windows Routing" oeffnen und dort die App auf ${deviceName} setzen.`;
+      userRoutingHint.textContent = `Gespeichert fuer ${program}. Bei aktiver Session kannst du mit "Jetzt umschalten" das Per-App Routing direkt anwenden.`;
     }
     renderUserProgramRoutes();
   });

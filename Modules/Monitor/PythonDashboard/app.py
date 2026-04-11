@@ -10,6 +10,7 @@ import time
 import ctypes
 import sys
 import threading
+import uuid
 from importlib import metadata as importlib_metadata
 from contextlib import contextmanager
 from pathlib import Path
@@ -141,6 +142,158 @@ _audio_diag_stats: dict[str, object] = {
     "last_duration_ms": 0,
 }
 _audio_last_error: dict[str, object] = {"ts": 0.0, "action": "", "message": ""}
+
+_POLICY_CONFIG_ACTIVATION_CLASS = "Windows.Media.Internal.AudioPolicyConfig"
+_POLICY_CONFIG_FACTORY_IIDS = (
+    "ab3d4648-e242-459f-b02f-541c70306324",  # 21H2+
+    "2a59116d-6c4f-45e0-a74f-707e3fef9258",  # downlevel
+)
+_POLICY_CONFIG_METHOD_INDEX_SET_PERSISTED = 24
+_POLICY_CONFIG_METHOD_INDEX_RELEASE = 2
+_MMDEVAPI_TOKEN = r"\\?\SWD#MMDEVAPI#"
+_DEVINTERFACE_AUDIO_RENDER = "#{e6327cad-dcec-4949-ae8a-991e976a79d2}"
+_DEVINTERFACE_AUDIO_CAPTURE = "#{2eef81be-33fa-4800-9670-1cd474972c3f}"
+
+
+class _GUID(ctypes.Structure):
+    _fields_ = [
+        ("Data1", ctypes.c_uint32),
+        ("Data2", ctypes.c_uint16),
+        ("Data3", ctypes.c_uint16),
+        ("Data4", ctypes.c_ubyte * 8),
+    ]
+
+
+def _guid_from_string(value: str) -> _GUID:
+    parsed = uuid.UUID(str(value))
+    return _GUID.from_buffer_copy(parsed.bytes_le)
+
+
+def _hresult_hex(value: int) -> str:
+    return f"0x{(int(value) & 0xFFFFFFFF):08X}"
+
+
+def _pack_policy_device_id(device_id: str, flow: int) -> str:
+    suffix = _DEVINTERFACE_AUDIO_CAPTURE if int(flow) == 1 else _DEVINTERFACE_AUDIO_RENDER
+    return f"{_MMDEVAPI_TOKEN}{device_id}{suffix}"
+
+
+def _windows_create_hstring(value: str) -> tuple[bool, ctypes.c_void_p, str]:
+    try:
+        create_fn = ctypes.windll.combase.WindowsCreateString
+    except Exception as ex:
+        return False, ctypes.c_void_p(), f"WindowsCreateString unavailable: {ex}"
+
+    create_fn.argtypes = [ctypes.c_wchar_p, ctypes.c_uint32, ctypes.POINTER(ctypes.c_void_p)]
+    create_fn.restype = ctypes.c_long
+
+    handle = ctypes.c_void_p()
+    text = str(value or "")
+    hr = int(create_fn(text, len(text), ctypes.byref(handle)))
+    if hr != 0:
+        return False, ctypes.c_void_p(), f"WindowsCreateString failed ({_hresult_hex(hr)})"
+    return True, handle, "OK"
+
+
+def _windows_delete_hstring(handle: ctypes.c_void_p | None) -> None:
+    if not handle:
+        return
+    raw = int(getattr(handle, "value", 0) or 0)
+    if raw == 0:
+        return
+    try:
+        delete_fn = ctypes.windll.combase.WindowsDeleteString
+        delete_fn.argtypes = [ctypes.c_void_p]
+        delete_fn.restype = ctypes.c_long
+        delete_fn(handle)
+    except Exception:
+        pass
+
+
+def _ro_get_policy_config_factory() -> tuple[bool, ctypes.c_void_p, str]:
+    try:
+        ro_get_factory = ctypes.windll.combase.RoGetActivationFactory
+    except Exception as ex:
+        return False, ctypes.c_void_p(), f"RoGetActivationFactory unavailable: {ex}"
+
+    ro_get_factory.argtypes = [ctypes.c_void_p, ctypes.POINTER(_GUID), ctypes.POINTER(ctypes.c_void_p)]
+    ro_get_factory.restype = ctypes.c_long
+
+    ok, class_hstr, class_msg = _windows_create_hstring(_POLICY_CONFIG_ACTIVATION_CLASS)
+    if not ok:
+        return False, ctypes.c_void_p(), class_msg
+
+    try:
+        for iid_str in _POLICY_CONFIG_FACTORY_IIDS:
+            iid = _guid_from_string(iid_str)
+            factory = ctypes.c_void_p()
+            hr = int(ro_get_factory(class_hstr, ctypes.byref(iid), ctypes.byref(factory)))
+            if hr == 0 and int(factory.value or 0) != 0:
+                return True, factory, f"factory={iid_str}"
+        return False, ctypes.c_void_p(), "AudioPolicyConfig factory not available for known IIDs."
+    finally:
+        _windows_delete_hstring(class_hstr)
+
+
+def _policy_factory_release(factory: ctypes.c_void_p | None) -> None:
+    raw = int(getattr(factory, "value", 0) or 0)
+    if raw == 0:
+        return
+    try:
+        vtbl = ctypes.cast(factory, ctypes.POINTER(ctypes.POINTER(ctypes.c_void_p))).contents
+        release_ptr = vtbl[_POLICY_CONFIG_METHOD_INDEX_RELEASE]
+        release_fn = ctypes.WINFUNCTYPE(ctypes.c_ulong, ctypes.c_void_p)(release_ptr)
+        release_fn(factory)
+    except Exception:
+        pass
+
+
+def set_persisted_app_audio_endpoint(process_id: int, device_id: str, device_kind: str = "output") -> tuple[bool, str]:
+    pid = int(process_id or 0)
+    if pid <= 0:
+        return False, "Ungueltige PID."
+    if platform.system().lower() != "windows":
+        return False, "Nur unter Windows verfuegbar."
+
+    kind = str(device_kind or "output").strip().lower()
+    flow = 1 if kind == "input" else 0
+    clean_device_id = str(device_id or "").strip()
+    packed_id = _pack_policy_device_id(clean_device_id, flow) if clean_device_id else ""
+
+    with _audio_com_context():
+        ok, factory, factory_msg = _ro_get_policy_config_factory()
+        if not ok:
+            return False, factory_msg
+
+        endpoint_hstr = ctypes.c_void_p()
+        if packed_id:
+            h_ok, endpoint_hstr, h_msg = _windows_create_hstring(packed_id)
+            if not h_ok:
+                _policy_factory_release(factory)
+                return False, h_msg
+
+        try:
+            vtbl = ctypes.cast(factory, ctypes.POINTER(ctypes.POINTER(ctypes.c_void_p))).contents
+            set_ptr = vtbl[_POLICY_CONFIG_METHOD_INDEX_SET_PERSISTED]
+            set_fn = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, ctypes.c_uint32, ctypes.c_int32, ctypes.c_int32, ctypes.c_void_p)(set_ptr)
+
+            # Apply to all roles so Windows mixer and comms profile stay in sync.
+            role_results: list[tuple[int, int]] = []
+            for role in (0, 1, 2):
+                hr = int(set_fn(factory, ctypes.c_uint32(pid), ctypes.c_int32(flow), ctypes.c_int32(role), endpoint_hstr))
+                role_results.append((role, hr))
+
+            failed = [(role, hr) for role, hr in role_results if hr != 0]
+            if failed:
+                details = ", ".join([f"role {role}: {_hresult_hex(hr)}" for role, hr in failed])
+                return False, f"SetPersistedDefaultAudioEndpoint fehlgeschlagen ({details})."
+
+            cleared = not bool(clean_device_id)
+            mode = "clear" if cleared else "set"
+            return True, f"Per-App Routing {mode} OK ({factory_msg}, pid={pid}, flow={flow})."
+        finally:
+            _windows_delete_hstring(endpoint_hstr)
+            _policy_factory_release(factory)
 
 def _get_god_mode_cached(cache_key: str, func, timeout_sec: float = 0.5) -> bool:
     """Get cached God Mode state or compute fresh if cache expired."""
@@ -1882,6 +2035,45 @@ def api_audio_default_device(payload: dict | None = None) -> dict:
         "duration_ms": result.get("duration_ms", 0),
         "active_output": updated.get("active_output"),
         "active_input": updated.get("active_input"),
+    }
+
+
+@app.post("/api/audio/route-app")
+def api_audio_route_app(payload: dict | None = None) -> dict:
+    body = payload or {}
+    pid_raw = body.get("pid")
+    device_id = str(body.get("device_id") or "").strip()
+    device_kind = str(body.get("device_kind") or "output").strip().lower()
+    if device_kind not in {"output", "input"}:
+        device_kind = "output"
+
+    try:
+        pid = int(pid_raw)
+    except Exception:
+        pid = 0
+
+    if pid <= 0:
+        return {
+            "success": False,
+            "message": "Ungueltige PID.",
+            "pid": pid,
+            "device_id": device_id,
+            "device_kind": device_kind,
+        }
+
+    result = _run_audio_write_action(
+        f"route_app:{pid}:{device_kind}",
+        lambda: set_persisted_app_audio_endpoint(pid, device_id, device_kind),
+    )
+
+    return {
+        "success": result.get("success", False),
+        "message": result.get("message", ""),
+        "duration_ms": result.get("duration_ms", 0),
+        "pid": pid,
+        "device_id": device_id,
+        "device_kind": device_kind,
+        "note": "Aenderung greift fuer neue oder neu aufgebaute Audio-Sessions am zuverlaessigsten.",
     }
 
 
