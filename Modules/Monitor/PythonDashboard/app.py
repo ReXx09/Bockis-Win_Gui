@@ -84,30 +84,19 @@ def _get_endpoint_peak_percent(device_obj) -> int:
         return 0
 
 
-def _get_session_output_level_percent(session_obj, session_control_obj=None) -> int:
+def _get_session_output_level_percent(session_obj, session_control_obj=None, device_peak_level: int | None = None) -> int:
     if not _ensure_audio_backend() or not session_obj:
         return 0
 
-    # Preferred path: use the known IAudioSessionControl2 COM object from enumerator.
-    if session_control_obj is not None:
+    # Stable path: use endpoint peak of the session's output device.
+    if device_peak_level is not None:
         try:
-            meter = session_control_obj.QueryInterface(IAudioMeterInformation)
-            if meter is not None:
-                peak = float(meter.GetPeakValue())
-                return _to_percent_level(peak)
+            vol_obj = session_obj.SimpleAudioVolume
+            if bool(vol_obj.GetMute()):
+                return 0
         except Exception:
             pass
-
-    # Fallback path: only use the primary pycaw control handle.
-    try:
-        meter_obj = getattr(session_obj, "_ctl", None)
-        if meter_obj is not None:
-            meter = meter_obj.QueryInterface(IAudioMeterInformation)
-            if meter is not None:
-                peak = float(meter.GetPeakValue())
-                return _to_percent_level(peak)
-    except Exception:
-        pass
+        return max(0, min(100, int(device_peak_level)))
 
     # Fallback: use current session volume as stable level indicator.
     try:
@@ -1918,16 +1907,17 @@ def _iter_render_audio_devices() -> list:
     return devices
 
 
-def _iter_audio_sessions_with_devices() -> list[tuple[object, str, str, object]]:
+def _iter_audio_sessions_with_devices() -> list[tuple[object, str, str, object, int]]:
     if not _ensure_audio_backend():
         return []
 
-    sessions: list[tuple[object, str, str, object]] = []
+    sessions: list[tuple[object, str, str, object, int]] = []
     seen: set[tuple[str, str]] = set()
     for device in _iter_render_audio_devices():
         try:
             device_name = str(getattr(device, "FriendlyName", None) or "Unknown")
             device_id = str(getattr(device, "id", None) or getattr(device, "Id", None) or device_name)
+            device_peak = _get_endpoint_peak_percent(device)
             manager = getattr(device, "AudioSessionManager", None)
             if manager is None:
                 continue
@@ -1946,7 +1936,7 @@ def _iter_audio_sessions_with_devices() -> list[tuple[object, str, str, object]]
                 if dedup_key in seen:
                     continue
                 seen.add(dedup_key)
-                sessions.append((audio_session, device_name, device_id, ctl2))
+                sessions.append((audio_session, device_name, device_id, ctl2, device_peak))
         except Exception:
             continue
     return sessions
@@ -1958,7 +1948,7 @@ def get_audio_sessions() -> dict:
 
     result: list[dict] = []
     with _audio_com_context():
-        for sess, device_name, device_id, ctl2 in _iter_audio_sessions_with_devices():
+        for sess, device_name, device_id, ctl2, device_peak in _iter_audio_sessions_with_devices():
             try:
                 pid = int(getattr(sess, "ProcessId", 0) or 0)
                 proc = getattr(sess, "Process", None)
@@ -1967,7 +1957,7 @@ def get_audio_sessions() -> dict:
                 vol = int(round(vol_obj.GetMasterVolume() * 100))
                 muted = bool(vol_obj.GetMute())
                 state = int(getattr(sess, "State", 0) or 0)
-                output_level = _get_session_output_level_percent(sess, ctl2)
+                output_level = _get_session_output_level_percent(sess, ctl2, device_peak)
                 result.append(
                     {
                         "pid": pid,
@@ -1993,13 +1983,13 @@ def get_audio_session_levels() -> dict:
 
     by_pid: dict[int, dict[str, object]] = {}
     with _audio_com_context():
-        for sess, _, _, ctl2 in _iter_audio_sessions_with_devices():
+        for sess, _, _, ctl2, device_peak in _iter_audio_sessions_with_devices():
             try:
                 pid = int(getattr(sess, "ProcessId", 0) or 0)
                 if pid <= 0:
                     continue
                 state = int(getattr(sess, "State", 0) or 0)
-                output_level = _get_session_output_level_percent(sess, ctl2)
+                output_level = _get_session_output_level_percent(sess, ctl2, device_peak)
                 prev = by_pid.get(pid)
                 if prev is None:
                     by_pid[pid] = {
@@ -2024,7 +2014,7 @@ def set_audio_session_volume(pid: int, level: int) -> bool:
     target = max(0.0, min(1.0, level / 100.0))
     changed = False
     with _audio_com_context():
-        for sess, _, _, _ in _iter_audio_sessions_with_devices():
+        for sess, _, _, _, _ in _iter_audio_sessions_with_devices():
             try:
                 session_pid = int(getattr(sess, "ProcessId", 0) or 0)
                 if session_pid != pid:
@@ -2042,7 +2032,7 @@ def set_audio_session_mute(pid: int, muted: bool) -> bool:
 
     changed = False
     with _audio_com_context():
-        for sess, _, _, _ in _iter_audio_sessions_with_devices():
+        for sess, _, _, _, _ in _iter_audio_sessions_with_devices():
             try:
                 session_pid = int(getattr(sess, "ProcessId", 0) or 0)
                 if session_pid != pid:
