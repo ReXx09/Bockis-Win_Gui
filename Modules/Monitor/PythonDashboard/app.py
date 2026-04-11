@@ -88,16 +88,19 @@ def _get_session_output_level_percent(session_obj) -> int:
     if not _ensure_audio_backend() or not session_obj:
         return 0
 
-    # Try direct session metering when exposed by pycaw session wrapper.
-    try:
-        meter_obj = getattr(session_obj, "_ctl", None)
-        if meter_obj is not None:
+    # Try direct session metering through known pycaw wrapper internals.
+    for handle_name in ("_ctl", "_ctl2", "_session", "_sessionctl", "_session_control"):
+        try:
+            meter_obj = getattr(session_obj, handle_name, None)
+            if meter_obj is None:
+                continue
             meter = meter_obj.QueryInterface(IAudioMeterInformation)
-            if meter is not None:
-                peak = float(meter.GetPeakValue())
-                return _to_percent_level(peak)
-    except Exception:
-        pass
+            if meter is None:
+                continue
+            peak = float(meter.GetPeakValue())
+            return _to_percent_level(peak)
+        except Exception:
+            continue
 
     # Fallback: use current session volume as stable level indicator.
     try:

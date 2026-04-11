@@ -280,6 +280,8 @@ let audioEditMode = false;
 let lastAudioDeviceSummary = { activeOutput: '', activeInput: '', routingMessage: '' };
 let routeMuteInFlight = new Set();
 let routeSessionRefreshTimer = null;
+let routeOutputMeteringTimer = null;
+let routeOutputMeteringInFlight = false;
 let routeDebugEvents = [];
 let persistedRouteByPid = new Map();
 let persistedReadbackApiAvailable = true;
@@ -543,6 +545,10 @@ function clearScopedRefreshTimers() {
     clearInterval(inputMeteringTimer);
     inputMeteringTimer = null;
   }
+  if (routeOutputMeteringTimer) {
+    clearInterval(routeOutputMeteringTimer);
+    routeOutputMeteringTimer = null;
+  }
   if (gitRefreshTimer) {
     clearInterval(gitRefreshTimer);
     gitRefreshTimer = null;
@@ -596,6 +602,12 @@ function updateScopedRefreshTimers() {
       if (!hasVisibleWidgetsOnPage('audio', ['audio-volume', 'audio-devices', 'audio-sessions', 'audio-routing'])) return;
       loadInputMetering().catch(() => {});
     }, 320);
+
+    routeOutputMeteringTimer = setInterval(() => {
+      if (getCurrentPage() !== 'audio') return;
+      if (!hasVisibleWidgetsOnPage('audio', ['audio-volume', 'audio-devices', 'audio-sessions', 'audio-routing'])) return;
+      refreshRouteOutputMetersFast().catch(() => {});
+    }, 450);
   }
 
   if (page === 'tools' && toolStateApiAvailable && hasVisibleWidgetsOnPage('tools', ['tools-sys', 'tools-net', 'tools-diag', 'tools-disk', 'tools-priv', 'tools-dev'])) {
@@ -2937,6 +2949,42 @@ function scheduleRouteSessionRefresh(delayMs = 500) {
   }, Math.max(120, delayMs));
 }
 
+async function refreshRouteOutputMetersFast() {
+  if (routeOutputMeteringInFlight || !userProgramRoutes) return;
+
+  const bars = Array.from(userProgramRoutes.querySelectorAll('.audio-route-output-meter-bar[data-route-output-meter-pid]'));
+  if (!bars.length) return;
+
+  routeOutputMeteringInFlight = true;
+  try {
+    const d = await jsonFetch('/api/audio/sessions');
+    if (!d || !d.available) return;
+
+    const grouped = groupAudioSessionsByProcess(Array.isArray(d.sessions) ? d.sessions : []);
+    const levelByPid = new Map(
+      grouped
+        .map((s) => [String(s.pid || ''), Math.max(0, Math.min(100, Number(s.output_level ?? s.volume ?? 0)))])
+        .filter(([pid]) => !!pid)
+    );
+
+    bars.forEach((bar) => {
+      const pid = String(bar.dataset.routeOutputMeterPid || '');
+      if (!pid) return;
+      const level = levelByPid.get(pid);
+      if (typeof level !== 'number') return;
+      const levelText = String(Math.round(level));
+      if (bar.dataset.routeOutputLevel === levelText) return;
+
+      bar.dataset.routeOutputLevel = levelText;
+      bar.style.width = `${level}%`;
+      const meterWrap = bar.closest('.audio-route-output-meter');
+      if (meterWrap) meterWrap.title = `Output-Peak ${levelText}%`;
+    });
+  } finally {
+    routeOutputMeteringInFlight = false;
+  }
+}
+
 function setRouteSessionMuteUi(controlsEl, muted, pending = false) {
   if (!controlsEl) return;
 
@@ -3047,7 +3095,7 @@ function renderUserProgramRoutes() {
           <div class="audio-route-slider-wrap">
             <input type="range" min="0" max="100" value="${match.volume}" data-route-session-volume="${idx}" data-route-session-pid="${match.pid}" />
             <div class="audio-route-output-meter" title="Output-Peak ${Math.max(0, Math.min(100, Number(match.output_level ?? match.volume ?? 0)))}%">
-              <div class="audio-route-output-meter-bar" style="width:${Math.max(0, Math.min(100, Number(match.output_level ?? match.volume ?? 0)))}%"></div>
+              <div class="audio-route-output-meter-bar" data-route-output-meter-pid="${match.pid}" data-route-output-level="${Math.max(0, Math.min(100, Number(match.output_level ?? match.volume ?? 0)))}" style="width:${Math.max(0, Math.min(100, Number(match.output_level ?? match.volume ?? 0)))}%"></div>
             </div>
           </div>
           <button class="btn audio-route-mute-btn${match.muted ? ' is-muted' : ''}" title="${match.muted ? 'Unmute' : 'Mute'}" data-route-session-mute="${idx}" data-route-session-pid="${match.pid}" data-route-session-state="${match.muted ? 0 : 1}">
