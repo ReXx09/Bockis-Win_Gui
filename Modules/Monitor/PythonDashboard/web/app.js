@@ -2678,6 +2678,38 @@ function bestProgramMatch(input) {
   return '';
 }
 
+function findRoutingConflicts(sourceProgram, targetDeviceId) {
+  const routes = normalizeAllUserRoutes(readUserAudioRoutes());
+  const sourceToken = normalizeProgramToken(sourceProgram);
+  const targetId = String(targetDeviceId || '');
+  if (!sourceToken || !targetId || !routes.length) return [];
+
+  return routes
+    .filter((r) => normalizeProgramToken(r.program) !== sourceToken)
+    .map((r) => {
+      const routeToken = normalizeProgramToken(r.program);
+      const session = lastAudioSessions.find((s) => {
+        const appToken = normalizeProgramToken(s.app);
+        return appToken.includes(routeToken) || routeToken.includes(appToken);
+      });
+      if (!session) return null;
+
+      const isActive = Number(session.state || 0) > 0;
+      const isMuted = !!session.muted;
+      if (!isActive || isMuted) return null;
+
+      const otherTarget = String(r.deviceId || '');
+      if (!otherTarget || otherTarget === targetId) return null;
+
+      return {
+        program: r.program,
+        currentDevice: session.device_name || 'Unbekannt',
+        preferredDevice: resolveDeviceNameById(otherTarget),
+      };
+    })
+    .filter(Boolean);
+}
+
 function groupAudioSessionsByProcess(sessions) {
   const groups = new Map();
 
@@ -2896,6 +2928,12 @@ function renderUserProgramRoutes() {
       const all = normalizeAllUserRoutes(readUserAudioRoutes());
       if (!Number.isInteger(idx) || !all[idx]) return;
       const route = all[idx];
+      const conflicts = findRoutingConflicts(route.program, route.deviceId);
+      if (conflicts.length) {
+        const preview = conflicts.slice(0, 2).map((c) => `${c.program} (${c.preferredDevice})`).join(', ');
+        audioMsg.textContent = `Switch blockiert: aktive Route-Konflikte mit ${preview}. Erst stummschalten oder Windows-Routing nutzen.`;
+        return;
+      }
       const devName = route.deviceName || resolveDeviceNameById(route.deviceId);
       await setDefaultAudioDevice(route.deviceId, devName);
     });
@@ -2922,6 +2960,12 @@ function renderUserProgramRoutes() {
       const all = normalizeAllUserRoutes(readUserAudioRoutes());
       if (!Number.isInteger(idx) || !all[idx] || !favId) return;
       const route = all[idx];
+      const conflicts = findRoutingConflicts(route.program, favId);
+      if (conflicts.length) {
+        const preview = conflicts.slice(0, 2).map((c) => `${c.program} (${c.preferredDevice})`).join(', ');
+        audioMsg.textContent = `Switch blockiert: aktive Route-Konflikte mit ${preview}. Erst stummschalten oder Windows-Routing nutzen.`;
+        return;
+      }
       route.deviceId = favId;
       route.deviceName = resolveDeviceNameById(favId);
       saveUserAudioRoutes(all);
