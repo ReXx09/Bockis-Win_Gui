@@ -4930,6 +4930,29 @@ $btnCheckDependenciesH.Add_Click({
                     }
                 }
 
+                $totalDependenciesCount = @($sortedDependencies).Count
+                $visibleDependenciesCount = 0
+                foreach ($dep in $sortedDependencies) {
+                    $groupKeyForCount = & $resolveDependencyGroup $dep
+                    if ($script:showAllDependencyGroups) {
+                        $visibleDependenciesCount++
+                        continue
+                    }
+
+                    $showGroupForCount = ($groupKeyForCount -eq "repo") -or ($groupNeedsAttention.ContainsKey($groupKeyForCount) -and $groupNeedsAttention[$groupKeyForCount])
+                    if ($showGroupForCount) {
+                        $visibleDependenciesCount++
+                    }
+                }
+
+                $scopeInfoLabel = New-Object System.Windows.Forms.Label
+                $scopeInfoLabel.Location = New-Object System.Drawing.Point(12, 7)
+                $scopeInfoLabel.Size = New-Object System.Drawing.Size(530, 18)
+                $scopeInfoLabel.ForeColor = [System.Drawing.Color]::FromArgb(180, 180, 180)
+                $scopeInfoLabel.Font = New-Object System.Drawing.Font("Segoe UI", 8)
+                $scopeInfoLabel.Text = "Geprüft: $totalDependenciesCount Abhängigkeiten | Sichtbar: $visibleDependenciesCount"
+                $script:dependencyTableHost.Controls.Add($scopeInfoLabel)
+
                 $rowY = 56
                 $lastGroup = $null
                 foreach ($dep in $sortedDependencies) {
