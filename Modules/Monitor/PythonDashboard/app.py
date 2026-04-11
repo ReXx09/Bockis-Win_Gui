@@ -1840,7 +1840,16 @@ def _iter_audio_sessions() -> list:
         return []
 
 
-def _iter_render_audio_devices() -> list:
+def _get_device_kind_from_id(device_id: str) -> str:
+    raw = str(device_id or "")
+    if raw.startswith("{0.0.0."):
+        return "output"
+    if raw.startswith("{0.0.1."):
+        return "input"
+    return "unknown"
+
+
+def _iter_audio_devices(include_inputs: bool = False) -> list:
     if not _ensure_audio_backend():
         return []
 
@@ -1850,7 +1859,10 @@ def _iter_render_audio_devices() -> list:
             try:
                 device_id = str(getattr(device, "id", None) or getattr(device, "Id", None) or "")
                 state = str(getattr(device, "state", None) or "")
-                if not device_id.startswith("{0.0.0."):
+                kind = _get_device_kind_from_id(device_id)
+                if kind == "unknown":
+                    continue
+                if kind == "input" and not include_inputs:
                     continue
                 if "active" not in state.lower() and state != "1":
                     continue
@@ -1862,16 +1874,17 @@ def _iter_render_audio_devices() -> list:
     return devices
 
 
-def _iter_audio_sessions_with_devices() -> list[tuple[object, str, str]]:
+def _iter_audio_sessions_with_devices(include_inputs: bool = False) -> list[tuple[object, str, str, str]]:
     if not _ensure_audio_backend():
         return []
 
-    sessions: list[tuple[object, str, str]] = []
+    sessions: list[tuple[object, str, str, str]] = []
     seen: set[tuple[str, str]] = set()
-    for device in _iter_render_audio_devices():
+    for device in _iter_audio_devices(include_inputs=include_inputs):
         try:
             device_name = str(getattr(device, "FriendlyName", None) or "Unknown")
             device_id = str(getattr(device, "id", None) or getattr(device, "Id", None) or device_name)
+            device_kind = _get_device_kind_from_id(device_id)
             manager = getattr(device, "AudioSessionManager", None)
             if manager is None:
                 continue
@@ -1890,7 +1903,7 @@ def _iter_audio_sessions_with_devices() -> list[tuple[object, str, str]]:
                 if dedup_key in seen:
                     continue
                 seen.add(dedup_key)
-                sessions.append((audio_session, device_name, device_id))
+                sessions.append((audio_session, device_name, device_id, device_kind))
         except Exception:
             continue
     return sessions
@@ -1902,7 +1915,7 @@ def get_audio_sessions() -> dict:
 
     result: list[dict] = []
     with _audio_com_context():
-        for sess, device_name, device_id in _iter_audio_sessions_with_devices():
+        for sess, device_name, device_id, device_kind in _iter_audio_sessions_with_devices(include_inputs=True):
             try:
                 pid = int(getattr(sess, "ProcessId", 0) or 0)
                 proc = getattr(sess, "Process", None)
@@ -1915,6 +1928,7 @@ def get_audio_sessions() -> dict:
                     {
                         "pid": pid,
                         "app": app,
+                        "device_kind": device_kind,
                         "device_name": device_name,
                         "device_id": device_id,
                         "volume": max(0, min(100, vol)),
@@ -1925,7 +1939,7 @@ def get_audio_sessions() -> dict:
             except Exception:
                 continue
 
-    result = sorted(result, key=lambda x: (x["app"].lower(), x["device_name"].lower(), x["pid"]))
+    result = sorted(result, key=lambda x: (x.get("device_kind") != "output", x["app"].lower(), x["device_name"].lower(), x["pid"]))
     return {"available": True, "sessions": result}
 
 
@@ -1936,7 +1950,7 @@ def set_audio_session_volume(pid: int, level: int) -> bool:
     target = max(0.0, min(1.0, level / 100.0))
     changed = False
     with _audio_com_context():
-        for sess, _, _ in _iter_audio_sessions_with_devices():
+        for sess, _, _, _ in _iter_audio_sessions_with_devices(include_inputs=False):
             try:
                 session_pid = int(getattr(sess, "ProcessId", 0) or 0)
                 if session_pid != pid:
@@ -1954,7 +1968,7 @@ def set_audio_session_mute(pid: int, muted: bool) -> bool:
 
     changed = False
     with _audio_com_context():
-        for sess, _, _ in _iter_audio_sessions_with_devices():
+        for sess, _, _, _ in _iter_audio_sessions_with_devices(include_inputs=False):
             try:
                 session_pid = int(getattr(sess, "ProcessId", 0) or 0)
                 if session_pid != pid:
