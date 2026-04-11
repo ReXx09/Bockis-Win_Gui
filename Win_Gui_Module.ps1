@@ -7766,6 +7766,18 @@ function Invoke-GitPullDependencyAction {
             return @{ Success = $false; Cancelled = $true; Message = "Abgebrochen" }
         }
 
+        $safetyConfirmText = "WICHTIG: Dieser Git Pull kann Beta-Daten enthalten.`n`nMoechten Sie den Vorgang wirklich starten?"
+        $safetyConfirmResult = [System.Windows.Forms.MessageBox]::Show(
+            $safetyConfirmText,
+            "Sicherheitsabfrage",
+            [System.Windows.Forms.MessageBoxButtons]::YesNo,
+            [System.Windows.Forms.MessageBoxIcon]::Warning
+        )
+
+        if ($safetyConfirmResult -ne [System.Windows.Forms.DialogResult]::Yes) {
+            return @{ Success = $false; Cancelled = $true; Message = "Abgebrochen (Sicherheitsabfrage)" }
+        }
+
         if ($ProgressCallback) {
             & $ProgressCallback 25 "Lese aktuellen Commit-Stand..."
         }
