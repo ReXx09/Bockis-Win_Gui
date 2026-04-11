@@ -1739,6 +1739,66 @@ def get_audio_devices() -> dict:
     if not _ensure_audio_backend():
         return {"available": False, "active_output": None, "active_input": None, "devices": []}
 
+    if _audio_disable_device_enumeration:
+        active_output = None
+        active_output_id = None
+        active_input = None
+        active_input_id = None
+
+        with _audio_com_context():
+            try:
+                active = AudioUtilities.GetSpeakers()
+                active_output = getattr(active, "FriendlyName", None)
+                active_output_id = getattr(active, "id", None) or getattr(active, "Id", None)
+            except Exception:
+                active_output = None
+                active_output_id = None
+
+            try:
+                active_mic_getter = getattr(AudioUtilities, "GetMicrophone", None)
+                active_mic = active_mic_getter() if callable(active_mic_getter) else None
+                active_input = getattr(active_mic, "FriendlyName", None)
+                active_input_id = getattr(active_mic, "id", None) or getattr(active_mic, "Id", None)
+            except Exception:
+                active_input = None
+                active_input_id = None
+
+        devices: list[dict] = []
+        if active_output_id or active_output:
+            devices.append(
+                {
+                    "id": str(active_output_id or active_output or "output-active"),
+                    "name": str(active_output or "Aktive Ausgabe"),
+                    "kind": "output",
+                    "is_output": True,
+                    "is_input": False,
+                    "is_active_output": True,
+                    "is_active_input": False,
+                }
+            )
+
+        if active_input_id or active_input:
+            devices.append(
+                {
+                    "id": str(active_input_id or active_input or "input-active"),
+                    "name": str(active_input or "Aktives Mikrofon"),
+                    "kind": "input",
+                    "is_output": False,
+                    "is_input": True,
+                    "is_active_output": False,
+                    "is_active_input": True,
+                }
+            )
+
+        # Keep UI informative while running in crash-safe mode.
+        return {
+            "available": True,
+            "active_output": active_output,
+            "active_input": active_input,
+            "devices": devices,
+            "routing_message": "Audio-Safe-Mode aktiv (stabile, reduzierte Geraeteerkennung).",
+        }
+
     devices: list[dict] = []
     dedup_by_name: dict[str, dict] = {}
     active_output = None
