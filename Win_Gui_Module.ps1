@@ -4792,8 +4792,29 @@ $btnCheckDependenciesH.Add_Click({
             if ($script:dependencyTableHost) {
                 $script:dependencyTableHost.Controls.Clear()
 
+                if ($null -eq $script:showAllDependencyGroups) {
+                    $script:showAllDependencyGroups = $false
+                }
+
+                $toggleGroupsButton = New-Object System.Windows.Forms.Button
+                $toggleGroupsButton.Location = New-Object System.Drawing.Point(560, 2)
+                $toggleGroupsButton.Size = New-Object System.Drawing.Size(150, 24)
+                $toggleGroupsButton.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+                $toggleGroupsButton.FlatAppearance.BorderSize = 0
+                $toggleGroupsButton.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
+                $toggleGroupsButton.ForeColor = [System.Drawing.Color]::White
+                $toggleGroupsButton.Font = New-Object System.Drawing.Font("Segoe UI", 8, [System.Drawing.FontStyle]::Bold)
+                $toggleGroupsButton.Cursor = [System.Windows.Forms.Cursors]::Hand
+                $toggleGroupsButton.Text = if ($script:showAllDependencyGroups) { "Nur relevante Gruppen" } else { "Alle Gruppen anzeigen" }
+                $toggleGroupsButton.Tag = $script:showAllDependencyGroups
+                $toggleGroupsButton.Add_Click({
+                        $script:showAllDependencyGroups = -not [bool]$this.Tag
+                        $btnCheckDependenciesH.PerformClick()
+                    })
+                $script:dependencyTableHost.Controls.Add($toggleGroupsButton)
+
                 $headerPanel = New-Object System.Windows.Forms.Panel
-                $headerPanel.Location = New-Object System.Drawing.Point(0, 0)
+                $headerPanel.Location = New-Object System.Drawing.Point(0, 30)
                 $headerPanel.Size = New-Object System.Drawing.Size(745, 24)
                 $headerPanel.BackColor = [System.Drawing.Color]::FromArgb(45, 45, 45)
 
@@ -4884,7 +4905,7 @@ $btnCheckDependenciesH.Add_Click({
                     }
                 }
 
-                $groupOrder = @("system", "package", "dashboard", "repo", "hardware", "other")
+                $groupOrder = @("repo", "system", "package", "dashboard", "hardware", "other")
 
                 $sortedDependencies = @(
                     $depResult.Dependencies | Sort-Object `
@@ -4898,12 +4919,30 @@ $btnCheckDependenciesH.Add_Click({
                         @{ Expression = { $_.Name } }
                 )
 
-                $rowY = 26
+                $groupNeedsAttention = @{}
+                foreach ($dep in $sortedDependencies) {
+                    $g = & $resolveDependencyGroup $dep
+                    if (-not $groupNeedsAttention.ContainsKey($g)) {
+                        $groupNeedsAttention[$g] = $false
+                    }
+                    if ((-not $dep.Found) -or $dep.UpdateAvailable -or ($dep.StatusColor -eq "Red") -or ($dep.StatusColor -eq "Yellow") -or ($dep.Name -eq "Git Pull" -and $dep.Available) -or ($dep.Name -eq "GUI-Update (GitHub)")) {
+                        $groupNeedsAttention[$g] = $true
+                    }
+                }
+
+                $rowY = 56
                 $lastGroup = $null
                 foreach ($dep in $sortedDependencies) {
                     $groupKey = & $resolveDependencyGroup $dep
                     if (-not $groupMeta.ContainsKey($groupKey)) {
                         $groupKey = "other"
+                    }
+
+                    if (-not $script:showAllDependencyGroups) {
+                        $showGroup = ($groupKey -eq "repo") -or ($groupNeedsAttention.ContainsKey($groupKey) -and $groupNeedsAttention[$groupKey])
+                        if (-not $showGroup) {
+                            continue
+                        }
                     }
 
                     $groupColor = $groupMeta[$groupKey].Color
