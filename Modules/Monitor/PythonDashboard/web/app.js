@@ -678,9 +678,10 @@ function setCardSize(card, size, save = true, layoutEl = dashboardGrid, storageK
   card.classList.add(`tile-size-${target}`);
   card.dataset.size = target;
 
-  card.querySelectorAll('.size-btn').forEach((btn) => {
-    btn.classList.toggle('active', btn.dataset.size === target);
-  });
+  const selectEl = card.querySelector('.size-select');
+  if (selectEl && selectEl.value !== target) {
+    selectEl.value = target;
+  }
 
   scheduleMasonryLayout(layoutEl);
   if (save) saveLayout(layoutEl, storageKey, false, messageEl);
@@ -766,20 +767,22 @@ function wireSizeControls(layoutEl = dashboardGrid, storageKey = LAYOUT_KEY, mes
       { key: 'min', label: 'min' },
     ];
 
+    const select = document.createElement('select');
+    select.className = 'size-select';
+    select.title = 'Kachelgroesse';
     specs.forEach((spec) => {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'size-btn';
-      btn.textContent = spec.label;
-      btn.dataset.size = spec.key;
-      btn.title = `Kachelgroesse ${spec.label}`;
-      btn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setCardSize(card, spec.key, true, layoutEl, storageKey, messageEl);
-      });
-      controls.appendChild(btn);
+      const option = document.createElement('option');
+      option.value = spec.key;
+      option.textContent = spec.label;
+      select.appendChild(option);
     });
+    select.addEventListener('change', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setCardSize(card, select.value, true, layoutEl, storageKey, messageEl);
+    });
+    select.addEventListener('mousedown', (e) => e.stopPropagation());
+    controls.appendChild(select);
 
     actions.appendChild(controls);
     if (drag) actions.appendChild(drag);

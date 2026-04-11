@@ -328,28 +328,24 @@ body {
   background: rgba(9, 17, 31, 0.65);
 }
 
-.size-btn {
+.size-select {
   border: 0;
-  border-right: 1px solid var(--line);
   background: transparent;
-  color: var(--muted);
-  padding: 3px 6px;
-  font-size: 0.7rem;
+  color: var(--text);
+  padding: 3px 8px;
+  font-size: 0.74rem;
+  min-width: 62px;
+  outline: none;
   cursor: pointer;
 }
 
-.size-btn:last-child {
-  border-right: 0;
-}
-
-.size-btn:hover {
-  color: var(--text);
+.size-select:hover {
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
-.size-btn.active {
+.size-select option {
   color: var(--text);
-  background: color-mix(in srgb, var(--accent) 24%, transparent);
+  background: var(--card);
 }
 
 .drag-handle {
