@@ -148,11 +148,13 @@ _POLICY_CONFIG_FACTORY_IIDS = (
     "ab3d4648-e242-459f-b02f-541c70306324",  # 21H2+
     "2a59116d-6c4f-45e0-a74f-707e3fef9258",  # downlevel
 )
-_POLICY_CONFIG_METHOD_INDEX_SET_PERSISTED = 24
+# IUnknown (3) + IInspectable (3) + 19 placeholder methods before SetPersistedDefaultAudioEndpoint.
+_POLICY_CONFIG_METHOD_INDEX_SET_PERSISTED = 25
 _POLICY_CONFIG_METHOD_INDEX_RELEASE = 2
 _MMDEVAPI_TOKEN = r"\\?\SWD#MMDEVAPI#"
 _DEVINTERFACE_AUDIO_RENDER = "#{e6327cad-dcec-4949-ae8a-991e976a79d2}"
 _DEVINTERFACE_AUDIO_CAPTURE = "#{2eef81be-33fa-4800-9670-1cd474972c3f}"
+_RO_INIT_MULTITHREADED = 1
 
 
 class _GUID(ctypes.Structure):
@@ -235,6 +237,33 @@ def _ro_get_policy_config_factory() -> tuple[bool, ctypes.c_void_p, str]:
         _windows_delete_hstring(class_hstr)
 
 
+@contextmanager
+def _winrt_context():
+    """Initialize WinRT for RoGetActivationFactory calls on this thread."""
+    initialized = False
+    try:
+        ro_init = ctypes.windll.combase.RoInitialize
+        ro_init.argtypes = [ctypes.c_uint32]
+        ro_init.restype = ctypes.c_long
+        hr = int(ro_init(_RO_INIT_MULTITHREADED))
+        # S_OK (0) and S_FALSE (1) both mean usable initialization.
+        initialized = hr in (0, 1)
+    except Exception:
+        initialized = False
+
+    try:
+        yield
+    finally:
+        if initialized:
+            try:
+                ro_uninit = ctypes.windll.combase.RoUninitialize
+                ro_uninit.argtypes = []
+                ro_uninit.restype = None
+                ro_uninit()
+            except Exception:
+                pass
+
+
 def _policy_factory_release(factory: ctypes.c_void_p | None) -> None:
     raw = int(getattr(factory, "value", 0) or 0)
     if raw == 0:
@@ -261,39 +290,40 @@ def set_persisted_app_audio_endpoint(process_id: int, device_id: str, device_kin
     packed_id = _pack_policy_device_id(clean_device_id, flow) if clean_device_id else ""
 
     with _audio_com_context():
-        ok, factory, factory_msg = _ro_get_policy_config_factory()
-        if not ok:
-            return False, factory_msg
+        with _winrt_context():
+            ok, factory, factory_msg = _ro_get_policy_config_factory()
+            if not ok:
+                return False, factory_msg
 
-        endpoint_hstr = ctypes.c_void_p()
-        if packed_id:
-            h_ok, endpoint_hstr, h_msg = _windows_create_hstring(packed_id)
-            if not h_ok:
+            endpoint_hstr = ctypes.c_void_p()
+            if packed_id:
+                h_ok, endpoint_hstr, h_msg = _windows_create_hstring(packed_id)
+                if not h_ok:
+                    _policy_factory_release(factory)
+                    return False, h_msg
+
+            try:
+                vtbl = ctypes.cast(factory, ctypes.POINTER(ctypes.POINTER(ctypes.c_void_p))).contents
+                set_ptr = vtbl[_POLICY_CONFIG_METHOD_INDEX_SET_PERSISTED]
+                set_fn = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, ctypes.c_uint32, ctypes.c_int32, ctypes.c_int32, ctypes.c_void_p)(set_ptr)
+
+                # Apply to all roles so Windows mixer and comms profile stay in sync.
+                role_results: list[tuple[int, int]] = []
+                for role in (0, 1, 2):
+                    hr = int(set_fn(factory, ctypes.c_uint32(pid), ctypes.c_int32(flow), ctypes.c_int32(role), endpoint_hstr))
+                    role_results.append((role, hr))
+
+                failed = [(role, hr) for role, hr in role_results if hr != 0]
+                if failed:
+                    details = ", ".join([f"role {role}: {_hresult_hex(hr)}" for role, hr in failed])
+                    return False, f"SetPersistedDefaultAudioEndpoint fehlgeschlagen ({details})."
+
+                cleared = not bool(clean_device_id)
+                mode = "clear" if cleared else "set"
+                return True, f"Per-App Routing {mode} OK ({factory_msg}, pid={pid}, flow={flow})."
+            finally:
+                _windows_delete_hstring(endpoint_hstr)
                 _policy_factory_release(factory)
-                return False, h_msg
-
-        try:
-            vtbl = ctypes.cast(factory, ctypes.POINTER(ctypes.POINTER(ctypes.c_void_p))).contents
-            set_ptr = vtbl[_POLICY_CONFIG_METHOD_INDEX_SET_PERSISTED]
-            set_fn = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, ctypes.c_uint32, ctypes.c_int32, ctypes.c_int32, ctypes.c_void_p)(set_ptr)
-
-            # Apply to all roles so Windows mixer and comms profile stay in sync.
-            role_results: list[tuple[int, int]] = []
-            for role in (0, 1, 2):
-                hr = int(set_fn(factory, ctypes.c_uint32(pid), ctypes.c_int32(flow), ctypes.c_int32(role), endpoint_hstr))
-                role_results.append((role, hr))
-
-            failed = [(role, hr) for role, hr in role_results if hr != 0]
-            if failed:
-                details = ", ".join([f"role {role}: {_hresult_hex(hr)}" for role, hr in failed])
-                return False, f"SetPersistedDefaultAudioEndpoint fehlgeschlagen ({details})."
-
-            cleared = not bool(clean_device_id)
-            mode = "clear" if cleared else "set"
-            return True, f"Per-App Routing {mode} OK ({factory_msg}, pid={pid}, flow={flow})."
-        finally:
-            _windows_delete_hstring(endpoint_hstr)
-            _policy_factory_release(factory)
 
 def _get_god_mode_cached(cache_key: str, func, timeout_sec: float = 0.5) -> bool:
     """Get cached God Mode state or compute fresh if cache expired."""
