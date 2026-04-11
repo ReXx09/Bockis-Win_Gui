@@ -90,8 +90,6 @@ const audioLevel = document.getElementById('audioLevel');
 const audioMuted = document.getElementById('audioMuted');
 const audioSlider = document.getElementById('audioSlider');
 const audioMsg = document.getElementById('audioMsg');
-const audioInputLevelTxt = document.getElementById('audioInputLevelTxt');
-const audioInputMeterBar = document.getElementById('audioInputMeterBar');
 const audioDeviceInfo = document.getElementById('audioDeviceInfo');
 const audioDevices = document.getElementById('audioDevices');
 const audioSessions = document.getElementById('audioSessions');
@@ -225,7 +223,7 @@ const ROUTE_PAGE_MAP = {
   '/tools': 'tools',
   '/setup': 'setup',
 };
-const SIZE_PRESETS = ['1-3', '1-2', '2-3', 'full', 'min'];
+const SIZE_PRESETS = ['1-4', '1-3', '1-2', '2-3', 'full', 'min'];
 const THEME_KEY = 'bockis_theme_v1';
 const GLASS_STRENGTH_KEY = 'bockis_glass_strength_v1';
 const AUDIO_USER_ROUTES_KEY = 'bockis_audio_user_routes_v1';
@@ -280,10 +278,6 @@ let audioEditMode = false;
 let lastAudioDeviceSummary = { activeOutput: '', activeInput: '', routingMessage: '' };
 let routeMuteInFlight = new Set();
 let routeSessionRefreshTimer = null;
-let routeOutputMeteringTimer = null;
-let routeOutputMeteringInFlight = false;
-let routeOutputMeteringFailCount = 0;
-let routeOutputMeteringDisabledUntil = 0;
 let routeDebugEvents = [];
 let persistedRouteByPid = new Map();
 let persistedReadbackApiAvailable = true;
@@ -547,10 +541,6 @@ function clearScopedRefreshTimers() {
     clearInterval(inputMeteringTimer);
     inputMeteringTimer = null;
   }
-  if (routeOutputMeteringTimer) {
-    clearInterval(routeOutputMeteringTimer);
-    routeOutputMeteringTimer = null;
-  }
   if (gitRefreshTimer) {
     clearInterval(gitRefreshTimer);
     gitRefreshTimer = null;
@@ -598,18 +588,6 @@ function updateScopedRefreshTimers() {
       if (!hasVisibleWidgetsOnPage('audio', ['audio-volume', 'audio-devices', 'audio-sessions', 'audio-routing'])) return;
       refreshAudio().catch(() => {});
     }, REFRESH_INTERVALS.audioMs);
-
-    inputMeteringTimer = setInterval(() => {
-      if (getCurrentPage() !== 'audio') return;
-      if (!hasVisibleWidgetsOnPage('audio', ['audio-volume', 'audio-devices', 'audio-sessions', 'audio-routing'])) return;
-      loadInputMetering().catch(() => {});
-    }, 320);
-
-    routeOutputMeteringTimer = setInterval(() => {
-      if (getCurrentPage() !== 'audio') return;
-      if (!hasVisibleWidgetsOnPage('audio', ['audio-volume', 'audio-devices', 'audio-sessions', 'audio-routing'])) return;
-      refreshRouteOutputMetersFast().catch(() => {});
-    }, 450);
   }
 
   if (page === 'tools' && toolStateApiAvailable && hasVisibleWidgetsOnPage('tools', ['tools-sys', 'tools-net', 'tools-diag', 'tools-disk', 'tools-priv', 'tools-dev'])) {
@@ -779,6 +757,7 @@ function wireSizeControls(layoutEl = dashboardGrid, storageKey = LAYOUT_KEY, mes
     controls.className = 'size-controls';
 
     const specs = [
+      { key: '1-4', label: '1/4' },
       { key: '1-3', label: '1/3' },
       { key: '1-2', label: '1/2' },
       { key: '2-3', label: '2/3' },
@@ -2553,17 +2532,6 @@ function setAudioEditMode(enabled) {
   loadAudioSessions().catch(() => {});
 }
 
-function renderInputMeterLevel(level, available = true) {
-  const pct = Math.max(0, Math.min(100, Number(level || 0)));
-  if (audioInputLevelTxt) {
-    audioInputLevelTxt.textContent = available ? `${pct}%` : 'N/A';
-  }
-  if (audioInputMeterBar) {
-    audioInputMeterBar.style.width = `${available ? pct : 0}%`;
-    audioInputMeterBar.style.opacity = available ? '1' : '0.3';
-  }
-}
-
 async function loadInputMetering() {
   try {
     const d = await jsonFetch('/api/audio/input-level');
@@ -2572,9 +2540,12 @@ async function loadInputMetering() {
       peak: Math.max(0, Math.min(100, parseInt(d.peak || 0, 10))),
       available: !!d.available,
     };
-    renderInputMeterLevel(lastInputMeteringData.level, lastInputMeteringData.available);
+    // Trigger render to update meter display
+    if (userProgramRoutes) {
+      renderUserProgramRoutes();
+    }
   } catch {
-    renderInputMeterLevel(0, false);
+    // Keep last known state
   }
 }
 
@@ -2901,7 +2872,6 @@ function groupAudioSessionsByProcess(sessions) {
       groups.set(key, {
         ...session,
         devices: session.device_name ? [session.device_name] : [],
-        output_level: Number(session.output_level || 0),
       });
       continue;
     }
@@ -2914,8 +2884,6 @@ function groupAudioSessionsByProcess(sessions) {
     const currentState = Number(session.state || 0);
     const existingVolume = Number(existing.volume || 0);
     const currentVolume = Number(session.volume || 0);
-    const existingOutputLevel = Number(existing.output_level || 0);
-    const currentOutputLevel = Number(session.output_level || 0);
     const preferCurrent = currentState > existingState || (currentState === existingState && currentVolume > existingVolume);
 
     if (preferCurrent) {
@@ -2924,12 +2892,10 @@ function groupAudioSessionsByProcess(sessions) {
       existing.volume = session.volume;
       existing.muted = session.muted;
       existing.state = session.state;
-      existing.output_level = currentOutputLevel;
     } else {
       existing.muted = Boolean(existing.muted && session.muted);
       existing.volume = Math.max(existingVolume, currentVolume);
       existing.state = Math.max(existingState, currentState);
-      existing.output_level = Math.max(existingOutputLevel, currentOutputLevel);
     }
   }
 
@@ -2949,53 +2915,6 @@ function scheduleRouteSessionRefresh(delayMs = 500) {
     loadAudioSessions().catch(() => {});
     routeSessionRefreshTimer = null;
   }, Math.max(120, delayMs));
-}
-
-async function refreshRouteOutputMetersFast() {
-  if (routeOutputMeteringInFlight || !userProgramRoutes) return;
-  if (Date.now() < routeOutputMeteringDisabledUntil) return;
-
-  const bars = Array.from(userProgramRoutes.querySelectorAll('.audio-route-output-meter-bar[data-route-output-meter-pid]'));
-  if (!bars.length) return;
-
-  routeOutputMeteringInFlight = true;
-  try {
-    const d = await jsonFetch('/api/audio/session-levels');
-    if (!d || !d.available) {
-      routeOutputMeteringFailCount += 1;
-      return;
-    }
-
-    routeOutputMeteringFailCount = 0;
-    const levelByPid = new Map(
-      (Array.isArray(d.levels) ? d.levels : [])
-        .map((s) => [String(s.pid || ''), Math.max(0, Math.min(100, Number(s.output_level ?? 0)))])
-        .filter(([pid]) => !!pid)
-    );
-
-    bars.forEach((bar) => {
-      const pid = String(bar.dataset.routeOutputMeterPid || '');
-      if (!pid) return;
-      const level = levelByPid.get(pid);
-      if (typeof level !== 'number') return;
-      const levelText = String(Math.round(level));
-      if (bar.dataset.routeOutputLevel === levelText) return;
-
-      bar.dataset.routeOutputLevel = levelText;
-      bar.style.width = `${level}%`;
-      const meterWrap = bar.closest('.audio-route-output-meter');
-      if (meterWrap) meterWrap.title = `Output-Peak ${levelText}%`;
-    });
-  } catch (err) {
-    routeOutputMeteringFailCount += 1;
-    if (routeOutputMeteringFailCount >= 3) {
-      routeOutputMeteringDisabledUntil = Date.now() + 15000;
-      appendRouteDebugEntry('warn', 'Output-Meter kurz pausiert (API instabil). Wiederaufnahme in 15s.');
-      routeOutputMeteringFailCount = 0;
-    }
-  } finally {
-    routeOutputMeteringInFlight = false;
-  }
 }
 
 function setRouteSessionMuteUi(controlsEl, muted, pending = false) {
@@ -3105,12 +3024,7 @@ function renderUserProgramRoutes() {
     const sessionControls = match
       ? `
         <div class="audio-route-session-controls" data-route-session-controls="${idx}">
-          <div class="audio-route-slider-wrap">
-            <input type="range" min="0" max="100" value="${match.volume}" data-route-session-volume="${idx}" data-route-session-pid="${match.pid}" />
-            <div class="audio-route-output-meter" title="Output-Peak ${Math.max(0, Math.min(100, Number(match.output_level ?? match.volume ?? 0)))}%">
-              <div class="audio-route-output-meter-bar" data-route-output-meter-pid="${match.pid}" data-route-output-level="${Math.max(0, Math.min(100, Number(match.output_level ?? match.volume ?? 0)))}" style="width:${Math.max(0, Math.min(100, Number(match.output_level ?? match.volume ?? 0)))}%"></div>
-            </div>
-          </div>
+          <input type="range" min="0" max="100" value="${match.volume}" data-route-session-volume="${idx}" data-route-session-pid="${match.pid}" />
           <button class="btn audio-route-mute-btn${match.muted ? ' is-muted' : ''}" title="${match.muted ? 'Unmute' : 'Mute'}" data-route-session-mute="${idx}" data-route-session-pid="${match.pid}" data-route-session-state="${match.muted ? 0 : 1}">
             <span class="icon-inline" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><use href="#icon-speaker"></use></svg></span>
           </button>
@@ -3445,7 +3359,7 @@ async function refreshAudio() {
     audioLevel.textContent = `${d.level}%`;
     audioMuted.textContent = d.muted ? 'Stumm' : 'Aktiv';
     audioSlider.value = d.level;
-    await Promise.all([loadAudioDevices(), loadAudioSessions(), loadOpenPrograms(false), loadInputMetering()]);
+    await Promise.all([loadAudioDevices(), loadAudioSessions(), loadOpenPrograms(false)]);
   } catch (err) {
     audioMsg.textContent = `Audio-Status Fehler: ${err.message}`;
   }
