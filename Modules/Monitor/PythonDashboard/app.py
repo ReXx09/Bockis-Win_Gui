@@ -11,6 +11,7 @@ import ctypes
 import sys
 import threading
 import uuid
+import faulthandler
 from importlib import metadata as importlib_metadata
 from contextlib import contextmanager
 from pathlib import Path
@@ -38,6 +39,10 @@ except Exception:
     IAudioSessionControl2 = None
     IAudioMeterInformation = None
     AUDIO_AVAILABLE = False
+
+
+# Guard all audio COM calls against concurrent access from parallel HTTP requests.
+_audio_com_lock = threading.RLock()
 
 
 def _ensure_audio_backend() -> bool:
@@ -110,6 +115,7 @@ def _get_session_output_level_percent(session_obj, session_control_obj=None, dev
 
 @contextmanager
 def _audio_com_context():
+    _audio_com_lock.acquire()
     initialized = False
     try:
         ctypes.windll.ole32.CoInitialize(None)
@@ -125,6 +131,7 @@ def _audio_com_context():
                 ctypes.windll.ole32.CoUninitialize()
             except Exception:
                 pass
+        _audio_com_lock.release()
 
 APP_DIR = Path(__file__).resolve().parent
 WEB_DIR = APP_DIR / "web"
@@ -132,6 +139,14 @@ REPO_ROOT = APP_DIR.parent.parent.parent
 LOG_DIR = REPO_ROOT / "Data" / "Logs"
 DASHBOARD_REQUIREMENTS = APP_DIR / "requirements.txt"
 CUSTOM_LAUNCHERS_FILE = REPO_ROOT / "Data" / "dashboard_launchers.json"
+
+_fault_log_stream = None
+try:
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    _fault_log_stream = open(LOG_DIR / "python-dashboard-fault.log", "a", encoding="utf-8")
+    faulthandler.enable(file=_fault_log_stream, all_threads=True)
+except Exception:
+    _fault_log_stream = None
 
 app = FastAPI(title="Bockis Python Dashboard")
 
