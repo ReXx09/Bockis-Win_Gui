@@ -921,6 +921,14 @@ input, select {
   align-items: center;
 }
 
+.audio-user-route-item.is-live {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.audio-user-route-item.is-live > div:first-child {
+  grid-column: 1 / -1;
+}
+
 .audio-user-route-item .muted {
   margin: 0;
   font-size: 0.74rem;
@@ -931,6 +939,10 @@ input, select {
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 6px;
+}
+
+.audio-user-route-item.is-live .audio-fav-row {
+  gap: 8px;
 }
 
 .audio-route-session-controls {

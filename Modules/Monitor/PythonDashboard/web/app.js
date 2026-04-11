@@ -3037,7 +3037,7 @@ function renderUserProgramRoutes() {
       : '<div class="audio-route-session-controls"><span class="audio-route-session-badge is-offline">Keine Session</span></div>';
 
     return `
-      <div class="audio-user-route-item" data-route-index="${idx}">
+      <div class="audio-user-route-item ${audioEditMode ? 'is-edit' : 'is-live'}" data-route-index="${idx}">
         <div>
           <strong>${r.program}</strong>
           ${audioEditMode ? `<p class="muted">${status}</p>` : ''}
