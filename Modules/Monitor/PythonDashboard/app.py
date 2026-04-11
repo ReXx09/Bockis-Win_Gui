@@ -127,6 +127,21 @@ _tool_state_ttl_sec = 1.2
 # Fallback hint for default input device if backend cannot read active microphone reliably.
 _audio_default_hint: dict[str, str | None] = {"input_id": None, "input_name": None}
 
+# Serialize all mutating audio operations to avoid race conditions on rapid UI actions.
+_audio_write_lock = threading.Lock()
+_audio_write_timeout_sec = 8.0
+_audio_diag_lock = threading.Lock()
+_audio_diag_events: list[dict[str, object]] = []
+_audio_diag_max_events = 80
+_audio_diag_stats: dict[str, object] = {
+    "writes_total": 0,
+    "writes_ok": 0,
+    "writes_fail": 0,
+    "last_action": "",
+    "last_duration_ms": 0,
+}
+_audio_last_error: dict[str, object] = {"ts": 0.0, "action": "", "message": ""}
+
 def _get_god_mode_cached(cache_key: str, func, timeout_sec: float = 0.5) -> bool:
     """Get cached God Mode state or compute fresh if cache expired."""
     current = current_time()
@@ -138,6 +153,80 @@ def _get_god_mode_cached(cache_key: str, func, timeout_sec: float = 0.5) -> bool
         result = func()
         _god_mode_cache[cache_key] = (current, result)
         return result
+
+
+def _record_audio_diag(action: str, success: bool, message: str, duration_ms: int) -> None:
+    event = {
+        "ts": current_time(),
+        "action": str(action or "unknown"),
+        "success": bool(success),
+        "message": str(message or ""),
+        "duration_ms": int(max(0, duration_ms)),
+    }
+    with _audio_diag_lock:
+        _audio_diag_events.append(event)
+        if len(_audio_diag_events) > _audio_diag_max_events:
+            _audio_diag_events.pop(0)
+
+        _audio_diag_stats["writes_total"] = int(_audio_diag_stats.get("writes_total", 0)) + 1
+        _audio_diag_stats["last_action"] = event["action"]
+        _audio_diag_stats["last_duration_ms"] = event["duration_ms"]
+
+        if success:
+            _audio_diag_stats["writes_ok"] = int(_audio_diag_stats.get("writes_ok", 0)) + 1
+        else:
+            _audio_diag_stats["writes_fail"] = int(_audio_diag_stats.get("writes_fail", 0)) + 1
+            _audio_last_error["ts"] = event["ts"]
+            _audio_last_error["action"] = event["action"]
+            _audio_last_error["message"] = event["message"]
+
+
+def _run_audio_write_action(action: str, fn) -> dict:
+    started = current_time()
+
+    if not _audio_write_lock.acquire(timeout=_audio_write_timeout_sec):
+        duration_ms = int(max(0.0, (current_time() - started) * 1000.0))
+        message = f"Audio queue timeout for action '{action}'."
+        _record_audio_diag(action, False, message, duration_ms)
+        return {"success": False, "message": message, "duration_ms": duration_ms}
+
+    try:
+        try:
+            raw = fn()
+            success = False
+            message = ""
+
+            if isinstance(raw, tuple):
+                success = bool(raw[0]) if len(raw) > 0 else False
+                message = str(raw[1]) if len(raw) > 1 else ""
+            else:
+                success = bool(raw)
+
+            if not message:
+                message = "OK" if success else f"Action '{action}' failed."
+        except Exception as ex:
+            success = False
+            message = f"{type(ex).__name__}: {ex}"
+
+        duration_ms = int(max(0.0, (current_time() - started) * 1000.0))
+        _record_audio_diag(action, success, message, duration_ms)
+        return {"success": success, "message": message, "duration_ms": duration_ms}
+    finally:
+        _audio_write_lock.release()
+
+
+def _get_audio_diag_snapshot() -> dict:
+    with _audio_diag_lock:
+        events = list(_audio_diag_events)
+        stats = dict(_audio_diag_stats)
+        last_error = dict(_audio_last_error)
+
+    return {
+        "stats": stats,
+        "last_error": last_error,
+        "recent_events": events[-20:],
+        "queue_timeout_sec": _audio_write_timeout_sec,
+    }
 
 
 def _run_powershell(command: str, timeout: int = 8) -> tuple[int, str]:
@@ -1674,7 +1763,17 @@ def index() -> FileResponse:
 
 @app.get("/api/health")
 def health() -> dict:
-    return {"ok": True, "service": "python-dashboard"}
+    audio_diag = _get_audio_diag_snapshot()
+    return {
+        "ok": True,
+        "service": "python-dashboard",
+        "audio": {
+            "backend_available": bool(_ensure_audio_backend()),
+            "write_lock_busy": _audio_write_lock.locked(),
+            "stats": audio_diag.get("stats", {}),
+            "last_error": audio_diag.get("last_error", {}),
+        },
+    }
 
 
 @app.get("/api/system")
@@ -1714,16 +1813,16 @@ def api_audio() -> dict:
 
 @app.post("/api/audio/volume/{level}")
 def api_audio_volume(level: int) -> dict:
-    ok = set_audio_volume(level)
+    result = _run_audio_write_action("master_volume", lambda: set_audio_volume(level))
     st = get_audio_status()
-    return {"success": ok, "status": st}
+    return {"success": result["success"], "message": result["message"], "duration_ms": result["duration_ms"], "status": st}
 
 
 @app.post("/api/audio/mute/{state}")
 def api_audio_mute(state: int) -> dict:
-    ok = set_audio_mute(bool(state))
+    result = _run_audio_write_action("master_mute", lambda: set_audio_mute(bool(state)))
     st = get_audio_status()
-    return {"success": ok, "status": st}
+    return {"success": result["success"], "message": result["message"], "duration_ms": result["duration_ms"], "status": st}
 
 
 @app.post("/api/audio/media/{action}")
@@ -1766,7 +1865,10 @@ def api_audio_default_device(payload: dict | None = None) -> dict:
             "active_input": None,
         }
 
-    ok, out = set_default_audio_device(target_id)
+    action_name = f"default_device:{device_kind}"
+    result = _run_audio_write_action(action_name, lambda: set_default_audio_device(target_id))
+    ok = bool(result.get("success"))
+    out = str(result.get("message") or "")
     if ok and device_kind == "input":
         _audio_default_hint["input_id"] = target_id
     updated = get_audio_devices()
@@ -1777,6 +1879,7 @@ def api_audio_default_device(payload: dict | None = None) -> dict:
         "success": ok,
         "message": ("Standard-Mikrofon umgeschaltet." if device_kind == "input" else "Standard-Ausgabegeraet umgeschaltet.") if ok else "Umschalten fehlgeschlagen.",
         "output": out,
+        "duration_ms": result.get("duration_ms", 0),
         "active_output": updated.get("active_output"),
         "active_input": updated.get("active_input"),
     }
@@ -1792,6 +1895,26 @@ def api_audio_input_level() -> dict:
     return get_input_metering_level()
 
 
+@app.get("/api/audio/health")
+def api_audio_health() -> dict:
+    status = get_audio_status()
+    diag = _get_audio_diag_snapshot()
+    return {
+        "ok": True,
+        "audio_available": bool(status.get("available")),
+        "backend_available": bool(_ensure_audio_backend()),
+        "write_lock_busy": _audio_write_lock.locked(),
+        "queue_timeout_sec": diag.get("queue_timeout_sec", _audio_write_timeout_sec),
+        "stats": diag.get("stats", {}),
+        "last_error": diag.get("last_error", {}),
+    }
+
+
+@app.get("/api/debug/audio")
+def api_debug_audio() -> dict:
+    return _get_audio_diag_snapshot()
+
+
 @app.get("/api/audio/open-programs")
 def api_audio_open_programs(limit: int = 300) -> dict:
     try:
@@ -1802,14 +1925,26 @@ def api_audio_open_programs(limit: int = 300) -> dict:
 
 @app.post("/api/audio/session/{pid}/volume/{level}")
 def api_audio_session_volume(pid: int, level: int) -> dict:
-    ok = set_audio_session_volume(pid, level)
-    return {"success": ok, "pid": pid, "level": max(0, min(100, level))}
+    result = _run_audio_write_action(f"session_volume:{pid}", lambda: set_audio_session_volume(pid, level))
+    return {
+        "success": result["success"],
+        "message": result["message"],
+        "duration_ms": result["duration_ms"],
+        "pid": pid,
+        "level": max(0, min(100, level)),
+    }
 
 
 @app.post("/api/audio/session/{pid}/mute/{state}")
 def api_audio_session_mute(pid: int, state: int) -> dict:
-    ok = set_audio_session_mute(pid, bool(state))
-    return {"success": ok, "pid": pid, "muted": bool(state)}
+    result = _run_audio_write_action(f"session_mute:{pid}", lambda: set_audio_session_mute(pid, bool(state)))
+    return {
+        "success": result["success"],
+        "message": result["message"],
+        "duration_ms": result["duration_ms"],
+        "pid": pid,
+        "muted": bool(state),
+    }
 
 
 @app.get("/api/logs")
