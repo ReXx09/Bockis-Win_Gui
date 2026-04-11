@@ -7754,28 +7754,24 @@ function Invoke-GitPullDependencyAction {
             return @{ Success = $false; Cancelled = $false; Message = "Kein Git-Upstream konfiguriert" }
         }
 
-        $confirmText = "Git Pull fuer Branch '$branch' von '$upstream' ausfuehren?`n`nLokale Aenderungen werden mit --autostash zwischengespeichert, sofern moeglich."
+        $confirmText = @"
+Git Pull jetzt starten?
+
+Branch: $branch
+Quelle: $upstream
+
+WICHTIG: Der Pull kann Beta-Daten enthalten.
+Lokale Aenderungen werden mit --autostash zwischengespeichert (sofern moeglich).
+"@
         $confirmResult = [System.Windows.Forms.MessageBox]::Show(
             $confirmText,
-            "Git Pull",
-            [System.Windows.Forms.MessageBoxButtons]::YesNo,
-            [System.Windows.Forms.MessageBoxIcon]::Question
-        )
-
-        if ($confirmResult -ne [System.Windows.Forms.DialogResult]::Yes) {
-            return @{ Success = $false; Cancelled = $true; Message = "Abgebrochen" }
-        }
-
-        $safetyConfirmText = "WICHTIG: Dieser Git Pull kann Beta-Daten enthalten.`n`nMoechten Sie den Vorgang wirklich starten?"
-        $safetyConfirmResult = [System.Windows.Forms.MessageBox]::Show(
-            $safetyConfirmText,
-            "Sicherheitsabfrage",
+            "Git Pull bestaetigen",
             [System.Windows.Forms.MessageBoxButtons]::YesNo,
             [System.Windows.Forms.MessageBoxIcon]::Warning
         )
 
-        if ($safetyConfirmResult -ne [System.Windows.Forms.DialogResult]::Yes) {
-            return @{ Success = $false; Cancelled = $true; Message = "Abgebrochen (Sicherheitsabfrage)" }
+        if ($confirmResult -ne [System.Windows.Forms.DialogResult]::Yes) {
+            return @{ Success = $false; Cancelled = $true; Message = "Abgebrochen" }
         }
 
         if ($ProgressCallback) {
