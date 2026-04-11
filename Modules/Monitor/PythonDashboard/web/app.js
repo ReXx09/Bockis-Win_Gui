@@ -750,7 +750,6 @@ function wireSizeControls(layoutEl = dashboardGrid, storageKey = LAYOUT_KEY, mes
     const head = card.querySelector('.card-head');
     if (!head || head.querySelector('.size-controls')) return;
 
-    const drag = head.querySelector('.drag-handle');
     const actions = document.createElement('div');
     actions.className = 'card-head-actions';
 
@@ -785,7 +784,6 @@ function wireSizeControls(layoutEl = dashboardGrid, storageKey = LAYOUT_KEY, mes
     controls.appendChild(select);
 
     actions.appendChild(controls);
-    if (drag) actions.appendChild(drag);
     head.appendChild(actions);
 
     setCardSize(card, card.dataset.size || card.dataset.defaultSize || '1-3', false, layoutEl, storageKey, messageEl);

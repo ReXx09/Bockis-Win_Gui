@@ -349,6 +349,7 @@ body {
 }
 
 .drag-handle {
+  display: none;
   color: var(--muted);
   cursor: grab;
   user-select: none;
