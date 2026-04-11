@@ -1070,6 +1070,12 @@ input, select {
   text-transform: uppercase;
 }
 
+.audio-route-debug-actions {
+  margin-top: 8px;
+  margin-bottom: 6px;
+  gap: 8px;
+}
+
 .audio-hidden {
   display: none !important;
 }

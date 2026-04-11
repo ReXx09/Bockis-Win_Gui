@@ -315,7 +315,7 @@
             <div class="row">
               <button class="btn" id="audioEditModeBtn">Bearbeitungsmodus: Aus</button>
             </div>
-            <p class="muted">Bevorzugtes Geraet wird hier als Merkliste gespeichert. Die echte Zuweisung erfolgt in Windows.</p>
+            <p class="muted">Per-App Routing wird direkt gesetzt. Falls Windows blockiert, kannst du auf den nativen Mixer-Fallback wechseln.</p>
             <div class="audio-user-routing-row">
               <select id="openProgramSelect">
                 <option value="">Offene Programme auswaehlen...</option>
@@ -327,7 +327,12 @@
               <button class="btn" id="refreshOpenProgramsBtn">Programme aktualisieren</button>
               <button class="btn" id="openRoutingSettingsBtn">Windows Routing</button>
             </div>
-            <p id="userRoutingHint" class="muted">Tipp: Nach dem Speichern direkt auf "Windows Routing" klicken und dort der App das Geraet zuweisen.</p>
+            <p id="userRoutingHint" class="muted">Tipp: Nach dem Speichern "Jetzt umschalten" klicken. Falls es fehlschlaegt, nutzt du den nativen Windows-Fallback.</p>
+            <div class="row audio-route-debug-actions">
+              <button class="btn" id="routeFallbackBtn">Fallback: Windows Routing</button>
+              <button class="btn" id="clearRouteDebugBtn">Route-Log leeren</button>
+            </div>
+            <pre id="routeDebugLog" class="console small-console compact-console">Route-Diagnose bereit.</pre>
             <div id="userProgramRoutes" class="audio-user-route-list"></div>
           </section>
 

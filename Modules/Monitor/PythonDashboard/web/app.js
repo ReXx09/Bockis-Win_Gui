@@ -103,6 +103,9 @@ const openRoutingSettingsBtn = document.getElementById('openRoutingSettingsBtn')
 const audioEditModeBtn = document.getElementById('audioEditModeBtn');
 const userProgramRoutes = document.getElementById('userProgramRoutes');
 const userRoutingHint = document.getElementById('userRoutingHint');
+const routeDebugLog = document.getElementById('routeDebugLog');
+const clearRouteDebugBtn = document.getElementById('clearRouteDebugBtn');
+const routeFallbackBtn = document.getElementById('routeFallbackBtn');
 
 const dashboardGrid = document.getElementById('dashboardGrid');
 const audioGrid = document.getElementById('audioGrid');
@@ -273,6 +276,7 @@ let audioEditMode = false;
 let lastAudioDeviceSummary = { activeOutput: '', activeInput: '', routingMessage: '' };
 let routeMuteInFlight = new Set();
 let routeSessionRefreshTimer = null;
+let routeDebugEvents = [];
 let lastInputMeteringData = { level: 0, peak: 0, available: false };
 let inputMeteringTimer = null;
 let pendingThemeId = 'ozean';
@@ -2601,6 +2605,23 @@ function resolveDeviceNameById(id) {
   return dev ? dev.name : '(Unbekanntes Geraet)';
 }
 
+function appendRouteDebugEntry(level, text) {
+  const stamp = new Date().toLocaleTimeString('de-DE', { hour12: false });
+  routeDebugEvents.push({ ts: stamp, level: String(level || 'INFO').toUpperCase(), text: String(text || '') });
+  if (routeDebugEvents.length > 40) {
+    routeDebugEvents = routeDebugEvents.slice(-40);
+  }
+  if (!routeDebugLog) return;
+  routeDebugLog.textContent = routeDebugEvents.map((e) => `[${e.ts}] ${e.level}  ${e.text}`).join('\n') || 'Route-Diagnose bereit.';
+}
+
+function clearRouteDebugEntries() {
+  routeDebugEvents = [];
+  if (routeDebugLog) {
+    routeDebugLog.textContent = 'Route-Diagnose bereit.';
+  }
+}
+
 async function setDefaultAudioDevice(deviceId, deviceName = '', deviceKind = 'output') {
   if (!deviceId) {
     audioMsg.textContent = deviceKind === 'input' ? 'Kein Mikrofon ausgewaehlt.' : 'Kein Ausgabegeraet ausgewaehlt.';
@@ -2666,10 +2687,13 @@ async function setPerAppAudioRoute(pid, deviceId, deviceName = '', deviceKind = 
       body: JSON.stringify({ pid: parsedPid, device_id: deviceId, device_kind: deviceKind }),
     });
     if (!d.success) {
+      appendRouteDebugEntry('warn', `PID ${parsedPid} -> ${deviceName || deviceId} fehlgeschlagen: ${d.message || 'Unbekannter Fehler'}`);
       return { success: false, message: d.message || 'Per-App Routing fehlgeschlagen.' };
     }
+    appendRouteDebugEntry('ok', `PID ${parsedPid} -> ${deviceName || deviceId} gesetzt (${d.duration_ms || 0} ms)`);
     return { success: true, message: d.message || `Per-App Routing gesetzt: PID ${parsedPid} -> ${deviceName || deviceId}` };
   } catch (err) {
+    appendRouteDebugEntry('error', `PID ${parsedPid} -> ${deviceName || deviceId} Fehler: ${err.message}`);
     return { success: false, message: `Per-App Routing Fehler: ${err.message}` };
   }
 }
@@ -2689,6 +2713,7 @@ async function applyPerAppRouteForProgram(programName, deviceId, deviceName = ''
   const pids = [...new Set(sessions.map((s) => Number(s.pid || 0)).filter((p) => p > 0))];
 
   if (!pids.length) {
+    appendRouteDebugEntry('info', `Keine aktive Session fuer ${programName}; Route wird bei naechster Session angewendet.`);
     audioMsg.textContent = `Zuordnung gespeichert: ${programName} -> ${deviceName || resolveDeviceNameById(deviceId)}. Wird angewendet, sobald eine Audio-Session der App aktiv ist.`;
     return false;
   }
@@ -2705,6 +2730,7 @@ async function applyPerAppRouteForProgram(programName, deviceId, deviceName = ''
   }
 
   if (!okCount) {
+    appendRouteDebugEntry('error', `Routing fuer ${programName} komplett fehlgeschlagen.`);
     audioMsg.textContent = `Per-App Routing fehlgeschlagen fuer ${programName}: ${failures[0] || 'Unbekannter Fehler'}`;
     return false;
   }
@@ -2712,6 +2738,12 @@ async function applyPerAppRouteForProgram(programName, deviceId, deviceName = ''
   audioMsg.textContent = failures.length
     ? `Per-App Routing teilweise gesetzt (${okCount}/${pids.length}) fuer ${programName}.`
     : `Per-App Routing gesetzt fuer ${programName} (${okCount} Session${okCount === 1 ? '' : 's'}).`;
+  appendRouteDebugEntry(
+    failures.length ? 'warn' : 'ok',
+    failures.length
+      ? `${programName}: teilweise gesetzt (${okCount}/${pids.length})`
+      : `${programName}: erfolgreich gesetzt (${okCount}/${pids.length})`
+  );
   scheduleRouteSessionRefresh(500);
   return true;
 }
@@ -3104,6 +3136,31 @@ function renderUserProgramRoutes() {
 function wireUserAudioRoutingControls() {
   if (!addUserProgramBtn || !openRoutingSettingsBtn) return;
 
+  if (clearRouteDebugBtn) {
+    clearRouteDebugBtn.addEventListener('click', () => {
+      clearRouteDebugEntries();
+      audioMsg.textContent = 'Route-Log geleert.';
+    });
+  }
+
+  if (routeFallbackBtn) {
+    routeFallbackBtn.addEventListener('click', async () => {
+      try {
+        const d = await jsonFetch('/api/audio/open-routing-settings', { method: 'POST' });
+        if (d.success) {
+          appendRouteDebugEntry('info', 'Windows Routing als Fallback geoeffnet.');
+          audioMsg.textContent = 'Windows Audio-Routing geoeffnet.';
+        } else {
+          appendRouteDebugEntry('warn', `Windows Routing konnte nicht geoeffnet werden: ${d.message || 'Unbekannter Fehler'}`);
+          audioMsg.textContent = `Routing konnte nicht geoeffnet werden: ${d.message || 'Unbekannter Fehler'}`;
+        }
+      } catch (err) {
+        appendRouteDebugEntry('error', `Fallback-Open Fehler: ${err.message}`);
+        audioMsg.textContent = `Routing-Fehler: ${err.message}`;
+      }
+    });
+  }
+
   if (openProgramSelect && userProgramName) {
     openProgramSelect.addEventListener('change', () => {
       if (!openProgramSelect.value) return;
@@ -3145,9 +3202,11 @@ function wireUserAudioRoutingControls() {
       existing.deviceName = deviceName;
       existing.favoriteDeviceIds = normalizeFavoriteDeviceIds([...(existing.favoriteDeviceIds || []), deviceId]);
       audioMsg.textContent = `Zuordnung gespeichert: ${program} -> ${deviceName}${detectionInfo}.`;
+      appendRouteDebugEntry('info', `Zuordnung aktualisiert: ${program} -> ${deviceName}`);
     } else {
       all.push({ program, deviceId, deviceName, favoriteDeviceIds: [deviceId] });
       audioMsg.textContent = `Programm gespeichert: ${program} -> ${deviceName}${detectionInfo}.`;
+      appendRouteDebugEntry('info', `Zuordnung angelegt: ${program} -> ${deviceName}`);
     }
     saveUserAudioRoutes(all);
     if (userProgramName) userProgramName.value = '';
@@ -3161,8 +3220,14 @@ function wireUserAudioRoutingControls() {
   openRoutingSettingsBtn.addEventListener('click', async () => {
     try {
       const d = await jsonFetch('/api/audio/open-routing-settings', { method: 'POST' });
+      if (d.success) {
+        appendRouteDebugEntry('info', 'Windows Routing geoeffnet.');
+      } else {
+        appendRouteDebugEntry('warn', `Windows Routing Fehler: ${d.message || 'Unbekannter Fehler'}`);
+      }
       audioMsg.textContent = d.success ? 'Windows Audio-Routing geoeffnet.' : `Routing konnte nicht geoeffnet werden: ${d.message || 'Unbekannter Fehler'}`;
     } catch (err) {
+      appendRouteDebugEntry('error', `Windows Routing Exception: ${err.message}`);
       audioMsg.textContent = `Routing-Fehler: ${err.message}`;
     }
   });
