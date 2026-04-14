@@ -21,6 +21,10 @@ const gpuBar = document.getElementById('gpuBar');
 const cpuChart = document.getElementById('cpuChart');
 const gpuChart = document.getElementById('gpuChart');
 const ramChart = document.getElementById('ramChart');
+const cpuTempValue = document.getElementById('cpuTempValue');
+const cpuTempStatus = document.getElementById('cpuTempStatus');
+const cpuTempBar = document.getElementById('cpuTempBar');
+const cpuTempChart = document.getElementById('cpuTempChart');
 const disks = document.getElementById('disks');
 const procRows = document.getElementById('procRows');
 
@@ -145,6 +149,7 @@ const PAGE_ICONS = {
 };
 const WIDGET_LABELS = {
   monitoring: 'Monitoring',
+  'cpu-temp': 'CPU Temperatur',
   'net-upload': 'Upload',
   'net-download': 'Download',
   disks: 'Festplatten',
@@ -172,6 +177,7 @@ const WIDGET_LABELS = {
 };
 const WIDGET_ICONS = {
   monitoring: 'activity',
+  'cpu-temp': 'thermometer',
   'net-upload': 'upload',
   'net-download': 'download',
   disks: 'drive',
@@ -315,6 +321,7 @@ const monitorHistory = {
   cpu: [],
   gpu: [],
   ram: [],
+  cpuTemp: [],
   netUp: [],
   netDown: [],
 };
@@ -378,6 +385,8 @@ function renderMonitorCharts() {
   drawSparkline(cpuChart, monitorHistory.cpu, 100, '#49a9ff', 'rgba(73,169,255,0.16)');
   drawSparkline(gpuChart, monitorHistory.gpu, 100, '#41d88f', 'rgba(65,216,143,0.16)');
   drawSparkline(ramChart, monitorHistory.ram, 100, '#8ea7ff', 'rgba(142,167,255,0.16)');
+  const cpuTempMax = Math.max(100, ...monitorHistory.cpuTemp);
+  drawSparkline(cpuTempChart, monitorHistory.cpuTemp, cpuTempMax, '#f97316', 'rgba(249,115,22,0.16)');
   const upMax = Math.max(1, ...monitorHistory.netUp);
   const downMax = Math.max(1, ...monitorHistory.netDown);
   drawSparkline(netUpChart, monitorHistory.netUp, upMax, '#f97316', 'rgba(249,115,22,0.16)');
@@ -949,6 +958,22 @@ async function loadMetrics() {
 
   pushHistory('cpu', m.cpu_pct || 0);
   pushHistory('ram', m.ram_pct || 0);
+
+    if (m.cpu_temp_c != null) {
+      const temp = m.cpu_temp_c;
+      cpuTempValue.textContent = `${temp} °C`;
+      cpuTempValue.style.color = temp >= 85 ? '#ef4444' : temp >= 65 ? '#f97316' : '#41d88f';
+      cpuTempStatus.textContent = temp >= 85 ? 'Kritisch' : temp >= 65 ? 'Warm' : 'OK';
+      cpuTempBar.parentElement.style.display = '';
+      cpuTempBar.style.width = `${Math.max(0, Math.min(100, temp))}%`;
+      pushHistory('cpuTemp', temp);
+    } else {
+      cpuTempValue.textContent = 'n/a';
+      cpuTempValue.style.color = 'var(--muted)';
+      cpuTempStatus.textContent = 'Kein Sensor verfuegbar';
+      cpuTempBar.parentElement.style.display = 'none';
+      pushHistory('cpuTemp', 0);
+    }
 
   // GPU als gleiches Metrik-Format wie CPU/RAM
   const mainGpu = gpus.length ? gpus[0] : null;

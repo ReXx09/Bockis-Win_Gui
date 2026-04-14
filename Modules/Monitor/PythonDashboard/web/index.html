@@ -250,6 +250,19 @@
             </div>
             <div class="chart-card" style="margin-top: 10px;">
               <canvas id="netDownChart" height="70"></canvas>
+
+                      <section class="card" data-widget="cpu-temp" data-default-size="1-3" draggable="true">
+                        <div class="card-head"><h2>CPU Temperatur</h2><span class="drag-handle">&#8942;&#8942;</span></div>
+                        <div class="net-rate-tile">
+                          <strong id="cpuTempValue" class="net-rate-value" style="color: var(--accent);">-</strong>
+                          <span class="net-rate-unit">Grad Celsius</span>
+                          <small id="cpuTempStatus" class="net-rate-total">-</small>
+                        </div>
+                        <div class="bar" style="margin: 6px 4px 10px;"><div id="cpuTempBar" style="background: linear-gradient(90deg, #41d88f 0%, #f97316 60%, #ef4444 100%);"></div></div>
+                        <div class="chart-card">
+                          <canvas id="cpuTempChart" height="70"></canvas>
+                        </div>
+                      </section>
             </div>
           </section>
 
