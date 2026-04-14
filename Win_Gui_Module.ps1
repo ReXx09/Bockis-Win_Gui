@@ -1168,7 +1168,7 @@ function Test-PythonDashboardApiCompatibility {
     }
 }
 
-function Ensure-PythonDashboardStartupRegistration {
+function Set-PythonDashboardStartupRegistration {
     param([bool]$Enable)
 
     $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
@@ -1341,8 +1341,8 @@ function Start-PythonDashboard {
         try { Remove-Item $stdoutLog -Force -ErrorAction SilentlyContinue } catch { }
         try { Remove-Item $stderrLog -Force -ErrorAction SilentlyContinue } catch { }
 
-        $args = @($pythonPrefixArgs + @("-m", "uvicorn", "app:app", "--host", "127.0.0.1", "--port", "$script:pythonDashboardPort"))
-        $proc = Start-Process -FilePath $pythonCmd -ArgumentList $args -WorkingDirectory $dashboardDir -PassThru -WindowStyle Hidden -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog
+        $processArgs = @($pythonPrefixArgs + @("-m", "uvicorn", "app:app", "--host", "127.0.0.1", "--port", "$script:pythonDashboardPort"))
+        $proc = Start-Process -FilePath $pythonCmd -ArgumentList $processArgs -WorkingDirectory $dashboardDir -PassThru -WindowStyle Hidden -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog
         $script:pythonDashboardProcess = $proc
 
         # Kurz warten bis API antwortet (max ~12 Sekunden)
@@ -2000,7 +2000,7 @@ function Close-FormSafely {
 }
 
 # Funktion zum Neuladen der GUI
-function Reload-GUI {
+function Invoke-GUIReload {
     param (
         [System.Windows.Forms.Form]$Form
     )
@@ -5921,7 +5921,7 @@ $btnGUIReload.Add_Click({
 
         if ($confirmReload -eq [System.Windows.Forms.DialogResult]::Yes) {
             Update-LogFile -Message "GUI-Reload wurde vom Benutzer initiiert"
-            Reload-GUI -Form $mainform
+            Invoke-GUIReload -Form $mainform
         }
     })
 $restartPanel.Content.Controls.Add($btnGUIReload)
@@ -7109,11 +7109,11 @@ $script:functionButtons = @(
 )
 
 foreach ($btn in $script:functionButtons) {
-    if ($btn -ne $null) {
+    if ($null -ne $btn) {
         $btn.Add_HandleCreated({
                 try {
                     $rgn = [RoundedCorners]::CreateRoundRectRgn(0, 0, $this.Width, $this.Height, 8, 8)
-                    if ($rgn -ne [IntPtr]::Zero) {
+                    if ([IntPtr]::Zero -ne $rgn) {
                         $this.Region = [System.Drawing.Region]::FromHrgn($rgn)
                     }
                 } catch {}
@@ -7437,7 +7437,7 @@ $menuItemGUIReload.Add_Click({
 
         if ($confirmReload -eq [System.Windows.Forms.DialogResult]::Yes) {
             Update-LogFile -Message "GUI-Reload wurde vom Benutzer initiiert"
-            Reload-GUI -Form $mainform
+            Invoke-GUIReload -Form $mainform
         }
     })
 
@@ -8702,7 +8702,7 @@ try {
 # um das weiße Aufblitzen beim Fokus-Wechsel zu verhindern.
 # WinForms nutzt sonst System-Farben als Standard-BorderColor.
 # ===================================================================
-function Fix-AllButtonFlatAppearance {
+function Update-AllButtonFlatAppearance {
     param([System.Windows.Forms.Control]$RootControl)
     foreach ($child in $RootControl.Controls) {
         if ($child -is [System.Windows.Forms.Button] -and
@@ -8719,11 +8719,11 @@ function Fix-AllButtonFlatAppearance {
             }
         }
         if ($child.Controls.Count -gt 0) {
-            Fix-AllButtonFlatAppearance -RootControl $child
+            Update-AllButtonFlatAppearance -RootControl $child
         }
     }
 }
-Fix-AllButtonFlatAppearance -RootControl $mainform
+Update-AllButtonFlatAppearance -RootControl $mainform
 
 [void]$mainform.ShowDialog()
 
