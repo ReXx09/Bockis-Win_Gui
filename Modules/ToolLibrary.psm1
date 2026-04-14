@@ -1023,7 +1023,32 @@ function Invoke-ToolDownload {
                         }
                     }
                 }
-                
+
+                # Authenticode-Signaturprüfung für .exe und .msi (kein harter Block — Warnung bei fehlendem/ungültigem Zertifikat)
+                $sigExt = [System.IO.Path]::GetExtension($finalPath).ToLower()
+                if ($sigExt -in @('.exe', '.msi')) {
+                    Update-ToolWorkflowProgress -ProgressBar $ProgressBar -StatusText "Prüfe Authenticode-Signatur..." -ProgressValue 94 -TextColor ([System.Drawing.Color]::White)
+                    try {
+                        $sig = Get-AuthenticodeSignature -FilePath $finalPath -ErrorAction Stop
+                        switch ($sig.Status) {
+                            'Valid' {
+                                $publisher = if ($sig.SignerCertificate) { $sig.SignerCertificate.Subject } else { 'Unbekannt' }
+                                Write-Host "  ✓ Signatur gültig | Herausgeber: $publisher" -ForegroundColor Green
+                            }
+                            'NotSigned' {
+                                Write-Host "  ⚠ Datei ist NICHT signiert: $finalFileName" -ForegroundColor Yellow
+                                Write-Host "    Bitte stellen Sie sicher, dass die Quelle vertrauenswürdig ist." -ForegroundColor Yellow
+                            }
+                            default {
+                                Write-Host "  ⚠ Signatur ungültig oder nicht vertrauenswürdig (Status: $($sig.Status)): $finalFileName" -ForegroundColor Red
+                                Write-Host "    Die Datei könnte manipuliert sein. Bitte manuell prüfen." -ForegroundColor Red
+                            }
+                        }
+                    } catch {
+                        Write-Verbose "Signaturprüfung konnte nicht durchgeführt werden: $($_.Exception.Message)"
+                    }
+                }
+
                 Write-Host "✓ Download erfolgreich: $finalFileName ($fileSizeMB MB)" -ForegroundColor Green
                 Update-ToolWorkflowProgress -ProgressBar $ProgressBar -StatusText "Download erfolgreich abgeschlossen" -ProgressValue 100 -TextColor ([System.Drawing.Color]::LightGreen)
                 Start-Sleep -Milliseconds 500
