@@ -1620,8 +1620,9 @@ public class BockisWinHelper {
 
     try {
         # CMD-Fenster startet sofort an der Zielposition (kein Flackern auf Monitor 1)
-        $windowTitle = "Bockis System-Tool - ${OperationLabel}: $ToolName"
-        $cmdCommand  = "cmd.exe /c `"title $windowTitle && winget $argumentString`""
+        # Alle cmd.exe-Sonderzeichen entfernen (verhindert Command Injection via Fenstertitel)
+        $safeTitle   = ("Bockis System-Tool - ${OperationLabel}: $ToolName") -replace '[&|<>^"()%!]', ''
+        $cmdCommand  = "cmd.exe /c `"title $safeTitle && winget $argumentString`""
 
         $hProcess = [BockisWinHelper]::StartAt($cmdCommand, $cmdTargetX, $cmdTargetY, 960, 540, $windowTitle)
 

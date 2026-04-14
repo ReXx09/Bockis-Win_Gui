@@ -7710,7 +7710,8 @@ function Show-TemporaryCmdPreview {
         $tempFilePath = Join-Path ([System.IO.Path]::GetTempPath()) $tempFileName
         [System.IO.File]::WriteAllLines($tempFilePath, $previewLines)
 
-        $cmdTitle = ($Title -replace '"', '')
+        # Alle cmd.exe-Sonderzeichen entfernen (verhindert Command Injection via Fenstertitel)
+        $cmdTitle = ($Title -replace '[&|<>^"()%!]', '') -replace '\s+', ' '
         $cmdArguments = "/c title $cmdTitle & type `"$tempFilePath`" & echo. & timeout /t $TimeoutSeconds /nobreak >nul & del /f /q `"$tempFilePath`""
 
         Start-Process -FilePath 'cmd.exe' -ArgumentList $cmdArguments -WorkingDirectory $RepositoryPath -WindowStyle Normal | Out-Null

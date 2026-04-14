@@ -190,7 +190,27 @@ function Update-LibreHardwareMonitorDll {
             $webClient.Headers.Add("User-Agent", "Bockis-System-Tool")
             $webClient.DownloadFile($nugetUrl, $zipPath)
             $webClient.Dispose()
-            
+
+            # SHA512-Integritätsprüfung via NuGet v3 API (verhindert MITM/manipulierte DLLs)
+            if ($ProgressCallback) { & $ProgressCallback 57 "Prüfe Integrität der Datei..." }
+            $pkgId  = 'librehardwaremonitorlib'
+            $pkgVer = $TargetVersion.ToLower()
+            $shaUrl = "https://api.nuget.org/v3-flatcontainer/$pkgId/$pkgVer/$pkgId.$pkgVer.nupkg.sha512"
+            try {
+                $expectedHash = (Invoke-WebRequest -Uri $shaUrl -UseBasicParsing -ErrorAction Stop).Content.Trim()
+                $sha512       = [System.Security.Cryptography.SHA512]::Create()
+                $actualHash   = [System.Convert]::ToBase64String($sha512.ComputeHash([System.IO.File]::ReadAllBytes($zipPath)))
+                $sha512.Dispose()
+                if ($actualHash -ne $expectedHash) {
+                    Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
+                    throw "Integritätsprüfung fehlgeschlagen: SHA512-Hash der NuGet-Datei stimmt nicht überein."
+                }
+                Write-Verbose "✓ SHA512-Integrität bestätigt"
+            } catch {
+                if ($_.Exception.Message -match 'Integrität') { throw }
+                Write-Verbose "SHA512-Prüfung übersprungen (Hash nicht abrufbar): $($_.Exception.Message)"
+            }
+
             if ($ProgressCallback) { & $ProgressCallback 58 "Entpacke Paket..." }
             
             # Entpacken (.nupkg ist intern ein ZIP)
