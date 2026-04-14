@@ -1,5 +1,5 @@
 ﻿; ===================================================================
-; INSTALLATIONS-SKRIPT FÃœR BOCKIS SYSTEM-TOOL V4.2.2
+; INSTALLATIONS-SKRIPT FÃœR BOCKIS SYSTEM-TOOL V4.2.3
 ; ===================================================================
 ;
 ; BESCHREIBUNG:
@@ -36,7 +36,7 @@
 ; • LZMA2 Maximum-Kompression für kleinere Setup-Datei
 ;
 ; AUTOR: Bockis
-; VERSION: 4.2.2
+; VERSION: 4.2.3
 ; ERSTELLT MIT: Inno Setup 6.x
 ; DATUM: 2025
 ; LIZENZ: Siehe LICENSE.txt
@@ -46,7 +46,7 @@
 ; ANWENDUNGS-DEFINITIONEN
 ; -------------------------------------------------------------------
 #define MyAppName "Bockis System-Tool"
-#define MyAppVersion "4.2.2"
+#define MyAppVersion "4.2.3"
 #define MyAppPublisher "Bockis"
 #define MyAppURL "https://github.com/bockis"
 #define MyAppExeName "Win_Gui_Module.ps1"
