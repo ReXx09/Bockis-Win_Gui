@@ -25,6 +25,10 @@ const cpuTempValue = document.getElementById('cpuTempValue');
 const cpuTempStatus = document.getElementById('cpuTempStatus');
 const cpuTempBar = document.getElementById('cpuTempBar');
 const cpuTempChart = document.getElementById('cpuTempChart');
+const gpuTempValue = document.getElementById('gpuTempValue');
+const gpuTempStatus = document.getElementById('gpuTempStatus');
+const gpuTempBar = document.getElementById('gpuTempBar');
+const gpuTempChart = document.getElementById('gpuTempChart');
 const disks = document.getElementById('disks');
 const procRows = document.getElementById('procRows');
 
@@ -150,6 +154,7 @@ const PAGE_ICONS = {
 const WIDGET_LABELS = {
   monitoring: 'Monitoring',
   'cpu-temp': 'CPU Temperatur',
+  'gpu-temp': 'GPU Temperatur',
   'net-upload': 'Upload',
   'net-download': 'Download',
   disks: 'Festplatten',
@@ -178,6 +183,7 @@ const WIDGET_LABELS = {
 const WIDGET_ICONS = {
   monitoring: 'activity',
   'cpu-temp': 'thermometer',
+  'gpu-temp': 'thermometer',
   'net-upload': 'upload',
   'net-download': 'download',
   disks: 'drive',
@@ -322,6 +328,7 @@ const monitorHistory = {
   gpu: [],
   ram: [],
   cpuTemp: [],
+  gpuTemp: [],
   netUp: [],
   netDown: [],
 };
@@ -387,6 +394,8 @@ function renderMonitorCharts() {
   drawSparkline(ramChart, monitorHistory.ram, 100, '#8ea7ff', 'rgba(142,167,255,0.16)');
   const cpuTempMax = Math.max(100, ...monitorHistory.cpuTemp);
   drawSparkline(cpuTempChart, monitorHistory.cpuTemp, cpuTempMax, '#f97316', 'rgba(249,115,22,0.16)');
+  const gpuTempMax = Math.max(100, ...monitorHistory.gpuTemp);
+  drawSparkline(gpuTempChart, monitorHistory.gpuTemp, gpuTempMax, '#ef4444', 'rgba(239,68,68,0.16)');
   const upMax = Math.max(1, ...monitorHistory.netUp);
   const downMax = Math.max(1, ...monitorHistory.netDown);
   drawSparkline(netUpChart, monitorHistory.netUp, upMax, '#f97316', 'rgba(249,115,22,0.16)');
@@ -987,12 +996,34 @@ async function loadMetrics() {
     gpuMeta.textContent = `${vram} | ${mainGpu.temp_c != null ? `${mainGpu.temp_c} °C` : 'Temp n/a'}`;
     gpuBar.style.width = `${Math.max(0, Math.min(100, pct))}%`;
     pushHistory('gpu', pct);
+
+    if (mainGpu.temp_c != null) {
+      const temp = mainGpu.temp_c;
+      gpuTempValue.textContent = `${temp} °C`;
+      gpuTempValue.style.color = temp >= 88 ? '#ef4444' : temp >= 72 ? '#f97316' : '#41d88f';
+      gpuTempStatus.textContent = temp >= 88 ? 'Kritisch' : temp >= 72 ? 'Warm' : 'OK';
+      gpuTempBar.parentElement.style.display = '';
+      gpuTempBar.style.width = `${Math.max(0, Math.min(100, temp))}%`;
+      pushHistory('gpuTemp', temp);
+    } else {
+      gpuTempValue.textContent = 'n/a';
+      gpuTempValue.style.color = 'var(--muted)';
+      gpuTempStatus.textContent = 'Kein Sensor verfuegbar';
+      gpuTempBar.parentElement.style.display = 'none';
+      pushHistory('gpuTemp', 0);
+    }
   } else {
     gpuName.textContent = 'GPU';
     gpuPct.textContent = 'n/a';
     gpuMeta.textContent = 'Keine GPU-Daten';
     gpuBar.style.width = '0%';
     pushHistory('gpu', 0);
+
+    gpuTempValue.textContent = 'n/a';
+    gpuTempValue.style.color = 'var(--muted)';
+    gpuTempStatus.textContent = 'Keine GPU-Daten';
+    gpuTempBar.parentElement.style.display = 'none';
+    pushHistory('gpuTemp', 0);
   }
 
   const now = Date.now();
