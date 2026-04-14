@@ -11,7 +11,6 @@ import ctypes
 import sys
 import threading
 import uuid
-import faulthandler
 from importlib import metadata as importlib_metadata
 from contextlib import contextmanager
 from pathlib import Path
@@ -26,7 +25,7 @@ from fastapi.staticfiles import StaticFiles
 try:
     from ctypes import POINTER, cast
     from comtypes import CLSCTX_ALL
-    from pycaw.pycaw import AudioSession, AudioUtilities, IAudioEndpointVolume, IAudioSessionControl2, IAudioMeterInformation
+    from pycaw.pycaw import AudioSession, AudioUtilities, IAudioEndpointVolume, IAudioSessionControl2
 
     AUDIO_AVAILABLE = True
 except Exception:
@@ -37,16 +36,11 @@ except Exception:
     AudioUtilities = None
     IAudioEndpointVolume = None
     IAudioSessionControl2 = None
-    IAudioMeterInformation = None
     AUDIO_AVAILABLE = False
 
 
-# Guard all audio COM calls against concurrent access from parallel HTTP requests.
-_audio_com_lock = threading.RLock()
-
-
 def _ensure_audio_backend() -> bool:
-    global AUDIO_AVAILABLE, POINTER, cast, CLSCTX_ALL, AudioSession, AudioUtilities, IAudioEndpointVolume, IAudioSessionControl2, IAudioMeterInformation
+    global AUDIO_AVAILABLE, POINTER, cast, CLSCTX_ALL, AudioSession, AudioUtilities, IAudioEndpointVolume, IAudioSessionControl2
 
     if AUDIO_AVAILABLE:
         return True
@@ -54,7 +48,7 @@ def _ensure_audio_backend() -> bool:
     try:
         from ctypes import POINTER as _POINTER, cast as _cast
         from comtypes import CLSCTX_ALL as _CLSCTX_ALL
-        from pycaw.pycaw import AudioSession as _AudioSession, AudioUtilities as _AudioUtilities, IAudioEndpointVolume as _IAudioEndpointVolume, IAudioSessionControl2 as _IAudioSessionControl2, IAudioMeterInformation as _IAudioMeterInformation
+        from pycaw.pycaw import AudioSession as _AudioSession, AudioUtilities as _AudioUtilities, IAudioEndpointVolume as _IAudioEndpointVolume, IAudioSessionControl2 as _IAudioSessionControl2
 
         POINTER = _POINTER
         cast = _cast
@@ -63,59 +57,14 @@ def _ensure_audio_backend() -> bool:
         AudioUtilities = _AudioUtilities
         IAudioEndpointVolume = _IAudioEndpointVolume
         IAudioSessionControl2 = _IAudioSessionControl2
-        IAudioMeterInformation = _IAudioMeterInformation
         AUDIO_AVAILABLE = True
         return True
     except Exception:
         return False
 
 
-def _to_percent_level(value: float) -> int:
-    try:
-        return int(max(0, min(100, round(float(value) * 100.0))))
-    except Exception:
-        return 0
-
-
-def _get_endpoint_peak_percent(device_obj) -> int:
-    if not _ensure_audio_backend() or not device_obj:
-        return 0
-    try:
-        interface = device_obj.Activate(IAudioMeterInformation._iid_, CLSCTX_ALL, None)
-        meter = cast(interface, POINTER(IAudioMeterInformation))
-        peak = float(meter.GetPeakValue())
-        return _to_percent_level(peak)
-    except Exception:
-        return 0
-
-
-def _get_session_output_level_percent(session_obj, session_control_obj=None, device_peak_level: int | None = None) -> int:
-    if not _ensure_audio_backend() or not session_obj:
-        return 0
-
-    # Stable path: use endpoint peak of the session's output device.
-    if device_peak_level is not None:
-        try:
-            vol_obj = session_obj.SimpleAudioVolume
-            if bool(vol_obj.GetMute()):
-                return 0
-        except Exception:
-            pass
-        return max(0, min(100, int(device_peak_level)))
-
-    # Fallback: use current session volume as stable level indicator.
-    try:
-        vol_obj = session_obj.SimpleAudioVolume
-        if bool(vol_obj.GetMute()):
-            return 0
-        return _to_percent_level(float(vol_obj.GetMasterVolume()))
-    except Exception:
-        return 0
-
-
 @contextmanager
 def _audio_com_context():
-    _audio_com_lock.acquire()
     initialized = False
     try:
         ctypes.windll.ole32.CoInitialize(None)
@@ -131,7 +80,6 @@ def _audio_com_context():
                 ctypes.windll.ole32.CoUninitialize()
             except Exception:
                 pass
-        _audio_com_lock.release()
 
 APP_DIR = Path(__file__).resolve().parent
 WEB_DIR = APP_DIR / "web"
@@ -139,14 +87,6 @@ REPO_ROOT = APP_DIR.parent.parent.parent
 LOG_DIR = REPO_ROOT / "Data" / "Logs"
 DASHBOARD_REQUIREMENTS = APP_DIR / "requirements.txt"
 CUSTOM_LAUNCHERS_FILE = REPO_ROOT / "Data" / "dashboard_launchers.json"
-
-_fault_log_stream = None
-try:
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-    _fault_log_stream = open(LOG_DIR / "python-dashboard-fault.log", "a", encoding="utf-8")
-    faulthandler.enable(file=_fault_log_stream, all_threads=True)
-except Exception:
-    _fault_log_stream = None
 
 app = FastAPI(title="Bockis Python Dashboard")
 
@@ -202,13 +142,6 @@ _audio_diag_stats: dict[str, object] = {
     "last_duration_ms": 0,
 }
 _audio_last_error: dict[str, object] = {"ts": 0.0, "action": "", "message": ""}
-
-# Python 3.14 + comtypes/pycaw can crash in AudioUtilities.GetAllDevices() (native AV).
-# Keep dashboard stable by avoiding that code path unless explicitly enabled.
-_audio_disable_device_enumeration = (
-    sys.version_info >= (3, 14)
-    and os.getenv("BOCKIS_AUDIO_ALLOW_DEVICE_ENUM", "0").strip().lower() not in ("1", "true", "yes", "on")
-)
 
 _POLICY_CONFIG_ACTIVATION_CLASS = "Windows.Media.Internal.AudioPolicyConfig"
 _POLICY_CONFIG_FACTORY_IIDS = (
@@ -893,6 +826,53 @@ def _get_cpu_temp_c() -> float | None:
                     values = [e.current for e in entries if getattr(e, "current", None) is not None]
                     if values:
                         return round(sum(values) / len(values), 1)
+    except Exception:
+        pass
+
+    # Direct LibreHardwareMonitor DLL fallback.
+    # This avoids relying on WMI namespaces that are often unavailable on Windows.
+    try:
+        dll_path = REPO_ROOT / "Lib" / "LibreHardwareMonitorLib.dll"
+        if dll_path.exists():
+            dll_ps = str(dll_path).replace("'", "''")
+            ps_cmd = (
+                f"$dllPath = '{dll_ps}';"
+                "try {"
+                "  Add-Type -Path $dllPath -ErrorAction Stop;"
+                "  $computer = New-Object LibreHardwareMonitor.Hardware.Computer;"
+                "  $computer.IsCpuEnabled = $true;"
+                "  $computer.IsMotherboardEnabled = $true;"
+                "  $computer.Open();"
+                "  1..3 | ForEach-Object {"
+                "    foreach ($hw in $computer.Hardware) {"
+                "      $hw.Update();"
+                "      foreach ($sub in $hw.SubHardware) { $sub.Update() }"
+                "    }"
+                "    Start-Sleep -Milliseconds 250"
+                "  };"
+                "  $cpu = $computer.Hardware | Where-Object { $_.HardwareType.ToString() -eq 'Cpu' } | Select-Object -First 1;"
+                "  if ($cpu) {"
+                "    $vals = @($cpu.Sensors | Where-Object {"
+                "      $_.SensorType.ToString() -eq 'Temperature' -and $_.Value -ne $null -and $_.Value -gt 0 -and $_.Name -notmatch 'Distance to TjMax' -and $_.Name -match 'Core \\(Tctl/Tdie\\)|Core Average|Package|CPU Package|CPU Core|Tdie|CCD|P-Core|E-Core'"
+                "    } | ForEach-Object { [double]$_.Value });"
+                "    if (-not $vals -or $vals.Count -eq 0) {"
+                "      $vals = @($cpu.Sensors | Where-Object { $_.SensorType.ToString() -eq 'Temperature' -and $_.Value -ne $null -and $_.Value -gt 0 -and $_.Name -notmatch 'Distance to TjMax' } | ForEach-Object { [double]$_.Value })"
+                "    }"
+                "    if ($vals -and $vals.Count -gt 0) { [math]::Round((($vals | Measure-Object -Average).Average),1) }"
+                "  }"
+                "  $computer.Close();"
+                "} catch {}"
+            )
+            rc, out = _run_powershell(ps_cmd, timeout=5)
+            if rc == 0 and out.strip():
+                for line in reversed(out.splitlines()):
+                    candidate = line.strip().replace(",", ".")
+                    if not candidate:
+                        continue
+                    try:
+                        return float(candidate)
+                    except Exception:
+                        continue
     except Exception:
         pass
 
@@ -1739,66 +1719,6 @@ def get_audio_devices() -> dict:
     if not _ensure_audio_backend():
         return {"available": False, "active_output": None, "active_input": None, "devices": []}
 
-    if _audio_disable_device_enumeration:
-        active_output = None
-        active_output_id = None
-        active_input = None
-        active_input_id = None
-
-        with _audio_com_context():
-            try:
-                active = AudioUtilities.GetSpeakers()
-                active_output = getattr(active, "FriendlyName", None)
-                active_output_id = getattr(active, "id", None) or getattr(active, "Id", None)
-            except Exception:
-                active_output = None
-                active_output_id = None
-
-            try:
-                active_mic_getter = getattr(AudioUtilities, "GetMicrophone", None)
-                active_mic = active_mic_getter() if callable(active_mic_getter) else None
-                active_input = getattr(active_mic, "FriendlyName", None)
-                active_input_id = getattr(active_mic, "id", None) or getattr(active_mic, "Id", None)
-            except Exception:
-                active_input = None
-                active_input_id = None
-
-        devices: list[dict] = []
-        if active_output_id or active_output:
-            devices.append(
-                {
-                    "id": str(active_output_id or active_output or "output-active"),
-                    "name": str(active_output or "Aktive Ausgabe"),
-                    "kind": "output",
-                    "is_output": True,
-                    "is_input": False,
-                    "is_active_output": True,
-                    "is_active_input": False,
-                }
-            )
-
-        if active_input_id or active_input:
-            devices.append(
-                {
-                    "id": str(active_input_id or active_input or "input-active"),
-                    "name": str(active_input or "Aktives Mikrofon"),
-                    "kind": "input",
-                    "is_output": False,
-                    "is_input": True,
-                    "is_active_output": False,
-                    "is_active_input": True,
-                }
-            )
-
-        # Keep UI informative while running in crash-safe mode.
-        return {
-            "available": True,
-            "active_output": active_output,
-            "active_input": active_input,
-            "devices": devices,
-            "routing_message": "Audio-Safe-Mode aktiv (stabile, reduzierte Geraeteerkennung).",
-        }
-
     devices: list[dict] = []
     dedup_by_name: dict[str, dict] = {}
     active_output = None
@@ -1989,36 +1909,16 @@ def _iter_render_audio_devices() -> list:
     return devices
 
 
-def _iter_audio_sessions_with_devices() -> list[tuple[object, str, str, object | None, int | None]]:
+def _iter_audio_sessions_with_devices() -> list[tuple[object, str, str]]:
     if not _ensure_audio_backend():
         return []
 
-    sessions: list[tuple[object, str, str, object | None, int | None]] = []
-
-    # Safe mode: do not enumerate endpoint devices (unstable on some Python/comtypes builds).
-    if _audio_disable_device_enumeration:
-        seen_ids: set[str] = set()
-        for audio_session in _iter_audio_sessions():
-            try:
-                instance_id = str(getattr(audio_session, "InstanceIdentifier", None) or getattr(audio_session, "Identifier", None) or "")
-                if not instance_id:
-                    pid = int(getattr(audio_session, "ProcessId", 0) or 0)
-                    instance_id = f"pid:{pid}"
-                if instance_id in seen_ids:
-                    continue
-                seen_ids.add(instance_id)
-                ctl2 = getattr(audio_session, "_ctl", None)
-                sessions.append((audio_session, "Current Output", "unknown", ctl2, None))
-            except Exception:
-                continue
-        return sessions
-
+    sessions: list[tuple[object, str, str]] = []
     seen: set[tuple[str, str]] = set()
     for device in _iter_render_audio_devices():
         try:
             device_name = str(getattr(device, "FriendlyName", None) or "Unknown")
             device_id = str(getattr(device, "id", None) or getattr(device, "Id", None) or device_name)
-            device_peak = _get_endpoint_peak_percent(device)
             manager = getattr(device, "AudioSessionManager", None)
             if manager is None:
                 continue
@@ -2037,7 +1937,7 @@ def _iter_audio_sessions_with_devices() -> list[tuple[object, str, str, object |
                 if dedup_key in seen:
                     continue
                 seen.add(dedup_key)
-                sessions.append((audio_session, device_name, device_id, ctl2, device_peak))
+                sessions.append((audio_session, device_name, device_id))
         except Exception:
             continue
     return sessions
@@ -2049,7 +1949,7 @@ def get_audio_sessions() -> dict:
 
     result: list[dict] = []
     with _audio_com_context():
-        for sess, device_name, device_id, ctl2, device_peak in _iter_audio_sessions_with_devices():
+        for sess, device_name, device_id in _iter_audio_sessions_with_devices():
             try:
                 pid = int(getattr(sess, "ProcessId", 0) or 0)
                 proc = getattr(sess, "Process", None)
@@ -2058,7 +1958,6 @@ def get_audio_sessions() -> dict:
                 vol = int(round(vol_obj.GetMasterVolume() * 100))
                 muted = bool(vol_obj.GetMute())
                 state = int(getattr(sess, "State", 0) or 0)
-                output_level = _get_session_output_level_percent(sess, ctl2, device_peak)
                 result.append(
                     {
                         "pid": pid,
@@ -2066,7 +1965,6 @@ def get_audio_sessions() -> dict:
                         "device_name": device_name,
                         "device_id": device_id,
                         "volume": max(0, min(100, vol)),
-                        "output_level": max(0, min(100, int(output_level))),
                         "muted": muted,
                         "state": state,
                     }
@@ -2078,36 +1976,6 @@ def get_audio_sessions() -> dict:
     return {"available": True, "sessions": result}
 
 
-def get_audio_session_levels() -> dict:
-    if not _ensure_audio_backend():
-        return {"available": False, "levels": []}
-
-    by_pid: dict[int, dict[str, object]] = {}
-    with _audio_com_context():
-        for sess, _, _, ctl2, device_peak in _iter_audio_sessions_with_devices():
-            try:
-                pid = int(getattr(sess, "ProcessId", 0) or 0)
-                if pid <= 0:
-                    continue
-                state = int(getattr(sess, "State", 0) or 0)
-                output_level = _get_session_output_level_percent(sess, ctl2, device_peak)
-                prev = by_pid.get(pid)
-                if prev is None:
-                    by_pid[pid] = {
-                        "pid": pid,
-                        "output_level": max(0, min(100, int(output_level))),
-                        "state": state,
-                    }
-                else:
-                    prev["output_level"] = max(int(prev.get("output_level", 0)), max(0, min(100, int(output_level))))
-                    prev["state"] = max(int(prev.get("state", 0)), state)
-            except Exception:
-                continue
-
-    levels = sorted(by_pid.values(), key=lambda x: int(x.get("pid", 0)))
-    return {"available": True, "levels": levels}
-
-
 def set_audio_session_volume(pid: int, level: int) -> bool:
     if not _ensure_audio_backend():
         return False
@@ -2115,7 +1983,7 @@ def set_audio_session_volume(pid: int, level: int) -> bool:
     target = max(0.0, min(1.0, level / 100.0))
     changed = False
     with _audio_com_context():
-        for sess, _, _, _, _ in _iter_audio_sessions_with_devices():
+        for sess, _, _ in _iter_audio_sessions_with_devices():
             try:
                 session_pid = int(getattr(sess, "ProcessId", 0) or 0)
                 if session_pid != pid:
@@ -2133,7 +2001,7 @@ def set_audio_session_mute(pid: int, muted: bool) -> bool:
 
     changed = False
     with _audio_com_context():
-        for sess, _, _, _, _ in _iter_audio_sessions_with_devices():
+        for sess, _, _ in _iter_audio_sessions_with_devices():
             try:
                 session_pid = int(getattr(sess, "ProcessId", 0) or 0)
                 if session_pid != pid:
@@ -2179,13 +2047,15 @@ def get_input_metering_level() -> dict:
             active_mic_getter = getattr(AudioUtilities, "GetMicrophone", None)
             if not callable(active_mic_getter):
                 return {"available": False, "level": 0}
-
+            
             mic_dev = active_mic_getter()
             if not mic_dev:
                 return {"available": False, "level": 0}
-
-            level = _get_endpoint_peak_percent(mic_dev)
-            return {"available": True, "level": int(level)}
+            
+            # Microphone is connected and active - return availability
+            # Actual metering would require IAudioMeterInformation which is complex
+            # For now, return constant to show input is active
+            return {"available": True, "level": 0}
 
     except Exception:
         return {"available": False, "level": 0}
@@ -2234,7 +2104,6 @@ def health() -> dict:
         "service": "python-dashboard",
         "audio": {
             "backend_available": bool(_ensure_audio_backend()),
-            "device_enumeration_safe_mode": bool(_audio_disable_device_enumeration),
             "write_lock_busy": _audio_write_lock.locked(),
             "stats": audio_diag.get("stats", {}),
             "last_error": audio_diag.get("last_error", {}),
@@ -2469,11 +2338,6 @@ def api_audio_route_app_clear_all() -> dict:
 @app.get("/api/audio/sessions")
 def api_audio_sessions() -> dict:
     return get_audio_sessions()
-
-
-@app.get("/api/audio/session-levels")
-def api_audio_session_levels() -> dict:
-    return get_audio_session_levels()
 
 
 @app.get("/api/audio/input-level")
