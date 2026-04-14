@@ -433,6 +433,21 @@ body {
   display: block;
 }
 
+.page[data-page="overview"] .card[data-widget="net-upload"],
+.page[data-page="overview"] .card[data-widget="cpu-temp"],
+.page[data-page="overview"] .card[data-widget="monitoring"],
+.page[data-page="overview"] .card[data-widget="net-download"] {
+  min-height: 296px;
+  display: flex;
+  flex-direction: column;
+}
+
+.page[data-page="overview"] .card[data-widget="net-upload"] .chart-card,
+.page[data-page="overview"] .card[data-widget="cpu-temp"] .chart-card,
+.page[data-page="overview"] .card[data-widget="net-download"] .chart-card {
+  margin-top: auto;
+}
+
 .grid-3 {
   display: grid;
   grid-template-columns: repeat(3, minmax(100px, 1fr));
