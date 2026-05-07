@@ -1,6 +1,17 @@
-﻿2026-01-21 19:04:28 - [INFO] 
-	[►]DISM Check Health wird gestartet
-2026-02-03 18:47:04 - [INFO] 
-	[►]DISM Check Health wird gestartet
-2026-03-20 19:29:49 - [INFO] 
-	[►]DISM Check Health wird gestartet
+﻿
+========== RUN 0001 START | [DISM-CHECK] | 2026-04-10 22:04:33.610 ==========
+[2026-04-10 22:04:33.609] [INFO ] [DISM-CHECK] DISM-Check wurde gestartet | SessionId=20260410220433 | EntryId=000001 | Phase=start | RunId=0001 | ProcId=10384 | Process=dism.exe | Command=dism.exe /Online /Cleanup-Image /CheckHealth | Operation=CheckHealth | Status=START | Error=- | ExitCode=0 | Duration=-
+[2026-04-10 22:04:33.612] [INFO ] [DISM-CHECK] Prozess dism.exe laeuft | SessionId=20260410220433 | EntryId=000002 | Phase=event | RunId=0001 | ProcId=10384 | Process=dism.exe | Command=dism.exe | Operation=CheckHealth | Status=INFO | Error=- | ExitCode=0 | Duration=-
+[2026-04-10 22:04:33.622] [OK   ] [DISM-CHECK] Status OK | SessionId=20260410220433 | EntryId=000003 | Phase=event | RunId=0001 | ProcId=10384 | Process=dism.exe | Command=dism.exe | Operation=CheckHealth | Status=OK | Error=- | ExitCode=0 | Duration=-
+[2026-04-10 22:04:42.107] [OK   ] [DISM-CHECK] DISM wurde erfolgreich beendet | SessionId=20260410220442 | EntryId=000001 | Phase=end | RunId=none | ProcId=10384 | Process=dism.exe | Command=dism.exe | Operation=CheckHealth | Status=OK | Error=- | ExitCode=0 | Duration=00:00:06
+
+========== RUN 0001 START | [DISM-CHECK] | 2026-04-10 22:25:39.019 ==========
+[2026-04-10 22:25:39.019] [INFO ] [DISM-CHECK] DISM CheckHealth wird gestartet | SessionId=20260410221842 | EntryId=000001 | Phase=start | RunId=0001 | ProcId=3060 | Process=dism.exe | Command=dism.exe /Online /Cleanup-Image /CheckHealth | Operation=CheckHealth | Status=START | Error=- | ExitCode=0 | Duration=-
+[2026-04-10 22:25:45.375] [OK   ] [DISM-CHECK] DISM CheckHealth erfolgreich abgeschlossen | SessionId=20260410221842 | EntryId=000002 | Phase=end | RunId=0001 | ProcId=3060 | Process=dism.exe | Command=dism.exe /Online /Cleanup-Image /CheckHealth | Operation=CheckHealth | Status=OK | Error=- | ExitCode=0 | Duration=00:00:06 | PID=6920
+========== RUN 0001 END   | [DISM-CHECK] | 2026-04-10 22:25:45.375 | Dauer=00:00:06 ==========
+
+========== RUN 0001 START | [DISM-CHECK] | 2026-04-10 22:43:55.332 ==========
+[2026-04-10 22:43:55.332] [INFO ] [DISM-CHECK] DISM CheckHealth wird gestartet | SessionId=20260410224301 | EntryId=000001 | Phase=start | RunId=0001 | ProcId=22172 | Process=dism.exe | Command=dism.exe /Online /Cleanup-Image /CheckHealth | Operation=CheckHealth | Status=START | Error=- | ExitCode=0 | Duration=-
+[2026-04-10 22:44:00.888] [INFO ] [DISM-CHECK] Es wurde keine Komponentenspeicherbesch�digung erkannt. | SessionId=20260410224301 | EntryId=000002 | Phase=event | RunId=0001 | ProcId=22172 | Process=dism.exe | Command=dism.exe /Online /Cleanup-Image /CheckHealth | Operation=CheckHealth | Status=INFO | Error=- | ExitCode=0 | Duration=-
+[2026-04-10 22:44:00.894] [OK   ] [DISM-CHECK] DISM CheckHealth erfolgreich abgeschlossen | SessionId=20260410224301 | EntryId=000003 | Phase=end | RunId=0001 | ProcId=22172 | Process=dism.exe | Command=dism.exe /Online /Cleanup-Image /CheckHealth | Operation=CheckHealth | Status=OK | Error=- | ExitCode=0 | Duration=00:00:05 | PID=22820
+========== RUN 0001 END   | [DISM-CHECK] | 2026-04-10 22:44:00.894 | Dauer=00:00:05 ==========

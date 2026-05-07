@@ -217,6 +217,15 @@ function Initialize-SystemToolSettings {
         ShowSplash          = $true
         AutoStartPythonDashboardOnAppStart = $false
         AutoStartPythonDashboardOnWindowsLogin = $false
+        AutoStartGuiOnWindowsLogin = $false
+        UseModernSettingsDialog = $true
+        StartupProfile      = "Standard"
+        RunNetworkScanAtStartup = $false
+        RunSmartRepairAtStartup = $false
+        MinimizeToTrayOnStartup = $false
+        MinimizeToTrayOnMinimizeClick = $false
+        EnableWin11ServiceHints = $true
+        EnableExperimentalTweaks = $false
         ColorScheme         = Get-DefaultColorScheme
     }
     
@@ -282,6 +291,42 @@ function Import-SystemToolSettings {
             }
             if (-not $settingsHashtable.ContainsKey("AutoStartPythonDashboardOnWindowsLogin")) {
                 $settingsHashtable["AutoStartPythonDashboardOnWindowsLogin"] = $false
+                $needsSave = $true
+            }
+            if (-not $settingsHashtable.ContainsKey("AutoStartGuiOnWindowsLogin")) {
+                $settingsHashtable["AutoStartGuiOnWindowsLogin"] = $false
+                $needsSave = $true
+            }
+            if (-not $settingsHashtable.ContainsKey("UseModernSettingsDialog")) {
+                $settingsHashtable["UseModernSettingsDialog"] = $true
+                $needsSave = $true
+            }
+            if (-not $settingsHashtable.ContainsKey("StartupProfile")) {
+                $settingsHashtable["StartupProfile"] = "Standard"
+                $needsSave = $true
+            }
+            if (-not $settingsHashtable.ContainsKey("RunNetworkScanAtStartup")) {
+                $settingsHashtable["RunNetworkScanAtStartup"] = $false
+                $needsSave = $true
+            }
+            if (-not $settingsHashtable.ContainsKey("RunSmartRepairAtStartup")) {
+                $settingsHashtable["RunSmartRepairAtStartup"] = $false
+                $needsSave = $true
+            }
+            if (-not $settingsHashtable.ContainsKey("MinimizeToTrayOnStartup")) {
+                $settingsHashtable["MinimizeToTrayOnStartup"] = $false
+                $needsSave = $true
+            }
+            if (-not $settingsHashtable.ContainsKey("MinimizeToTrayOnMinimizeClick")) {
+                $settingsHashtable["MinimizeToTrayOnMinimizeClick"] = $false
+                $needsSave = $true
+            }
+            if (-not $settingsHashtable.ContainsKey("EnableWin11ServiceHints")) {
+                $settingsHashtable["EnableWin11ServiceHints"] = $true
+                $needsSave = $true
+            }
+            if (-not $settingsHashtable.ContainsKey("EnableExperimentalTweaks")) {
+                $settingsHashtable["EnableExperimentalTweaks"] = $false
                 $needsSave = $true
             }
             
@@ -713,6 +758,473 @@ function Update-SystemToolUI {
     }
 }
 
+function Ensure-SettingsWpfAssemblies {
+    Add-Type -AssemblyName PresentationFramework
+    Add-Type -AssemblyName PresentationCore
+    Add-Type -AssemblyName WindowsBase
+}
+
+function Get-SettingsRegistry {
+    return @(
+        [PSCustomObject]@{ Category = 'Allgemein'; Group = 'Symbol-Farben'; Type = 'Color'; SettingKey = 'Color.Success'; ColorKey = 'Success'; Label = '[√] Erfolg'; PreviewIcon = '[√]'; Description = 'Farbe für Erfolgs-Symbole und Success-Ausgaben.' }
+        [PSCustomObject]@{ Category = 'Allgemein'; Group = 'Symbol-Farben'; Type = 'Color'; SettingKey = 'Color.Error'; ColorKey = 'Error'; Label = '[X] Fehler'; PreviewIcon = '[X]'; Description = 'Farbe für Fehler-Symbole und Error-Ausgaben.' }
+        [PSCustomObject]@{ Category = 'Allgemein'; Group = 'Symbol-Farben'; Type = 'Color'; SettingKey = 'Color.Warning'; ColorKey = 'Warning'; Label = '[!] Warnung'; PreviewIcon = '[!]'; Description = 'Farbe für Warn-Symbole und Warning-Ausgaben.' }
+        [PSCustomObject]@{ Category = 'Allgemein'; Group = 'Symbol-Farben'; Type = 'Color'; SettingKey = 'Color.Info'; ColorKey = 'Info'; Label = '[►] Info'; PreviewIcon = '[►]'; Description = 'Farbe für Info-Symbole und Info-Ausgaben.' }
+        [PSCustomObject]@{ Category = 'Allgemein'; Group = 'Symbol-Farben'; Type = 'Color'; SettingKey = 'Color.Action'; ColorKey = 'Action'; Label = '[>] Prozess'; PreviewIcon = '[>]'; Description = 'Farbe für Prozess-/Action-Symbole.' }
+        [PSCustomObject]@{ Category = 'Allgemein'; Group = 'Symbol-Farben'; Type = 'Color'; SettingKey = 'Color.Alert'; ColorKey = 'Alert'; Label = 'Hinweis'; PreviewIcon = '[⚠]'; Description = 'Farbe für Hinweise/Alert-Symbole.' }
+        [PSCustomObject]@{ Category = 'Allgemein'; Group = 'Anzeige'; Type = 'Choice'; SettingKey = 'FontSize'; Label = 'Schriftgröße'; Description = 'Steuert die Basis-Schriftgröße für Ausgaben.'; Options = @(8, 9, 10, 11, 12, 14) }
+        [PSCustomObject]@{ Category = 'Allgemein'; Group = 'Anzeige'; Type = 'Toggle'; SettingKey = 'SaveWindowSize'; Label = 'Fenstergröße und Position speichern'; Description = 'Speichert Größe und Position beim Beenden.' }
+        [PSCustomObject]@{ Category = 'System'; Group = 'Verhalten'; Type = 'Toggle'; SettingKey = 'ConfirmActions'; Label = 'Aktionen bestätigen'; Description = 'Zeigt eine Bestätigung vor kritischen Aktionen.' }
+        [PSCustomObject]@{ Category = 'System'; Group = 'Verhalten'; Type = 'Toggle'; SettingKey = 'CheckUpdates'; Label = 'Automatisch nach Updates suchen'; Description = 'Aktiviert die Update-Prüfung beim Start.' }
+        [PSCustomObject]@{ Category = 'System'; Group = 'Verhalten'; Type = 'Toggle'; SettingKey = 'ShowSplash'; Label = 'Splash-Screen anzeigen'; Description = 'Zeigt beim Programmstart den Splash-Screen.' }
+        [PSCustomObject]@{ Category = 'Startup'; Group = 'Profile'; Type = 'Choice'; SettingKey = 'StartupProfile'; Label = 'Startup-Profil'; Description = 'Vordefiniertes Verhalten beim Start.'; Options = @('Standard', 'Leicht', 'Diagnose', 'Performance') }
+        [PSCustomObject]@{ Category = 'Startup'; Group = 'Ablauf'; Type = 'Toggle'; SettingKey = 'AutoStartPythonDashboardOnAppStart'; Label = 'Python-Dashboard bei App-Start'; Description = 'Startet das Dashboard direkt beim Öffnen von Bockis.' }
+        [PSCustomObject]@{ Category = 'Startup'; Group = 'Ablauf'; Type = 'Toggle'; SettingKey = 'AutoStartPythonDashboardOnWindowsLogin'; Label = 'Python-Dashboard bei Windows-Login'; Description = 'Registriert Dashboard-Start beim Benutzer-Login.' }
+        [PSCustomObject]@{ Category = 'Startup'; Group = 'Ablauf'; Type = 'Toggle'; SettingKey = 'AutoStartGuiOnWindowsLogin'; Label = 'Bockis GUI bei Windows-Login'; Description = 'Startet die Haupt-GUI automatisch nach dem Login.' }
+        [PSCustomObject]@{ Category = 'Startup'; Group = 'Ablauf'; Type = 'Toggle'; SettingKey = 'RunNetworkScanAtStartup'; Label = 'Netzwerk-Einstellungs-Scan beim Start'; Description = 'Führt nach Start einen Netzwerk-Scan aus.' }
+        [PSCustomObject]@{ Category = 'Startup'; Group = 'Ablauf'; Type = 'Toggle'; SettingKey = 'RunSmartRepairAtStartup'; Label = 'Smart Repair beim Start'; Description = 'Führt nach Start Smart Repair aus.' }
+        [PSCustomObject]@{ Category = 'Startup'; Group = 'Ablauf'; Type = 'Toggle'; SettingKey = 'MinimizeToTrayOnStartup'; Label = 'Beim Start minimiert im Tray'; Description = 'Öffnet die GUI minimiert im Infobereich.' }
+        [PSCustomObject]@{ Category = 'Startup'; Group = 'Ablauf'; Type = 'Toggle'; SettingKey = 'MinimizeToTrayOnMinimizeClick'; Label = 'Beim Minimieren in den Tray'; Description = 'Der Minimize-Button versteckt die GUI im Infobereich statt nur in der Taskleiste.' }
+        [PSCustomObject]@{ Category = 'Tweaks'; Group = 'Windows 11 Services'; Type = 'Toggle'; SettingKey = 'EnableWin11ServiceHints'; Label = 'Win11-Service-Hinweise anzeigen'; Description = 'Aktiviert kontextbasierte Hinweise für Services und ms-settings Ziele.' }
+        [PSCustomObject]@{ Category = 'Tweaks'; Group = 'Erweitert'; Type = 'Toggle'; SettingKey = 'EnableExperimentalTweaks'; Label = 'Experimentelle Tweaks erlauben'; Description = 'Schaltet zukünftige experimentelle Tweak-Optionen frei.' }
+    )
+}
+
+function Show-SettingsDialogModern {
+    param (
+        [Parameter(Mandatory = $true)]
+        [System.Windows.Forms.Form]$MainForm,
+
+        [Parameter(Mandatory = $true)]
+        [System.Windows.Forms.RichTextBox]$OutputBox,
+
+        [Parameter(Mandatory = $true)]
+        [System.Collections.Hashtable]$MainPanels
+    )
+
+    Ensure-SettingsWpfAssemblies
+
+    $registry = @(Get-SettingsRegistry)
+    if ($registry.Count -eq 0) { return 'legacy' }
+
+    $settingsSnapshot = ConvertTo-SettingsHashtable -InputObject (Get-SystemToolSettings)
+    if ($settingsSnapshot -isnot [hashtable]) { return 'legacy' }
+
+    $defaultScheme = Get-DefaultColorScheme
+
+    $getColorHex = {
+        param([string]$colorKey)
+
+        if ($settingsSnapshot.ContainsKey('ColorScheme') -and
+            $settingsSnapshot.ColorScheme -is [hashtable] -and
+            $settingsSnapshot.ColorScheme.ContainsKey('Output') -and
+            $settingsSnapshot.ColorScheme.Output -is [hashtable] -and
+            $settingsSnapshot.ColorScheme.Output.ContainsKey('Colors') -and
+            $settingsSnapshot.ColorScheme.Output.Colors -is [hashtable] -and
+            $settingsSnapshot.ColorScheme.Output.Colors.ContainsKey($colorKey) -and
+            -not [string]::IsNullOrWhiteSpace("$($settingsSnapshot.ColorScheme.Output.Colors[$colorKey])")) {
+            return "$($settingsSnapshot.ColorScheme.Output.Colors[$colorKey])"
+        }
+
+        if ($defaultScheme.Output.Colors.ContainsKey($colorKey)) {
+            return "$($defaultScheme.Output.Colors[$colorKey])"
+        }
+
+        return '#DCDCDC'
+    }
+
+    $setPreviewColor = {
+        param(
+            [System.Windows.Controls.TextBlock]$PreviewBlock,
+            [System.Windows.Controls.Button]$ColorButton,
+            [string]$HexColor,
+            [string]$PreviewIcon
+        )
+
+        $safeHex = if ([string]::IsNullOrWhiteSpace($HexColor)) { '#DCDCDC' } else { $HexColor }
+        $previewText = if ([string]::IsNullOrWhiteSpace($PreviewIcon)) { '[■]' } else { $PreviewIcon }
+
+        try {
+            $brush = ([System.Windows.Media.BrushConverter]::new().ConvertFrom($safeHex))
+            $PreviewBlock.Text = "$previewText  $safeHex"
+            $PreviewBlock.Foreground = $brush
+            $ColorButton.Background = $brush
+        }
+        catch {
+            $fallbackBrush = ([System.Windows.Media.BrushConverter]::new().ConvertFrom('#DCDCDC'))
+            $PreviewBlock.Text = "$previewText  #DCDCDC"
+            $PreviewBlock.Foreground = $fallbackBrush
+            $ColorButton.Background = $fallbackBrush
+        }
+    }
+
+    [xml]$xaml = @'
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Einstellungen" Width="980" Height="680"
+        WindowStyle="None" ResizeMode="NoResize" AllowsTransparency="True"
+        WindowStartupLocation="CenterScreen" Background="Transparent">
+    <Window.Resources>
+        <Style x:Key="PrimaryButton" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd" CornerRadius="8" Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="bd" Property="Opacity" Value="0.9"/></Trigger>
+                            <Trigger Property="IsPressed" Value="True"><Setter TargetName="bd" Property="Opacity" Value="0.8"/></Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+    <Border CornerRadius="12" Background="#1E1E1E" BorderBrush="#4A4A4A" BorderThickness="1">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="46"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="66"/>
+            </Grid.RowDefinitions>
+
+            <Border Grid.Row="0" Background="#262626" CornerRadius="12,12,0,0" x:Name="DragHeader">
+                <Grid>
+                    <TextBlock Text="  ⚙  Einstellungen (Modern / XAML)" VerticalAlignment="Center" Foreground="#E8E8E8" FontSize="14" FontWeight="SemiBold"/>
+                    <Button x:Name="BtnClose" Content="✕" Width="44" Height="44" HorizontalAlignment="Right" Background="Transparent" Foreground="#B0B0B0" BorderThickness="0" Cursor="Hand"/>
+                </Grid>
+            </Border>
+
+            <Grid Grid.Row="1" Margin="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="240"/>
+                    <ColumnDefinition Width="12"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0" Background="#242424" BorderBrush="#3E3E3E" BorderThickness="1" CornerRadius="8">
+                    <DockPanel Margin="10">
+                        <TextBlock DockPanel.Dock="Top" Text="Kategorien" Foreground="#9FD7FF" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                        <ListBox x:Name="LstCategories" Background="#1C1C1C" Foreground="#E5E5E5" BorderBrush="#3A3A3A"/>
+                    </DockPanel>
+                </Border>
+
+                <Border Grid.Column="2" Background="#242424" BorderBrush="#3E3E3E" BorderThickness="1" CornerRadius="8">
+                    <DockPanel Margin="12">
+                        <TextBlock x:Name="TxtCategory" DockPanel.Dock="Top" Text="" Foreground="#7BD9A8" FontSize="15" FontWeight="Bold" Margin="0,0,0,8"/>
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel x:Name="SettingsHost" Margin="0,0,4,0"/>
+                        </ScrollViewer>
+                    </DockPanel>
+                </Border>
+            </Grid>
+
+            <Grid Grid.Row="2" Margin="12,0,12,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="8"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="8"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="8"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <Button x:Name="BtnLegacy" Grid.Column="1" Width="170" Height="36" Background="#4B5563" Foreground="White" Content="Legacy Ansicht" Style="{StaticResource PrimaryButton}"/>
+                <Button x:Name="BtnCancel" Grid.Column="3" Width="120" Height="36" Background="#525252" Foreground="White" Content="Abbrechen" Style="{StaticResource PrimaryButton}"/>
+                <Button x:Name="BtnApply" Grid.Column="5" Width="120" Height="36" Background="#0E7490" Foreground="White" Content="Anwenden" Style="{StaticResource PrimaryButton}"/>
+                <Button x:Name="BtnOk" Grid.Column="7" Width="120" Height="36" Background="#0F9D58" Foreground="White" Content="OK" Style="{StaticResource PrimaryButton}"/>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>
+'@
+
+    $reader = New-Object System.Xml.XmlNodeReader $xaml
+    $window = [Windows.Markup.XamlReader]::Load($reader)
+
+    $dragHeader = $window.FindName('DragHeader')
+    $btnClose = $window.FindName('BtnClose')
+    $lstCategories = $window.FindName('LstCategories')
+    $txtCategory = $window.FindName('TxtCategory')
+    $settingsHost = $window.FindName('SettingsHost')
+    $btnLegacy = $window.FindName('BtnLegacy')
+    $btnCancel = $window.FindName('BtnCancel')
+    $btnApply = $window.FindName('BtnApply')
+    $btnOk = $window.FindName('BtnOk')
+
+    $controlMap = @{}
+    $groupLabels = @{}
+    $categories = @($registry | Select-Object -ExpandProperty Category -Unique)
+    foreach ($cat in $categories) { [void]$lstCategories.Items.Add($cat) }
+
+    $renderCategory = {
+        param([string]$category)
+
+        $settingsHost.Children.Clear()
+        $controlMap.Clear()
+        $groupLabels.Clear()
+        $txtCategory.Text = $category
+
+        $defs = @($registry | Where-Object { $_.Category -eq $category })
+        foreach ($def in $defs) {
+            if (-not $groupLabels.ContainsKey($def.Group)) {
+                $groupHeader = New-Object System.Windows.Controls.TextBlock
+                $groupHeader.Text = $def.Group
+                $groupHeader.Foreground = ([System.Windows.Media.BrushConverter]::new().ConvertFrom('#9FD7FF'))
+                $groupHeader.FontWeight = 'SemiBold'
+                $groupHeader.Margin = '0,8,0,4'
+                $settingsHost.Children.Add($groupHeader)
+                $groupLabels[$def.Group] = $true
+            }
+
+            $container = New-Object System.Windows.Controls.Border
+            $container.CornerRadius = '6'
+            $container.BorderBrush = ([System.Windows.Media.BrushConverter]::new().ConvertFrom('#3A3A3A'))
+            $container.BorderThickness = '1'
+            $container.Background = ([System.Windows.Media.BrushConverter]::new().ConvertFrom('#202020'))
+            $container.Margin = '0,0,0,8'
+            $container.Padding = '10'
+
+            $stack = New-Object System.Windows.Controls.StackPanel
+
+            $lbl = New-Object System.Windows.Controls.TextBlock
+            $lbl.Text = $def.Label
+            $lbl.Foreground = ([System.Windows.Media.BrushConverter]::new().ConvertFrom('#E6E6E6'))
+            $lbl.FontWeight = 'SemiBold'
+            $stack.Children.Add($lbl)
+
+            $desc = New-Object System.Windows.Controls.TextBlock
+            $desc.Text = $def.Description
+            $desc.Foreground = ([System.Windows.Media.BrushConverter]::new().ConvertFrom('#A0A0A0'))
+            $desc.Margin = '0,2,0,8'
+            $desc.TextWrapping = 'Wrap'
+            $stack.Children.Add($desc)
+
+            $currentValue = if ($settingsSnapshot.ContainsKey($def.SettingKey)) { $settingsSnapshot[$def.SettingKey] } else { $null }
+
+            switch ($def.Type) {
+                'Toggle' {
+                    $ctrl = New-Object System.Windows.Controls.CheckBox
+                    $ctrl.IsChecked = [bool]$currentValue
+                    $ctrl.Content = 'Aktiviert'
+                    $ctrl.Foreground = ([System.Windows.Media.BrushConverter]::new().ConvertFrom('#D6D6D6'))
+                    $stack.Children.Add($ctrl)
+                }
+                'Choice' {
+                    $ctrl = New-Object System.Windows.Controls.ComboBox
+                    $ctrl.Height = 30
+                    $ctrl.Background = ([System.Windows.Media.BrushConverter]::new().ConvertFrom('#2B2B2B'))
+                    $ctrl.Foreground = ([System.Windows.Media.BrushConverter]::new().ConvertFrom('#E6E6E6'))
+                    foreach ($opt in @($def.Options)) { [void]$ctrl.Items.Add("$opt") }
+                    $selected = if ($null -ne $currentValue) { "$currentValue" } else { "$($def.Options[0])" }
+                    $ctrl.SelectedItem = $selected
+                    $stack.Children.Add($ctrl)
+                }
+                'Color' {
+                    $ctrl = [PSCustomObject]@{}
+
+                    $colorRow = New-Object System.Windows.Controls.Grid
+                    $colorRow.Margin = '0,0,0,0'
+                    [void]$colorRow.ColumnDefinitions.Add((New-Object System.Windows.Controls.ColumnDefinition -Property @{ Width = '120' }))
+                    [void]$colorRow.ColumnDefinitions.Add((New-Object System.Windows.Controls.ColumnDefinition -Property @{ Width = '70' }))
+                    [void]$colorRow.ColumnDefinitions.Add((New-Object System.Windows.Controls.ColumnDefinition -Property @{ Width = '*' }))
+
+                    $pickBtn = New-Object System.Windows.Controls.Button
+                    $pickBtn.Content = 'Farbe wählen'
+                    $pickBtn.Height = 30
+                    $pickBtn.Foreground = ([System.Windows.Media.BrushConverter]::new().ConvertFrom('#121212'))
+                    [System.Windows.Controls.Grid]::SetColumn($pickBtn, 0)
+                    $colorRow.Children.Add($pickBtn)
+
+                    $resetBtn = New-Object System.Windows.Controls.Button
+                    $resetBtn.Content = '↻'
+                    $resetBtn.Height = 30
+                    $resetBtn.Margin = '8,0,0,0'
+                    $resetBtn.Background = ([System.Windows.Media.BrushConverter]::new().ConvertFrom('#3A3A3A'))
+                    $resetBtn.Foreground = ([System.Windows.Media.BrushConverter]::new().ConvertFrom('#E6E6E6'))
+                    [System.Windows.Controls.Grid]::SetColumn($resetBtn, 1)
+                    $colorRow.Children.Add($resetBtn)
+
+                    $preview = New-Object System.Windows.Controls.TextBlock
+                    $preview.Margin = '12,6,0,0'
+                    $preview.FontWeight = 'SemiBold'
+                    [System.Windows.Controls.Grid]::SetColumn($preview, 2)
+                    $colorRow.Children.Add($preview)
+
+                    $initialHex = & $getColorHex $def.ColorKey
+                    $colorState = [PSCustomObject]@{
+                        PickButton = $pickBtn
+                        ResetButton = $resetBtn
+                        PreviewBlock = $preview
+                        SelectedHex = $initialHex
+                    }
+
+                    & $setPreviewColor -PreviewBlock $preview -ColorButton $pickBtn -HexColor $initialHex -PreviewIcon $def.PreviewIcon
+
+                    $pickBtn.Add_Click({
+                            $dialog = New-Object System.Windows.Forms.ColorDialog
+                            $dialog.FullOpen = $true
+                            try {
+                                $dialog.Color = [System.Drawing.ColorTranslator]::FromHtml($colorState.SelectedHex)
+                            }
+                            catch {
+                            }
+
+                            if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+                                $hex = '#{0:X2}{1:X2}{2:X2}' -f $dialog.Color.R, $dialog.Color.G, $dialog.Color.B
+                                $colorState.SelectedHex = $hex
+                                & $setPreviewColor -PreviewBlock $colorState.PreviewBlock -ColorButton $colorState.PickButton -HexColor $hex -PreviewIcon $def.PreviewIcon
+                            }
+                        })
+
+                    $resetBtn.Add_Click({
+                            $defaultHex = if ($defaultScheme.Output.Colors.ContainsKey($def.ColorKey)) { "$($defaultScheme.Output.Colors[$def.ColorKey])" } else { '#DCDCDC' }
+                            $colorState.SelectedHex = $defaultHex
+                            & $setPreviewColor -PreviewBlock $colorState.PreviewBlock -ColorButton $colorState.PickButton -HexColor $defaultHex -PreviewIcon $def.PreviewIcon
+                        })
+
+                    $stack.Children.Add($colorRow)
+                    $ctrl = $colorState
+                }
+            }
+
+            $controlMap[$def.SettingKey] = [PSCustomObject]@{
+                Definition = $def
+                Control = $ctrl
+            }
+
+            $container.Child = $stack
+            $settingsHost.Children.Add($container)
+        }
+    }
+
+    $applyChanges = {
+        param([switch]$CloseAfterSave)
+
+        $updatedSettings = ConvertTo-SettingsHashtable -InputObject (Get-SystemToolSettings)
+        if ($updatedSettings -isnot [hashtable]) {
+            [System.Windows.MessageBox]::Show('Einstellungen konnten nicht geladen werden.', 'Fehler', 'OK', 'Error') | Out-Null
+            return
+        }
+
+        foreach ($def in $registry) {
+            if (-not $controlMap.ContainsKey($def.SettingKey)) { continue }
+
+            $ctrlEntry = $controlMap[$def.SettingKey]
+            switch ($def.Type) {
+                'Toggle' {
+                    $updatedSettings[$def.SettingKey] = [bool]$ctrlEntry.Control.IsChecked
+                }
+                'Choice' {
+                    $selected = "$($ctrlEntry.Control.SelectedItem)"
+                    if ([string]::IsNullOrWhiteSpace($selected)) {
+                        $selected = "$($def.Options[0])"
+                    }
+
+                    if ($def.SettingKey -eq 'FontSize') {
+                        $intValue = 10
+                        [void][int]::TryParse($selected, [ref]$intValue)
+                        $updatedSettings[$def.SettingKey] = $intValue
+                    }
+                    else {
+                        $updatedSettings[$def.SettingKey] = $selected
+                    }
+                }
+                'Color' {
+                    if (-not $updatedSettings.ContainsKey('ColorScheme')) { $updatedSettings['ColorScheme'] = @{} }
+                    if ($updatedSettings.ColorScheme -isnot [hashtable]) { $updatedSettings.ColorScheme = ConvertTo-SettingsHashtable -InputObject $updatedSettings.ColorScheme }
+                    if (-not $updatedSettings.ColorScheme.ContainsKey('Output')) { $updatedSettings.ColorScheme['Output'] = @{} }
+                    if ($updatedSettings.ColorScheme.Output -isnot [hashtable]) { $updatedSettings.ColorScheme.Output = ConvertTo-SettingsHashtable -InputObject $updatedSettings.ColorScheme.Output }
+                    if (-not $updatedSettings.ColorScheme.Output.ContainsKey('Colors')) { $updatedSettings.ColorScheme.Output['Colors'] = @{} }
+                    if ($updatedSettings.ColorScheme.Output.Colors -isnot [hashtable]) { $updatedSettings.ColorScheme.Output.Colors = ConvertTo-SettingsHashtable -InputObject $updatedSettings.ColorScheme.Output.Colors }
+
+                    $selectedHex = "$($ctrlEntry.Control.SelectedHex)"
+                    if ([string]::IsNullOrWhiteSpace($selectedHex)) {
+                        $selectedHex = if ($defaultScheme.Output.Colors.ContainsKey($def.ColorKey)) { "$($defaultScheme.Output.Colors[$def.ColorKey])" } else { '#DCDCDC' }
+                    }
+
+                    $updatedSettings.ColorScheme.Output.Colors[$def.ColorKey] = $selectedHex
+                }
+            }
+        }
+
+        Set-SystemToolSettings -Settings $updatedSettings
+
+        if (Get-Command -Name Set-PythonDashboardStartupRegistration -ErrorAction SilentlyContinue) {
+            try {
+                Set-PythonDashboardStartupRegistration -Enable:$updatedSettings.AutoStartPythonDashboardOnWindowsLogin | Out-Null
+            }
+            catch {
+                Write-Verbose "Python-Dashboard Startup-Registrierung konnte nicht aktualisiert werden: $_"
+            }
+        }
+
+        if (Get-Command -Name Set-GuiStartupRegistration -ErrorAction SilentlyContinue) {
+            try {
+                Set-GuiStartupRegistration -Enable:$updatedSettings.AutoStartGuiOnWindowsLogin | Out-Null
+            }
+            catch {
+                Write-Verbose "GUI Startup-Registrierung konnte nicht aktualisiert werden: $_"
+            }
+        }
+
+        $configPath = Join-Path ($PSScriptRoot | Split-Path | Split-Path) 'config.json'
+        [void](Export-SystemToolSettings -ConfigPath $configPath -Silent)
+
+        [void](Update-SystemToolUI -UIElements @{
+                OutputBox = $OutputBox
+                MainForm = $MainForm
+                HardwareInfoBox = $null
+                SystemStatusBox = $null
+                ToolInfoBox = $null
+                ToolDownloadsBox = $null
+                HardwareTimer = $null
+            })
+
+        try {
+            Initialize-TextStyle -Settings $updatedSettings -OutputBox $OutputBox
+        }
+        catch {
+            Write-Verbose "TextStyle konnte nicht neu initialisiert werden: $_"
+        }
+
+        Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Success'
+        $OutputBox.AppendText("`r`nModernes Einstellungsmenue: Einstellungen gespeichert.`r`n")
+        Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Default'
+
+        if ($CloseAfterSave) {
+            $window.DialogResult = $true
+            $window.Close()
+        }
+    }
+
+    $dragHeader.Add_MouseLeftButtonDown({ $window.DragMove() })
+    $btnClose.Add_Click({ $window.DialogResult = $false; $window.Close() })
+    $btnCancel.Add_Click({ $window.DialogResult = $false; $window.Close() })
+    $btnLegacy.Add_Click({ $window.Tag = 'legacy'; $window.DialogResult = $false; $window.Close() })
+    $btnApply.Add_Click({ & $applyChanges })
+    $btnOk.Add_Click({ & $applyChanges -CloseAfterSave })
+
+    $lstCategories.Add_SelectionChanged({
+            if ($lstCategories.SelectedItem) {
+                & $renderCategory $lstCategories.SelectedItem.ToString()
+            }
+        })
+
+    if ($lstCategories.Items.Count -gt 0) {
+        $lstCategories.SelectedIndex = 0
+    }
+
+    $null = $window.ShowDialog()
+    if ("$($window.Tag)" -eq 'legacy') { return 'legacy' }
+
+    return 'handled'
+}
+
 function Show-SettingsDialog {
     <#
     .SYNOPSIS
@@ -747,6 +1259,23 @@ function Show-SettingsDialog {
         [Parameter(Mandatory = $true)]
         [System.Collections.Hashtable]$MainPanels
     )
+
+    $useModernDialog = $true
+    if ($script:settings -is [hashtable] -and $script:settings.ContainsKey('UseModernSettingsDialog')) {
+        $useModernDialog = [bool]$script:settings.UseModernSettingsDialog
+    }
+
+    if ($useModernDialog) {
+        try {
+            $modernResult = Show-SettingsDialogModern -MainForm $MainForm -OutputBox $OutputBox -MainPanels $MainPanels
+            if ($modernResult -ne 'legacy') {
+                return
+            }
+        }
+        catch {
+            Write-Verbose "Modernes Einstellungsmenue konnte nicht gestartet werden, fallback auf Legacy: $_"
+        }
+    }
     
     # Aktuelle Fenstergröße und -position speichern, wenn eingeschaltet
     $currentWindowWidth = $MainForm.Width
@@ -1388,6 +1917,24 @@ function Show-SettingsDialog {
     $chkPyDashboardWindowsLogin.ForeColor = $textColor
     $chkPyDashboardWindowsLogin.Checked = [bool]$script:settings.AutoStartPythonDashboardOnWindowsLogin
     $tabBehavior.Controls.Add($chkPyDashboardWindowsLogin)
+
+    # Bockis GUI beim Windows-Login starten
+    $chkGuiWindowsLogin = New-Object System.Windows.Forms.CheckBox
+    $chkGuiWindowsLogin.Text = "Bockis GUI beim Windows-Login automatisch starten"
+    $chkGuiWindowsLogin.Location = New-Object System.Drawing.Point(15, 250)
+    $chkGuiWindowsLogin.Size = New-Object System.Drawing.Size(520, 25)
+    $chkGuiWindowsLogin.ForeColor = $textColor
+    $chkGuiWindowsLogin.Checked = [bool]$script:settings.AutoStartGuiOnWindowsLogin
+    $tabBehavior.Controls.Add($chkGuiWindowsLogin)
+
+    # Beim Klick auf Minimieren in den Tray wechseln
+    $chkMinimizeToTrayOnMinimizeClick = New-Object System.Windows.Forms.CheckBox
+    $chkMinimizeToTrayOnMinimizeClick.Text = "Beim Klick auf Minimieren in den Tray"
+    $chkMinimizeToTrayOnMinimizeClick.Location = New-Object System.Drawing.Point(15, 285)
+    $chkMinimizeToTrayOnMinimizeClick.Size = New-Object System.Drawing.Size(520, 25)
+    $chkMinimizeToTrayOnMinimizeClick.ForeColor = $textColor
+    $chkMinimizeToTrayOnMinimizeClick.Checked = [bool]$script:settings.MinimizeToTrayOnMinimizeClick
+    $tabBehavior.Controls.Add($chkMinimizeToTrayOnMinimizeClick)
     
     # Tab 5: System-Einstellungen
     $tabSystem_Settings = New-Object System.Windows.Forms.TabPage
@@ -1720,15 +2267,27 @@ function Show-SettingsDialog {
                 ShowSplash          = $chkShowSplash.Checked
                 AutoStartPythonDashboardOnAppStart = $chkAutoStartPyDashboard.Checked
                 AutoStartPythonDashboardOnWindowsLogin = $chkPyDashboardWindowsLogin.Checked
+                AutoStartGuiOnWindowsLogin = $chkGuiWindowsLogin.Checked
+                MinimizeToTrayOnMinimizeClick = $chkMinimizeToTrayOnMinimizeClick.Checked
             }
 
             # Optional: Registry-Autostart fuer Python-Dashboard sofort umsetzen
-            if (Get-Command -Name Ensure-PythonDashboardStartupRegistration -ErrorAction SilentlyContinue) {
+            if (Get-Command -Name Set-PythonDashboardStartupRegistration -ErrorAction SilentlyContinue) {
                 try {
-                    Ensure-PythonDashboardStartupRegistration -Enable:$chkPyDashboardWindowsLogin.Checked | Out-Null
+                    Set-PythonDashboardStartupRegistration -Enable:$chkPyDashboardWindowsLogin.Checked | Out-Null
                 }
                 catch {
                     Write-Verbose "Python-Dashboard Startup-Registrierung konnte nicht aktualisiert werden: $_"
+                }
+            }
+
+            # Optional: Registry-Autostart fuer Haupt-GUI sofort umsetzen
+            if (Get-Command -Name Set-GuiStartupRegistration -ErrorAction SilentlyContinue) {
+                try {
+                    Set-GuiStartupRegistration -Enable:$chkGuiWindowsLogin.Checked | Out-Null
+                }
+                catch {
+                    Write-Verbose "GUI Startup-Registrierung konnte nicht aktualisiert werden: $_"
                 }
             }
             
@@ -1823,6 +2382,8 @@ function Show-SettingsDialog {
             $OutputBox.AppendText("- Log-Level: $($script:settings.LogLevel)`r`n")
             $OutputBox.AppendText("- Python-Dashboard Auto-Start (App): $($script:settings.AutoStartPythonDashboardOnAppStart)`r`n")
             $OutputBox.AppendText("- Python-Dashboard Auto-Start (Windows): $($script:settings.AutoStartPythonDashboardOnWindowsLogin)`r`n")
+            $OutputBox.AppendText("- Bockis GUI Auto-Start (Windows): $($script:settings.AutoStartGuiOnWindowsLogin)`r`n")
+            $OutputBox.AppendText("- Beim Minimieren in den Tray: $($script:settings.MinimizeToTrayOnMinimizeClick)`r`n")
             
             # Zeige Farb-Änderungen an
             $colorCount = if ($script:settings.ColorScheme.Output.Colors) { $script:settings.ColorScheme.Output.Colors.Count } else { 0 }

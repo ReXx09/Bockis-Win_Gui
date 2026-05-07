@@ -2,6 +2,10 @@
 # Autor: Bocki
 # Version: 4.2.3
 
+param(
+    [switch]$StartedFromWindowsLogin
+)
+
 # ===================================================================
 # VERSIONS-INFORMATION
 # ===================================================================
@@ -649,11 +653,53 @@ function Test-Admin {
     return $currentUser.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
+$script:GuiElevatedTaskName = 'BockisSystemToolGUI-Elevated'
+
+function Register-GuiElevatedLaunchTask {
+    param(
+        [string]$TaskName = $script:GuiElevatedTaskName,
+        [string]$ScriptPath = $MyInvocation.MyCommand.Path
+    )
+
+    if (-not (Test-Admin)) { return $false }
+    if ([string]::IsNullOrWhiteSpace($ScriptPath)) { return $false }
+
+    try {
+        $taskAction = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ('-NoProfile -ExecutionPolicy Bypass -File "{0}"' -f $ScriptPath)
+        $taskTrigger = New-ScheduledTaskTrigger -AtLogOn -User $env:UserName
+        $taskPrincipal = New-ScheduledTaskPrincipal -UserId ("{0}\{1}" -f $env:UserDomain, $env:UserName) -RunLevel Highest -LogonType Interactive
+        $taskSettings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+        $task = New-ScheduledTask -Action $taskAction -Trigger $taskTrigger -Principal $taskPrincipal -Settings $taskSettings
+        Register-ScheduledTask -TaskName $TaskName -InputObject $task -Force | Out-Null
+        return $true
+    }
+    catch {
+        return $false
+    }
+}
+
+function Invoke-GuiElevatedLaunchTask {
+    param([string]$TaskName = $script:GuiElevatedTaskName)
+
+    try {
+        $runResult = Start-Process -FilePath 'schtasks.exe' -ArgumentList @('/Run', '/TN', $TaskName) -WindowStyle Hidden -Wait -PassThru -ErrorAction Stop
+        return ($runResult.ExitCode -eq 0)
+    }
+    catch {
+        return $false
+    }
+}
+
 # Administratorrechte anfordern, falls nicht vorhanden
 if (-not (Test-Admin)) {
     try {
         # Skriptpfad ermitteln
         $scriptPath = $MyInvocation.MyCommand.Path
+
+        # Bevor UAC gezeigt wird: geplanten Elevated-Task starten (wenn vorhanden)
+        if (Invoke-GuiElevatedLaunchTask -TaskName $script:GuiElevatedTaskName) {
+            exit
+        }
 
         # PowerShell mit erhöhten Rechten starten (ohne -Wait, damit das aktuelle Fenster geschlossen wird)
         Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`"" -Verb RunAs
@@ -666,6 +712,9 @@ if (-not (Test-Admin)) {
         exit
     }
 }
+
+# Elevated-Task bei erfolgreichem Admin-Start automatisch aktualisieren
+$null = Register-GuiElevatedLaunchTask -TaskName $script:GuiElevatedTaskName -ScriptPath $MyInvocation.MyCommand.Path
 
 # Logo-Funktion hinzufügen
 function Show-SystemToolLogo {
@@ -910,7 +959,7 @@ try {
     # Größen anwenden
     $Host.UI.RawUI.WindowSize = $newWindowSize
     $Host.UI.RawUI.BufferSize = $newBufferSize
-    $Host.UI.RawUI.WindowTitle = "System Tools"
+    $Host.UI.RawUI.WindowTitle = "Bockis System Tools"
 } catch {
     Write-Host "Hinweis: Konnte PowerShell-Fenster nicht anpassen: $_" -ForegroundColor Yellow
 }
@@ -1192,6 +1241,186 @@ function Set-PythonDashboardStartupRegistration {
     }
 }
 
+function Set-GuiStartupRegistration {
+    param([bool]$Enable)
+
+    $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+    $valueName = 'BockisSystemToolGUI'
+    $guiScriptPath = Join-Path $PSScriptRoot 'Win_Gui_Module.ps1'
+
+    $startupFlag = '-StartedFromWindowsLogin'
+    $configPath = Join-Path $PSScriptRoot 'config.json'
+    if (Test-Path $configPath) {
+        try {
+            $cfg = Get-Content -Path $configPath -Raw -ErrorAction Stop | ConvertFrom-Json
+            if ($cfg -and $cfg.MinimizeToTrayOnStartup) {
+                # Startet beim Login minimiert, wenn die Option aktiv ist.
+                $startupFlag = '-StartedFromWindowsLogin'
+            }
+        }
+        catch {
+            # Konfigurationsfehler ignorieren; Startup soll dennoch funktionieren.
+        }
+    }
+
+    if ($Enable) {
+        if (-not (Test-Path $guiScriptPath)) {
+            throw "GUI-Skript nicht gefunden: $guiScriptPath"
+        }
+
+        # Legacy-RunKey entfernen, damit kein Doppelstart entsteht.
+        try {
+            Remove-ItemProperty -Path $runKey -Name $valueName -ErrorAction SilentlyContinue
+        }
+        catch { }
+
+        Set-GuiStartupFolderRegistration -Enable:$true -GuiScriptPath $guiScriptPath -StartupFlag $startupFlag | Out-Null
+    }
+    else {
+        try {
+            Remove-ItemProperty -Path $runKey -Name $valueName -ErrorAction SilentlyContinue
+        }
+        catch { }
+
+        Set-GuiStartupFolderRegistration -Enable:$false -GuiScriptPath $guiScriptPath -StartupFlag $startupFlag | Out-Null
+    }
+}
+
+function Set-GuiStartupFolderRegistration {
+    param(
+        [bool]$Enable,
+        [string]$GuiScriptPath,
+        [string]$StartupFlag = '-StartedFromWindowsLogin'
+    )
+
+    $startupFolder = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Startup'
+    $shortcutPath = Join-Path $startupFolder 'Bockis System-Tool GUI.lnk'
+
+    if ($Enable) {
+        if (-not (Test-Path $startupFolder)) {
+            New-Item -Path $startupFolder -ItemType Directory -Force | Out-Null
+        }
+
+        $wsh = New-Object -ComObject WScript.Shell
+        $shortcut = $wsh.CreateShortcut($shortcutPath)
+        $shortcut.TargetPath = 'powershell.exe'
+        $shortcut.Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$GuiScriptPath`" $StartupFlag"
+        $shortcut.WorkingDirectory = $PSScriptRoot
+        $shortcut.IconLocation = 'powershell.exe,0'
+        $shortcut.Description = 'Bockis System-Tool GUI beim Windows-Login starten'
+        $shortcut.Save()
+        return $true
+    }
+
+    if (Test-Path $shortcutPath) {
+        Remove-Item -Path $shortcutPath -Force -ErrorAction SilentlyContinue
+    }
+    return $true
+}
+
+function Get-ExternalToolsConfigPath {
+    return (Join-Path $PSScriptRoot 'Data\external_tools.json')
+}
+
+function Get-ExternalToolDefinitions {
+    $configPath = Get-ExternalToolsConfigPath
+    if (-not (Test-Path $configPath)) {
+        return @()
+    }
+
+    try {
+        $raw = Get-Content -Path $configPath -Raw -ErrorAction Stop
+        if ([string]::IsNullOrWhiteSpace($raw)) {
+            return @()
+        }
+
+        $parsed = $raw | ConvertFrom-Json -ErrorAction Stop
+        if ($parsed -is [System.Array]) {
+            return @($parsed)
+        }
+        return @($parsed)
+    }
+    catch {
+        return @()
+    }
+}
+
+function Open-ExternalToolsConfig {
+    $configPath = Get-ExternalToolsConfigPath
+    Start-Process -FilePath 'notepad.exe' -ArgumentList $configPath | Out-Null
+}
+
+function Invoke-ExternalToolLauncher {
+    param(
+        [string]$ToolId = 'multi_monitor',
+        [System.Windows.Forms.RichTextBox]$OutputBox
+    )
+
+    $definitions = Get-ExternalToolDefinitions
+    if (-not $definitions -or $definitions.Count -eq 0) {
+        if ($OutputBox) {
+            Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Warning'
+            $OutputBox.AppendText("[!] Keine externen Tools konfiguriert. Bitte Data\\external_tools.json befuellen.`r`n")
+        }
+        return $false
+    }
+
+    $tool = $definitions | Where-Object { $_.id -eq $ToolId } | Select-Object -First 1
+    if (-not $tool) {
+        $tool = $definitions | Where-Object { $_.enabled -eq $true } | Select-Object -First 1
+    }
+
+    if (-not $tool) {
+        if ($OutputBox) {
+            Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Warning'
+            $OutputBox.AppendText("[!] Kein aktiviertes externes Tool gefunden.`r`n")
+        }
+        return $false
+    }
+
+    try {
+        $kind = if ($tool.kind) { [string]$tool.kind } else { 'app' }
+        $target = [string]$tool.target
+        if ([string]::IsNullOrWhiteSpace($target)) {
+            throw "Tool '$($tool.id)' hat kein target."
+        }
+
+        if ($kind -eq 'url') {
+            Start-Process $target | Out-Null
+        }
+        else {
+            $startParams = @{
+                FilePath = $target
+            }
+
+            if ($tool.args -and -not [string]::IsNullOrWhiteSpace([string]$tool.args)) {
+                $startParams.ArgumentList = [string]$tool.args
+            }
+            if ($tool.workingDirectory -and -not [string]::IsNullOrWhiteSpace([string]$tool.workingDirectory)) {
+                $startParams.WorkingDirectory = [string]$tool.workingDirectory
+            }
+            if ($tool.runAsAdmin -eq $true) {
+                $startParams.Verb = 'RunAs'
+            }
+
+            Start-Process @startParams | Out-Null
+        }
+
+        if ($OutputBox) {
+            Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Success'
+            $OutputBox.AppendText("[+] Externes Tool gestartet: $($tool.title)`r`n")
+        }
+        return $true
+    }
+    catch {
+        if ($OutputBox) {
+            Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Error'
+            $OutputBox.AppendText("[x] Externes Tool konnte nicht gestartet werden: $($_.Exception.Message)`r`n")
+        }
+        return $false
+    }
+}
+
 function Get-PythonDashboardStatus {
     $running = $false
     try {
@@ -1290,7 +1519,8 @@ function Start-PythonDashboard {
                         & $addCandidate $candidatePath @()
                     }
                 }
-        } catch { }
+        }
+        catch { }
     }
 
     foreach ($cand in $candidates) {
@@ -1309,7 +1539,8 @@ function Start-PythonDashboard {
                 $pythonPrefixArgs = @($cand.Prefix)
                 break
             }
-        } catch { }
+        }
+        catch { }
     }
 
     if (-not $pythonCmd) {
@@ -1355,7 +1586,8 @@ function Start-PythonDashboard {
                     $ready = $true
                     break
                 }
-            } catch { }
+            }
+            catch { }
 
             if ($script:pythonDashboardProcess.HasExited) {
                 break
@@ -1372,7 +1604,8 @@ function Start-PythonDashboard {
             try {
                 if (Test-Path $stderrLog) { $errTail = (Get-Content $stderrLog -Tail 30 -ErrorAction SilentlyContinue | Out-String).Trim() }
                 if (Test-Path $stdoutLog) { $outTail = (Get-Content $stdoutLog -Tail 30 -ErrorAction SilentlyContinue | Out-String).Trim() }
-            } catch { }
+            }
+            catch { }
 
             $script:pythonDashboardProcess = $null
             $details = @()
@@ -1383,7 +1616,8 @@ function Start-PythonDashboard {
         }
 
         return @{ Success = $true; Url = "http://127.0.0.1:$script:pythonDashboardPort"; Message = "Python-Dashboard gestartet." }
-    } catch {
+    }
+    catch {
         $script:pythonDashboardProcess = $null
         return @{ Success = $false; Message = "Start fehlgeschlagen: $($_.Exception.Message)" }
     }
@@ -1402,6 +1636,161 @@ function Stop-PythonDashboard {
     $script:pythonDashboardProcess = $null
 }
 
+$script:trayNotifyIcon = $null
+$script:trayBalloonHintShown = $false
+$script:isHidingToTray = $false
+$script:lastTrayHideRequest = [datetime]::MinValue
+$script:lastTrayRestoreRequest = [datetime]::MinValue
+
+function Ensure-TrayNotifyIcon {
+    if ($script:trayNotifyIcon) {
+        try {
+            # Zugriff auf eine Property erzwingt einen gueltigen Objektzustand.
+            $null = $script:trayNotifyIcon.Visible
+            return
+        }
+        catch {
+            try { $script:trayNotifyIcon.Dispose() } catch { }
+            $script:trayNotifyIcon = $null
+        }
+    }
+
+    $script:trayNotifyIcon = New-Object System.Windows.Forms.NotifyIcon
+    $script:trayNotifyIcon.Text = 'Bockis System-Tool'
+    $script:trayNotifyIcon.Icon = if ($mainform -and $mainform.Icon) { $mainform.Icon } else { [System.Drawing.SystemIcons]::Application }
+    $script:trayNotifyIcon.Visible = $false
+
+    $trayContextMenu = New-Object System.Windows.Forms.ContextMenuStrip
+    $trayOpenItem = New-Object System.Windows.Forms.ToolStripMenuItem 'Bockis GUI öffnen'
+    $trayExitItem = New-Object System.Windows.Forms.ToolStripMenuItem 'Beenden'
+    [void]$trayContextMenu.Items.Add($trayOpenItem)
+    [void]$trayContextMenu.Items.Add('-')
+    [void]$trayContextMenu.Items.Add($trayExitItem)
+    $script:trayNotifyIcon.ContextMenuStrip = $trayContextMenu
+
+    $trayOpenItem.Add_Click({ Show-MainFormFromTray })
+    $trayExitItem.Add_Click({
+            if ($script:trayNotifyIcon) {
+                $script:trayNotifyIcon.Visible = $false
+            }
+
+            Close-FormSafely -Form $mainform
+        })
+    $script:trayNotifyIcon.Add_DoubleClick({ Show-MainFormFromTray })
+}
+
+function Invoke-OnMainFormThread {
+    param([scriptblock]$Action)
+
+    if (-not $mainform) { return }
+
+    if ($mainform.InvokeRequired) {
+        [void]$mainform.BeginInvoke($Action)
+    }
+    else {
+        & $Action
+    }
+}
+
+function Show-MainFormFromTray {
+    if (-not $mainform) { return }
+
+    try {
+        Ensure-TrayNotifyIcon
+        Update-LogFile -Message "Tray: GUI wird aus dem Tray wiederhergestellt"
+        $script:lastTrayRestoreRequest = [datetime]::Now
+
+        Invoke-OnMainFormThread {
+            try {
+                $mainform.ShowInTaskbar = $true
+                $mainform.WindowState = [System.Windows.Forms.FormWindowState]::Normal
+
+                if (-not $mainform.Visible) {
+                    $mainform.Show()
+                }
+
+                $mainform.Activate()
+                $mainform.BringToFront()
+
+                # Kurzer TopMost-Impuls hilft beim sicheren Fokus-Restore.
+                $mainform.TopMost = $true
+                $mainform.TopMost = $false
+
+                if ($script:trayNotifyIcon) {
+                    $script:trayNotifyIcon.Visible = $false
+                }
+            }
+            catch {
+                Update-LogFile -Message "Tray: Fehler beim Wiederherstellen der GUI: $_" -IsError
+            }
+        }
+    }
+    catch {
+        Update-LogFile -Message "Tray: Fehler im Restore-Handler: $_" -IsError
+    }
+}
+
+function Hide-MainFormToTray {
+    param([bool]$ShowBalloon = $true)
+
+    if (-not $mainform) { return }
+
+    Ensure-TrayNotifyIcon
+    $script:lastTrayHideRequest = [datetime]::Now
+    Update-LogFile -Message "Tray: GUI wird in den Tray minimiert"
+
+    if ($script:trayNotifyIcon) {
+        if (-not $script:trayNotifyIcon.Icon) {
+            $script:trayNotifyIcon.Icon = if ($mainform.Icon) { $mainform.Icon } else { [System.Drawing.SystemIcons]::Application }
+        }
+
+        $script:trayNotifyIcon.Visible = $true
+    }
+
+    $script:isHidingToTray = $true
+    try {
+        $mainform.WindowState = [System.Windows.Forms.FormWindowState]::Minimized
+        $mainform.ShowInTaskbar = $false
+    }
+    finally {
+        $script:isHidingToTray = $false
+    }
+
+    # Einige Systeme oder UI-Events machen das Fenster direkt wieder sichtbar.
+    # Daher nach kurzer Verzoegerung den Tray-Zustand nochmals erzwingen.
+    $enforceTrayTimer = New-Object System.Windows.Forms.Timer
+    $enforceTrayTimer.Interval = 150
+    $enforceTrayTimer.Add_Tick({
+            $this.Stop()
+            try {
+                if ($script:trayNotifyIcon) {
+                    $script:trayNotifyIcon.Visible = $true
+                }
+
+                if ($mainform -and ($mainform.Visible -or $mainform.ShowInTaskbar)) {
+                    $mainform.ShowInTaskbar = $false
+                    $mainform.WindowState = [System.Windows.Forms.FormWindowState]::Minimized
+                }
+
+                Update-LogFile -Message "Tray: Zustand erzwungen (Visible=$($mainform.Visible), ShowInTaskbar=$($mainform.ShowInTaskbar), TrayIconVisible=$($script:trayNotifyIcon.Visible))"
+            }
+            finally {
+                $this.Dispose()
+            }
+        })
+    $enforceTrayTimer.Start()
+
+    if ($ShowBalloon -and $script:trayNotifyIcon -and -not $script:trayBalloonHintShown) {
+        try {
+            $script:trayNotifyIcon.ShowBalloonTip(2500, 'Bockis GUI', 'Die GUI läuft im Tray. Doppelklick auf das Tray-Icon zum Öffnen.', [System.Windows.Forms.ToolTipIcon]::Info)
+            $script:trayBalloonHintShown = $true
+        }
+        catch {
+            # Balloon-Hinweis ist optional und kann je nach Systemrichtlinie blockiert sein.
+        }
+    }
+}
+
 # Minimieren-Button
 $minimizeButton = New-Object System.Windows.Forms.Button
 $minimizeButton.Text = "−"
@@ -1414,7 +1803,15 @@ $minimizeButton.FlatAppearance.MouseDownBackColor = [System.Drawing.Color]::From
 $minimizeButton.BackColor = [System.Drawing.Color]::DarkSlateGray
 $minimizeButton.ForeColor = [System.Drawing.Color]::White
 $minimizeButton.Font = New-Object System.Drawing.Font("Segoe UI", 14, [System.Drawing.FontStyle]::Bold)
-$minimizeButton.Add_Click({ $mainform.WindowState = [System.Windows.Forms.FormWindowState]::Minimized })
+$minimizeButton.Add_Click({
+        $currentSettings = Get-SystemToolSettings
+        if ($currentSettings -and [bool]$currentSettings.MinimizeToTrayOnMinimizeClick) {
+            Hide-MainFormToTray
+        }
+        else {
+            $mainform.WindowState = [System.Windows.Forms.FormWindowState]::Minimized
+        }
+    })
 $minimizeButton.Add_MouseEnter({ $this.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43) })
 $minimizeButton.Add_MouseLeave({ $this.BackColor = [System.Drawing.Color]::DarkSlateGray })
 [void]$titleBar.Controls.Add($minimizeButton)
@@ -2168,6 +2565,33 @@ $mainform.Add_FormClosing({
             return
         }
 
+        # Schutz: Direkt nach dem Restore aus dem Tray kann vereinzelt ein unerwuenschtes
+        # FormClosing eintreffen. Dieses Event nicht als App-Exit behandeln.
+        try {
+            $secondsSinceRestore = ((Get-Date) - $script:lastTrayRestoreRequest).TotalSeconds
+            if ($secondsSinceRestore -ge 0 -and $secondsSinceRestore -lt 5) {
+                $e.Cancel = $true
+                Update-LogFile -Message "Tray: Unerwartetes FormClosing kurz nach Tray-Restore abgefangen"
+                return
+            }
+        }
+        catch { }
+
+        # Schutz: Falls im direkten Umfeld einer Tray-Minimierung ein Close-Event eintrifft,
+        # nicht beenden sondern in den Tray verschieben.
+        try {
+            $secondsSinceTrayRequest = ((Get-Date) - $script:lastTrayHideRequest).TotalSeconds
+            $settingsOnClose = Get-SystemToolSettings
+            if ($secondsSinceTrayRequest -ge 0 -and $secondsSinceTrayRequest -lt 3 -and
+                $settingsOnClose -and [bool]$settingsOnClose.MinimizeToTrayOnMinimizeClick) {
+                $e.Cancel = $true
+                Update-LogFile -Message "Tray: FormClosing innerhalb Tray-Minimize-Fenster abgefangen"
+                Hide-MainFormToTray -ShowBalloon:$false
+                return
+            }
+        }
+        catch { }
+
         # Fenstergröße und Position speichern mit der Funktion aus dem Settings-Modul
         Export-WindowPosition -MainForm $mainform -ConfigPath "$PSScriptRoot\config.json"
         Update-LogFile -Message "Fensterposition wurde gespeichert"
@@ -2202,6 +2626,12 @@ $mainform.Add_FormClosing({
             Write-Host "Leere Tool-Cache..."
             Update-LogFile -Message "Tool-Cache wurde geleert"
             Clear-ToolCacheOnExit
+
+            if ($script:trayNotifyIcon) {
+                $script:trayNotifyIcon.Visible = $false
+                $script:trayNotifyIcon.Dispose()
+                $script:trayNotifyIcon = $null
+            }
 
             # Garbage Collection
             Write-Host "Führe Garbage Collection durch..."
@@ -2239,6 +2669,21 @@ $mainform.Add_LocationChanged({
             }
         } catch {
             # Fehler beim Ausblenden ignorieren
+        }
+    })
+
+$mainform.Add_Resize({
+        if ($script:isHidingToTray) {
+            return
+        }
+
+        if ($mainform.WindowState -ne [System.Windows.Forms.FormWindowState]::Minimized) {
+            return
+        }
+
+        $settingsForResize = Get-SystemToolSettings
+        if ($settingsForResize -and [bool]$settingsForResize.MinimizeToTrayOnMinimizeClick) {
+            Hide-MainFormToTray -ShowBalloon:$false
         }
     })
 
@@ -3084,6 +3529,9 @@ function Reset-MainPanelStates {
     if ($troubleshootHorizontalPanel -and $troubleshootHorizontalPanel.Container) {
         $troubleshootHorizontalPanel.Container.Visible = $false
     }
+    if ($externalToolsHorizontalPanel -and $externalToolsHorizontalPanel.Container) {
+        $externalToolsHorizontalPanel.Container.Visible = $false
+    }
     
     # Header-Buttons visuell zurücksetzen (alle inaktiv)
     if ($systemPanel) { $systemPanel.Header.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38) }
@@ -3102,7 +3550,7 @@ function Reset-MainPanelStates {
     }
 }
 
-# Hilfsfunktion: Zeigt Informationen- und Support-Panel im MainContent wieder an
+# Hilfsfunktion: Zeigt Informationen-, Support- und Externe-Tools-Panel im MainContent wieder an
 function Show-MainInfoSupportPanels {
     if ($infoHorizontalPanel -and $infoHorizontalPanel.Container) {
         $infoHorizontalPanel.Container.Visible = $true
@@ -3112,15 +3560,22 @@ function Show-MainInfoSupportPanels {
         $troubleshootHorizontalPanel.Container.Visible = $true
         $troubleshootHorizontalPanel.Container.BringToFront()
     }
+    if ($externalToolsHorizontalPanel -and $externalToolsHorizontalPanel.Container) {
+        $externalToolsHorizontalPanel.Container.Visible = $true
+        $externalToolsHorizontalPanel.Container.BringToFront()
+    }
 }
 
-# Hilfsfunktion: Versteckt Informationen- und Support-Panel (für Funktionsansichten)
+# Hilfsfunktion: Versteckt Informationen-, Support- und Externe-Tools-Panel (fuer Funktionsansichten)
 function Hide-MainInfoSupportPanels {
     if ($infoHorizontalPanel -and $infoHorizontalPanel.Container) {
         $infoHorizontalPanel.Container.Visible = $false
     }
     if ($troubleshootHorizontalPanel -and $troubleshootHorizontalPanel.Container) {
         $troubleshootHorizontalPanel.Container.Visible = $false
+    }
+    if ($externalToolsHorizontalPanel -and $externalToolsHorizontalPanel.Container) {
+        $externalToolsHorizontalPanel.Container.Visible = $false
     }
 }
 
@@ -3471,6 +3926,10 @@ $networkPanel = New-CollapsiblePanel -Title "Netzwerk-Tools" -YPosition 110 -Tag
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
     $outputBox.AppendText("  • Ping Test            - Konnektivitätstests zu beliebigen Hosts`r`n")
     $outputBox.AppendText("                           (Konfigurierbar: Anzahl, Timeout, Buffer-Größe)`r`n`r`n")
+    $outputBox.AppendText("  • Einstellungs-Scan    - Prüft Fast Startup, NIC-Energieverwaltung,`r`n")
+    $outputBox.AppendText("                           Speed/Duplex, Treiber, Eventlogs, IP/DHCP/DNS`r`n`r`n")
+    $outputBox.AppendText("  • Manuelle Anleitung   - Zeigt Win11-Menüpfade, klassische Tools`r`n")
+    $outputBox.AppendText("                           sowie Prüf-/Fix-Kommandos pro Problemtyp`r`n`r`n")
     
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Accent'
     Add-OutputIcon -OutputBox $outputBox -IconCode 0xE90F
@@ -4435,6 +4894,9 @@ $infoHorizontalPanel = New-HorizontalCollapsiblePanel -Title "Informationen" -XP
     if ($troubleshootHorizontalPanel -and $troubleshootHorizontalPanel.Container) {
         $troubleshootHorizontalPanel.Container.Visible = $true
     }
+    if ($externalToolsHorizontalPanel -and $externalToolsHorizontalPanel.Container) {
+        $externalToolsHorizontalPanel.Container.Visible = $true
+    }
     
     # OutputBox leeren und Info anzeigen
     $outputBox.Clear()
@@ -4469,22 +4931,13 @@ $infoHorizontalPanel = New-HorizontalCollapsiblePanel -Title "Informationen" -XP
     $outputBox.AppendText("  • Festplatten: Status, Kapazität und S.M.A.R.T.-Daten`r`n")
     $outputBox.AppendText("  • Netzwerk: Adapter-Details und IP-Konfiguration`r`n`r`n")
     
-    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Accent'
-    Add-OutputIcon -OutputBox $outputBox -IconCode 0xE90F
-    $outputBox.AppendText(" TOOL-INFO:`r`n")
-    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
-    $outputBox.AppendText("  • Detaillierte Beschreibungen aller verfügbaren Tools`r`n")
-    $outputBox.AppendText("  • Verwendungszweck und Funktionsweise`r`n")
-    $outputBox.AppendText("  • Empfohlene Anwendungsfälle`r`n")
-    $outputBox.AppendText("  • Hinweise und Warnungen zu kritischen Tools`r`n`r`n")
-    
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Muted'
     Add-OutputIcon -OutputBox $outputBox -IconCode 0xE946
     $outputBox.AppendText(" Tipp: Wählen Sie eine Info-Kategorie aus dem ausgeklappten Menü.`r`n")
 }
 
-# Setze Content-Panel-Größe für 3 Buttons nebeneinander
-$infoHorizontalPanel.Content.Width = 435  # 3 Buttons × 145px
+# Setze Content-Panel-Groesse fuer 2 Buttons nebeneinander
+$infoHorizontalPanel.Content.Width = 290  # 2 Buttons x 145px
 $infoHorizontalPanel.Content.Height = 35
 
 # Erstelle die Info-Buttons horizontal im Content-Panel
@@ -4516,7 +4969,6 @@ $btnStatusInfoH.Add_Click({
     
         $btnStatusInfoH.BackColor = [System.Drawing.Color]::FromArgb(55, 55, 55)
         $btnHardwareInfoH.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
-        $btnToolInfoH.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
     
         if (-not $script:statusInfoLoaded) {
             $systemStatusBox.Clear()
@@ -4559,7 +5011,6 @@ $btnHardwareInfoH.Add_Click({
     
         $btnStatusInfoH.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
         $btnHardwareInfoH.BackColor = [System.Drawing.Color]::FromArgb(55, 55, 55)
-        $btnToolInfoH.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
     
         if (-not $script:hardwareInfoLoaded) {
             Get-HardwareInfo -infoBox $hardwareInfoBox
@@ -4567,38 +5018,6 @@ $btnHardwareInfoH.Add_Click({
         }
     })
 $infoHorizontalPanel.Content.Controls.Add($btnHardwareInfoH)
-
-$btnToolInfoH = New-Object System.Windows.Forms.Button
-$btnToolInfoH.Text = "Tool-Info"
-$btnToolInfoH.Size = New-Object System.Drawing.Size(145, 35)
-$btnToolInfoH.Location = New-Object System.Drawing.Point(290, 0)
-$btnToolInfoH.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
-$btnToolInfoH.FlatAppearance.BorderSize = 0
-$btnToolInfoH.FlatAppearance.MouseOverBackColor = [System.Drawing.Color]::FromArgb(55, 55, 55)
-$btnToolInfoH.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
-$btnToolInfoH.ForeColor = [System.Drawing.Color]::White
-$btnToolInfoH.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
-$btnToolInfoH.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
-Add-ButtonIcon -Button $btnToolInfoH -IconCode 0xE90F -IconSize 11 -LeftMargin 8
-
-# Runde Ecken für Button (8px Radius)
-try {
-    $regionHandle = [RoundedCorners]::CreateRoundRectRgn(0, 0, $btnToolInfoH.Width, $btnToolInfoH.Height, 8, 8)
-    if ($regionHandle -ne [IntPtr]::Zero) {
-        $btnToolInfoH.Region = [System.Drawing.Region]::FromHrgn($regionHandle)
-    }
-} catch {
-    # Falls runde Ecken nicht funktionieren, einfach ohne weitermachen
-}
-
-$btnToolInfoH.Add_Click({
-        Switch-OutputView -viewName "toolInfoView"
-    
-        $btnStatusInfoH.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
-        $btnHardwareInfoH.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
-        $btnToolInfoH.BackColor = [System.Drawing.Color]::FromArgb(55, 55, 55)
-    })
-$infoHorizontalPanel.Content.Controls.Add($btnToolInfoH)
 
 $mainContentPanel.Controls.Add($infoHorizontalPanel.Container)
 
@@ -4624,6 +5043,9 @@ $troubleshootHorizontalPanel = New-HorizontalCollapsiblePanel -Title "Support" -
     }
     if ($troubleshootHorizontalPanel -and $troubleshootHorizontalPanel.Container) {
         $troubleshootHorizontalPanel.Container.Visible = $true
+    }
+    if ($externalToolsHorizontalPanel -and $externalToolsHorizontalPanel.Container) {
+        $externalToolsHorizontalPanel.Container.Visible = $true
     }
 }
 
@@ -5369,6 +5791,123 @@ $troubleshootHorizontalPanel.Content.Controls.Add($btnCheckDependenciesH)
 
 $mainContentPanel.Controls.Add($troubleshootHorizontalPanel.Container)
 
+# Erstelle horizontales Collapsible Panel fuer Externe Tools (rechts neben Support)
+$externalToolsHorizontalPanel = New-HorizontalCollapsiblePanel -Title "Externe Tools" -XPosition 330 -Tag "externalToolsHorizontalPanel" -ParentPanel $mainContentPanel -IconCode 0xE8FD -OnExpand {
+    if ($outputViewPanel) { $outputViewPanel.Visible = $true }
+    if ($statusViewPanel) { $statusViewPanel.Visible = $false }
+    if ($hardwareViewPanel) { $hardwareViewPanel.Visible = $false }
+    if ($toolInfoViewPanel) { $toolInfoViewPanel.Visible = $false }
+
+    if ($searchPanel) { $searchPanel.Visible = $false }
+    if ($script:dependencyTableHost) { $script:dependencyTableHost.Visible = $false }
+    if ($outputBox) { $outputBox.Visible = $true }
+
+    if ($infoHorizontalPanel -and $infoHorizontalPanel.Container) {
+        $infoHorizontalPanel.Container.Visible = $true
+    }
+    if ($troubleshootHorizontalPanel -and $troubleshootHorizontalPanel.Container) {
+        $troubleshootHorizontalPanel.Container.Visible = $true
+    }
+    if ($externalToolsHorizontalPanel -and $externalToolsHorizontalPanel.Container) {
+        $externalToolsHorizontalPanel.Container.Visible = $true
+    }
+}
+
+$externalToolsHorizontalPanel.Content.Width = 435
+$externalToolsHorizontalPanel.Content.Height = 35
+
+$externalToolsButtonWidth = 145
+$externalToolsButtonX = 0
+$externalToolDefinitions = @(Get-ExternalToolDefinitions | Where-Object { $_.enabled -eq $true })
+
+if (-not $externalToolDefinitions -or $externalToolDefinitions.Count -eq 0) {
+    $externalToolDefinitions = @([pscustomobject]@{
+            id = 'multi_monitor'
+            title = 'Multi-Monitor Tool'
+            iconCode = 0xE7F4
+        })
+}
+
+foreach ($externalTool in $externalToolDefinitions) {
+    $toolId = [string]$externalTool.id
+    if ([string]::IsNullOrWhiteSpace($toolId)) { continue }
+
+    $toolTitle = if (-not [string]::IsNullOrWhiteSpace([string]$externalTool.title)) { [string]$externalTool.title } else { $toolId }
+    $toolIconCode = if ($externalTool.PSObject.Properties.Name -contains 'iconCode' -and $externalTool.iconCode) { [int]$externalTool.iconCode } else { 0xE7F4 }
+
+    $btnExternalTool = New-Object System.Windows.Forms.Button
+    $btnExternalTool.Text = $toolTitle
+    $btnExternalTool.Size = New-Object System.Drawing.Size($externalToolsButtonWidth, 35)
+    $btnExternalTool.Location = New-Object System.Drawing.Point($externalToolsButtonX, 0)
+    $btnExternalTool.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+    $btnExternalTool.FlatAppearance.BorderSize = 0
+    $btnExternalTool.FlatAppearance.MouseOverBackColor = [System.Drawing.Color]::FromArgb(55, 55, 55)
+    $btnExternalTool.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
+    $btnExternalTool.ForeColor = [System.Drawing.Color]::White
+    $btnExternalTool.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+    $btnExternalTool.Cursor = [System.Windows.Forms.Cursors]::Hand
+    Add-ButtonIcon -Button $btnExternalTool -IconCode $toolIconCode -IconSize 11 -LeftMargin 8
+
+    try {
+        $regionHandle = [RoundedCorners]::CreateRoundRectRgn(0, 0, $btnExternalTool.Width, $btnExternalTool.Height, 8, 8)
+        if ($regionHandle -ne [IntPtr]::Zero) {
+            $btnExternalTool.Region = [System.Drawing.Region]::FromHrgn($regionHandle)
+        }
+    }
+    catch {
+    }
+
+    $btnExternalTool.Add_Click({
+            $launched = Invoke-ExternalToolLauncher -ToolId $toolId -OutputBox $outputBox
+            if (-not $launched) {
+                [System.Windows.Forms.MessageBox]::Show(
+                    "Das externe Tool konnte nicht gestartet werden.`nBitte Data\\external_tools.json pruefen.",
+                    "Externe Tools",
+                    [System.Windows.Forms.MessageBoxButtons]::OK,
+                    [System.Windows.Forms.MessageBoxIcon]::Warning
+                ) | Out-Null
+            }
+        }.GetNewClosure())
+
+    $externalToolsHorizontalPanel.Content.Controls.Add($btnExternalTool)
+    $externalToolsButtonX += $externalToolsButtonWidth
+}
+
+$btnEditExternalToolsH = New-Object System.Windows.Forms.Button
+$btnEditExternalToolsH.Text = "Konfiguration"
+$btnEditExternalToolsH.Size = New-Object System.Drawing.Size($externalToolsButtonWidth, 35)
+$btnEditExternalToolsH.Location = New-Object System.Drawing.Point($externalToolsButtonX, 0)
+$btnEditExternalToolsH.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+$btnEditExternalToolsH.FlatAppearance.BorderSize = 0
+$btnEditExternalToolsH.FlatAppearance.MouseOverBackColor = [System.Drawing.Color]::FromArgb(55, 55, 55)
+$btnEditExternalToolsH.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
+$btnEditExternalToolsH.ForeColor = [System.Drawing.Color]::White
+$btnEditExternalToolsH.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+$btnEditExternalToolsH.Cursor = [System.Windows.Forms.Cursors]::Hand
+Add-ButtonIcon -Button $btnEditExternalToolsH -IconCode 0xE70F -IconSize 11 -LeftMargin 8
+
+try {
+    $regionHandle = [RoundedCorners]::CreateRoundRectRgn(0, 0, $btnEditExternalToolsH.Width, $btnEditExternalToolsH.Height, 8, 8)
+    if ($regionHandle -ne [IntPtr]::Zero) {
+        $btnEditExternalToolsH.Region = [System.Drawing.Region]::FromHrgn($regionHandle)
+    }
+}
+catch {
+}
+
+$btnEditExternalToolsH.Add_Click({
+        Open-ExternalToolsConfig
+        if ($outputBox) {
+            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
+            $outputBox.AppendText("[i] Externe Tool-Konfiguration geoeffnet: Data\\external_tools.json`r`n")
+        }
+    })
+$externalToolsHorizontalPanel.Content.Controls.Add($btnEditExternalToolsH)
+
+$externalToolsHorizontalPanel.Content.Width = [Math]::Max(205, ($externalToolsButtonX + $externalToolsButtonWidth))
+
+$mainContentPanel.Controls.Add($externalToolsHorizontalPanel.Container)
+
 #------------------------------------------------------------------------------------------------------------
 
 # Separator zwischen Bereinigung und Tool-Downloads
@@ -5551,6 +6090,9 @@ $btnAllTools.Add_Click({
         if ($troubleshootHorizontalPanel -and $troubleshootHorizontalPanel.Container) {
             $troubleshootHorizontalPanel.Container.Visible = $false
         }
+        if ($externalToolsHorizontalPanel -and $externalToolsHorizontalPanel.Container) {
+            $externalToolsHorizontalPanel.Container.Visible = $false
+        }
     
         # Suchfeld einblenden
         if ($searchPanel) { $searchPanel.Visible = $true }
@@ -5606,6 +6148,9 @@ $btnSystemTools.Add_Click({
         }
         if ($troubleshootHorizontalPanel -and $troubleshootHorizontalPanel.Container) {
             $troubleshootHorizontalPanel.Container.Visible = $false
+        }
+        if ($externalToolsHorizontalPanel -and $externalToolsHorizontalPanel.Container) {
+            $externalToolsHorizontalPanel.Container.Visible = $false
         }
     
         # Suchfeld einblenden
@@ -5663,6 +6208,9 @@ $btnApplications.Add_Click({
         if ($troubleshootHorizontalPanel -and $troubleshootHorizontalPanel.Container) {
             $troubleshootHorizontalPanel.Container.Visible = $false
         }
+        if ($externalToolsHorizontalPanel -and $externalToolsHorizontalPanel.Container) {
+            $externalToolsHorizontalPanel.Container.Visible = $false
+        }
     
         # Suchfeld einblenden
         if ($searchPanel) { $searchPanel.Visible = $true }
@@ -5719,6 +6267,9 @@ $btnAudioTV.Add_Click({
         if ($troubleshootHorizontalPanel -and $troubleshootHorizontalPanel.Container) {
             $troubleshootHorizontalPanel.Container.Visible = $false
         }
+        if ($externalToolsHorizontalPanel -and $externalToolsHorizontalPanel.Container) {
+            $externalToolsHorizontalPanel.Container.Visible = $false
+        }
     
         # Suchfeld einblenden
         if ($searchPanel) { $searchPanel.Visible = $true }
@@ -5774,6 +6325,9 @@ $btnCodingTools.Add_Click({
         }
         if ($troubleshootHorizontalPanel -and $troubleshootHorizontalPanel.Container) {
             $troubleshootHorizontalPanel.Container.Visible = $false
+        }
+        if ($externalToolsHorizontalPanel -and $externalToolsHorizontalPanel.Container) {
+            $externalToolsHorizontalPanel.Container.Visible = $false
         }
     
         # Suchfeld einblenden
@@ -6202,6 +6756,9 @@ $btnOutput.Add_Click({
         }
         if ($troubleshootHorizontalPanel -and $troubleshootHorizontalPanel.Container) {
             $troubleshootHorizontalPanel.Container.Visible = $true
+        }
+        if ($externalToolsHorizontalPanel -and $externalToolsHorizontalPanel.Container) {
+            $externalToolsHorizontalPanel.Container.Visible = $true
         }
     
         Switch-OutputView -viewName "outputView"
@@ -7021,6 +7578,46 @@ $btnPingTest.Add_Click({
         Update-ProgressStatus -StatusText "Fertig" -ProgressValue 100 -TextColor ([System.Drawing.Color]::White)
     })
 $tblNetwork.Controls.Add($btnPingTest)
+
+$btnNetworkSettingsScan = New-Object System.Windows.Forms.Button
+$btnNetworkSettingsScan.Name = "btnNetworkSettingsScan"
+$btnNetworkSettingsScan.Text = "Einstellungs-Scan"
+$btnNetworkSettingsScan.Size = New-Object System.Drawing.Size(155, 35)
+$btnNetworkSettingsScan.Location = New-Object System.Drawing.Point(180, 5)
+$btnNetworkSettingsScan.BackColor = $script:btnSubNavColor
+$btnNetworkSettingsScan.ForeColor = [System.Drawing.Color]::White
+$btnNetworkSettingsScan.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+$btnNetworkSettingsScan.FlatAppearance.BorderSize = 0
+$btnNetworkSettingsScan.Font = New-Object System.Drawing.Font("Segoe UI", 8.5, [System.Drawing.FontStyle]::Bold)
+$btnNetworkSettingsScan.Tag = "networkDiagnosticsControl"
+$btnNetworkSettingsScan.Add_Click({
+        Switch-ToOutputTab
+        # Status auf "Scan läuft..." setzen
+        Update-ProgressStatus -StatusText "Netzwerk-Einstellungs-Scan läuft..." -ProgressValue 0 -TextColor ([System.Drawing.Color]::White)
+        Start-NetworkSettingsScan -outputBox $outputBox -progressBar $progressBar
+        # Nach dem Scan Status auf "Fertig" setzen
+        Update-ProgressStatus -StatusText "Fertig" -ProgressValue 100 -TextColor ([System.Drawing.Color]::White)
+    })
+$tblNetwork.Controls.Add($btnNetworkSettingsScan)
+
+$btnNetworkManualGuide = New-Object System.Windows.Forms.Button
+$btnNetworkManualGuide.Name = "btnNetworkManualGuide"
+$btnNetworkManualGuide.Text = "Manuelle Anleitung"
+$btnNetworkManualGuide.Size = New-Object System.Drawing.Size(155, 35)
+$btnNetworkManualGuide.Location = New-Object System.Drawing.Point(355, 5)
+$btnNetworkManualGuide.BackColor = $script:btnSubNavColor
+$btnNetworkManualGuide.ForeColor = [System.Drawing.Color]::White
+$btnNetworkManualGuide.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+$btnNetworkManualGuide.FlatAppearance.BorderSize = 0
+$btnNetworkManualGuide.Font = New-Object System.Drawing.Font("Segoe UI", 8.5, [System.Drawing.FontStyle]::Bold)
+$btnNetworkManualGuide.Tag = "networkDiagnosticsControl"
+$btnNetworkManualGuide.Add_Click({
+        Switch-ToOutputTab
+        Update-ProgressStatus -StatusText "Manuelle Netzwerk-Anleitung wird erstellt..." -ProgressValue 0 -TextColor ([System.Drawing.Color]::White)
+    Start-NetworkManualGuide -outputBox $outputBox -UseWindow
+        Update-ProgressStatus -StatusText "Fertig" -ProgressValue 100 -TextColor ([System.Drawing.Color]::White)
+    })
+$tblNetwork.Controls.Add($btnNetworkManualGuide)
 
 $btnResetNetwork = New-Object System.Windows.Forms.Button
 $btnResetNetwork.Name = "btnResetNetwork"
@@ -8724,6 +9321,30 @@ function Update-AllButtonFlatAppearance {
     }
 }
 Update-AllButtonFlatAppearance -RootControl $mainform
+
+$startupSettings = Get-SystemToolSettings
+$script:hideToTrayOnShown = $false
+if ($StartedFromWindowsLogin -and $startupSettings -and [bool]$startupSettings.MinimizeToTrayOnStartup) {
+    $script:hideToTrayOnShown = $true
+}
+
+$mainform.Add_Shown({
+        if ($script:hideToTrayOnShown) {
+            $script:hideToTrayOnShown = $false
+            $startupTrayTimer = New-Object System.Windows.Forms.Timer
+            $startupTrayTimer.Interval = 800
+            $startupTrayTimer.Add_Tick({
+                    $this.Stop()
+                    try {
+                        Hide-MainFormToTray -ShowBalloon:$false
+                    }
+                    finally {
+                        $this.Dispose()
+                    }
+                })
+            $startupTrayTimer.Start()
+        }
+    })
 
 [void]$mainform.ShowDialog()
 

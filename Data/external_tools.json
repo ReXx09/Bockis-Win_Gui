@@ -1,0 +1,13 @@
+[
+  {
+    "id": "multi_monitor",
+    "title": "Multi-Monitor Tool",
+    "enabled": true,
+    "kind": "app",
+    "target": "C:\\Tools\\MultiMonitorTool\\MultiMonitorTool.exe",
+    "args": "",
+    "workingDirectory": "C:\\Tools\\MultiMonitorTool",
+    "runAsAdmin": false,
+    "note": "Pfad anpassen. Tool bleibt extern und kann unabhaengig weiterentwickelt werden."
+  }
+]
