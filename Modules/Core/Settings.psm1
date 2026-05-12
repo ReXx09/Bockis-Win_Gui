@@ -1297,6 +1297,11 @@ function Show-SettingsDialogModern {
                 'Action' {
                     $actionCommandName = if ($def.PSObject.Properties.Name -contains 'ActionCommand') { [string]$def.ActionCommand } else { '' }
                     $actionKeyName = if ($def.PSObject.Properties.Name -contains 'ActionKey') { [string]$def.ActionKey } else { '' }
+                    
+                    # Capture Variablen fuer die Closure
+                    $capturedCommand = $actionCommandName
+                    $capturedKey = $actionKeyName
+                    
                     $ctrl = New-Object System.Windows.Controls.Button
                     $ctrl.Content = if ($def.PSObject.Properties.Name -contains 'ButtonText' -and -not [string]::IsNullOrWhiteSpace([string]$def.ButtonText)) { [string]$def.ButtonText } else { 'Öffnen' }
                     $ctrl.Height = 32
@@ -1306,44 +1311,44 @@ function Show-SettingsDialogModern {
                     $ctrl.Cursor = 'Hand'
                     
                     # Lokale Funktionen im Button-Scope verfügbar machen
-                        $localInvokeSettingsAction = ${function:'Invoke-SettingsAction'}
-                        $localOpenSettingsPathByKey = ${function:'Open-SettingsPathByKey'}
-                        $localResetSettingsLogFiles = ${function:'Reset-SettingsLogFiles'}
-                        $localShowDatabaseOverview = ${function:'Show-DatabaseOverview'}
-                        $localShowExtensionStartupSettingsDialog = ${function:'Show-ExtensionStartupSettingsDialog'}
+                    $localInvokeSettingsAction = ${function:'Invoke-SettingsAction'}
+                    $localOpenSettingsPathByKey = ${function:'Open-SettingsPathByKey'}
+                    $localResetSettingsLogFiles = ${function:'Reset-SettingsLogFiles'}
+                    $localShowDatabaseOverview = ${function:'Show-DatabaseOverview'}
+                    $localShowExtensionStartupSettingsDialog = ${function:'Show-ExtensionStartupSettingsDialog'}
                     
                     $ctrl.Add_Click({
-                            if ([string]::IsNullOrWhiteSpace($actionCommandName) -or -not (Get-Command -Name $actionCommandName -ErrorAction SilentlyContinue)) {
-                                $errorMsg = switch ($actionKeyName) {
+                            if ([string]::IsNullOrWhiteSpace($capturedCommand) -or -not (Get-Command -Name $capturedCommand -ErrorAction SilentlyContinue)) {
+                                $errorMsg = switch ($capturedKey) {
                                     'ManageExtensionLaunchOptions' { 'Die Erweiterungs-Konfiguration ist aktuell nicht verfügbar.' }
                                     'RestartDefenderServices' { 'Der Defender-Service-Handler ist nicht verfügbar.' }
                                     'OpenDatabaseOverview' { 'Die Datenbank-Übersicht ist nicht verfügbar.' }
                                     {$_ -match '^OpenPath'} { "Das Verzeichnis konnte nicht geöffnet werden: Handler nicht verfügbar." }
                                     {$_ -match '^ResetLogs'} { 'Das Log-Reset ist nicht verfügbar.' }
-                                    default { "Die Aktion '$actionKeyName' ist nicht verfügbar." }
+                                    default { "Die Aktion '$capturedKey' ist nicht verfügbar." }
                                 }
                                 [System.Windows.MessageBox]::Show($errorMsg, 'Nicht verfügbar', 'OK', 'Information') | Out-Null
                                 return
                             }
 
                             try {
-                                if ($actionCommandName -eq 'Invoke-SettingsAction') {
-                                    & $localInvokeSettingsAction -ActionKey $actionKeyName -MainForm $MainForm -OutputBox $OutputBox -MainPanels $MainPanels | Out-Null
+                                if ($capturedCommand -eq 'Invoke-SettingsAction') {
+                                    & $localInvokeSettingsAction -ActionKey $capturedKey -MainForm $MainForm -OutputBox $OutputBox -MainPanels $MainPanels | Out-Null
                                 }
                                 else {
-                                    & $actionCommandName -Owner $MainForm -OutputBox $OutputBox | Out-Null
+                                    & $capturedCommand -Owner $MainForm -OutputBox $OutputBox | Out-Null
                                 }
                             }
                             catch {
-                                $errorMsg = switch ($actionKeyName) {
+                                $errorMsg = switch ($capturedKey) {
                                     {$_ -match '^OpenPath'} { "Fehler beim Öffnen des Verzeichnisses:`n$_" }
                                     'ResetLogs' { "Fehler beim Zurücksetzen der Logs:`n$_" }
                                     'ManageExtensionLaunchOptions' { "Fehler beim Öffnen der Erweiterungskonfiguration:`n$_" }
-                                    default { "Fehler bei der Aktion '$actionKeyName':`n$_" }
+                                    default { "Fehler bei der Aktion '$capturedKey':`n$_" }
                                 }
                                 [System.Windows.MessageBox]::Show($errorMsg, 'Fehler', 'OK', 'Error') | Out-Null
                             }
-                        })
+                        }.GetNewClosure())
                     $stack.Children.Add($ctrl)
                 }
             }
