@@ -1298,10 +1298,6 @@ function Show-SettingsDialogModern {
                     $actionCommandName = if ($def.PSObject.Properties.Name -contains 'ActionCommand') { [string]$def.ActionCommand } else { '' }
                     $actionKeyName = if ($def.PSObject.Properties.Name -contains 'ActionKey') { [string]$def.ActionKey } else { '' }
                     
-                    # Capture Variablen fuer die Closure
-                    $capturedCommand = $actionCommandName
-                    $capturedKey = $actionKeyName
-                    
                     $ctrl = New-Object System.Windows.Controls.Button
                     $ctrl.Content = if ($def.PSObject.Properties.Name -contains 'ButtonText' -and -not [string]::IsNullOrWhiteSpace([string]$def.ButtonText)) { [string]$def.ButtonText } else { 'Öffnen' }
                     $ctrl.Height = 32
@@ -1310,43 +1306,80 @@ function Show-SettingsDialogModern {
                     $ctrl.BorderThickness = '0'
                     $ctrl.Cursor = 'Hand'
                     
-                    # Lokale Funktionen im Button-Scope verfügbar machen
-                    $localInvokeSettingsAction = ${function:'Invoke-SettingsAction'}
-                    $localOpenSettingsPathByKey = ${function:'Open-SettingsPathByKey'}
-                    $localResetSettingsLogFiles = ${function:'Reset-SettingsLogFiles'}
-                    $localShowDatabaseOverview = ${function:'Show-DatabaseOverview'}
-                    $localShowExtensionStartupSettingsDialog = ${function:'Show-ExtensionStartupSettingsDialog'}
-                    
+                    # Direkt die Action ausfuehren (wie im Legacy-Dialog)
                     $ctrl.Add_Click({
-                            if ([string]::IsNullOrWhiteSpace($capturedCommand) -or -not (Get-Command -Name $capturedCommand -ErrorAction SilentlyContinue)) {
-                                $errorMsg = switch ($capturedKey) {
-                                    'ManageExtensionLaunchOptions' { 'Die Erweiterungs-Konfiguration ist aktuell nicht verfügbar.' }
-                                    'RestartDefenderServices' { 'Der Defender-Service-Handler ist nicht verfügbar.' }
-                                    'OpenDatabaseOverview' { 'Die Datenbank-Übersicht ist nicht verfügbar.' }
-                                    {$_ -match '^OpenPath'} { "Das Verzeichnis konnte nicht geöffnet werden: Handler nicht verfügbar." }
-                                    {$_ -match '^ResetLogs'} { 'Das Log-Reset ist nicht verfügbar.' }
-                                    default { "Die Aktion '$capturedKey' ist nicht verfügbar." }
-                                }
-                                [System.Windows.MessageBox]::Show($errorMsg, 'Nicht verfügbar', 'OK', 'Information') | Out-Null
-                                return
-                            }
-
                             try {
-                                if ($capturedCommand -eq 'Invoke-SettingsAction') {
-                                    & $localInvokeSettingsAction -ActionKey $capturedKey -MainForm $MainForm -OutputBox $OutputBox -MainPanels $MainPanels | Out-Null
-                                }
-                                else {
-                                    & $capturedCommand -Owner $MainForm -OutputBox $OutputBox | Out-Null
+                                switch ($actionKeyName) {
+                                    'ManageExtensionLaunchOptions' {
+                                        Show-ExtensionStartupSettingsDialog -Owner $MainForm -OutputBox $OutputBox
+                                    }
+                                    'RestartDefenderServices' {
+                                        if (Get-Command -Name Restart-DefenderService -ErrorAction SilentlyContinue) {
+                                            Restart-DefenderService -outputBox $OutputBox -progressBar $global:progressBar -MainForm $MainForm
+                                        }
+                                        else {
+                                            [System.Windows.MessageBox]::Show('Restart-DefenderService ist nicht verfügbar.', 'Fehler', 'OK', 'Error') | Out-Null
+                                        }
+                                    }
+                                    'ResetLogs' {
+                                        $confirm = [System.Windows.Forms.MessageBox]::Show(
+                                            "Möchten Sie wirklich alle Log-Dateien zurücksetzen?`n`nDiese Aktion kann nicht rückgängig gemacht werden.",
+                                            'Logs zurücksetzen',
+                                            [System.Windows.Forms.MessageBoxButtons]::YesNo,
+                                            [System.Windows.Forms.MessageBoxIcon]::Warning
+                                        )
+                                        
+                                        if ($confirm -eq [System.Windows.Forms.DialogResult]::Yes) {
+                                            $result = Reset-SettingsLogFiles
+                                            if ($result.Errors.Count -eq 0) {
+                                                [System.Windows.MessageBox]::Show(
+                                                    "Erfolgreich $($result.DeletedCount) Log-Dateien zurückgesetzt.",
+                                                    'Logs erfolgreich zurückgesetzt',
+                                                    'OK', 'Information'
+                                                ) | Out-Null
+                                            }
+                                            else {
+                                                [System.Windows.MessageBox]::Show(
+                                                    "Log-Reset mit Fehlern: $($result.Errors -join ', ')",
+                                                    'Log-Reset fehlgeschlagen',
+                                                    'OK', 'Warning'
+                                                ) | Out-Null
+                                            }
+                                        }
+                                    }
+                                    'OpenLogFolder' {
+                                        Open-SettingsPathByKey -PathKey 'Logs'
+                                    }
+                                    'OpenDatabaseOverview' {
+                                        if (Get-Command -Name Show-DatabaseOverview -ErrorAction SilentlyContinue) {
+                                            Show-DatabaseOverview
+                                        }
+                                        else {
+                                            [System.Windows.MessageBox]::Show('Show-DatabaseOverview ist nicht verfügbar.', 'Fehler', 'OK', 'Error') | Out-Null
+                                        }
+                                    }
+                                    'OpenPathLogs' {
+                                        Open-SettingsPathByKey -PathKey 'Logs'
+                                    }
+                                    'OpenPathDatabase' {
+                                        Open-SettingsPathByKey -PathKey 'Database'
+                                    }
+                                    'OpenPathInstall' {
+                                        Open-SettingsPathByKey -PathKey 'Install'
+                                    }
+                                    'OpenPathDownload' {
+                                        Open-SettingsPathByKey -PathKey 'Download'
+                                    }
+                                    'OpenPathToolsInstall' {
+                                        Open-SettingsPathByKey -PathKey 'ToolsInstall'
+                                    }
+                                    default {
+                                        [System.Windows.MessageBox]::Show("Die Aktion '$actionKeyName' ist nicht implementiert.", 'Unbekannte Aktion', 'OK', 'Warning') | Out-Null
+                                    }
                                 }
                             }
                             catch {
-                                $errorMsg = switch ($capturedKey) {
-                                    {$_ -match '^OpenPath'} { "Fehler beim Öffnen des Verzeichnisses:`n$_" }
-                                    'ResetLogs' { "Fehler beim Zurücksetzen der Logs:`n$_" }
-                                    'ManageExtensionLaunchOptions' { "Fehler beim Öffnen der Erweiterungskonfiguration:`n$_" }
-                                    default { "Fehler bei der Aktion '$capturedKey':`n$_" }
-                                }
-                                [System.Windows.MessageBox]::Show($errorMsg, 'Fehler', 'OK', 'Error') | Out-Null
+                                [System.Windows.MessageBox]::Show("Fehler bei der Aktion '$actionKeyName':`n$_", 'Fehler', 'OK', 'Error') | Out-Null
                             }
                         }.GetNewClosure())
                     $stack.Children.Add($ctrl)
