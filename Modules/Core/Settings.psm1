@@ -2247,56 +2247,15 @@ function Show-SettingsDialog {
     $chkGuiWindowsLogin.Checked = [bool]$script:settings.AutoStartGuiOnWindowsLogin
     $tabBehavior.Controls.Add($chkGuiWindowsLogin)
 
-    # Beim Windows-Login konfigurierte Erweiterungen mitstarten
-    $chkAutoStartExtensionsWindowsLogin = New-Object System.Windows.Forms.CheckBox
-    $chkAutoStartExtensionsWindowsLogin.Text = "Konfigurierte Erweiterungen beim Windows-Login starten"
-    $chkAutoStartExtensionsWindowsLogin.Location = New-Object System.Drawing.Point(15, 285)
-    $chkAutoStartExtensionsWindowsLogin.Size = New-Object System.Drawing.Size(520, 25)
-    $chkAutoStartExtensionsWindowsLogin.ForeColor = $textColor
-    $chkAutoStartExtensionsWindowsLogin.Checked = [bool]$script:settings.AutoStartExtensionsOnWindowsLogin
-    $tabBehavior.Controls.Add($chkAutoStartExtensionsWindowsLogin)
-
     # Beim Klick auf Minimieren in den Tray wechseln
     $chkMinimizeToTrayOnMinimizeClick = New-Object System.Windows.Forms.CheckBox
     $chkMinimizeToTrayOnMinimizeClick.Text = "Beim Klick auf Minimieren in den Tray"
-    $chkMinimizeToTrayOnMinimizeClick.Location = New-Object System.Drawing.Point(15, 320)
+    $chkMinimizeToTrayOnMinimizeClick.Location = New-Object System.Drawing.Point(15, 285)
     $chkMinimizeToTrayOnMinimizeClick.Size = New-Object System.Drawing.Size(520, 25)
     $chkMinimizeToTrayOnMinimizeClick.ForeColor = $textColor
     $chkMinimizeToTrayOnMinimizeClick.Checked = [bool]$script:settings.MinimizeToTrayOnMinimizeClick
     $tabBehavior.Controls.Add($chkMinimizeToTrayOnMinimizeClick)
 
-    # Erweiterungen im Tray-Menue anzeigen
-    $chkShowExtensionsInTrayMenu = New-Object System.Windows.Forms.CheckBox
-    $chkShowExtensionsInTrayMenu.Text = "Erweiterungen im Tray-Menue anzeigen"
-    $chkShowExtensionsInTrayMenu.Location = New-Object System.Drawing.Point(15, 355)
-    $chkShowExtensionsInTrayMenu.Size = New-Object System.Drawing.Size(520, 25)
-    $chkShowExtensionsInTrayMenu.ForeColor = $textColor
-    $chkShowExtensionsInTrayMenu.Checked = [bool]$script:settings.ShowExtensionsInTrayMenu
-    $tabBehavior.Controls.Add($chkShowExtensionsInTrayMenu)
-
-    $btnExtensionLaunchOptions = New-Object System.Windows.Forms.Button
-    $btnExtensionLaunchOptions.Text = "Erweiterungen konfigurieren"
-    $btnExtensionLaunchOptions.Location = New-Object System.Drawing.Point(15, 388)
-    $btnExtensionLaunchOptions.Size = New-Object System.Drawing.Size(220, 30)
-    $btnExtensionLaunchOptions.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
-    $btnExtensionLaunchOptions.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(0, 122, 204)
-    $btnExtensionLaunchOptions.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
-    $btnExtensionLaunchOptions.ForeColor = [System.Drawing.Color]::White
-    $btnExtensionLaunchOptions.Add_Click({
-            if (-not (Get-Command -Name Show-ExtensionStartupSettingsDialog -ErrorAction SilentlyContinue)) {
-                [System.Windows.Forms.MessageBox]::Show(
-                    'Die Erweiterungs-Konfiguration ist aktuell nicht verfügbar.',
-                    'Nicht verfügbar',
-                    [System.Windows.Forms.MessageBoxButtons]::OK,
-                    [System.Windows.Forms.MessageBoxIcon]::Information
-                ) | Out-Null
-                return
-            }
-
-            Show-ExtensionStartupSettingsDialog -Owner $settingsForm -OutputBox $OutputBox
-        })
-    $tabBehavior.Controls.Add($btnExtensionLaunchOptions)
-    
     # Tab 5: System-Einstellungen
     $tabSystem_Settings = New-Object System.Windows.Forms.TabPage
     $tabSystem_Settings.Text = "System"
@@ -2629,9 +2588,7 @@ function Show-SettingsDialog {
                 AutoStartPythonDashboardOnAppStart = $chkAutoStartPyDashboard.Checked
                 AutoStartPythonDashboardOnWindowsLogin = $chkPyDashboardWindowsLogin.Checked
                 AutoStartGuiOnWindowsLogin = $chkGuiWindowsLogin.Checked
-                AutoStartExtensionsOnWindowsLogin = $chkAutoStartExtensionsWindowsLogin.Checked
                 MinimizeToTrayOnMinimizeClick = $chkMinimizeToTrayOnMinimizeClick.Checked
-                ShowExtensionsInTrayMenu = $chkShowExtensionsInTrayMenu.Checked
             }
 
             # Optional: Registry-Autostart fuer Python-Dashboard sofort umsetzen
@@ -2755,9 +2712,7 @@ function Show-SettingsDialog {
             $OutputBox.AppendText("- Python-Dashboard Auto-Start (App): $($script:settings.AutoStartPythonDashboardOnAppStart)`r`n")
             $OutputBox.AppendText("- Python-Dashboard Auto-Start (Windows): $($script:settings.AutoStartPythonDashboardOnWindowsLogin)`r`n")
             $OutputBox.AppendText("- Bockis GUI Auto-Start (Windows): $($script:settings.AutoStartGuiOnWindowsLogin)`r`n")
-            $OutputBox.AppendText("- Erweiterungen Auto-Start (Windows): $($script:settings.AutoStartExtensionsOnWindowsLogin)`r`n")
             $OutputBox.AppendText("- Beim Minimieren in den Tray: $($script:settings.MinimizeToTrayOnMinimizeClick)`r`n")
-            $OutputBox.AppendText("- Erweiterungen im Tray-Menue: $($script:settings.ShowExtensionsInTrayMenu)`r`n")
             
             # Zeige Farb-Änderungen an
             $colorCount = if ($script:settings.ColorScheme.Output.Colors) { $script:settings.ColorScheme.Output.Colors.Count } else { 0 }
