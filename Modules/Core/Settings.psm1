@@ -218,12 +218,14 @@ function Initialize-SystemToolSettings {
         AutoStartPythonDashboardOnAppStart = $false
         AutoStartPythonDashboardOnWindowsLogin = $false
         AutoStartGuiOnWindowsLogin = $false
+        AutoStartExtensionsOnWindowsLogin = $false
         UseModernSettingsDialog = $true
         StartupProfile      = "Standard"
         RunNetworkScanAtStartup = $false
         RunSmartRepairAtStartup = $false
         MinimizeToTrayOnStartup = $false
         MinimizeToTrayOnMinimizeClick = $false
+        ShowExtensionsInTrayMenu = $true
         EnableWin11ServiceHints = $true
         EnableExperimentalTweaks = $false
         ColorScheme         = Get-DefaultColorScheme
@@ -297,6 +299,10 @@ function Import-SystemToolSettings {
                 $settingsHashtable["AutoStartGuiOnWindowsLogin"] = $false
                 $needsSave = $true
             }
+            if (-not $settingsHashtable.ContainsKey("AutoStartExtensionsOnWindowsLogin")) {
+                $settingsHashtable["AutoStartExtensionsOnWindowsLogin"] = $false
+                $needsSave = $true
+            }
             if (-not $settingsHashtable.ContainsKey("UseModernSettingsDialog")) {
                 $settingsHashtable["UseModernSettingsDialog"] = $true
                 $needsSave = $true
@@ -319,6 +325,10 @@ function Import-SystemToolSettings {
             }
             if (-not $settingsHashtable.ContainsKey("MinimizeToTrayOnMinimizeClick")) {
                 $settingsHashtable["MinimizeToTrayOnMinimizeClick"] = $false
+                $needsSave = $true
+            }
+            if (-not $settingsHashtable.ContainsKey("ShowExtensionsInTrayMenu")) {
+                $settingsHashtable["ShowExtensionsInTrayMenu"] = $true
                 $needsSave = $true
             }
             if (-not $settingsHashtable.ContainsKey("EnableWin11ServiceHints")) {
@@ -764,6 +774,153 @@ function Ensure-SettingsWpfAssemblies {
     Add-Type -AssemblyName WindowsBase
 }
 
+function Get-SettingsPathMap {
+    $guiRoot = $PSScriptRoot | Split-Path | Split-Path
+
+    return @{
+        Logs = Join-Path $guiRoot 'Data\Logs'
+        Database = Join-Path $guiRoot 'Data\Database'
+        Install = $guiRoot
+        Download = Join-Path $guiRoot 'Data\ToolDownloads'
+        ToolsInstall = $env:ProgramFiles
+    }
+}
+
+function Open-SettingsPathByKey {
+    param([Parameter(Mandatory = $true)][string]$PathKey)
+
+    $pathMap = Get-SettingsPathMap
+    if (-not $pathMap.ContainsKey($PathKey)) {
+        throw "Unbekannter Pfad-Schluessel: $PathKey"
+    }
+
+    $targetPath = [string]$pathMap[$PathKey]
+    if (-not (Test-Path $targetPath)) {
+        throw "Verzeichnis nicht gefunden: $targetPath"
+    }
+
+    Start-Process 'explorer.exe' -ArgumentList $targetPath | Out-Null
+}
+
+function Reset-SettingsLogFiles {
+    $logsPath = (Get-SettingsPathMap).Logs
+    $logFiles = @(
+        'CHKDSK.log',
+        'DefenderOfflineScan.log',
+        'DISM-Check.log',
+        'DISM-Scan.log',
+        'FullMRT.log',
+        'gui_closing.log',
+        'QuickMRT.log',
+        'SFCCheck.log',
+        'WindowsDefender.log',
+        'WindowsUpdate.log'
+    )
+
+    $deletedCount = 0
+    $errors = New-Object System.Collections.Generic.List[string]
+
+    foreach ($logFile in $logFiles) {
+        $filePath = Join-Path $logsPath $logFile
+        if (-not (Test-Path $filePath)) { continue }
+
+        try {
+            Remove-Item -Path $filePath -Force -ErrorAction Stop
+            $deletedCount++
+        }
+        catch {
+            [void]$errors.Add("$logFile`: $($_.Exception.Message)")
+        }
+    }
+
+    return [pscustomobject]@{
+        LogPath = $logsPath
+        DeletedCount = $deletedCount
+        Errors = @($errors)
+    }
+}
+
+function Invoke-SettingsAction {
+    param(
+        [Parameter(Mandatory = $true)][string]$ActionKey,
+        [System.Windows.Forms.Form]$MainForm,
+        [System.Windows.Forms.RichTextBox]$OutputBox,
+        [System.Collections.Hashtable]$MainPanels
+    )
+
+    switch ($ActionKey) {
+        'ManageExtensionLaunchOptions' {
+            if (-not (Get-Command -Name Show-ExtensionStartupSettingsDialog -ErrorAction SilentlyContinue)) {
+                throw 'Die Erweiterungs-Konfiguration ist aktuell nicht verfügbar.'
+            }
+
+            Show-ExtensionStartupSettingsDialog -Owner $MainForm -OutputBox $OutputBox
+            return
+        }
+        'RestartDefenderServices' {
+            if (-not (Get-Command -Name Restart-DefenderService -ErrorAction SilentlyContinue)) {
+                throw 'Restart-DefenderService ist nicht verfügbar.'
+            }
+
+            if (Get-Command -Name Switch-ToOutputTab -ErrorAction SilentlyContinue) {
+                Switch-ToOutputTab
+            }
+            if ($OutputBox) { $OutputBox.Clear() }
+            if (Get-Command -Name Update-ProgressStatus -ErrorAction SilentlyContinue) {
+                Update-ProgressStatus -StatusText 'Windows Defender-Dienst Neustart wird vorbereitet...' -ProgressValue 0 -TextColor ([System.Drawing.Color]::White)
+            }
+
+            Restart-DefenderService -outputBox $OutputBox -progressBar $global:progressBar -MainForm $MainForm
+            return
+        }
+        'ResetLogs' {
+            $confirm = [System.Windows.Forms.MessageBox]::Show(
+                "Möchten Sie wirklich alle Log-Dateien zurücksetzen?`n`nDiese Aktion kann nicht rückgängig gemacht werden.",
+                'Logs zurücksetzen',
+                [System.Windows.Forms.MessageBoxButtons]::YesNo,
+                [System.Windows.Forms.MessageBoxIcon]::Warning
+            )
+
+            if ($confirm -ne [System.Windows.Forms.DialogResult]::Yes) { return }
+
+            $result = Reset-SettingsLogFiles
+            if ($result.Errors.Count -eq 0) {
+                [System.Windows.Forms.MessageBox]::Show(
+                    "Erfolgreich $($result.DeletedCount) Log-Dateien zurückgesetzt.`n`nVerzeichnis:`n$($result.LogPath)",
+                    'Logs erfolgreich zurückgesetzt',
+                    [System.Windows.Forms.MessageBoxButtons]::OK,
+                    [System.Windows.Forms.MessageBoxIcon]::Information
+                ) | Out-Null
+            }
+            else {
+                $errorText = ($result.Errors -join "`n")
+                [System.Windows.Forms.MessageBox]::Show(
+                    "Log-Reset teilweise erfolgreich:`n`n$($result.DeletedCount) Dateien gelöscht.`n`nFehler:`n$errorText",
+                    'Log-Reset mit Fehlern',
+                    [System.Windows.Forms.MessageBoxButtons]::OK,
+                    [System.Windows.Forms.MessageBoxIcon]::Warning
+                ) | Out-Null
+            }
+            return
+        }
+        'OpenLogFolder' { Open-SettingsPathByKey -PathKey 'Logs'; return }
+        'OpenDatabaseOverview' {
+            if (Get-Command -Name Show-DatabaseOverview -ErrorAction SilentlyContinue) {
+                Show-DatabaseOverview
+                return
+            }
+
+            throw 'Show-DatabaseOverview ist nicht verfügbar.'
+        }
+        'OpenPathLogs' { Open-SettingsPathByKey -PathKey 'Logs'; return }
+        'OpenPathDatabase' { Open-SettingsPathByKey -PathKey 'Database'; return }
+        'OpenPathInstall' { Open-SettingsPathByKey -PathKey 'Install'; return }
+        'OpenPathDownload' { Open-SettingsPathByKey -PathKey 'Download'; return }
+        'OpenPathToolsInstall' { Open-SettingsPathByKey -PathKey 'ToolsInstall'; return }
+        default { throw "Unbekannte Settings-Action: $ActionKey" }
+    }
+}
+
 function Get-SettingsRegistry {
     return @(
         [PSCustomObject]@{ Category = 'Allgemein'; Group = 'Symbol-Farben'; Type = 'Color'; SettingKey = 'Color.Success'; ColorKey = 'Success'; Label = '[√] Erfolg'; PreviewIcon = '[√]'; Description = 'Farbe für Erfolgs-Symbole und Success-Ausgaben.' }
@@ -774,9 +931,21 @@ function Get-SettingsRegistry {
         [PSCustomObject]@{ Category = 'Allgemein'; Group = 'Symbol-Farben'; Type = 'Color'; SettingKey = 'Color.Alert'; ColorKey = 'Alert'; Label = 'Hinweis'; PreviewIcon = '[⚠]'; Description = 'Farbe für Hinweise/Alert-Symbole.' }
         [PSCustomObject]@{ Category = 'Allgemein'; Group = 'Anzeige'; Type = 'Choice'; SettingKey = 'FontSize'; Label = 'Schriftgröße'; Description = 'Steuert die Basis-Schriftgröße für Ausgaben.'; Options = @(8, 9, 10, 11, 12, 14) }
         [PSCustomObject]@{ Category = 'Allgemein'; Group = 'Anzeige'; Type = 'Toggle'; SettingKey = 'SaveWindowSize'; Label = 'Fenstergröße und Position speichern'; Description = 'Speichert Größe und Position beim Beenden.' }
+        [PSCustomObject]@{ Category = 'Monitoring'; Group = 'Überwachung'; Type = 'Choice'; SettingKey = 'UpdateInterval'; Label = 'Update-Intervall (ms)'; Description = 'Aktualisierungsintervall für die Hardware-Überwachung.'; Options = @(500, 750, 1000, 1500, 2000, 3000, 5000, 10000) }
+        [PSCustomObject]@{ Category = 'Monitoring'; Group = 'Schwellenwerte'; Type = 'Choice'; SettingKey = 'CpuThreshold'; Label = 'CPU-Warnschwelle (%)'; Description = 'Ab welcher CPU-Last eine Warnung angezeigt wird.'; Options = @(50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100) }
+        [PSCustomObject]@{ Category = 'Monitoring'; Group = 'Schwellenwerte'; Type = 'Choice'; SettingKey = 'RamThreshold'; Label = 'RAM-Warnschwelle (%)'; Description = 'Ab welcher RAM-Auslastung eine Warnung angezeigt wird.'; Options = @(50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100) }
+        [PSCustomObject]@{ Category = 'Monitoring'; Group = 'Schwellenwerte'; Type = 'Choice'; SettingKey = 'GpuThreshold'; Label = 'GPU-Warnschwelle (%)'; Description = 'Ab welcher GPU-Auslastung eine Warnung angezeigt wird.'; Options = @(50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100) }
+        [PSCustomObject]@{ Category = 'Monitoring'; Group = 'Überwachung'; Type = 'Toggle'; SettingKey = 'EnableNotifications'; Label = 'Benachrichtigungen aktivieren'; Description = 'Aktiviert visuelle Warnungen bei überschrittenen Schwellenwerten.' }
+        [PSCustomObject]@{ Category = 'Logs'; Group = 'Protokollierung'; Type = 'Choice'; SettingKey = 'LogLevel'; Label = 'Log-Detailgrad'; Description = 'Legt fest, wie ausführlich Logs geschrieben werden.'; Options = @('Minimal', 'Standard', 'Detailliert', 'Debug') }
+        [PSCustomObject]@{ Category = 'Logs'; Group = 'Protokollierung'; Type = 'Toggle'; SettingKey = 'AutoSaveLogs'; Label = 'Logs automatisch speichern'; Description = 'Speichert Protokolle automatisch beim Lauf.' }
+        [PSCustomObject]@{ Category = 'Logs'; Group = 'Aktionen'; Type = 'Action'; SettingKey = 'ResetLogsAction'; Label = 'Alle Logs zurücksetzen'; Description = 'Löscht die wichtigsten Log-Dateien im Data\Logs-Verzeichnis.'; ButtonText = 'Logs zurücksetzen'; ActionCommand = 'Invoke-SettingsAction'; ActionKey = 'ResetLogs' }
+        [PSCustomObject]@{ Category = 'Logs'; Group = 'Aktionen'; Type = 'Action'; SettingKey = 'OpenLogsFolderAction'; Label = 'Log-Ordner öffnen'; Description = 'Öffnet das Log-Verzeichnis im Explorer.'; ButtonText = 'Log-Ordner öffnen'; ActionCommand = 'Invoke-SettingsAction'; ActionKey = 'OpenLogFolder' }
+        [PSCustomObject]@{ Category = 'Logs'; Group = 'Aktionen'; Type = 'Action'; SettingKey = 'OpenDatabaseOverviewAction'; Label = 'Datenbank-Übersicht'; Description = 'Öffnet die Datenbank-Übersicht.'; ButtonText = 'Datenbank-Übersicht öffnen'; ActionCommand = 'Invoke-SettingsAction'; ActionKey = 'OpenDatabaseOverview' }
         [PSCustomObject]@{ Category = 'System'; Group = 'Verhalten'; Type = 'Toggle'; SettingKey = 'ConfirmActions'; Label = 'Aktionen bestätigen'; Description = 'Zeigt eine Bestätigung vor kritischen Aktionen.' }
+        [PSCustomObject]@{ Category = 'System'; Group = 'Verhalten'; Type = 'Toggle'; SettingKey = 'AdvancedCleanup'; Label = 'Erweiterte Bereinigung'; Description = 'Aktiviert erweiterte Bereinigungsfunktionen.' }
         [PSCustomObject]@{ Category = 'System'; Group = 'Verhalten'; Type = 'Toggle'; SettingKey = 'CheckUpdates'; Label = 'Automatisch nach Updates suchen'; Description = 'Aktiviert die Update-Prüfung beim Start.' }
         [PSCustomObject]@{ Category = 'System'; Group = 'Verhalten'; Type = 'Toggle'; SettingKey = 'ShowSplash'; Label = 'Splash-Screen anzeigen'; Description = 'Zeigt beim Programmstart den Splash-Screen.' }
+        [PSCustomObject]@{ Category = 'System'; Group = 'Wartung'; Type = 'Action'; SettingKey = 'RestartDefenderServicesAction'; Label = 'Windows Defender-Dienste neu starten'; Description = 'Startet Defender-Dienste neu, wenn Scans hängen oder Probleme auftreten.'; ButtonText = 'Defender-Dienste neu starten'; ActionCommand = 'Invoke-SettingsAction'; ActionKey = 'RestartDefenderServices' }
         [PSCustomObject]@{ Category = 'Startup'; Group = 'Profile'; Type = 'Choice'; SettingKey = 'StartupProfile'; Label = 'Startup-Profil'; Description = 'Vordefiniertes Verhalten beim Start.'; Options = @('Standard', 'Leicht', 'Diagnose', 'Performance') }
         [PSCustomObject]@{ Category = 'Startup'; Group = 'Ablauf'; Type = 'Toggle'; SettingKey = 'AutoStartPythonDashboardOnAppStart'; Label = 'Python-Dashboard bei App-Start'; Description = 'Startet das Dashboard direkt beim Öffnen von Bockis.' }
         [PSCustomObject]@{ Category = 'Startup'; Group = 'Ablauf'; Type = 'Toggle'; SettingKey = 'AutoStartPythonDashboardOnWindowsLogin'; Label = 'Python-Dashboard bei Windows-Login'; Description = 'Registriert Dashboard-Start beim Benutzer-Login.' }
@@ -785,6 +954,14 @@ function Get-SettingsRegistry {
         [PSCustomObject]@{ Category = 'Startup'; Group = 'Ablauf'; Type = 'Toggle'; SettingKey = 'RunSmartRepairAtStartup'; Label = 'Smart Repair beim Start'; Description = 'Führt nach Start Smart Repair aus.' }
         [PSCustomObject]@{ Category = 'Startup'; Group = 'Ablauf'; Type = 'Toggle'; SettingKey = 'MinimizeToTrayOnStartup'; Label = 'Beim Start minimiert im Tray'; Description = 'Öffnet die GUI minimiert im Infobereich.' }
         [PSCustomObject]@{ Category = 'Startup'; Group = 'Ablauf'; Type = 'Toggle'; SettingKey = 'MinimizeToTrayOnMinimizeClick'; Label = 'Beim Minimieren in den Tray'; Description = 'Der Minimize-Button versteckt die GUI im Infobereich statt nur in der Taskleiste.' }
+        [PSCustomObject]@{ Category = 'Startup'; Group = 'Erweiterungen'; Type = 'Toggle'; SettingKey = 'AutoStartExtensionsOnWindowsLogin'; Label = 'Erweiterungen bei Windows-Login starten'; Description = 'Startet markierte Erweiterungen automatisch, wenn die GUI durch den Windows-Login gestartet wird.' }
+        [PSCustomObject]@{ Category = 'Startup'; Group = 'Erweiterungen'; Type = 'Toggle'; SettingKey = 'ShowExtensionsInTrayMenu'; Label = 'Erweiterungen im Tray-Menü anzeigen'; Description = 'Blendet ein dynamisches Tray-Untermenü für dafür markierte Erweiterungen ein.' }
+        [PSCustomObject]@{ Category = 'Startup'; Group = 'Erweiterungen'; Type = 'Action'; SettingKey = 'ManageExtensionLaunchOptions'; Label = 'Erweiterungs-Startoptionen'; Description = 'Öffnet die detailierte Konfiguration pro Erweiterung für Windows-Login und Tray.'; ButtonText = 'Erweiterungen konfigurieren'; ActionCommand = 'Invoke-SettingsAction'; ActionKey = 'ManageExtensionLaunchOptions' }
+        [PSCustomObject]@{ Category = 'Pfade'; Group = 'Verzeichnisse'; Type = 'Action'; SettingKey = 'OpenPathLogsAction'; Label = 'Logs-Verzeichnis'; Description = 'Öffnet das Verzeichnis mit allen Log-Dateien.'; ButtonText = 'Logs öffnen'; ActionCommand = 'Invoke-SettingsAction'; ActionKey = 'OpenPathLogs' }
+        [PSCustomObject]@{ Category = 'Pfade'; Group = 'Verzeichnisse'; Type = 'Action'; SettingKey = 'OpenPathDatabaseAction'; Label = 'Datenbank-Verzeichnis'; Description = 'Öffnet das SQLite-Datenbankverzeichnis.'; ButtonText = 'Datenbank öffnen'; ActionCommand = 'Invoke-SettingsAction'; ActionKey = 'OpenPathDatabase' }
+        [PSCustomObject]@{ Category = 'Pfade'; Group = 'Verzeichnisse'; Type = 'Action'; SettingKey = 'OpenPathInstallAction'; Label = 'Installations-Verzeichnis'; Description = 'Öffnet das Hauptverzeichnis der GUI-Anwendung.'; ButtonText = 'Installation öffnen'; ActionCommand = 'Invoke-SettingsAction'; ActionKey = 'OpenPathInstall' }
+        [PSCustomObject]@{ Category = 'Pfade'; Group = 'Verzeichnisse'; Type = 'Action'; SettingKey = 'OpenPathDownloadAction'; Label = 'Tool-Downloads'; Description = 'Öffnet das Download-Verzeichnis für Tools.'; ButtonText = 'Downloads öffnen'; ActionCommand = 'Invoke-SettingsAction'; ActionKey = 'OpenPathDownload' }
+        [PSCustomObject]@{ Category = 'Pfade'; Group = 'Verzeichnisse'; Type = 'Action'; SettingKey = 'OpenPathToolsInstallAction'; Label = 'Tool-Installationen'; Description = 'Öffnet den Standardpfad für Tool-Installationen.'; ButtonText = 'Tool-Installationen öffnen'; ActionCommand = 'Invoke-SettingsAction'; ActionKey = 'OpenPathToolsInstall' }
         [PSCustomObject]@{ Category = 'Tweaks'; Group = 'Windows 11 Services'; Type = 'Toggle'; SettingKey = 'EnableWin11ServiceHints'; Label = 'Win11-Service-Hinweise anzeigen'; Description = 'Aktiviert kontextbasierte Hinweise für Services und ms-settings Ziele.' }
         [PSCustomObject]@{ Category = 'Tweaks'; Group = 'Erweitert'; Type = 'Toggle'; SettingKey = 'EnableExperimentalTweaks'; Label = 'Experimentelle Tweaks erlauben'; Description = 'Schaltet zukünftige experimentelle Tweak-Optionen frei.' }
     )
@@ -805,10 +982,14 @@ function Show-SettingsDialogModern {
     Ensure-SettingsWpfAssemblies
 
     $registry = @(Get-SettingsRegistry)
-    if ($registry.Count -eq 0) { return 'legacy' }
+    if ($registry.Count -eq 0) {
+        throw 'Settings-Registry ist leer.'
+    }
 
     $settingsSnapshot = ConvertTo-SettingsHashtable -InputObject (Get-SystemToolSettings)
-    if ($settingsSnapshot -isnot [hashtable]) { return 'legacy' }
+    if ($settingsSnapshot -isnot [hashtable]) {
+        throw 'Einstellungen konnten nicht als Hashtable geladen werden.'
+    }
 
     $defaultScheme = Get-DefaultColorScheme
 
@@ -965,7 +1146,6 @@ function Show-SettingsDialogModern {
         param([string]$category)
 
         $settingsHost.Children.Clear()
-        $controlMap.Clear()
         $groupLabels.Clear()
         $txtCategory.Text = $category
 
@@ -1004,7 +1184,18 @@ function Show-SettingsDialogModern {
             $desc.TextWrapping = 'Wrap'
             $stack.Children.Add($desc)
 
-            $currentValue = if ($settingsSnapshot.ContainsKey($def.SettingKey)) { $settingsSnapshot[$def.SettingKey] } else { $null }
+            $currentValue = $null
+            if ($controlMap.ContainsKey($def.SettingKey)) {
+                $existingControl = $controlMap[$def.SettingKey].Control
+                switch ($def.Type) {
+                    'Toggle' { $currentValue = [bool]$existingControl.IsChecked }
+                    'Choice' { $currentValue = "$($existingControl.SelectedItem)" }
+                    'Color' { $currentValue = "$($existingControl.SelectedHex)" }
+                }
+            }
+            elseif ($settingsSnapshot.ContainsKey($def.SettingKey)) {
+                $currentValue = $settingsSnapshot[$def.SettingKey]
+            }
 
             switch ($def.Type) {
                 'Toggle' {
@@ -1017,8 +1208,21 @@ function Show-SettingsDialogModern {
                 'Choice' {
                     $ctrl = New-Object System.Windows.Controls.ComboBox
                     $ctrl.Height = 30
-                    $ctrl.Background = ([System.Windows.Media.BrushConverter]::new().ConvertFrom('#2B2B2B'))
-                    $ctrl.Foreground = ([System.Windows.Media.BrushConverter]::new().ConvertFrom('#E6E6E6'))
+                    $ctrl.IsEditable = $false
+                    $ctrl.Background = ([System.Windows.Media.BrushConverter]::new().ConvertFrom('#F0F0F0'))
+                    $ctrl.Foreground = ([System.Windows.Media.BrushConverter]::new().ConvertFrom('#111111'))
+                    $ctrl.BorderBrush = ([System.Windows.Media.BrushConverter]::new().ConvertFrom('#8A8A8A'))
+
+                    # Lesbare Dropdown-Eintraege: dunkle Schrift auf hellem Listenhintergrund.
+                    $dropItemBg = ([System.Windows.Media.BrushConverter]::new().ConvertFrom('#F0F0F0'))
+                    $dropItemFg = ([System.Windows.Media.BrushConverter]::new().ConvertFrom('#111111'))
+                    $dropItemPadding = New-Object System.Windows.Thickness -ArgumentList 6,3,6,3
+                    $comboItemStyle = New-Object System.Windows.Style -ArgumentList ([System.Windows.Controls.ComboBoxItem])
+                    $comboItemStyle.Setters.Add((New-Object System.Windows.Setter -ArgumentList ([System.Windows.Controls.Control]::BackgroundProperty, $dropItemBg))) | Out-Null
+                    $comboItemStyle.Setters.Add((New-Object System.Windows.Setter -ArgumentList ([System.Windows.Controls.Control]::ForegroundProperty, $dropItemFg))) | Out-Null
+                    $comboItemStyle.Setters.Add((New-Object System.Windows.Setter -ArgumentList ([System.Windows.Controls.Control]::PaddingProperty, $dropItemPadding))) | Out-Null
+                    $ctrl.ItemContainerStyle = $comboItemStyle
+
                     foreach ($opt in @($def.Options)) { [void]$ctrl.Items.Add("$opt") }
                     $selected = if ($null -ne $currentValue) { "$currentValue" } else { "$($def.Options[0])" }
                     $ctrl.SelectedItem = $selected
@@ -1055,7 +1259,7 @@ function Show-SettingsDialogModern {
                     [System.Windows.Controls.Grid]::SetColumn($preview, 2)
                     $colorRow.Children.Add($preview)
 
-                    $initialHex = & $getColorHex $def.ColorKey
+                    $initialHex = if (-not [string]::IsNullOrWhiteSpace("$currentValue")) { "$currentValue" } else { & $getColorHex $def.ColorKey }
                     $colorState = [PSCustomObject]@{
                         PickButton = $pickBtn
                         ResetButton = $resetBtn
@@ -1089,6 +1293,58 @@ function Show-SettingsDialogModern {
 
                     $stack.Children.Add($colorRow)
                     $ctrl = $colorState
+                }
+                'Action' {
+                    $actionCommandName = if ($def.PSObject.Properties.Name -contains 'ActionCommand') { [string]$def.ActionCommand } else { '' }
+                    $actionKeyName = if ($def.PSObject.Properties.Name -contains 'ActionKey') { [string]$def.ActionKey } else { '' }
+                    $ctrl = New-Object System.Windows.Controls.Button
+                    $ctrl.Content = if ($def.PSObject.Properties.Name -contains 'ButtonText' -and -not [string]::IsNullOrWhiteSpace([string]$def.ButtonText)) { [string]$def.ButtonText } else { 'Öffnen' }
+                    $ctrl.Height = 32
+                    $ctrl.Background = ([System.Windows.Media.BrushConverter]::new().ConvertFrom('#0E7490'))
+                    $ctrl.Foreground = ([System.Windows.Media.BrushConverter]::new().ConvertFrom('#FFFFFF'))
+                    $ctrl.BorderThickness = '0'
+                    $ctrl.Cursor = 'Hand'
+                    
+                    # Lokale Funktionen im Button-Scope verfügbar machen
+                        $localInvokeSettingsAction = ${function:'Invoke-SettingsAction'}
+                        $localOpenSettingsPathByKey = ${function:'Open-SettingsPathByKey'}
+                        $localResetSettingsLogFiles = ${function:'Reset-SettingsLogFiles'}
+                        $localShowDatabaseOverview = ${function:'Show-DatabaseOverview'}
+                        $localShowExtensionStartupSettingsDialog = ${function:'Show-ExtensionStartupSettingsDialog'}
+                    
+                    $ctrl.Add_Click({
+                            if ([string]::IsNullOrWhiteSpace($actionCommandName) -or -not (Get-Command -Name $actionCommandName -ErrorAction SilentlyContinue)) {
+                                $errorMsg = switch ($actionKeyName) {
+                                    'ManageExtensionLaunchOptions' { 'Die Erweiterungs-Konfiguration ist aktuell nicht verfügbar.' }
+                                    'RestartDefenderServices' { 'Der Defender-Service-Handler ist nicht verfügbar.' }
+                                    'OpenDatabaseOverview' { 'Die Datenbank-Übersicht ist nicht verfügbar.' }
+                                    {$_ -match '^OpenPath'} { "Das Verzeichnis konnte nicht geöffnet werden: Handler nicht verfügbar." }
+                                    {$_ -match '^ResetLogs'} { 'Das Log-Reset ist nicht verfügbar.' }
+                                    default { "Die Aktion '$actionKeyName' ist nicht verfügbar." }
+                                }
+                                [System.Windows.MessageBox]::Show($errorMsg, 'Nicht verfügbar', 'OK', 'Information') | Out-Null
+                                return
+                            }
+
+                            try {
+                                if ($actionCommandName -eq 'Invoke-SettingsAction') {
+                                    & $localInvokeSettingsAction -ActionKey $actionKeyName -MainForm $MainForm -OutputBox $OutputBox -MainPanels $MainPanels | Out-Null
+                                }
+                                else {
+                                    & $actionCommandName -Owner $MainForm -OutputBox $OutputBox | Out-Null
+                                }
+                            }
+                            catch {
+                                $errorMsg = switch ($actionKeyName) {
+                                    {$_ -match '^OpenPath'} { "Fehler beim Öffnen des Verzeichnisses:`n$_" }
+                                    'ResetLogs' { "Fehler beim Zurücksetzen der Logs:`n$_" }
+                                    'ManageExtensionLaunchOptions' { "Fehler beim Öffnen der Erweiterungskonfiguration:`n$_" }
+                                    default { "Fehler bei der Aktion '$actionKeyName':`n$_" }
+                                }
+                                [System.Windows.MessageBox]::Show($errorMsg, 'Fehler', 'OK', 'Error') | Out-Null
+                            }
+                        })
+                    $stack.Children.Add($ctrl)
                 }
             }
 
@@ -1125,7 +1381,7 @@ function Show-SettingsDialogModern {
                         $selected = "$($def.Options[0])"
                     }
 
-                    if ($def.SettingKey -eq 'FontSize') {
+                    if ($def.SettingKey -in @('FontSize', 'UpdateInterval', 'CpuThreshold', 'RamThreshold', 'GpuThreshold')) {
                         $intValue = 10
                         [void][int]::TryParse($selected, [ref]$intValue)
                         $updatedSettings[$def.SettingKey] = $intValue
@@ -1149,6 +1405,8 @@ function Show-SettingsDialogModern {
 
                     $updatedSettings.ColorScheme.Output.Colors[$def.ColorKey] = $selectedHex
                 }
+                'Action' {
+                }
             }
         }
 
@@ -1169,6 +1427,15 @@ function Show-SettingsDialogModern {
             }
             catch {
                 Write-Verbose "GUI Startup-Registrierung konnte nicht aktualisiert werden: $_"
+            }
+        }
+
+        if (Get-Command -Name Refresh-ExtensionTrayMenu -ErrorAction SilentlyContinue) {
+            try {
+                Refresh-ExtensionTrayMenu
+            }
+            catch {
+                Write-Verbose "Extension-Tray-Menue konnte nicht aktualisiert werden: $_"
             }
         }
 
@@ -1219,7 +1486,15 @@ function Show-SettingsDialogModern {
         $lstCategories.SelectedIndex = 0
     }
 
-    $null = $window.ShowDialog()
+    try {
+        $null = $window.ShowDialog()
+    }
+    catch {
+        $innerMessage = if ($_.Exception -and $_.Exception.InnerException) { $_.Exception.InnerException.ToString() } else { '<keine InnerException>' }
+        $stackMessage = if ($_.ScriptStackTrace) { $_.ScriptStackTrace } else { '<kein ScriptStackTrace>' }
+        throw "Show-SettingsDialogModern fehlgeschlagen.`r`nException: $($_.Exception)`r`nInnerException: $innerMessage`r`nScriptStackTrace: $stackMessage"
+    }
+
     if ("$($window.Tag)" -eq 'legacy') { return 'legacy' }
 
     return 'handled'
@@ -1273,7 +1548,14 @@ function Show-SettingsDialog {
             }
         }
         catch {
-            Write-Verbose "Modernes Einstellungsmenue konnte nicht gestartet werden, fallback auf Legacy: $_"
+            Write-Verbose "Modernes Einstellungsmenue konnte nicht gestartet werden: $_"
+            [System.Windows.Forms.MessageBox]::Show(
+                "Das moderne Einstellungsmenue ist auf einen Fehler gelaufen.`r`n`r`nDetails:`r`n$_`r`n`r`nDie Legacy-Ansicht wird nur ueber den Button 'Legacy Ansicht' geoeffnet.",
+                'Einstellungen (Modern) - Fehler',
+                [System.Windows.Forms.MessageBoxButtons]::OK,
+                [System.Windows.Forms.MessageBoxIcon]::Error
+            ) | Out-Null
+            return
         }
     }
     
@@ -1927,14 +2209,55 @@ function Show-SettingsDialog {
     $chkGuiWindowsLogin.Checked = [bool]$script:settings.AutoStartGuiOnWindowsLogin
     $tabBehavior.Controls.Add($chkGuiWindowsLogin)
 
+    # Beim Windows-Login konfigurierte Erweiterungen mitstarten
+    $chkAutoStartExtensionsWindowsLogin = New-Object System.Windows.Forms.CheckBox
+    $chkAutoStartExtensionsWindowsLogin.Text = "Konfigurierte Erweiterungen beim Windows-Login starten"
+    $chkAutoStartExtensionsWindowsLogin.Location = New-Object System.Drawing.Point(15, 285)
+    $chkAutoStartExtensionsWindowsLogin.Size = New-Object System.Drawing.Size(520, 25)
+    $chkAutoStartExtensionsWindowsLogin.ForeColor = $textColor
+    $chkAutoStartExtensionsWindowsLogin.Checked = [bool]$script:settings.AutoStartExtensionsOnWindowsLogin
+    $tabBehavior.Controls.Add($chkAutoStartExtensionsWindowsLogin)
+
     # Beim Klick auf Minimieren in den Tray wechseln
     $chkMinimizeToTrayOnMinimizeClick = New-Object System.Windows.Forms.CheckBox
     $chkMinimizeToTrayOnMinimizeClick.Text = "Beim Klick auf Minimieren in den Tray"
-    $chkMinimizeToTrayOnMinimizeClick.Location = New-Object System.Drawing.Point(15, 285)
+    $chkMinimizeToTrayOnMinimizeClick.Location = New-Object System.Drawing.Point(15, 320)
     $chkMinimizeToTrayOnMinimizeClick.Size = New-Object System.Drawing.Size(520, 25)
     $chkMinimizeToTrayOnMinimizeClick.ForeColor = $textColor
     $chkMinimizeToTrayOnMinimizeClick.Checked = [bool]$script:settings.MinimizeToTrayOnMinimizeClick
     $tabBehavior.Controls.Add($chkMinimizeToTrayOnMinimizeClick)
+
+    # Erweiterungen im Tray-Menue anzeigen
+    $chkShowExtensionsInTrayMenu = New-Object System.Windows.Forms.CheckBox
+    $chkShowExtensionsInTrayMenu.Text = "Erweiterungen im Tray-Menue anzeigen"
+    $chkShowExtensionsInTrayMenu.Location = New-Object System.Drawing.Point(15, 355)
+    $chkShowExtensionsInTrayMenu.Size = New-Object System.Drawing.Size(520, 25)
+    $chkShowExtensionsInTrayMenu.ForeColor = $textColor
+    $chkShowExtensionsInTrayMenu.Checked = [bool]$script:settings.ShowExtensionsInTrayMenu
+    $tabBehavior.Controls.Add($chkShowExtensionsInTrayMenu)
+
+    $btnExtensionLaunchOptions = New-Object System.Windows.Forms.Button
+    $btnExtensionLaunchOptions.Text = "Erweiterungen konfigurieren"
+    $btnExtensionLaunchOptions.Location = New-Object System.Drawing.Point(15, 388)
+    $btnExtensionLaunchOptions.Size = New-Object System.Drawing.Size(220, 30)
+    $btnExtensionLaunchOptions.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+    $btnExtensionLaunchOptions.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(0, 122, 204)
+    $btnExtensionLaunchOptions.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
+    $btnExtensionLaunchOptions.ForeColor = [System.Drawing.Color]::White
+    $btnExtensionLaunchOptions.Add_Click({
+            if (-not (Get-Command -Name Show-ExtensionStartupSettingsDialog -ErrorAction SilentlyContinue)) {
+                [System.Windows.Forms.MessageBox]::Show(
+                    'Die Erweiterungs-Konfiguration ist aktuell nicht verfügbar.',
+                    'Nicht verfügbar',
+                    [System.Windows.Forms.MessageBoxButtons]::OK,
+                    [System.Windows.Forms.MessageBoxIcon]::Information
+                ) | Out-Null
+                return
+            }
+
+            Show-ExtensionStartupSettingsDialog -Owner $settingsForm -OutputBox $OutputBox
+        })
+    $tabBehavior.Controls.Add($btnExtensionLaunchOptions)
     
     # Tab 5: System-Einstellungen
     $tabSystem_Settings = New-Object System.Windows.Forms.TabPage
@@ -2268,7 +2591,9 @@ function Show-SettingsDialog {
                 AutoStartPythonDashboardOnAppStart = $chkAutoStartPyDashboard.Checked
                 AutoStartPythonDashboardOnWindowsLogin = $chkPyDashboardWindowsLogin.Checked
                 AutoStartGuiOnWindowsLogin = $chkGuiWindowsLogin.Checked
+                AutoStartExtensionsOnWindowsLogin = $chkAutoStartExtensionsWindowsLogin.Checked
                 MinimizeToTrayOnMinimizeClick = $chkMinimizeToTrayOnMinimizeClick.Checked
+                ShowExtensionsInTrayMenu = $chkShowExtensionsInTrayMenu.Checked
             }
 
             # Optional: Registry-Autostart fuer Python-Dashboard sofort umsetzen
@@ -2288,6 +2613,15 @@ function Show-SettingsDialog {
                 }
                 catch {
                     Write-Verbose "GUI Startup-Registrierung konnte nicht aktualisiert werden: $_"
+                }
+            }
+
+            if (Get-Command -Name Refresh-ExtensionTrayMenu -ErrorAction SilentlyContinue) {
+                try {
+                    Refresh-ExtensionTrayMenu
+                }
+                catch {
+                    Write-Verbose "Extension-Tray-Menue konnte nicht aktualisiert werden: $_"
                 }
             }
             
@@ -2383,7 +2717,9 @@ function Show-SettingsDialog {
             $OutputBox.AppendText("- Python-Dashboard Auto-Start (App): $($script:settings.AutoStartPythonDashboardOnAppStart)`r`n")
             $OutputBox.AppendText("- Python-Dashboard Auto-Start (Windows): $($script:settings.AutoStartPythonDashboardOnWindowsLogin)`r`n")
             $OutputBox.AppendText("- Bockis GUI Auto-Start (Windows): $($script:settings.AutoStartGuiOnWindowsLogin)`r`n")
+            $OutputBox.AppendText("- Erweiterungen Auto-Start (Windows): $($script:settings.AutoStartExtensionsOnWindowsLogin)`r`n")
             $OutputBox.AppendText("- Beim Minimieren in den Tray: $($script:settings.MinimizeToTrayOnMinimizeClick)`r`n")
+            $OutputBox.AppendText("- Erweiterungen im Tray-Menue: $($script:settings.ShowExtensionsInTrayMenu)`r`n")
             
             # Zeige Farb-Änderungen an
             $colorCount = if ($script:settings.ColorScheme.Output.Colors) { $script:settings.ColorScheme.Output.Colors.Count } else { 0 }
@@ -2482,10 +2818,16 @@ Export-ModuleMember -Function Import-SystemToolSettings
 Export-ModuleMember -Function Export-SystemToolSettings
 Export-ModuleMember -Function Update-SystemToolUI
 Export-ModuleMember -Function Show-SettingsDialog
+Export-ModuleMember -Function Show-SettingsDialogModern
 Export-ModuleMember -Function Export-WindowPosition
 Export-ModuleMember -Function Update-ScanHistory
 Export-ModuleMember -Function Get-ScanHistory
 Export-ModuleMember -Function Get-ScanStatus
+Export-ModuleMember -Function Invoke-SettingsAction
+Export-ModuleMember -Function Get-SettingsRegistry
+Export-ModuleMember -Function Get-SettingsPathMap
+Export-ModuleMember -Function Open-SettingsPathByKey
+Export-ModuleMember -Function Reset-SettingsLogFiles
 
 
 

@@ -1,8 +1,46 @@
 $ErrorActionPreference = 'Stop'
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$repoRoot = Split-Path (Split-Path (Split-Path $scriptDir -Parent) -Parent) -Parent
-$logDir = Join-Path $repoRoot "Data\Logs"
+
+function Resolve-LogRoot {
+    param([string]$BaseDir)
+
+    # Optional von der GUI uebergeben: expliziter Root fuer gemeinsame Logs.
+    $envRoot = [Environment]::GetEnvironmentVariable('BOCKIS_GUI_ROOT', 'Process')
+    if ([string]::IsNullOrWhiteSpace($envRoot)) {
+        $envRoot = [Environment]::GetEnvironmentVariable('BOCKIS_GUI_ROOT', 'User')
+    }
+    if (-not [string]::IsNullOrWhiteSpace($envRoot)) {
+        try {
+            $resolvedEnvRoot = [System.IO.Path]::GetFullPath($envRoot)
+            if (Test-Path $resolvedEnvRoot) {
+                return $resolvedEnvRoot
+            }
+        }
+        catch { }
+    }
+
+    # Nach oben laufen und nach Data\Logs suchen (GUI-Monorepo ODER eigenstaendiges Dashboard-Repo).
+    $cursor = $BaseDir
+    for ($i = 0; $i -lt 8; $i++) {
+        if ([string]::IsNullOrWhiteSpace($cursor)) { break }
+
+        $candidateDataRoot = Join-Path $cursor 'Data'
+        if (Test-Path $candidateDataRoot) {
+            return $cursor
+        }
+
+        $parent = Split-Path $cursor -Parent
+        if ($parent -eq $cursor) { break }
+        $cursor = $parent
+    }
+
+    # Fallback: lokales Data-Verzeichnis neben dem Dashboard-Projekt verwenden.
+    return $BaseDir
+}
+
+$repoRoot = Resolve-LogRoot -BaseDir $scriptDir
+$logDir = Join-Path $repoRoot 'Data\Logs'
 if (-not (Test-Path $logDir)) {
     New-Item -ItemType Directory -Path $logDir -Force | Out-Null
 }

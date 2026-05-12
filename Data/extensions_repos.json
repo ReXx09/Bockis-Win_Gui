@@ -1,0 +1,38 @@
+[
+  {
+    "id": "bockis-dashboard",
+    "title": "Bockis Dashboard",
+    "repoUrl": "https://github.com/ReXx09/Bockis-Dashboard",
+    "ref": "main",
+    "relativePath": "..\\Bockis-Dashboard",
+    "entryPoint": "app.py",
+    "capabilities": [
+      "dashboard",
+      "monitoring",
+      "audio"
+    ],
+    "minGuiVersion": "4.2.0",
+    "enabled": true,
+    "trust": "official",
+    "startWithWindows": false,
+    "showInTray": false
+  },
+  {
+    "id": "multimonitor-profile-tool",
+    "title": "MultiMonitor Profile Tool",
+    "repoUrl": "https://github.com/ReXx09/MultiMonitorProfileTool",
+    "ref": "master",
+    "relativePath": "..\\MultiMonitorProfileTool",
+    "entryPoint": "launcher.bat",
+    "capabilities": [
+      "monitoring",
+      "layout-editor",
+      "profiles"
+    ],
+    "minGuiVersion": "4.2.0",
+    "enabled": true,
+    "trust": "community",
+    "startWithWindows": false,
+    "showInTray": true
+  }
+]

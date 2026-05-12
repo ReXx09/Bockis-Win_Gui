@@ -1166,6 +1166,80 @@ $titleLabel.Add_MouseMove({
 $script:pythonDashboardProcess = $null
 $script:pythonDashboardPort = 9500
 
+function Get-PythonDashboardProjectPath {
+    $legacyPath = Join-Path $PSScriptRoot 'Modules\Monitor\PythonDashboard'
+    $configPath = Join-Path $PSScriptRoot 'config.json'
+
+    $candidatePaths = New-Object System.Collections.Generic.List[string]
+    $addCandidate = {
+        param([string]$Value)
+
+        if ([string]::IsNullOrWhiteSpace($Value)) { return }
+
+        $candidate = $Value.Trim()
+        if (-not [System.IO.Path]::IsPathRooted($candidate)) {
+            $candidate = Join-Path $PSScriptRoot $candidate
+        }
+
+        try {
+            $candidate = [System.IO.Path]::GetFullPath($candidate)
+        }
+        catch {
+            return
+        }
+
+        if (-not $candidatePaths.Contains($candidate)) {
+            $candidatePaths.Add($candidate)
+        }
+    }
+
+    if (Test-Path $configPath) {
+        try {
+            $cfg = Get-Content -Path $configPath -Raw -ErrorAction Stop | ConvertFrom-Json
+
+            if ($cfg -and ($cfg.PSObject.Properties.Name -contains 'DashboardSettings') -and $cfg.DashboardSettings) {
+                if ($cfg.DashboardSettings.PSObject.Properties.Name -contains 'ProjectPath') {
+                    & $addCandidate ([string]$cfg.DashboardSettings.ProjectPath)
+                }
+                if ($cfg.DashboardSettings.PSObject.Properties.Name -contains 'ExternalProjectPath') {
+                    & $addCandidate ([string]$cfg.DashboardSettings.ExternalProjectPath)
+                }
+                if ($cfg.DashboardSettings.PSObject.Properties.Name -contains 'RelativePath') {
+                    & $addCandidate ([string]$cfg.DashboardSettings.RelativePath)
+                }
+            }
+
+            if ($cfg -and ($cfg.PSObject.Properties.Name -contains 'PythonDashboardProjectPath')) {
+                & $addCandidate ([string]$cfg.PythonDashboardProjectPath)
+            }
+        }
+        catch {
+            # Konfigurationsfehler sollen den Legacy-Fallback nicht blockieren.
+        }
+    }
+
+    & $addCandidate $legacyPath
+
+    foreach ($candidate in $candidatePaths) {
+        if (Test-Path $candidate) {
+            return $candidate
+        }
+    }
+
+    return $legacyPath
+}
+
+function Get-PythonDashboardStartScriptPath {
+    $projectPath = Get-PythonDashboardProjectPath
+    $startScriptPath = Join-Path $projectPath 'Start-PythonDashboardBackground.ps1'
+    if (Test-Path $startScriptPath) {
+        return $startScriptPath
+    }
+
+    $legacyStartScriptPath = Join-Path (Join-Path $PSScriptRoot 'Modules\Monitor\PythonDashboard') 'Start-PythonDashboardBackground.ps1'
+    return $legacyStartScriptPath
+}
+
 function Get-PythonDashboardPidFromPort {
     param([int]$Port)
 
@@ -1217,12 +1291,37 @@ function Test-PythonDashboardApiCompatibility {
     }
 }
 
+function Get-PythonDashboardCapabilities {
+    param([int]$Port)
+
+    try {
+        $caps = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/capabilities" -Method Get -TimeoutSec 2
+        if ($caps -and $caps.ok) {
+            return @{
+                Ok = $true
+                RequiredGuiVersion = [string]$caps.required_gui_version
+                Features = $caps.features
+                Raw = $caps
+            }
+        }
+    }
+    catch {
+    }
+
+    return @{
+        Ok = $false
+        RequiredGuiVersion = ''
+        Features = $null
+        Raw = $null
+    }
+}
+
 function Set-PythonDashboardStartupRegistration {
     param([bool]$Enable)
 
     $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
     $valueName = 'BockisPythonDashboard'
-    $runnerPath = Join-Path $PSScriptRoot 'Modules\Monitor\PythonDashboard\Start-PythonDashboardBackground.ps1'
+    $runnerPath = Get-PythonDashboardStartScriptPath
 
     if ($Enable) {
         if (-not (Test-Path $runnerPath)) {
@@ -1306,7 +1405,13 @@ function Set-GuiStartupFolderRegistration {
         $shortcut.TargetPath = 'powershell.exe'
         $shortcut.Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$GuiScriptPath`" $StartupFlag"
         $shortcut.WorkingDirectory = $PSScriptRoot
-        $shortcut.IconLocation = 'powershell.exe,0'
+        $startupIconPath = Join-Path $PSScriptRoot 'IMG_0382.ico'
+        if (Test-Path $startupIconPath) {
+            $shortcut.IconLocation = "$startupIconPath,0"
+        }
+        else {
+            $shortcut.IconLocation = 'powershell.exe,0'
+        }
         $shortcut.Description = 'Bockis System-Tool GUI beim Windows-Login starten'
         $shortcut.Save()
         return $true
@@ -1320,6 +1425,1061 @@ function Set-GuiStartupFolderRegistration {
 
 function Get-ExternalToolsConfigPath {
     return (Join-Path $PSScriptRoot 'Data\external_tools.json')
+}
+
+function Get-ExtensionReposConfigPath {
+    return (Join-Path $PSScriptRoot 'Data\extensions_repos.json')
+}
+
+function Save-ExtensionRepoDefinitions {
+    param([object[]]$Definitions)
+
+    $configPath = Get-ExtensionReposConfigPath
+
+    try {
+        $json = @($Definitions) | ConvertTo-Json -Depth 8
+        $json | Out-File -FilePath $configPath -Encoding UTF8
+        return $true
+    }
+    catch {
+        return $false
+    }
+}
+
+function Set-ExtensionDefinitionBooleanProperty {
+    param(
+        [Parameter(Mandatory)]
+        [object]$Definition,
+        [Parameter(Mandatory)]
+        [string]$PropertyName,
+        [Parameter(Mandatory)]
+        [bool]$Value
+    )
+
+    if ($Definition.PSObject.Properties.Name -contains $PropertyName) {
+        $Definition.$PropertyName = $Value
+    }
+    else {
+        $Definition | Add-Member -NotePropertyName $PropertyName -NotePropertyValue $Value
+    }
+}
+
+function Get-ExtensionRepoDefinitions {
+    $configPath = Get-ExtensionReposConfigPath
+    if (-not (Test-Path $configPath)) {
+        return @()
+    }
+
+    try {
+        $raw = Get-Content -Path $configPath -Raw -ErrorAction Stop
+        if ([string]::IsNullOrWhiteSpace($raw)) {
+            return @()
+        }
+
+        $parsed = $raw | ConvertFrom-Json -ErrorAction Stop
+        if ($parsed -is [System.Array]) {
+            return @($parsed)
+        }
+        return @($parsed)
+    }
+    catch {
+        return @()
+    }
+}
+
+function Get-ExtensionRepoStatus {
+    param([object[]]$Definitions)
+
+    $items = @()
+    foreach ($def in @($Definitions)) {
+        if (-not $def) { continue }
+
+        $id = [string]$def.id
+        if ([string]::IsNullOrWhiteSpace($id)) { continue }
+
+        $title = if (-not [string]::IsNullOrWhiteSpace([string]$def.title)) { [string]$def.title } else { $id }
+        $repoUrl = [string]$def.repoUrl
+        $ref = [string]$def.ref
+        $enabled = $true
+        if ($def.PSObject.Properties.Name -contains 'enabled') {
+            $enabled = [bool]$def.enabled
+        }
+
+        $entryPoint = [string]$def.entryPoint
+        $startWithWindows = $false
+        if ($def.PSObject.Properties.Name -contains 'startWithWindows') {
+            $startWithWindows = [bool]$def.startWithWindows
+        }
+
+        $showInTray = $false
+        if ($def.PSObject.Properties.Name -contains 'showInTray') {
+            $showInTray = [bool]$def.showInTray
+        }
+
+        $capabilities = @()
+        if ($def.PSObject.Properties.Name -contains 'capabilities') {
+            $rawCapabilities = $def.capabilities
+            if ($rawCapabilities -is [System.Array]) {
+                $capabilities = @($rawCapabilities)
+            }
+            elseif ($rawCapabilities -is [System.Collections.IEnumerable] -and $rawCapabilities -isnot [string]) {
+                $capabilities = @($rawCapabilities)
+            }
+            elseif ($null -ne $rawCapabilities) {
+                $capabilities = @($rawCapabilities)
+            }
+        }
+        $capabilities = @($capabilities | ForEach-Object { $_.ToString().Trim().ToLowerInvariant() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+
+        $relativePath = [string]$def.relativePath
+        if ([string]::IsNullOrWhiteSpace($relativePath)) {
+            $relativePath = Join-Path 'Extensions' $id
+        }
+
+        $effectivePath = $relativePath
+        if (-not [System.IO.Path]::IsPathRooted($effectivePath)) {
+            $effectivePath = Join-Path $PSScriptRoot $effectivePath
+        }
+
+        try {
+            $effectivePath = [System.IO.Path]::GetFullPath($effectivePath)
+        }
+        catch {
+        }
+
+        $installed = Test-Path $effectivePath
+        $hasGit = Test-Path (Join-Path $effectivePath '.git')
+
+        $entryPointPath = $null
+        if (-not [string]::IsNullOrWhiteSpace($entryPoint)) {
+            $entryPointPath = $entryPoint
+            if (-not [System.IO.Path]::IsPathRooted($entryPointPath)) {
+                $entryPointPath = Join-Path $effectivePath $entryPointPath
+            }
+            try {
+                $entryPointPath = [System.IO.Path]::GetFullPath($entryPointPath)
+            }
+            catch {
+            }
+        }
+
+        $items += [pscustomobject]@{
+            Id = $id
+            Title = $title
+            RepoUrl = $repoUrl
+            Ref = $ref
+            Enabled = $enabled
+            EnabledText = if ($enabled) { 'Konfiguriert' } else { 'Deaktiviert' }
+            EntryPoint = $entryPoint
+            EntryPointPath = $entryPointPath
+            RelativePath = $relativePath
+            EffectivePath = $effectivePath
+            Installed = $installed
+            HasGit = $hasGit
+            StartWithWindows = $startWithWindows
+            ShowInTray = $showInTray
+            Capabilities = @($capabilities)
+        }
+    }
+
+    return @($items)
+}
+
+function Get-ExtensionItemsForWindowsLogin {
+    $settings = Get-SystemToolSettings
+    if (-not $settings -or -not [bool]$settings.AutoStartExtensionsOnWindowsLogin) {
+        return @()
+    }
+
+    $definitions = Get-ExtensionRepoDefinitions
+    if (-not $definitions -or $definitions.Count -eq 0) {
+        return @()
+    }
+
+    return @(
+        Get-ExtensionRepoStatus -Definitions $definitions |
+            Where-Object { $_.Enabled -and $_.Installed -and $_.StartWithWindows }
+    )
+}
+
+function Get-ExtensionItemsForTray {
+    $settings = Get-SystemToolSettings
+    if (-not $settings -or -not [bool]$settings.ShowExtensionsInTrayMenu) {
+        return @()
+    }
+
+    $definitions = Get-ExtensionRepoDefinitions
+    if (-not $definitions -or $definitions.Count -eq 0) {
+        return @()
+    }
+
+    return @(
+        Get-ExtensionRepoStatus -Definitions $definitions |
+            Where-Object { $_.Enabled -and $_.Installed -and $_.ShowInTray -and $_.Id -ne 'bockis-dashboard' }
+    )
+}
+
+function Open-ExtensionsConfig {
+    $configPath = Get-ExtensionReposConfigPath
+    Start-Process -FilePath 'notepad.exe' -ArgumentList $configPath | Out-Null
+}
+
+function Write-ExtensionActionOutput {
+    param(
+        [System.Windows.Forms.RichTextBox]$OutputBox,
+        [string]$Style,
+        [string]$Message
+    )
+
+    if (-not $OutputBox -or [string]::IsNullOrWhiteSpace($Message)) { return }
+    $effectiveStyle = if ([string]::IsNullOrWhiteSpace($Style)) { 'Info' } else { $Style }
+    Set-OutputSelectionStyle -OutputBox $OutputBox -Style $effectiveStyle
+    $OutputBox.AppendText("$Message`r`n")
+}
+
+function Set-ExtensionProgress {
+    param(
+        [int]$Value,
+        [string]$Text,
+        [System.Drawing.Color]$Color = [System.Drawing.Color]::White
+    )
+
+    if (-not $global:progressBar) { return }
+
+    $safeValue = [Math]::Max(0, [Math]::Min(100, $Value))
+    $global:progressBar.Value = $safeValue
+    $global:progressBar.CustomText = $Text
+    $global:progressBar.TextColor = $Color
+    [System.Windows.Forms.Application]::DoEvents()
+}
+
+function Reset-ExtensionProgress {
+    param([int]$DelayMs = 1800)
+
+    if (-not $global:progressBar) { return }
+
+    if ($script:extensionProgressResetTimer) {
+        try {
+            $script:extensionProgressResetTimer.Stop()
+            $script:extensionProgressResetTimer.Dispose()
+        }
+        catch {
+        }
+        $script:extensionProgressResetTimer = $null
+    }
+
+    $script:extensionProgressResetTimer = New-Object System.Windows.Forms.Timer
+    $script:extensionProgressResetTimer.Interval = [Math]::Max(250, $DelayMs)
+    $script:extensionProgressResetTimer.Add_Tick({
+            if ($global:progressBar) {
+                $global:progressBar.Value = 0
+                $global:progressBar.CustomText = 'Bereit'
+                $global:progressBar.TextColor = [System.Drawing.Color]::White
+            }
+
+            $this.Stop()
+            $this.Dispose()
+            $script:extensionProgressResetTimer = $null
+        })
+    $script:extensionProgressResetTimer.Start()
+}
+
+function Invoke-ExtensionGitCommand {
+    param(
+        [string]$WorkingDirectory,
+        [string[]]$Arguments
+    )
+
+    $gitCmd = Get-Command git -ErrorAction SilentlyContinue
+    if (-not $gitCmd) {
+        return [pscustomobject]@{
+            Success = $false
+            ExitCode = -1
+            Output = 'git.exe nicht gefunden.'
+        }
+    }
+
+    if (-not (Test-Path $WorkingDirectory)) {
+        return [pscustomobject]@{
+            Success = $false
+            ExitCode = -1
+            Output = "Arbeitsverzeichnis nicht gefunden: $WorkingDirectory"
+        }
+    }
+
+    $outputLines = @()
+    $exitCode = 1
+
+    Push-Location $WorkingDirectory
+    try {
+        $outputLines = @(& git @Arguments 2>&1)
+        $exitCode = $LASTEXITCODE
+    }
+    catch {
+        $outputLines = @($_.Exception.Message)
+        $exitCode = 1
+    }
+    finally {
+        Pop-Location
+    }
+
+    $outputText = ($outputLines | ForEach-Object { $_.ToString() }) -join "`r`n"
+    return [pscustomobject]@{
+        Success = ($exitCode -eq 0)
+        ExitCode = $exitCode
+        Output = $outputText
+    }
+}
+
+function Install-ExtensionRepo {
+    param(
+        [object]$ExtensionItem,
+        [System.Windows.Forms.RichTextBox]$OutputBox
+    )
+
+    if (-not $ExtensionItem) { return $false }
+
+    $repoUrl = [string]$ExtensionItem.RepoUrl
+    $targetPath = [string]$ExtensionItem.EffectivePath
+    $refValue = if ([string]::IsNullOrWhiteSpace([string]$ExtensionItem.Ref)) { 'main' } else { [string]$ExtensionItem.Ref }
+    $title = [string]$ExtensionItem.Title
+
+    Set-ExtensionProgress -Value 5 -Text ("Erweiterung wird installiert: {0}" -f $title)
+
+    if ([string]::IsNullOrWhiteSpace($repoUrl)) {
+        Write-ExtensionActionOutput -OutputBox $OutputBox -Style 'Error' -Message ('[x] {0}: Keine Repo-URL konfiguriert.' -f $title)
+        Set-ExtensionProgress -Value 0 -Text ("Fehler: Keine Repo-URL fuer {0}" -f $title) -Color ([System.Drawing.Color]::Red)
+        Reset-ExtensionProgress -DelayMs 3000
+        return $false
+    }
+
+    if ([string]::IsNullOrWhiteSpace($targetPath)) {
+        Write-ExtensionActionOutput -OutputBox $OutputBox -Style 'Error' -Message ('[x] {0}: Kein Zielpfad konfiguriert.' -f $title)
+        Set-ExtensionProgress -Value 0 -Text ("Fehler: Kein Zielpfad fuer {0}" -f $title) -Color ([System.Drawing.Color]::Red)
+        Reset-ExtensionProgress -DelayMs 3000
+        return $false
+    }
+
+    if (Test-Path $targetPath) {
+        if (Test-Path (Join-Path $targetPath '.git')) {
+            Write-ExtensionActionOutput -OutputBox $OutputBox -Style 'Info' -Message "[i] $title ist bereits vorhanden - starte Aktualisierung."
+            return (Update-ExtensionRepo -ExtensionItem $ExtensionItem -OutputBox $OutputBox)
+        }
+
+        Write-ExtensionActionOutput -OutputBox $OutputBox -Style 'Error' -Message ('[x] {0}: Zielpfad existiert bereits ohne .git: {1}' -f $title, $targetPath)
+        Set-ExtensionProgress -Value 0 -Text ("Fehler: Zielpfad existiert ohne .git ({0})" -f $title) -Color ([System.Drawing.Color]::Red)
+        Reset-ExtensionProgress -DelayMs 3000
+        return $false
+    }
+
+    try {
+        $parentPath = [System.IO.Path]::GetDirectoryName($targetPath)
+        if (-not [string]::IsNullOrWhiteSpace($parentPath) -and -not (Test-Path $parentPath)) {
+            New-Item -Path $parentPath -ItemType Directory -Force | Out-Null
+        }
+    }
+    catch {
+        Write-ExtensionActionOutput -OutputBox $OutputBox -Style 'Error' -Message ('[x] {0}: Zielordner konnte nicht erstellt werden: {1}' -f $title, $_.Exception.Message)
+        Set-ExtensionProgress -Value 0 -Text ("Fehler beim Vorbereiten: {0}" -f $title) -Color ([System.Drawing.Color]::Red)
+        Reset-ExtensionProgress -DelayMs 3000
+        return $false
+    }
+
+    Write-ExtensionActionOutput -OutputBox $OutputBox -Style 'Info' -Message "[i] Installiere $title ..."
+    Set-ExtensionProgress -Value 35 -Text ("Git-Clone laeuft: {0}" -f $title)
+
+    $cloneArgs = @('clone', '--origin', 'origin', '--single-branch', '--branch', $refValue, '--', $repoUrl, $targetPath)
+    $cloneResult = Invoke-ExtensionGitCommand -WorkingDirectory $PSScriptRoot -Arguments $cloneArgs
+    if (-not $cloneResult.Success) {
+        Set-ExtensionProgress -Value 55 -Text ("Fallback-Clone pruefen: {0}" -f $title) -Color ([System.Drawing.Color]::Orange)
+        $fallbackArgs = @('clone', '--origin', 'origin', '--', $repoUrl, $targetPath)
+        $fallbackResult = Invoke-ExtensionGitCommand -WorkingDirectory $PSScriptRoot -Arguments $fallbackArgs
+        if (-not $fallbackResult.Success) {
+            Write-ExtensionActionOutput -OutputBox $OutputBox -Style 'Error' -Message ('[x] {0}: Installation fehlgeschlagen.' -f $title)
+            if (-not [string]::IsNullOrWhiteSpace($fallbackResult.Output)) {
+                Write-ExtensionActionOutput -OutputBox $OutputBox -Style 'Muted' -Message "    $($fallbackResult.Output)"
+            }
+            Set-ExtensionProgress -Value 0 -Text ("Installation fehlgeschlagen: {0}" -f $title) -Color ([System.Drawing.Color]::Red)
+            Reset-ExtensionProgress -DelayMs 3200
+            return $false
+        }
+
+        $checkoutResult = Invoke-ExtensionGitCommand -WorkingDirectory $targetPath -Arguments @('checkout', $refValue)
+        if (-not $checkoutResult.Success) {
+            Write-ExtensionActionOutput -OutputBox $OutputBox -Style 'Warning' -Message ('[!] {0}: Checkout auf ''{1}'' fehlgeschlagen, Repo wurde trotzdem geklont.' -f $title, $refValue)
+        }
+    }
+
+    Write-ExtensionActionOutput -OutputBox $OutputBox -Style 'Success' -Message "[+] $title wurde installiert."
+    Set-ExtensionProgress -Value 100 -Text ("Installiert: {0}" -f $title) -Color ([System.Drawing.Color]::LightGreen)
+    Reset-ExtensionProgress
+    return $true
+}
+
+function Update-ExtensionRepo {
+    param(
+        [object]$ExtensionItem,
+        [System.Windows.Forms.RichTextBox]$OutputBox
+    )
+
+    if (-not $ExtensionItem) { return $false }
+
+    $targetPath = [string]$ExtensionItem.EffectivePath
+    $refValue = if ([string]::IsNullOrWhiteSpace([string]$ExtensionItem.Ref)) { 'main' } else { [string]$ExtensionItem.Ref }
+    $title = [string]$ExtensionItem.Title
+
+    Set-ExtensionProgress -Value 8 -Text ("Erweiterung wird aktualisiert: {0}" -f $title)
+
+    if (-not (Test-Path $targetPath)) {
+        Write-ExtensionActionOutput -OutputBox $OutputBox -Style 'Warning' -Message ('[!] {0}: Nicht installiert.' -f $title)
+        Set-ExtensionProgress -Value 0 -Text ("Nicht installiert: {0}" -f $title) -Color ([System.Drawing.Color]::Orange)
+        Reset-ExtensionProgress -DelayMs 2200
+        return $false
+    }
+
+    if (-not (Test-Path (Join-Path $targetPath '.git'))) {
+        Write-ExtensionActionOutput -OutputBox $OutputBox -Style 'Error' -Message ('[x] {0}: Ziel ist kein Git-Repository.' -f $title)
+        Set-ExtensionProgress -Value 0 -Text ("Kein Git-Repo: {0}" -f $title) -Color ([System.Drawing.Color]::Red)
+        Reset-ExtensionProgress -DelayMs 3000
+        return $false
+    }
+
+    Write-ExtensionActionOutput -OutputBox $OutputBox -Style 'Info' -Message "[i] Aktualisiere $title ..."
+    Set-ExtensionProgress -Value 28 -Text ("Git-Fetch laeuft: {0}" -f $title)
+
+    $fetchResult = Invoke-ExtensionGitCommand -WorkingDirectory $targetPath -Arguments @('fetch', '--all', '--prune')
+    if (-not $fetchResult.Success) {
+        Write-ExtensionActionOutput -OutputBox $OutputBox -Style 'Error' -Message ('[x] {0}: git fetch fehlgeschlagen.' -f $title)
+        Set-ExtensionProgress -Value 0 -Text ("Fetch fehlgeschlagen: {0}" -f $title) -Color ([System.Drawing.Color]::Red)
+        Reset-ExtensionProgress -DelayMs 3000
+        return $false
+    }
+
+    Set-ExtensionProgress -Value 58 -Text ("Checkout {0}: {1}" -f $refValue, $title)
+    $checkoutResult = Invoke-ExtensionGitCommand -WorkingDirectory $targetPath -Arguments @('checkout', $refValue)
+    if (-not $checkoutResult.Success) {
+        Write-ExtensionActionOutput -OutputBox $OutputBox -Style 'Error' -Message ('[x] {0}: Checkout auf ''{1}'' fehlgeschlagen.' -f $title, $refValue)
+        Set-ExtensionProgress -Value 0 -Text ("Checkout fehlgeschlagen: {0}" -f $title) -Color ([System.Drawing.Color]::Red)
+        Reset-ExtensionProgress -DelayMs 3000
+        return $false
+    }
+
+    Set-ExtensionProgress -Value 82 -Text ("Pull {0}: {1}" -f $refValue, $title)
+    $pullResult = Invoke-ExtensionGitCommand -WorkingDirectory $targetPath -Arguments @('pull', '--ff-only', 'origin', $refValue)
+    if (-not $pullResult.Success) {
+        Write-ExtensionActionOutput -OutputBox $OutputBox -Style 'Warning' -Message ('[!] {0}: Pull auf ''{1}'' nicht moeglich (Tag/Commit oder bereits aktuell).' -f $title, $refValue)
+        Write-ExtensionActionOutput -OutputBox $OutputBox -Style 'Success' -Message "[+] $title wurde auf '$refValue' eingecheckt."
+        Set-ExtensionProgress -Value 100 -Text ("Ref gesetzt: {0}" -f $title) -Color ([System.Drawing.Color]::Orange)
+        Reset-ExtensionProgress
+        return $true
+    }
+
+    Write-ExtensionActionOutput -OutputBox $OutputBox -Style 'Success' -Message "[+] $title wurde aktualisiert."
+    Set-ExtensionProgress -Value 100 -Text ("Aktualisiert: {0}" -f $title) -Color ([System.Drawing.Color]::LightGreen)
+    Reset-ExtensionProgress
+    return $true
+}
+
+function Uninstall-ExtensionRepo {
+    param(
+        [object]$ExtensionItem,
+        [System.Windows.Forms.RichTextBox]$OutputBox
+    )
+
+    if (-not $ExtensionItem) { return $false }
+
+    $targetPath = [string]$ExtensionItem.EffectivePath
+    $title = [string]$ExtensionItem.Title
+
+    Set-ExtensionProgress -Value 10 -Text ("Erweiterung wird deinstalliert: {0}" -f $title)
+
+    if ([string]::IsNullOrWhiteSpace($targetPath) -or -not (Test-Path $targetPath)) {
+        Write-ExtensionActionOutput -OutputBox $OutputBox -Style 'Info' -Message "[i] $title ist bereits deinstalliert."
+        Set-ExtensionProgress -Value 0 -Text ("Bereits deinstalliert: {0}" -f $title) -Color ([System.Drawing.Color]::Orange)
+        Reset-ExtensionProgress -DelayMs 2200
+        return $true
+    }
+
+    try {
+        $targetFull = [System.IO.Path]::GetFullPath($targetPath)
+        $scriptRootFull = [System.IO.Path]::GetFullPath($PSScriptRoot)
+        $targetRoot = [System.IO.Path]::GetPathRoot($targetFull)
+
+        if ($targetFull.TrimEnd('\\') -eq $targetRoot.TrimEnd('\\')) {
+            Write-ExtensionActionOutput -OutputBox $OutputBox -Style 'Error' -Message ('[x] {0}: Sicherheitsabbruch, Laufwerkswurzel darf nicht geloescht werden.' -f $title)
+            Set-ExtensionProgress -Value 0 -Text ("Sicherheitsabbruch: {0}" -f $title) -Color ([System.Drawing.Color]::Red)
+            Reset-ExtensionProgress -DelayMs 3000
+            return $false
+        }
+
+        if ($targetFull.TrimEnd('\\') -eq $scriptRootFull.TrimEnd('\\')) {
+            Write-ExtensionActionOutput -OutputBox $OutputBox -Style 'Error' -Message ('[x] {0}: Sicherheitsabbruch, GUI-Hauptordner darf nicht geloescht werden.' -f $title)
+            Set-ExtensionProgress -Value 0 -Text ("Sicherheitsabbruch: {0}" -f $title) -Color ([System.Drawing.Color]::Red)
+            Reset-ExtensionProgress -DelayMs 3000
+            return $false
+        }
+    }
+    catch {
+        Write-ExtensionActionOutput -OutputBox $OutputBox -Style 'Error' -Message ('[x] {0}: Pfadpruefung fehlgeschlagen.' -f $title)
+        Set-ExtensionProgress -Value 0 -Text ("Pfadpruefung fehlgeschlagen: {0}" -f $title) -Color ([System.Drawing.Color]::Red)
+        Reset-ExtensionProgress -DelayMs 3000
+        return $false
+    }
+
+    try {
+        Set-ExtensionProgress -Value 65 -Text ("Entferne Dateien: {0}" -f $title)
+        Remove-Item -Path $targetPath -Recurse -Force -ErrorAction Stop
+        Write-ExtensionActionOutput -OutputBox $OutputBox -Style 'Success' -Message "[+] $title wurde deinstalliert."
+        Set-ExtensionProgress -Value 100 -Text ("Deinstalliert: {0}" -f $title) -Color ([System.Drawing.Color]::LightGreen)
+        Reset-ExtensionProgress
+        return $true
+    }
+    catch {
+        Write-ExtensionActionOutput -OutputBox $OutputBox -Style 'Error' -Message ('[x] {0}: Deinstallation fehlgeschlagen: {1}' -f $title, $_.Exception.Message)
+        Set-ExtensionProgress -Value 0 -Text ("Deinstallation fehlgeschlagen: {0}" -f $title) -Color ([System.Drawing.Color]::Red)
+        Reset-ExtensionProgress -DelayMs 3000
+        return $false
+    }
+}
+
+function Open-ExtensionEntryPoint {
+    param(
+        [object]$ExtensionItem,
+        [System.Windows.Forms.RichTextBox]$OutputBox,
+        [switch]$BackgroundStart,
+        [switch]$Silent
+    )
+
+    if (-not $ExtensionItem) { return $false }
+
+    $title = [string]$ExtensionItem.Title
+    $extensionId = [string]$ExtensionItem.Id
+    $entryPath = [string]$ExtensionItem.EntryPointPath
+    $capabilities = @($ExtensionItem.Capabilities)
+    $isDashboardExtension = ($extensionId -eq 'bockis-dashboard') -or ($capabilities -contains 'dashboard')
+
+    $writeOutput = {
+        param(
+            [string]$Style,
+            [string]$Message
+        )
+
+        if ($Silent) { return }
+        Write-ExtensionActionOutput -OutputBox $OutputBox -Style $Style -Message $Message
+    }
+
+    if (-not $BackgroundStart) {
+        Set-ExtensionProgress -Value 12 -Text ("Starte Erweiterung: {0}" -f $title)
+    }
+
+    if ([string]::IsNullOrWhiteSpace($entryPath)) {
+        & $writeOutput 'Warning' ('[!] {0}: Kein entryPoint konfiguriert.' -f $title)
+        if (-not $BackgroundStart) {
+            Set-ExtensionProgress -Value 0 -Text ("Kein entryPoint: {0}" -f $title) -Color ([System.Drawing.Color]::Orange)
+            Reset-ExtensionProgress -DelayMs 2200
+        }
+        return $false
+    }
+
+    if (-not (Test-Path $entryPath)) {
+        & $writeOutput 'Error' ('[x] {0}: entryPoint nicht gefunden: {1}' -f $title, $entryPath)
+        if (-not $BackgroundStart) {
+            Set-ExtensionProgress -Value 0 -Text ("entryPoint fehlt: {0}" -f $title) -Color ([System.Drawing.Color]::Red)
+            Reset-ExtensionProgress -DelayMs 3000
+        }
+        return $false
+    }
+
+    try {
+        if ($isDashboardExtension) {
+            $dashboardResult = Start-PythonDashboard
+            if (-not $dashboardResult.Success) {
+                & $writeOutput 'Error' ('[x] {0}: Start fehlgeschlagen: {1}' -f $title, $dashboardResult.Message)
+                if (-not $BackgroundStart) {
+                    Set-ExtensionProgress -Value 0 -Text ("Start fehlgeschlagen: {0}" -f $title) -Color ([System.Drawing.Color]::Red)
+                    Reset-ExtensionProgress -DelayMs 3000
+                }
+                return $false
+            }
+
+            if (-not $BackgroundStart -and $dashboardResult.Url) {
+                $openResult = Open-UrlInBrowser -Url $dashboardResult.Url
+                if (-not $openResult.Success) {
+                    & $writeOutput 'Warning' ('[!] {0}: Browser konnte nicht geoeffnet werden: {1}' -f $title, $openResult.Message)
+                }
+            }
+
+            & $writeOutput 'Success' "[+] $title wurde gestartet."
+            if (-not $BackgroundStart) {
+                Set-ExtensionProgress -Value 100 -Text ("Gestartet: {0}" -f $title) -Color ([System.Drawing.Color]::LightGreen)
+                Reset-ExtensionProgress
+            }
+            return $true
+        }
+
+        $ext = [System.IO.Path]::GetExtension($entryPath).ToLowerInvariant()
+        switch ($ext) {
+            '.ps1' {
+                Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $entryPath) -WorkingDirectory ([System.IO.Path]::GetDirectoryName($entryPath)) | Out-Null
+            }
+            '.cmd' {
+                Start-Process -FilePath $entryPath -WorkingDirectory ([System.IO.Path]::GetDirectoryName($entryPath)) | Out-Null
+            }
+            '.bat' {
+                Start-Process -FilePath $entryPath -WorkingDirectory ([System.IO.Path]::GetDirectoryName($entryPath)) | Out-Null
+            }
+            default {
+                Start-Process -FilePath $entryPath -WorkingDirectory ([System.IO.Path]::GetDirectoryName($entryPath)) | Out-Null
+            }
+        }
+
+        & $writeOutput 'Success' "[+] $title wurde gestartet."
+        if (-not $BackgroundStart) {
+            Set-ExtensionProgress -Value 100 -Text ("Gestartet: {0}" -f $title) -Color ([System.Drawing.Color]::LightGreen)
+            Reset-ExtensionProgress
+        }
+        return $true
+    }
+    catch {
+        & $writeOutput 'Error' ('[x] {0}: Start fehlgeschlagen: {1}' -f $title, $_.Exception.Message)
+        if (-not $BackgroundStart) {
+            Set-ExtensionProgress -Value 0 -Text ("Start fehlgeschlagen: {0}" -f $title) -Color ([System.Drawing.Color]::Red)
+            Reset-ExtensionProgress -DelayMs 3000
+        }
+        return $false
+    }
+}
+
+function Show-ExtensionStartupSettingsDialog {
+    param(
+        [System.Windows.Forms.Form]$Owner,
+        [System.Windows.Forms.RichTextBox]$OutputBox
+    )
+
+    $definitions = @(Get-ExtensionRepoDefinitions)
+    if ($definitions.Count -eq 0) {
+        [System.Windows.Forms.MessageBox]::Show(
+            'Es sind keine Erweiterungen konfiguriert.',
+            'Erweiterungen',
+            [System.Windows.Forms.MessageBoxButtons]::OK,
+            [System.Windows.Forms.MessageBoxIcon]::Information
+        ) | Out-Null
+        return
+    }
+
+    $statusById = @{}
+    foreach ($item in @(Get-ExtensionRepoStatus -Definitions $definitions)) {
+        $statusById[$item.Id] = $item
+    }
+
+    $form = New-Object System.Windows.Forms.Form
+    $form.Text = 'Erweiterungs-Startoptionen'
+    $form.Size = New-Object System.Drawing.Size(780, 440)
+    $form.StartPosition = 'CenterParent'
+    $form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedDialog
+    $form.MaximizeBox = $false
+    $form.MinimizeBox = $false
+    $form.BackColor = [System.Drawing.Color]::FromArgb(30, 30, 30)
+    $form.ForeColor = [System.Drawing.Color]::FromArgb(220, 220, 220)
+
+    $lblInfo = New-Object System.Windows.Forms.Label
+    $lblInfo.Text = 'Hier legen Sie pro Erweiterung fest, ob sie beim Windows-Login mit der GUI gestartet wird und ob sie im Tray-Untermenue erscheint.'
+    $lblInfo.Location = New-Object System.Drawing.Point(15, 15)
+    $lblInfo.Size = New-Object System.Drawing.Size(735, 34)
+    $lblInfo.ForeColor = [System.Drawing.Color]::FromArgb(200, 200, 200)
+    $form.Controls.Add($lblInfo)
+
+    $grid = New-Object System.Windows.Forms.DataGridView
+    $grid.Location = New-Object System.Drawing.Point(15, 58)
+    $grid.Size = New-Object System.Drawing.Size(735, 290)
+    $grid.BackgroundColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
+    $grid.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
+    $grid.EnableHeadersVisualStyles = $false
+    $grid.ColumnHeadersDefaultCellStyle.BackColor = [System.Drawing.Color]::FromArgb(45, 45, 48)
+    $grid.ColumnHeadersDefaultCellStyle.ForeColor = [System.Drawing.Color]::White
+    $grid.DefaultCellStyle.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
+    $grid.DefaultCellStyle.ForeColor = [System.Drawing.Color]::FromArgb(220, 220, 220)
+    $grid.DefaultCellStyle.SelectionBackColor = [System.Drawing.Color]::FromArgb(0, 122, 204)
+    $grid.DefaultCellStyle.SelectionForeColor = [System.Drawing.Color]::White
+    $grid.RowHeadersVisible = $false
+    $grid.AllowUserToAddRows = $false
+    $grid.AllowUserToDeleteRows = $false
+    $grid.AllowUserToResizeRows = $false
+    $grid.SelectionMode = [System.Windows.Forms.DataGridViewSelectionMode]::FullRowSelect
+    $grid.MultiSelect = $false
+    $grid.AutoSizeColumnsMode = [System.Windows.Forms.DataGridViewAutoSizeColumnsMode]::Fill
+
+    $null = $grid.Columns.Add('Title', 'Erweiterung')
+    $null = $grid.Columns.Add('Installed', 'Installiert')
+    $null = $grid.Columns.Add('Enabled', 'Konfiguriert')
+
+    $colStart = New-Object System.Windows.Forms.DataGridViewCheckBoxColumn
+    $colStart.Name = 'StartWithWindows'
+    $colStart.HeaderText = 'Mit Windows-Login starten'
+    [void]$grid.Columns.Add($colStart)
+
+    $colTray = New-Object System.Windows.Forms.DataGridViewCheckBoxColumn
+    $colTray.Name = 'ShowInTray'
+    $colTray.HeaderText = 'Im Tray-Menue anzeigen'
+    [void]$grid.Columns.Add($colTray)
+
+    foreach ($definition in $definitions) {
+        $id = [string]$definition.id
+        if ([string]::IsNullOrWhiteSpace($id)) { continue }
+
+        $status = $statusById[$id]
+        $rowIndex = $grid.Rows.Add(
+            [string]$status.Title,
+            $(if ($status.Installed) { 'Ja' } else { 'Nein' }),
+            $(if ($status.Enabled) { 'Ja' } else { 'Nein' }),
+            [bool]$status.StartWithWindows,
+            [bool]$status.ShowInTray
+        )
+        $grid.Rows[$rowIndex].Tag = $definition
+    }
+
+    $form.Controls.Add($grid)
+
+    $lblHint = New-Object System.Windows.Forms.Label
+    $lblHint.Text = 'Hinweis: Der Windows-Login-Start fuer Erweiterungen greift nur, wenn die GUI selbst beim Login gestartet wird.'
+    $lblHint.Location = New-Object System.Drawing.Point(15, 355)
+    $lblHint.Size = New-Object System.Drawing.Size(735, 18)
+    $lblHint.ForeColor = [System.Drawing.Color]::FromArgb(150, 150, 150)
+    $form.Controls.Add($lblHint)
+
+    $btnSave = New-Object System.Windows.Forms.Button
+    $btnSave.Text = 'Speichern'
+    $btnSave.Location = New-Object System.Drawing.Point(545, 380)
+    $btnSave.Size = New-Object System.Drawing.Size(95, 30)
+    $btnSave.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+    $btnSave.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(0, 122, 204)
+    $btnSave.BackColor = [System.Drawing.Color]::FromArgb(0, 122, 204)
+    $btnSave.ForeColor = [System.Drawing.Color]::White
+
+    $btnCancel = New-Object System.Windows.Forms.Button
+    $btnCancel.Text = 'Abbrechen'
+    $btnCancel.Location = New-Object System.Drawing.Point(655, 380)
+    $btnCancel.Size = New-Object System.Drawing.Size(95, 30)
+    $btnCancel.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+    $btnCancel.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(90, 90, 90)
+    $btnCancel.BackColor = [System.Drawing.Color]::FromArgb(60, 60, 60)
+    $btnCancel.ForeColor = [System.Drawing.Color]::White
+    $btnCancel.Add_Click({ $form.Close() })
+
+    $btnSave.Add_Click({
+            foreach ($row in $grid.Rows) {
+                if (-not $row.Tag) { continue }
+
+                $definition = $row.Tag
+                $startWithWindowsValue = $false
+                $showInTrayValue = $false
+
+                if ($null -ne $row.Cells['StartWithWindows'].Value) {
+                    $startWithWindowsValue = [bool]$row.Cells['StartWithWindows'].Value
+                }
+                if ($null -ne $row.Cells['ShowInTray'].Value) {
+                    $showInTrayValue = [bool]$row.Cells['ShowInTray'].Value
+                }
+
+                Set-ExtensionDefinitionBooleanProperty -Definition $definition -PropertyName 'startWithWindows' -Value $startWithWindowsValue
+                Set-ExtensionDefinitionBooleanProperty -Definition $definition -PropertyName 'showInTray' -Value $showInTrayValue
+            }
+
+            if (-not (Save-ExtensionRepoDefinitions -Definitions $definitions)) {
+                [System.Windows.Forms.MessageBox]::Show(
+                    'Die Erweiterungs-Konfiguration konnte nicht gespeichert werden.',
+                    'Speicherfehler',
+                    [System.Windows.Forms.MessageBoxButtons]::OK,
+                    [System.Windows.Forms.MessageBoxIcon]::Error
+                ) | Out-Null
+                return
+            }
+
+            Refresh-ExtensionTrayMenu
+            Write-ExtensionActionOutput -OutputBox $OutputBox -Style 'Success' -Message '[+] Erweiterungs-Startoptionen wurden gespeichert.'
+            $form.DialogResult = [System.Windows.Forms.DialogResult]::OK
+            $form.Close()
+        })
+
+    $form.Controls.Add($btnSave)
+    $form.Controls.Add($btnCancel)
+
+    if ($Owner) {
+        $form.ShowDialog($Owner) | Out-Null
+    }
+    else {
+        $form.ShowDialog() | Out-Null
+    }
+}
+
+function Start-ConfiguredExtensionsOnWindowsLogin {
+    param([System.Windows.Forms.RichTextBox]$OutputBox)
+
+    $startupItems = @(Get-ExtensionItemsForWindowsLogin)
+    if ($startupItems.Count -eq 0) {
+        return
+    }
+
+    foreach ($extensionItem in $startupItems) {
+        try {
+            [void](Open-ExtensionEntryPoint -ExtensionItem $extensionItem -OutputBox $OutputBox -BackgroundStart)
+        }
+        catch {
+            Write-ExtensionActionOutput -OutputBox $OutputBox -Style 'Error' -Message ('[x] {0}: Autostart fehlgeschlagen: {1}' -f $extensionItem.Title, $_.Exception.Message)
+        }
+    }
+}
+
+function New-ExtensionTileActionButton {
+    param(
+        [int]$IconCode,
+        [string]$ToolTipText,
+        [bool]$Primary = $false,
+        [bool]$Danger = $false
+    )
+
+    $btn = New-Object Windows.Controls.Button
+    $btn.Padding = New-Object Windows.Thickness(0)
+    $btn.HorizontalContentAlignment = [Windows.HorizontalAlignment]::Center
+    $btn.VerticalContentAlignment = [Windows.VerticalAlignment]::Center
+
+    $iconText = New-Object Windows.Controls.TextBlock
+    $iconText.Text = [char]$IconCode
+    $iconText.FontFamily = New-Object Windows.Media.FontFamily('Segoe MDL2 Assets')
+    $iconText.FontSize = 14
+    $iconText.HorizontalAlignment = [Windows.HorizontalAlignment]::Center
+    $iconText.VerticalAlignment = [Windows.VerticalAlignment]::Center
+    $iconText.Foreground = [Windows.Media.SolidColorBrush]::new([Windows.Media.Color]::FromRgb(235, 235, 235))
+
+    $btn.Content = $iconText
+    $btn.Width = 32
+    $btn.Height = 28
+    $btn.Margin = New-Object Windows.Thickness(0, 8, 6, 0)
+    $btn.Foreground = [Windows.Media.SolidColorBrush]::new([Windows.Media.Color]::FromRgb(235, 235, 235))
+    $btn.BorderBrush = [Windows.Media.SolidColorBrush]::new([Windows.Media.Color]::FromRgb(88, 88, 88))
+    $btn.BorderThickness = New-Object Windows.Thickness(1)
+    if ($Danger) {
+        $btn.Background = [Windows.Media.SolidColorBrush]::new([Windows.Media.Color]::FromRgb(120, 40, 40))
+    }
+    elseif ($Primary) {
+        $btn.Background = [Windows.Media.SolidColorBrush]::new([Windows.Media.Color]::FromRgb(0, 120, 215))
+    }
+    else {
+        $btn.Background = [Windows.Media.SolidColorBrush]::new([Windows.Media.Color]::FromRgb(56, 56, 57))
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($ToolTipText)) {
+        [System.Windows.Controls.ToolTipService]::SetToolTip($btn, $ToolTipText)
+    }
+
+    return $btn
+}
+
+function Show-ExtensionsOverviewInOutput {
+    param(
+        [System.Windows.Forms.RichTextBox]$OutputBox,
+        [object[]]$ExtensionStatus,
+        [hashtable]$Capabilities
+    )
+
+    if (-not $OutputBox) { return }
+
+    $all = @($ExtensionStatus)
+    $enabledCount = @($all | Where-Object { $_.Enabled }).Count
+    $installedCount = @($all | Where-Object { $_.Installed }).Count
+    $gitCount = @($all | Where-Object { $_.HasGit }).Count
+
+    $OutputBox.Clear()
+    Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'BannerFrame'
+    $OutputBox.AppendText("`t╔═══════════════════════════════════════════════════════════════╗`r`n")
+    Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'BannerTitle'
+    $OutputBox.AppendText("`t║                      ERWEITERUNGEN                            ║`r`n")
+    Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'BannerFrame'
+    $OutputBox.AppendText("`t╚═══════════════════════════════════════════════════════════════╝`r`n`r`n")
+
+    Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Heading'
+    $OutputBox.AppendText("Git-Repo Uebersicht:`r`n`r`n")
+
+    Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Info'
+    $OutputBox.AppendText("- Gesamt: $($all.Count)`r`n")
+    $OutputBox.AppendText("- Aktiviert: $enabledCount`r`n")
+    $OutputBox.AppendText("- Lokal vorhanden: $installedCount`r`n")
+    $OutputBox.AppendText("- Mit .git erkannt: $gitCount`r`n")
+
+    if ($Capabilities -and $Capabilities.Ok) {
+        $requiredVersion = [string]$Capabilities.RequiredGuiVersion
+        if (-not [string]::IsNullOrWhiteSpace($requiredVersion)) {
+            $OutputBox.AppendText("- Dashboard required_gui_version: $requiredVersion`r`n")
+        }
+    }
+
+    $OutputBox.AppendText("`r`n")
+    Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Muted'
+    Add-OutputIcon -OutputBox $OutputBox -IconCode 0xE946
+    $OutputBox.AppendText(" Die Kachelansicht wird im rechten Bereich geladen.`r`n")
+}
+
+function Show-ExtensionTiles {
+    param(
+        [Windows.Controls.WrapPanel]$WrapPanel,
+        [object[]]$ExtensionStatus,
+        [System.Windows.Forms.RichTextBox]$OutputBox
+    )
+
+    if (-not $WrapPanel) { return 0 }
+
+    $WrapPanel.Children.Clear()
+
+    $items = @($ExtensionStatus)
+    if ($items.Count -eq 0) {
+        $emptyText = New-Object Windows.Controls.TextBlock
+        $emptyText.Text = 'Keine Erweiterungen konfiguriert. Bitte Data\\extensions_repos.json befuellen.'
+        $emptyText.Foreground = [Windows.Media.SolidColorBrush]::new([Windows.Media.Color]::FromRgb(220, 220, 220))
+        $emptyText.Margin = New-Object Windows.Thickness(12)
+        $emptyText.FontSize = 14
+        $WrapPanel.Children.Add($emptyText) | Out-Null
+        return 0
+    }
+
+    $refreshTiles = {
+        $definitions = Get-ExtensionRepoDefinitions
+        $newStatus = Get-ExtensionRepoStatus -Definitions $definitions
+        $caps = Get-PythonDashboardCapabilities -Port $script:pythonDashboardPort
+        Show-ExtensionsOverviewInOutput -OutputBox $OutputBox -ExtensionStatus $newStatus -Capabilities $caps
+        $null = Show-ExtensionTiles -WrapPanel $WrapPanel -ExtensionStatus $newStatus -OutputBox $OutputBox
+    }.GetNewClosure()
+
+    foreach ($item in $items) {
+        $tile = New-Object Windows.Controls.Border
+        $tile.Width = 250
+        $tile.MinHeight = 180
+        $tile.Margin = New-Object Windows.Thickness(8)
+        $tile.Padding = New-Object Windows.Thickness(10)
+        $tile.CornerRadius = New-Object Windows.CornerRadius(8)
+        $tile.Background = [Windows.Media.SolidColorBrush]::new([Windows.Media.Color]::FromRgb(37, 37, 38))
+        $tile.BorderBrush = [Windows.Media.SolidColorBrush]::new([Windows.Media.Color]::FromRgb(73, 73, 73))
+        $tile.BorderThickness = New-Object Windows.Thickness(1)
+
+        $stack = New-Object Windows.Controls.StackPanel
+
+        $title = New-Object Windows.Controls.TextBlock
+        $title.Text = [string]$item.Title
+        $title.FontSize = 14
+        $title.FontWeight = [Windows.FontWeights]::Bold
+        $title.Foreground = [Windows.Media.SolidColorBrush]::new([Windows.Media.Color]::FromRgb(235, 235, 235))
+        $title.TextWrapping = [Windows.TextWrapping]::Wrap
+        $stack.Children.Add($title) | Out-Null
+
+        $idText = New-Object Windows.Controls.TextBlock
+        $idText.Text = "ID: $([string]$item.Id)"
+        $idText.Margin = New-Object Windows.Thickness(0, 4, 0, 0)
+        $idText.Foreground = [Windows.Media.SolidColorBrush]::new([Windows.Media.Color]::FromRgb(170, 170, 170))
+        $stack.Children.Add($idText) | Out-Null
+
+        $statusParts = New-Object System.Collections.Generic.List[string]
+        if ($item.Enabled) { $statusParts.Add('Konfiguriert') } else { $statusParts.Add('Deaktiviert') }
+        if ($item.Installed) { $statusParts.Add('Installiert') } else { $statusParts.Add('Nicht installiert') }
+        if ($item.HasGit) { $statusParts.Add('Git OK') } else { $statusParts.Add('Git fehlt') }
+
+        $statusText = New-Object Windows.Controls.TextBlock
+        $statusText.Text = "Status: $($statusParts -join ' | ')"
+        $statusText.Margin = New-Object Windows.Thickness(0, 8, 0, 0)
+        $statusText.Foreground = [Windows.Media.SolidColorBrush]::new([Windows.Media.Color]::FromRgb(143, 208, 255))
+        $statusText.TextWrapping = [Windows.TextWrapping]::Wrap
+        $stack.Children.Add($statusText) | Out-Null
+
+        $repoText = New-Object Windows.Controls.TextBlock
+        $repoText.Text = "Repo: $([string]$item.RepoUrl)"
+        $repoText.Margin = New-Object Windows.Thickness(0, 8, 0, 0)
+        $repoText.Foreground = [Windows.Media.SolidColorBrush]::new([Windows.Media.Color]::FromRgb(185, 185, 185))
+        $repoText.TextWrapping = [Windows.TextWrapping]::Wrap
+        $stack.Children.Add($repoText) | Out-Null
+
+        $refValue = if ([string]::IsNullOrWhiteSpace([string]$item.Ref)) { 'main' } else { [string]$item.Ref }
+        $refText = New-Object Windows.Controls.TextBlock
+        $refText.Text = "Ref: $refValue"
+        $refText.Margin = New-Object Windows.Thickness(0, 3, 0, 0)
+        $refText.Foreground = [Windows.Media.SolidColorBrush]::new([Windows.Media.Color]::FromRgb(185, 185, 185))
+        $stack.Children.Add($refText) | Out-Null
+
+        $actionPanel = New-Object Windows.Controls.StackPanel
+        $actionPanel.Margin = New-Object Windows.Thickness(0, 8, 0, 0)
+        $actionPanel.Orientation = [Windows.Controls.Orientation]::Horizontal
+
+        $isInstalledGit = ($item.Installed -and $item.HasGit)
+        $installUpdateIcon = if ($isInstalledGit) { 0xE895 } else { 0xE896 }
+        $installUpdateTip = if ($isInstalledGit) { 'Aktualisieren' } else { 'Installieren' }
+        $btnInstallUpdate = New-ExtensionTileActionButton -IconCode $installUpdateIcon -ToolTipText $installUpdateTip -Primary $true
+        $btnInstallUpdate.IsEnabled = (-not [string]::IsNullOrWhiteSpace([string]$item.RepoUrl))
+        $btnInstallUpdate.Opacity = if ($btnInstallUpdate.IsEnabled) { 1.0 } else { 0.55 }
+
+        $itemSnapshot = $item
+        $btnInstallUpdate.Add_Click({
+                if ($itemSnapshot.Installed -and $itemSnapshot.HasGit) {
+                    $ok = Update-ExtensionRepo -ExtensionItem $itemSnapshot -OutputBox $outputBox
+                }
+                else {
+                    $ok = Install-ExtensionRepo -ExtensionItem $itemSnapshot -OutputBox $outputBox
+                }
+
+                if ($ok) {
+                    & $refreshTiles
+                }
+            }.GetNewClosure())
+        $actionPanel.Children.Add($btnInstallUpdate) | Out-Null
+
+        $btnUninstall = New-ExtensionTileActionButton -IconCode 0xE74D -ToolTipText 'Deinstallieren' -Danger $true
+        $btnUninstall.IsEnabled = $true
+        $btnUninstall.Opacity = if ($item.Installed) { 1.0 } else { 0.55 }
+        $btnUninstall.Add_Click({
+            if (-not $itemSnapshot.Installed) {
+                Write-ExtensionActionOutput -OutputBox $outputBox -Style 'Warning' -Message ('[!] {0}: Nicht installiert, Deinstallation nicht verfuegbar.' -f $itemSnapshot.Title)
+                Set-ExtensionProgress -Value 0 -Text ('Deinstallation nicht verfuegbar: {0}' -f $itemSnapshot.Title) -Color ([System.Drawing.Color]::Orange)
+                Reset-ExtensionProgress -DelayMs 2200
+                return
+            }
+
+                $confirmResult = [System.Windows.Forms.MessageBox]::Show(
+                    "Soll die Erweiterung '$($itemSnapshot.Title)' wirklich deinstalliert werden?",
+                    'Erweiterung deinstallieren',
+                    [System.Windows.Forms.MessageBoxButtons]::YesNo,
+                    [System.Windows.Forms.MessageBoxIcon]::Question
+                )
+
+                if ($confirmResult -ne [System.Windows.Forms.DialogResult]::Yes) {
+                    return
+                }
+
+                $ok = Uninstall-ExtensionRepo -ExtensionItem $itemSnapshot -OutputBox $outputBox
+                if ($ok) {
+                    & $refreshTiles
+                }
+            }.GetNewClosure())
+        $actionPanel.Children.Add($btnUninstall) | Out-Null
+
+        $btnOpen = New-ExtensionTileActionButton -IconCode 0xE8A7 -ToolTipText 'Oeffnen'
+        $hasEntryPoint = (-not [string]::IsNullOrWhiteSpace([string]$item.EntryPointPath) -and (Test-Path $item.EntryPointPath))
+        $btnOpen.IsEnabled = $true
+        $btnOpen.Opacity = if ($hasEntryPoint) { 1.0 } else { 0.55 }
+        $btnOpen.Add_Click({
+                if (-not $hasEntryPoint) {
+                    Write-ExtensionActionOutput -OutputBox $outputBox -Style 'Warning' -Message ('[!] {0}: Kein gueltiger entryPoint fuer diese Erweiterung.' -f $itemSnapshot.Title)
+                    Set-ExtensionProgress -Value 0 -Text ('Kein entryPoint: {0}' -f $itemSnapshot.Title) -Color ([System.Drawing.Color]::Orange)
+                    Reset-ExtensionProgress -DelayMs 2200
+                    return
+                }
+
+                $null = Open-ExtensionEntryPoint -ExtensionItem $itemSnapshot -OutputBox $outputBox
+            }.GetNewClosure())
+        $actionPanel.Children.Add($btnOpen) | Out-Null
+
+        $stack.Children.Add($actionPanel) | Out-Null
+
+        $tile.Child = $stack
+        $WrapPanel.Children.Add($tile) | Out-Null
+    }
+
+    return $items.Count
 }
 
 function Get-ExternalToolDefinitions {
@@ -1446,7 +2606,8 @@ function Start-PythonDashboard {
     $status = Get-PythonDashboardStatus
     if ($status.Running) {
         if (Test-PythonDashboardApiCompatibility -Port $script:pythonDashboardPort) {
-            return @{ Success = $true; Url = $status.Url; Message = "Python-Dashboard laeuft bereits." }
+            $existingCaps = Get-PythonDashboardCapabilities -Port $script:pythonDashboardPort
+            return @{ Success = $true; Url = $status.Url; Message = "Python-Dashboard laeuft bereits."; Capabilities = $existingCaps }
         }
 
         # Legacy/inkompatible API-Version erkannt -> laufenden Prozess auf Port beenden und frisch starten
@@ -1458,10 +2619,10 @@ function Start-PythonDashboard {
         $script:pythonDashboardProcess = $null
     }
 
-    $dashboardDir = Join-Path $PSScriptRoot "Modules\Monitor\PythonDashboard"
+    $dashboardDir = Get-PythonDashboardProjectPath
     $appPath = Join-Path $dashboardDir "app.py"
     if (-not (Test-Path $appPath)) {
-        return @{ Success = $false; Message = "Python-Dashboard nicht gefunden: $appPath" }
+        return @{ Success = $false; Message = "Python-Dashboard nicht gefunden: $appPath`nKonfigurierter Pfad: $dashboardDir" }
     }
 
     $pythonCmd = $null
@@ -1572,6 +2733,10 @@ function Start-PythonDashboard {
         try { Remove-Item $stdoutLog -Force -ErrorAction SilentlyContinue } catch { }
         try { Remove-Item $stderrLog -Force -ErrorAction SilentlyContinue } catch { }
 
+        # Dashboard-Starter erhaelt den GUI-Root fuer gemeinsame Logablage,
+        # auch wenn das Dashboard spaeter in ein separates Projekt ausgelagert wird.
+        [Environment]::SetEnvironmentVariable('BOCKIS_GUI_ROOT', $PSScriptRoot, 'Process')
+
         $processArgs = @($pythonPrefixArgs + @("-m", "uvicorn", "app:app", "--host", "127.0.0.1", "--port", "$script:pythonDashboardPort"))
         $proc = Start-Process -FilePath $pythonCmd -ArgumentList $processArgs -WorkingDirectory $dashboardDir -PassThru -WindowStyle Hidden -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog
         $script:pythonDashboardProcess = $proc
@@ -1615,7 +2780,13 @@ function Start-PythonDashboard {
             return @{ Success = $false; Message = "Python-Dashboard konnte nicht gestartet werden (Timeout/Fehler).$detailText" }
         }
 
-        return @{ Success = $true; Url = "http://127.0.0.1:$script:pythonDashboardPort"; Message = "Python-Dashboard gestartet." }
+        $caps = Get-PythonDashboardCapabilities -Port $script:pythonDashboardPort
+        $message = "Python-Dashboard gestartet."
+        if ($caps -and $caps.Ok -and -not [string]::IsNullOrWhiteSpace([string]$caps.RequiredGuiVersion)) {
+            $message = "$message Capabilities geladen (required_gui_version: $($caps.RequiredGuiVersion))."
+        }
+
+        return @{ Success = $true; Url = "http://127.0.0.1:$script:pythonDashboardPort"; Message = $message; Capabilities = $caps }
     }
     catch {
         $script:pythonDashboardProcess = $null
@@ -1641,12 +2812,35 @@ $script:trayBalloonHintShown = $false
 $script:isHidingToTray = $false
 $script:lastTrayHideRequest = [datetime]::MinValue
 $script:lastTrayRestoreRequest = [datetime]::MinValue
+$script:settingsButton = $null
+$script:trayIconPath = Join-Path $PSScriptRoot 'IMG_0382.ico'
+$script:trayContextMenu = $null
+$script:trayExtensionsMenuItem = $null
+$script:trayBaseSeparator = $null
+
+function Get-PreferredTrayIcon {
+    if (Test-Path $script:trayIconPath) {
+        try {
+            return New-Object System.Drawing.Icon($script:trayIconPath)
+        }
+        catch {
+            Update-LogFile -Message "Tray: Benutzerlogo konnte nicht geladen werden ($script:trayIconPath): $_" -IsError
+        }
+    }
+
+    if ($mainform -and $mainform.Icon) {
+        return $mainform.Icon
+    }
+
+    return [System.Drawing.SystemIcons]::Application
+}
 
 function Ensure-TrayNotifyIcon {
     if ($script:trayNotifyIcon) {
         try {
             # Zugriff auf eine Property erzwingt einen gueltigen Objektzustand.
             $null = $script:trayNotifyIcon.Visible
+            Refresh-ExtensionTrayMenu
             return
         }
         catch {
@@ -1657,18 +2851,27 @@ function Ensure-TrayNotifyIcon {
 
     $script:trayNotifyIcon = New-Object System.Windows.Forms.NotifyIcon
     $script:trayNotifyIcon.Text = 'Bockis System-Tool'
-    $script:trayNotifyIcon.Icon = if ($mainform -and $mainform.Icon) { $mainform.Icon } else { [System.Drawing.SystemIcons]::Application }
+    $script:trayNotifyIcon.Icon = Get-PreferredTrayIcon
     $script:trayNotifyIcon.Visible = $false
 
     $trayContextMenu = New-Object System.Windows.Forms.ContextMenuStrip
     $trayOpenItem = New-Object System.Windows.Forms.ToolStripMenuItem 'Bockis GUI öffnen'
+    $traySettingsItem = New-Object System.Windows.Forms.ToolStripMenuItem 'Einstellungen öffnen'
+    $trayDashboardItem = New-Object System.Windows.Forms.ToolStripMenuItem 'Dashboard öffnen'
+    $traySeparator = New-Object System.Windows.Forms.ToolStripSeparator
     $trayExitItem = New-Object System.Windows.Forms.ToolStripMenuItem 'Beenden'
     [void]$trayContextMenu.Items.Add($trayOpenItem)
-    [void]$trayContextMenu.Items.Add('-')
+    [void]$trayContextMenu.Items.Add($traySettingsItem)
+    [void]$trayContextMenu.Items.Add($trayDashboardItem)
+    [void]$trayContextMenu.Items.Add($traySeparator)
     [void]$trayContextMenu.Items.Add($trayExitItem)
     $script:trayNotifyIcon.ContextMenuStrip = $trayContextMenu
+    $script:trayContextMenu = $trayContextMenu
+    $script:trayBaseSeparator = $traySeparator
 
     $trayOpenItem.Add_Click({ Show-MainFormFromTray })
+    $traySettingsItem.Add_Click({ Open-SettingsFromTray })
+    $trayDashboardItem.Add_Click({ Open-PythonDashboardFromTray })
     $trayExitItem.Add_Click({
             if ($script:trayNotifyIcon) {
                 $script:trayNotifyIcon.Visible = $false
@@ -1677,6 +2880,51 @@ function Ensure-TrayNotifyIcon {
             Close-FormSafely -Form $mainform
         })
     $script:trayNotifyIcon.Add_DoubleClick({ Show-MainFormFromTray })
+
+    Refresh-ExtensionTrayMenu
+}
+
+function Refresh-ExtensionTrayMenu {
+    if (-not $script:trayContextMenu) { return }
+
+    if ($script:trayExtensionsMenuItem) {
+        [void]$script:trayContextMenu.Items.Remove($script:trayExtensionsMenuItem)
+        $script:trayExtensionsMenuItem = $null
+    }
+
+    $trayExtensions = @(Get-ExtensionItemsForTray)
+    if ($trayExtensions.Count -eq 0) {
+        return
+    }
+
+    $extensionsRootItem = New-Object System.Windows.Forms.ToolStripMenuItem 'Erweiterungen'
+    foreach ($extensionItem in $trayExtensions) {
+        $menuItem = New-Object System.Windows.Forms.ToolStripMenuItem $extensionItem.Title
+        $menuItem.Tag = $extensionItem
+        $menuItem.Add_Click({
+                try {
+                    [void](Open-ExtensionEntryPoint -ExtensionItem $this.Tag -OutputBox $outputBox)
+                }
+                catch {
+                    Update-LogFile -Message "Tray: Fehler beim Starten der Erweiterung $($this.Text): $_" -IsError
+                }
+            })
+        [void]$extensionsRootItem.DropDownItems.Add($menuItem)
+    }
+
+    $insertIndex = if ($script:trayBaseSeparator) {
+        $script:trayContextMenu.Items.IndexOf($script:trayBaseSeparator)
+    }
+    else {
+        $script:trayContextMenu.Items.Count - 1
+    }
+
+    if ($insertIndex -lt 0) {
+        $insertIndex = $script:trayContextMenu.Items.Count - 1
+    }
+
+    $script:trayContextMenu.Items.Insert($insertIndex, $extensionsRootItem)
+    $script:trayExtensionsMenuItem = $extensionsRootItem
 }
 
 function Invoke-OnMainFormThread {
@@ -1692,6 +2940,107 @@ function Invoke-OnMainFormThread {
     }
 }
 
+function Open-SettingsFromTray {
+    if (-not $mainform) { return }
+
+    Show-MainFormFromTray
+    Invoke-OnMainFormThread {
+        try {
+            if ($script:settingsButton) {
+                $script:settingsButton.PerformClick()
+                return
+            }
+
+            Show-SettingsDialog -MainForm $mainform -OutputBox $outputBox -MainPanels @{
+                SystemPanel  = $global:tblSystem
+                DiskPanel    = $tblDisk
+                NetworkPanel = $tblNetwork
+                CleanupPanel = $tblCleanup
+                BtnSystem    = $btnSystem
+                BtnDisk      = $btnDisk
+                BtnNetwork   = $btnNetwork
+                BtnCleanup   = $btnCleanup
+            }
+        }
+        catch {
+            Update-LogFile -Message "Tray: Fehler beim Oeffnen der Einstellungen: $_" -IsError
+        }
+    }
+}
+
+function Open-UrlInBrowser {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Url
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Url)) {
+        return @{ Success = $false; Message = 'Keine URL uebergeben.' }
+    }
+
+    $attemptErrors = New-Object System.Collections.Generic.List[string]
+
+    try {
+        Start-Process -FilePath $Url -ErrorAction Stop | Out-Null
+        return @{ Success = $true; Method = 'direct' }
+    }
+    catch {
+        $attemptErrors.Add("direct: $($_.Exception.Message)")
+    }
+
+    try {
+        Start-Process -FilePath 'explorer.exe' -ArgumentList $Url -ErrorAction Stop | Out-Null
+        return @{ Success = $true; Method = 'explorer' }
+    }
+    catch {
+        $attemptErrors.Add("explorer: $($_.Exception.Message)")
+    }
+
+    try {
+        Start-Process -FilePath 'cmd.exe' -ArgumentList '/c', 'start', '', $Url -WindowStyle Hidden -ErrorAction Stop | Out-Null
+        return @{ Success = $true; Method = 'cmd-start' }
+    }
+    catch {
+        $attemptErrors.Add("cmd-start: $($_.Exception.Message)")
+    }
+
+    return @{ Success = $false; Message = ($attemptErrors -join " | ") }
+}
+
+function Open-PythonDashboardFromTray {
+    if (-not $mainform) { return }
+
+    try {
+        Ensure-TrayNotifyIcon
+        Update-LogFile -Message "Tray: Dashboard wird ohne GUI-Restore geoeffnet"
+
+        $result = Start-PythonDashboard
+        if ($result.Success) {
+            $openResult = Open-UrlInBrowser -Url $result.Url
+            if (-not $openResult.Success) {
+                Update-LogFile -Message "Tray: Browserstart fuer Dashboard fehlgeschlagen: $($openResult.Message)" -IsError
+                [System.Windows.Forms.MessageBox]::Show(
+                    "Das Python-Dashboard wurde gestartet, aber der Browser konnte nicht geoeffnet werden:`n$($openResult.Message)`n`nURL: $($result.Url)",
+                    "Browserstart fehlgeschlagen",
+                    [System.Windows.Forms.MessageBoxButtons]::OK,
+                    [System.Windows.Forms.MessageBoxIcon]::Warning
+                ) | Out-Null
+            }
+        }
+        else {
+            [System.Windows.Forms.MessageBox]::Show(
+                "Python-Dashboard konnte nicht gestartet werden:`n$($result.Message)",
+                "Python-Dashboard Fehler",
+                [System.Windows.Forms.MessageBoxButtons]::OK,
+                [System.Windows.Forms.MessageBoxIcon]::Warning
+            )
+        }
+    }
+    catch {
+        Update-LogFile -Message "Tray: Fehler beim Oeffnen des Dashboards: $_" -IsError
+    }
+}
+
 function Show-MainFormFromTray {
     if (-not $mainform) { return }
 
@@ -1702,6 +3051,7 @@ function Show-MainFormFromTray {
 
         Invoke-OnMainFormThread {
             try {
+                $mainform.Opacity = 1
                 $mainform.ShowInTaskbar = $true
                 $mainform.WindowState = [System.Windows.Forms.FormWindowState]::Normal
 
@@ -1741,7 +3091,7 @@ function Hide-MainFormToTray {
 
     if ($script:trayNotifyIcon) {
         if (-not $script:trayNotifyIcon.Icon) {
-            $script:trayNotifyIcon.Icon = if ($mainform.Icon) { $mainform.Icon } else { [System.Drawing.SystemIcons]::Application }
+            $script:trayNotifyIcon.Icon = Get-PreferredTrayIcon
         }
 
         $script:trayNotifyIcon.Visible = $true
@@ -1751,6 +3101,7 @@ function Hide-MainFormToTray {
     try {
         $mainform.WindowState = [System.Windows.Forms.FormWindowState]::Minimized
         $mainform.ShowInTaskbar = $false
+        $mainform.Opacity = 0
     }
     finally {
         $script:isHidingToTray = $false
@@ -1770,6 +3121,7 @@ function Hide-MainFormToTray {
                 if ($mainform -and ($mainform.Visible -or $mainform.ShowInTaskbar)) {
                     $mainform.ShowInTaskbar = $false
                     $mainform.WindowState = [System.Windows.Forms.FormWindowState]::Minimized
+                    $mainform.Opacity = 0
                 }
 
                 Update-LogFile -Message "Tray: Zustand erzwungen (Visible=$($mainform.Visible), ShowInTaskbar=$($mainform.ShowInTaskbar), TrayIconVisible=$($script:trayNotifyIcon.Visible))"
@@ -1878,15 +3230,33 @@ $script:pythonDashboardButton.Add_Click({
         if ($result.Success) {
             $script:pythonDashboardButton.BackColor = [System.Drawing.Color]::FromArgb(25, 90, 25)
             $script:pythonDashboardButton.ForeColor = [System.Drawing.Color]::FromArgb(61, 220, 132)
-            Start-Process $result.Url
+            $openResult = Open-UrlInBrowser -Url $result.Url
+            if (-not $openResult.Success) {
+                Update-LogFile -Message "Dashboard-Button: Browserstart fehlgeschlagen: $($openResult.Message)" -IsError
+                [System.Windows.Forms.MessageBox]::Show(
+                    "Das Python-Dashboard wurde gestartet, aber der Browser konnte nicht geoeffnet werden:`n$($openResult.Message)`n`nURL: $($result.Url)",
+                    "Browserstart fehlgeschlagen",
+                    [System.Windows.Forms.MessageBoxButtons]::OK,
+                    [System.Windows.Forms.MessageBoxIcon]::Warning
+                ) | Out-Null
+            }
         } else {
             [System.Windows.Forms.MessageBox]::Show(
                 "Python-Dashboard konnte nicht gestartet werden:`n$($result.Message)",
                 "Python-Dashboard Fehler",
                 [System.Windows.Forms.MessageBoxButtons]::OK,
                 [System.Windows.Forms.MessageBoxIcon]::Warning
-            )
+            ) | Out-Null
         }
+    }
+    catch {
+        Update-LogFile -Message "Dashboard-Button: Unerwarteter Fehler beim Oeffnen: $_" -IsError
+        [System.Windows.Forms.MessageBox]::Show(
+            "Fehler beim Oeffnen des Python-Dashboards:`n$($_.Exception.Message)",
+            "Python-Dashboard Fehler",
+            [System.Windows.Forms.MessageBoxButtons]::OK,
+            [System.Windows.Forms.MessageBoxIcon]::Error
+        ) | Out-Null
     }
     finally {
         $script:pythonDashboardButtonBusy = $false
@@ -1906,6 +3276,7 @@ $script:pythonDashboardButton.Add_MouseLeave({
 
 # Einstellungen-Button
 $settingsButton = New-Object System.Windows.Forms.Button
+$script:settingsButton = $settingsButton
 $settingsButton.Text = "⚙"
 $settingsButton.Size = New-Object System.Drawing.Size(30, 30)
 $settingsButton.Location = New-Object System.Drawing.Point(880, 0)  # Position angepasst da Theme-Button entfernt
@@ -5049,8 +6420,8 @@ $troubleshootHorizontalPanel = New-HorizontalCollapsiblePanel -Title "Support" -
     }
 }
 
-# Setze Content-Panel-Breite für 1 Button
-$troubleshootHorizontalPanel.Content.Width = 205
+# Setze Content-Panel-Breite für 1 Button (kompakt, damit Add-ons näher folgt)
+$troubleshootHorizontalPanel.Content.Width = 145
 $troubleshootHorizontalPanel.Content.Height = 35
 
 # Button: Status prüfen
@@ -5792,7 +7163,9 @@ $troubleshootHorizontalPanel.Content.Controls.Add($btnCheckDependenciesH)
 $mainContentPanel.Controls.Add($troubleshootHorizontalPanel.Container)
 
 # Erstelle horizontales Collapsible Panel fuer Externe Tools (rechts neben Support)
-$externalToolsHorizontalPanel = New-HorizontalCollapsiblePanel -Title "Externe Tools" -XPosition 330 -Tag "externalToolsHorizontalPanel" -ParentPanel $mainContentPanel -IconCode 0xE8FD -OnExpand {
+$externalToolsHorizontalPanel = New-HorizontalCollapsiblePanel -Title "Add-ons" -XPosition 280 -Tag "externalToolsHorizontalPanel" -ParentPanel $mainContentPanel -IconCode 0xE943 -OnExpand {
+    Set-ExtensionProgress -Value 18 -Text "Erweiterungen werden geladen..."
+
     if ($outputViewPanel) { $outputViewPanel.Visible = $true }
     if ($statusViewPanel) { $statusViewPanel.Visible = $false }
     if ($hardwareViewPanel) { $hardwareViewPanel.Visible = $false }
@@ -5811,102 +7184,32 @@ $externalToolsHorizontalPanel = New-HorizontalCollapsiblePanel -Title "Externe T
     if ($externalToolsHorizontalPanel -and $externalToolsHorizontalPanel.Container) {
         $externalToolsHorizontalPanel.Container.Visible = $true
     }
+
+    $definitions = Get-ExtensionRepoDefinitions
+    $extensionStatus = Get-ExtensionRepoStatus -Definitions $definitions
+    $caps = Get-PythonDashboardCapabilities -Port $script:pythonDashboardPort
+    Show-ExtensionsOverviewInOutput -OutputBox $outputBox -ExtensionStatus $extensionStatus -Capabilities $caps
+    Switch-OutputView -viewName "downloadsView"
+    $null = Show-ExtensionTiles -WrapPanel $toolWrapPanel -ExtensionStatus $extensionStatus -OutputBox $outputBox
+
+    Set-ExtensionProgress -Value 100 -Text "Erweiterungen geladen" -Color ([System.Drawing.Color]::LightGreen)
+    Reset-ExtensionProgress -DelayMs 1200
 }
 
-$externalToolsHorizontalPanel.Content.Width = 435
+$externalToolsHorizontalPanel.Content.Width = 0
 $externalToolsHorizontalPanel.Content.Height = 35
 
-$externalToolsButtonWidth = 145
-$externalToolsButtonX = 0
-$externalToolDefinitions = @(Get-ExternalToolDefinitions | Where-Object { $_.enabled -eq $true })
-
-if (-not $externalToolDefinitions -or $externalToolDefinitions.Count -eq 0) {
-    $externalToolDefinitions = @([pscustomobject]@{
-            id = 'multi_monitor'
-            title = 'Multi-Monitor Tool'
-            iconCode = 0xE7F4
-        })
-}
-
-foreach ($externalTool in $externalToolDefinitions) {
-    $toolId = [string]$externalTool.id
-    if ([string]::IsNullOrWhiteSpace($toolId)) { continue }
-
-    $toolTitle = if (-not [string]::IsNullOrWhiteSpace([string]$externalTool.title)) { [string]$externalTool.title } else { $toolId }
-    $toolIconCode = if ($externalTool.PSObject.Properties.Name -contains 'iconCode' -and $externalTool.iconCode) { [int]$externalTool.iconCode } else { 0xE7F4 }
-
-    $btnExternalTool = New-Object System.Windows.Forms.Button
-    $btnExternalTool.Text = $toolTitle
-    $btnExternalTool.Size = New-Object System.Drawing.Size($externalToolsButtonWidth, 35)
-    $btnExternalTool.Location = New-Object System.Drawing.Point($externalToolsButtonX, 0)
-    $btnExternalTool.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
-    $btnExternalTool.FlatAppearance.BorderSize = 0
-    $btnExternalTool.FlatAppearance.MouseOverBackColor = [System.Drawing.Color]::FromArgb(55, 55, 55)
-    $btnExternalTool.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
-    $btnExternalTool.ForeColor = [System.Drawing.Color]::White
-    $btnExternalTool.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
-    $btnExternalTool.Cursor = [System.Windows.Forms.Cursors]::Hand
-    Add-ButtonIcon -Button $btnExternalTool -IconCode $toolIconCode -IconSize 11 -LeftMargin 8
-
-    try {
-        $regionHandle = [RoundedCorners]::CreateRoundRectRgn(0, 0, $btnExternalTool.Width, $btnExternalTool.Height, 8, 8)
-        if ($regionHandle -ne [IntPtr]::Zero) {
-            $btnExternalTool.Region = [System.Drawing.Region]::FromHrgn($regionHandle)
-        }
-    }
-    catch {
-    }
-
-    $btnExternalTool.Add_Click({
-            $launched = Invoke-ExternalToolLauncher -ToolId $toolId -OutputBox $outputBox
-            if (-not $launched) {
-                [System.Windows.Forms.MessageBox]::Show(
-                    "Das externe Tool konnte nicht gestartet werden.`nBitte Data\\external_tools.json pruefen.",
-                    "Externe Tools",
-                    [System.Windows.Forms.MessageBoxButtons]::OK,
-                    [System.Windows.Forms.MessageBoxIcon]::Warning
-                ) | Out-Null
-            }
-        }.GetNewClosure())
-
-    $externalToolsHorizontalPanel.Content.Controls.Add($btnExternalTool)
-    $externalToolsButtonX += $externalToolsButtonWidth
-}
-
-$btnEditExternalToolsH = New-Object System.Windows.Forms.Button
-$btnEditExternalToolsH.Text = "Konfiguration"
-$btnEditExternalToolsH.Size = New-Object System.Drawing.Size($externalToolsButtonWidth, 35)
-$btnEditExternalToolsH.Location = New-Object System.Drawing.Point($externalToolsButtonX, 0)
-$btnEditExternalToolsH.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
-$btnEditExternalToolsH.FlatAppearance.BorderSize = 0
-$btnEditExternalToolsH.FlatAppearance.MouseOverBackColor = [System.Drawing.Color]::FromArgb(55, 55, 55)
-$btnEditExternalToolsH.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
-$btnEditExternalToolsH.ForeColor = [System.Drawing.Color]::White
-$btnEditExternalToolsH.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
-$btnEditExternalToolsH.Cursor = [System.Windows.Forms.Cursors]::Hand
-Add-ButtonIcon -Button $btnEditExternalToolsH -IconCode 0xE70F -IconSize 11 -LeftMargin 8
-
-try {
-    $regionHandle = [RoundedCorners]::CreateRoundRectRgn(0, 0, $btnEditExternalToolsH.Width, $btnEditExternalToolsH.Height, 8, 8)
-    if ($regionHandle -ne [IntPtr]::Zero) {
-        $btnEditExternalToolsH.Region = [System.Drawing.Region]::FromHrgn($regionHandle)
-    }
-}
-catch {
-}
-
-$btnEditExternalToolsH.Add_Click({
-        Open-ExternalToolsConfig
-        if ($outputBox) {
-            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
-            $outputBox.AppendText("[i] Externe Tool-Konfiguration geoeffnet: Data\\external_tools.json`r`n")
-        }
-    })
-$externalToolsHorizontalPanel.Content.Controls.Add($btnEditExternalToolsH)
-
-$externalToolsHorizontalPanel.Content.Width = [Math]::Max(205, ($externalToolsButtonX + $externalToolsButtonWidth))
-
 $mainContentPanel.Controls.Add($externalToolsHorizontalPanel.Container)
+
+# WICHTIG: Initiale Neupositionierung aller horizontalen Panels beim Laden
+# um Überschneidungen zu vermeiden (alle Panels sind noch zugeklappt = 155px Breite)
+$initX = 10
+@($infoHorizontalPanel, $troubleshootHorizontalPanel, $externalToolsHorizontalPanel) | ForEach-Object {
+    if ($_ -and $_.Container) {
+        $_.Container.Location = New-Object System.Drawing.Point($initX, 5)
+        $initX += $_.Container.Width + 5
+    }
+}
 
 #------------------------------------------------------------------------------------------------------------
 
@@ -8787,6 +10090,15 @@ $mainform.Add_Shown({
         catch {
             Write-Verbose "Python-Dashboard Auto-Start konnte nicht ausgefuehrt werden: $_"
         }
+
+        try {
+            if ($StartedFromWindowsLogin) {
+                Start-ConfiguredExtensionsOnWindowsLogin -OutputBox $outputBox
+            }
+        }
+        catch {
+            Write-Verbose "Extension-Autostart beim Windows-Login konnte nicht ausgefuehrt werden: $_"
+        }
         
         # 2. Log-Verzeichnis initialisieren (10%)
         Update-InitProgress -Value 10 -Text "Initialisiere Log-System..."
@@ -9066,29 +10378,32 @@ $mainform.Add_Shown({
             Add-OutputIcon -OutputBox $outputBox -IconCode 0xE73E
             $outputBox.AppendText(" Alle Funktionen stehen zur Verfügung.`r`n`r`n")
         }
-        try {
-            # Sicherstellen, dass das Hauptfenster aktiviert und fokussiert ist
-            $mainform.Activate()
-            $mainform.BringToFront()
-            $mainform.Focus()
-        
-            # Zusätzlich: Windows API verwenden für sicheren Focus
-            if ($script:positioningInitialized -and (Get-Command -Name "NativeMethods" -ErrorAction SilentlyContinue)) {
-                $hwnd = $mainform.Handle
-                if ($hwnd -ne [IntPtr]::Zero) {
-                    [NativeMethods]::SetForegroundWindow($hwnd)
-                    [NativeMethods]::ShowWindow($hwnd, [NativeMethods]::SW_RESTORE)
+        if (-not $script:isStartupTrayLaunch) {
+            try {
+                # Sicherstellen, dass das Hauptfenster aktiviert und fokussiert ist
+                $mainform.Activate()
+                $mainform.BringToFront()
+                $mainform.Focus()
+            
+                # Zusätzlich: Windows API verwenden für sicheren Focus
+                if ($script:positioningInitialized -and (Get-Command -Name "NativeMethods" -ErrorAction SilentlyContinue)) {
+                    $hwnd = $mainform.Handle
+                    if ($hwnd -ne [IntPtr]::Zero) {
+                        [NativeMethods]::SetForegroundWindow($hwnd)
+                        [NativeMethods]::ShowWindow($hwnd, [NativeMethods]::SW_RESTORE)
+                    }
                 }
-            }            # Tooltips explizit aktivieren nach dem Fokussieren
-            if ($tooltipObj) {
-                $tooltipObj.Active = $true
-                [System.Windows.Forms.Application]::DoEvents()
+
+                if ($tooltipObj) {
+                    $tooltipObj.Active = $true
+                    [System.Windows.Forms.Application]::DoEvents()
+                }
             }
-        
-        } catch {
-            Write-ConsoleStyle -Message "[!] Warnung: Konnte GUI-Fenster nicht automatisch fokussieren: $_" -Style 'Warning'
-            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
-            $outputBox.AppendText("[!]Warnung: Automatischer Focus fehlgeschlagen - Tooltips funktionieren nach dem ersten Klick.`r`n")
+            catch {
+                Write-ConsoleStyle -Message "[!] Warnung: Konnte GUI-Fenster nicht automatisch fokussieren: $_" -Style 'Warning'
+                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
+                $outputBox.AppendText("[!]Warnung: Automatischer Focus fehlgeschlagen - Tooltips funktionieren nach dem ersten Klick.`r`n")
+            }
         }
 
         $applySettingsTimer = New-Object System.Windows.Forms.Timer
@@ -9113,143 +10428,129 @@ $mainform.Add_Shown({
         $applySettingsTimer.Start()
 
         # Verzögerte GUI-Versionsprüfung nach dem Start (nicht-blockierend für die Initialisierung)
-        $startupGuiUpdateTimer = New-Object System.Windows.Forms.Timer
-        $startupGuiUpdateTimer.Interval = 1500
-        $startupGuiUpdateTimer.Add_Tick({
-                $this.Stop()
-
-                try {
-                    $guiUpdateStatus = $null
+        if (-not $script:isStartupTrayLaunch) {
+            $startupGuiUpdateTimer = New-Object System.Windows.Forms.Timer
+            $startupGuiUpdateTimer.Interval = 1500
+            $startupGuiUpdateTimer.Add_Tick({
+                    $this.Stop()
 
                     try {
-                        $resolvedGitHubToken = Get-GuiGitHubToken -ProjectPath $PSScriptRoot
-                        $guiUpdateStatus = Get-GuiReleaseDependencyStatus `
-                            -CurrentVersion $script:AppVersion `
-                            -RepoOwner $script:GuiUpdateRepoOwner `
-                            -RepoName $script:GuiUpdateRepoName `
-                            -GitHubToken $resolvedGitHubToken
+                        $guiUpdateStatus = $null
+
+                        try {
+                            $resolvedGitHubToken = Get-GuiGitHubToken -ProjectPath $PSScriptRoot
+                            $guiUpdateStatus = Get-GuiReleaseDependencyStatus `
+                                -CurrentVersion $script:AppVersion `
+                                -RepoOwner $script:GuiUpdateRepoOwner `
+                                -RepoName $script:GuiUpdateRepoName `
+                                -GitHubToken $resolvedGitHubToken
+                        } catch {
+                            Write-Verbose "GUI-Update-Prüfung beim Start fehlgeschlagen: $_"
+                        }
+
+                        if ($guiUpdateStatus -and $guiUpdateStatus.UpdateAvailable) {
+                            $availableVersionText = if ([string]::IsNullOrWhiteSpace($guiUpdateStatus.AvailableVersion)) {
+                                "unbekannt"
+                            } else {
+                                "v$($guiUpdateStatus.AvailableVersion)"
+                            }
+
+                            if ($outputBox) {
+                                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
+                                Add-OutputIcon -OutputBox $outputBox -IconCode 0xE7BA
+                                $outputBox.AppendText(" Neue GUI-Version verfügbar: $availableVersionText`r`n")
+                                Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
+                                Add-OutputIcon -OutputBox $outputBox -IconCode 0xE721
+                                $outputBox.AppendText(" Öffnen Sie 'Status prüfen', um Update oder Downgrade auszuwählen.`r`n`r`n")
+                            }
+
+                            if ($statusLabel) {
+                                $statusLabel.Text = "Status: Neue GUI-Version verfügbar ($availableVersionText) | " + (Get-Date -Format "dd.MM.yyyy HH:mm")
+                            }
+
+                            $dialogText = "Eine neue GUI-Version ist verfügbar ($availableVersionText).`r`n`r`nJetzt 'Status prüfen' öffnen?"
+                            $dialogResult = [System.Windows.Forms.MessageBox]::Show(
+                                $dialogText,
+                                "Neue Version verfügbar",
+                                [System.Windows.Forms.MessageBoxButtons]::YesNo,
+                                [System.Windows.Forms.MessageBoxIcon]::Information
+                            )
+
+                            if ($dialogResult -eq [System.Windows.Forms.DialogResult]::Yes -and $btnCheckDependenciesH) {
+                                $btnCheckDependenciesH.PerformClick()
+                            }
+                        }
                     } catch {
-                        Write-Verbose "GUI-Update-Prüfung beim Start fehlgeschlagen: $_"
+                        Write-Verbose "Fehler bei Startup-Update-Hinweis: $_"
+                    } finally {
+                        $this.Dispose()
                     }
+                })
+            $startupGuiUpdateTimer.Start()
 
-                    if ($guiUpdateStatus -and $guiUpdateStatus.UpdateAvailable) {
-                        $availableVersionText = if ([string]::IsNullOrWhiteSpace($guiUpdateStatus.AvailableVersion)) {
-                            "unbekannt"
-                        } else {
-                            "v$($guiUpdateStatus.AvailableVersion)"
-                        }
+            # Timer für die finale Positionierung nach dem vollständigen Laden
+            $positioningTimer = New-Object System.Windows.Forms.Timer
+            $positioningTimer.Interval = 1000
+            $positioningTimer.Add_Tick({
+                    $this.Stop()
 
-                        if ($outputBox) {
-                            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Warning'
-                            Add-OutputIcon -OutputBox $outputBox -IconCode 0xE7BA
-                            $outputBox.AppendText(" Neue GUI-Version verfügbar: $availableVersionText`r`n")
-                            Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
-                            Add-OutputIcon -OutputBox $outputBox -IconCode 0xE721
-                            $outputBox.AppendText(" Öffnen Sie 'Status prüfen', um Update oder Downgrade auszuwählen.`r`n`r`n")
-                        }
+                    try {
+                        $consoleHandle = Find-PowerShellWindow
+                        if ($consoleHandle -ne [IntPtr]::Zero) {
+                            [NativeMethods]::ShowWindow($consoleHandle, [NativeMethods]::SW_RESTORE)
+                            [NativeMethods]::SetForegroundWindow($consoleHandle)
 
-                        if ($statusLabel) {
-                            $statusLabel.Text = "Status: Neue GUI-Version verfügbar ($availableVersionText) | " + (Get-Date -Format "dd.MM.yyyy HH:mm")
-                        }
+                            $rect = New-Object RECT                        if ([NativeMethods]::GetWindowRect($consoleHandle, [ref]$rect)) {
+                                $guiLeft = $rect.Right + 10
+                                $guiTop = $rect.Top
 
-                        $dialogText = "Eine neue GUI-Version ist verfügbar ($availableVersionText).`r`n`r`nJetzt 'Status prüfen' öffnen?"
-                        $dialogResult = [System.Windows.Forms.MessageBox]::Show(
-                            $dialogText,
-                            "Neue Version verfügbar",
-                            [System.Windows.Forms.MessageBoxButtons]::YesNo,
-                            [System.Windows.Forms.MessageBoxIcon]::Information
-                        )
+                                $screenWidth = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea.Width
+                                $screenHeight = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea.Height
 
-                        if ($dialogResult -eq [System.Windows.Forms.DialogResult]::Yes -and $btnCheckDependenciesH) {
-                            $btnCheckDependenciesH.PerformClick()
-                        }
-                    }
-                } catch {
-                    Write-Verbose "Fehler bei Startup-Update-Hinweis: $_"
-                } finally {
-                    $this.Dispose()
-                }
-            })
-        $startupGuiUpdateTimer.Start()
+                                if ($guiLeft + $mainform.Width -gt $screenWidth) {
+                                    $guiLeft = $rect.Left
+                                    $guiTop = $rect.Bottom + 10
 
-        # Timer für die finale Positionierung nach dem vollständigen Laden
-        $positioningTimer = New-Object System.Windows.Forms.Timer
-        $positioningTimer.Interval = 1000  # 1 Sekunde warten
-        $positioningTimer.Add_Tick({
-                $this.Stop()
-
-                try {
-                    # Konsolenfenster finden und in den Vordergrund bringen
-                    $consoleHandle = Find-PowerShellWindow
-                    if ($consoleHandle -ne [IntPtr]::Zero) {
-                        # Konsolenfenster in den Vordergrund bringen
-                        [NativeMethods]::ShowWindow($consoleHandle, [NativeMethods]::SW_RESTORE)
-                        [NativeMethods]::SetForegroundWindow($consoleHandle)
-
-                        # Konsolenfenstergröße ermitteln
-                        $rect = New-Object RECT                        if ([NativeMethods]::GetWindowRect($consoleHandle, [ref]$rect)) {
-                            # GUI-Fenster rechts neben dem Konsolenfenster positionieren
-                            $guiLeft = $rect.Right + 10
-                            $guiTop = $rect.Top
-
-                            # Sicherstellen, dass das Fenster auf dem Bildschirm sichtbar ist
-                            $screenWidth = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea.Width
-                            $screenHeight = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea.Height
-
-                            if ($guiLeft + $mainform.Width -gt $screenWidth) {
-                                # Wenn das GUI-Fenster rechts nicht mehr auf den Bildschirm passt,
-                                # platziere es unter dem Konsolenfenster
-                                $guiLeft = $rect.Left
-                                $guiTop = $rect.Bottom + 10
-
-                                # Wenn auch das nicht passt, dann belasse es bei der aktuellen Position
-                                if ($guiTop + $mainform.Height -gt $screenHeight) {
-                                    return
+                                    if ($guiTop + $mainform.Height -gt $screenHeight) {
+                                        return
+                                    }
                                 }
-                            }
 
-                            # Debug-Ausgabe entfernt
-                            $mainform.Location = New-Object System.Drawing.Point($guiLeft, $guiTop)
-                        }
-                    }                
-                } catch {
-                } finally {
-                    # Einfache Tooltip-Aktivierung nach vollständiger GUI-Initialisierung
-                    if ($tooltipObj) {
-                        $tooltipObj.Active = $true
-                        [System.Windows.Forms.Application]::DoEvents()
-                        #    Write-Host "Tooltips wurden nach GUI-Initialisierung aktiviert" -ForegroundColor Green
-                    }
-                    # Timer für verzögerte Tooltip-Setzung (erst nach vollständiger GUI-Initialisierung)
-                    $tooltipSetupTimer = New-Object System.Windows.Forms.Timer
-                    $tooltipSetupTimer.Interval = 1000  # 1 Sekunde warten
-                    $tooltipSetupTimer.Add_Tick({
-                            $this.Stop()
-                            try {
-                                if ($tooltipObj) {
-                                    # Tooltips aktivieren, nachdem alle GUI-Elemente sicher initialisiert sind
-                                    $tooltipObj.Active = $true
-                                
-                                    # UI-Events verarbeiten
-                                    [System.Windows.Forms.Application]::DoEvents()
-                                
-                                    # Fenster nochmals aktivieren für sichere Tooltip-Funktionalität
-                                    $mainform.Activate()
-                                    $mainform.BringToFront()
-                                    [System.Windows.Forms.Application]::DoEvents()
-                                }
-                            } catch {
-                                Write-Host "Fehler beim Setzen der Tooltips: $_" -ForegroundColor Red
-                            } finally {
-                                $this.Dispose()
+                                $mainform.Location = New-Object System.Drawing.Point($guiLeft, $guiTop)
                             }
-                        })
-                    $tooltipSetupTimer.Start()
-                    
-                    $this.Dispose()
-                }
-            })
-        $positioningTimer.Start()
+                        }
+                    } catch {
+                    } finally {
+                        if ($tooltipObj) {
+                            $tooltipObj.Active = $true
+                            [System.Windows.Forms.Application]::DoEvents()
+                        }
+
+                        $tooltipSetupTimer = New-Object System.Windows.Forms.Timer
+                        $tooltipSetupTimer.Interval = 1000
+                        $tooltipSetupTimer.Add_Tick({
+                                $this.Stop()
+                                try {
+                                    if ($tooltipObj) {
+                                        $tooltipObj.Active = $true
+                                        [System.Windows.Forms.Application]::DoEvents()
+                                        $mainform.Activate()
+                                        $mainform.BringToFront()
+                                        [System.Windows.Forms.Application]::DoEvents()
+                                    }
+                                } catch {
+                                    Write-Host "Fehler beim Setzen der Tooltips: $_" -ForegroundColor Red
+                                } finally {
+                                    $this.Dispose()
+                                }
+                            })
+                        $tooltipSetupTimer.Start()
+
+                        $this.Dispose()
+                    }
+                })
+            $positioningTimer.Start()
+        }
     })
 
 # Event-Handler für Button-Wechsel hinzufügen - steuert, welche Buttons in der SubNavigation angezeigt werden
@@ -9323,9 +10624,14 @@ function Update-AllButtonFlatAppearance {
 Update-AllButtonFlatAppearance -RootControl $mainform
 
 $startupSettings = Get-SystemToolSettings
+$script:isStartupTrayLaunch = $false
 $script:hideToTrayOnShown = $false
 if ($StartedFromWindowsLogin -and $startupSettings -and [bool]$startupSettings.MinimizeToTrayOnStartup) {
+    $script:isStartupTrayLaunch = $true
     $script:hideToTrayOnShown = $true
+    $mainform.ShowInTaskbar = $false
+    $mainform.WindowState = [System.Windows.Forms.FormWindowState]::Minimized
+    $mainform.Opacity = 0
 }
 
 $mainform.Add_Shown({

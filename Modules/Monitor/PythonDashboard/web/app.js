@@ -236,6 +236,15 @@ const ROUTE_PAGE_MAP = {
   '/setup': 'setup',
 };
 const SIZE_PRESETS = ['1-8', '1-4', '1-3', '1-2', '2-3', 'full', 'min'];
+const SIZE_RATIOS = {
+  '1-8': 1 / 8,
+  '1-4': 1 / 4,
+  '1-3': 1 / 3,
+  '1-2': 1 / 2,
+  '2-3': 2 / 3,
+  full: 1,
+  min: 1 / 3,
+};
 const THEME_KEY = 'bockis_theme_v1';
 const GLASS_STRENGTH_KEY = 'bockis_glass_strength_v1';
 const AUDIO_USER_ROUTES_KEY = 'bockis_audio_user_routes_v1';
@@ -277,6 +286,16 @@ const LAUNCHER_ICON_OPTIONS = [
   { id: 'speaker', label: 'Audio' },
   { id: 'file', label: 'Dokument' },
 ];
+
+const DASHBOARD_COLUMNS_KEY = 'bockis_dashboard_columns_v1';
+const DEFAULT_DASHBOARD_COLUMNS = {
+  overview: 3,
+  audio: 2,
+  quickstart: 3,
+  logs: 3,
+  tools: 4,
+  setup: 3,
+};
 
 let draggedCard = null;
 let cachedAudioDevices = [];
@@ -322,6 +341,8 @@ const REFRESH_INTERVALS = {
   gitMs: 30000,
 };
 const masonryFrames = new Map();
+let layoutResizeObserver = null;
+let layoutResizeDebounce = null;
 const HISTORY_LEN = 45;
 const monitorHistory = {
   cpu: [],
@@ -445,9 +466,92 @@ function scheduleMasonryLayout(layoutEl = audioGrid) {
   masonryFrames.set(key, frame);
 }
 
+function scheduleAllLayoutsMasonry() {
+  document.querySelectorAll('.layout').forEach((layoutEl) => scheduleMasonryLayout(layoutEl));
+}
+
+function installLayoutResizeObserver() {
+  if (typeof ResizeObserver === 'undefined') return;
+
+  if (layoutResizeObserver) {
+    try { layoutResizeObserver.disconnect(); } catch {}
+  }
+
+  layoutResizeObserver = new ResizeObserver((entries) => {
+    for (const entry of entries) {
+      const el = entry.target;
+      if (el && el.classList && el.classList.contains('layout')) {
+        applyResponsiveTileSpans(el);
+        scheduleMasonryLayout(el);
+      }
+    }
+  });
+
+  document.querySelectorAll('.layout').forEach((layoutEl) => {
+    try { layoutResizeObserver.observe(layoutEl); } catch {}
+  });
+}
+
+function queueLayoutReflow() {
+  if (layoutResizeDebounce) {
+    clearTimeout(layoutResizeDebounce);
+  }
+
+  layoutResizeDebounce = setTimeout(() => {
+    layoutResizeDebounce = null;
+    document.querySelectorAll('.layout').forEach((layoutEl) => {
+      applyResponsiveTileSpans(layoutEl);
+      scheduleMasonryLayout(layoutEl);
+    });
+  }, 120);
+}
+
 function getCards(layoutEl = dashboardGrid) {
   if (!layoutEl) return [];
   return Array.from(layoutEl.querySelectorAll('.card[data-widget]'));
+}
+
+function getLayoutColumnCount(layoutEl = dashboardGrid) {
+  if (!layoutEl) return 24;
+
+  const style = getComputedStyle(layoutEl);
+  const raw = style.getPropertyValue('--layout-columns').trim();
+  const parsed = Number.parseInt(raw, 10);
+  if (Number.isFinite(parsed) && parsed > 0) return parsed;
+
+  return 24;
+}
+
+function getResponsiveSpan(size, columns) {
+  const safeColumns = Math.max(1, Number.parseInt(columns, 10) || 1);
+  const key = SIZE_PRESETS.includes(size) ? size : '1-3';
+
+  if (key === 'full') return safeColumns;
+
+  if (key === 'min') {
+    // Keep compact cards useful on small grids: below 8 columns, show two compact cards per row.
+    const minSpan = safeColumns >= 8 ? Math.round(safeColumns / 3) : Math.max(1, Math.round(safeColumns / 2));
+    return Math.min(safeColumns, Math.max(1, minSpan));
+  }
+
+  const ratio = SIZE_RATIOS[key] || (1 / 3);
+  const span = Math.round(safeColumns * ratio);
+  return Math.min(safeColumns, Math.max(1, span));
+}
+
+function applyResponsiveCardSpan(card, layoutEl = dashboardGrid, size = null) {
+  if (!card) return;
+
+  const target = SIZE_PRESETS.includes(size) ? size : (card.dataset.size || card.dataset.defaultSize || '1-3');
+  const columns = getLayoutColumnCount(layoutEl);
+  const span = getResponsiveSpan(target, columns);
+  card.style.gridColumn = `span ${span}`;
+}
+
+function applyResponsiveTileSpans(layoutEl = dashboardGrid) {
+  getCards(layoutEl).forEach((card) => {
+    applyResponsiveCardSpan(card, layoutEl);
+  });
 }
 
 function getCurrentPage() {
@@ -502,6 +606,71 @@ function updateBrowserLocation(page, replace = false) {
 function getIconMarkup(iconName) {
   if (!iconName) return '';
   return `<span class="icon-inline"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#icon-${iconName}"></use></svg></span>`;
+}
+
+function readDashboardColumns() {
+  try {
+    const raw = localStorage.getItem(DASHBOARD_COLUMNS_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return { ...DEFAULT_DASHBOARD_COLUMNS };
+}
+
+function saveDashboardColumns(columns) {
+  try {
+    localStorage.setItem(DASHBOARD_COLUMNS_KEY, JSON.stringify(columns));
+  } catch {}
+}
+
+function applyDashboardColumns(page, columns) {
+  const safeColumns = Math.max(2, Math.min(4, Number.parseInt(columns, 10) || 3));
+  document.documentElement.style.setProperty('--layout-columns', Math.round(safeColumns * 6));
+}
+
+function getCurrentDashboardColumns(page = getCurrentPage()) {
+  const cols = readDashboardColumns();
+  return cols[page] || DEFAULT_DASHBOARD_COLUMNS[page] || 3;
+}
+
+function updateDashboardColumnButtons(page = null) {
+  const cols = readDashboardColumns();
+  const pages = page ? [page] : Object.keys(DEFAULT_DASHBOARD_COLUMNS);
+
+  pages.forEach((page) => {
+    const colNum = cols[page] || DEFAULT_DASHBOARD_COLUMNS[page];
+    const buttons = document.querySelectorAll(`.page-column-btn[data-page="${page}"]`);
+    buttons.forEach((btn) => {
+      const btnCols = Number.parseInt(btn.dataset.cols, 10);
+      btn.classList.toggle('active', btnCols === colNum);
+    });
+  });
+}
+
+function setDashboardColumns(page, columns) {
+  if (!page) return;
+  const safeColumns = Math.max(2, Math.min(4, Number.parseInt(columns, 10) || 3));
+  const allCols = readDashboardColumns();
+  allCols[page] = safeColumns;
+  saveDashboardColumns(allCols);
+  updateDashboardColumnButtons(page);
+
+  if (getCurrentPage() !== page) return;
+
+  applyDashboardColumns(page, safeColumns);
+  document.querySelectorAll('.page.active .layout').forEach((layoutEl) => {
+    applyResponsiveTileSpans(layoutEl);
+    scheduleMasonryLayout(layoutEl);
+  });
+}
+
+function wireDashboardColumnControls() {
+  document.querySelectorAll('.page-column-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      setDashboardColumns(btn.dataset.page, btn.dataset.cols);
+    });
+  });
+
+  updateDashboardColumnButtons();
 }
 
 function decoratePageMenuIcons() {
@@ -695,6 +864,7 @@ function setCardSize(card, size, save = true, layoutEl = dashboardGrid, storageK
   SIZE_PRESETS.forEach((s) => card.classList.remove(`tile-size-${s}`));
   card.classList.add(`tile-size-${target}`);
   card.dataset.size = target;
+  applyResponsiveCardSpan(card, layoutEl, target);
 
   const selectEl = card.querySelector('.size-select');
   if (selectEl && selectEl.value !== target) {
@@ -759,6 +929,8 @@ function applyLayout(layout, layoutEl = dashboardGrid) {
     const size = layout.sizes && layout.sizes[w] ? layout.sizes[w] : (card.dataset.defaultSize || '1-3');
     setCardSize(card, size, false, layoutEl);
   });
+
+  applyResponsiveTileSpans(layoutEl);
 
   scheduleMasonryLayout(layoutEl);
 }
@@ -911,7 +1083,14 @@ function showPage(page, options = {}) {
   renderWidgetMenu(resolvedPage);
   refreshActivePageOnce(resolvedPage);
   updateScopedRefreshTimers();
-  document.querySelectorAll('.page.active .layout').forEach((layoutEl) => scheduleMasonryLayout(layoutEl));
+
+  const pageColumns = getCurrentDashboardColumns(resolvedPage);
+  applyDashboardColumns(resolvedPage, pageColumns);
+
+  document.querySelectorAll('.page.active .layout').forEach((layoutEl) => {
+    applyResponsiveTileSpans(layoutEl);
+    scheduleMasonryLayout(layoutEl);
+  });
 }
 
 function wirePageMenu() {
@@ -4000,9 +4179,8 @@ async function init() {
   wireDragDrop(quickstartGrid, QUICKSTART_LAYOUT_KEY, renderWidgetMenu);
   wireDragDrop(toolsGrid, TOOLS_LAYOUT_KEY, renderWidgetMenu);
   wireDragDrop(setupGrid, SETUP_LAYOUT_KEY, renderWidgetMenu);
-  window.addEventListener('resize', () => {
-    document.querySelectorAll('.layout').forEach((layoutEl) => scheduleMasonryLayout(layoutEl));
-  });
+  window.addEventListener('resize', queueLayoutReflow);
+  installLayoutResizeObserver();
   wireAudioControls();
   wireUserAudioRoutingControls();
   hiddenAudioDeviceIds = new Set(readHiddenAudioDevices());
@@ -4012,6 +4190,8 @@ async function init() {
   }
   setAudioEditMode(audioEditMode);
   wireThemeControls();
+  wireDashboardColumnControls();
+
   launcherCategoryLayouts = readLauncherCategoryLayouts();
   launcherCategoryDensity = readLauncherCategoryDensity();
   launcherCategoryOrder = readLauncherCategoryOrder();
@@ -4027,8 +4207,29 @@ async function init() {
   }
 
   await Promise.all([refreshAll(), refreshGit(), loadLogs(), loadDependencyStatus(), loadDashboardDependencyStatus(), loadTools(), loadLaunchers()]);
-  document.querySelectorAll('.layout').forEach((layoutEl) => scheduleMasonryLayout(layoutEl));
+  scheduleAllLayoutsMasonry();
   updateScopedRefreshTimers();
+
+  const initialPage = getCurrentPage();
+  const initialColumns = getCurrentDashboardColumns(initialPage);
+  applyDashboardColumns(initialPage, initialColumns);
+
+  if (typeof console !== 'undefined' && console.log) {
+    setTimeout(() => {
+      const layoutEls = document.querySelectorAll('.layout');
+      if (layoutEls.length > 0) {
+        const firstLayout = layoutEls[0];
+        const columns = getLayoutColumnCount(firstLayout);
+        const cards = getCards(firstLayout);
+        console.log(`✓ Responsive Layout aktiv: ${columns} Spalten | ${cards.length} Karten`);
+        cards.slice(0, 2).forEach((card) => {
+          const span = card.style.gridColumn || card.className.match(/tile-size-\S+/) || 'default';
+          console.log(`  └─ ${card.dataset.widget}: ${span}`);
+        });
+      }
+    }, 300);
+  }
+
   // Git-Update-Check: sofort prüfen und danach alle 5 Minuten
   checkGitUpdates().catch(() => {});
   if (gitUpdateCheckTimer) clearInterval(gitUpdateCheckTimer);
