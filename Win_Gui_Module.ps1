@@ -5508,10 +5508,8 @@ $cleanupPanel = New-CollapsiblePanel -Title "Bereinigung" -YPosition 145 -Tag "c
     Add-OutputIcon -OutputBox $outputBox -IconCode 0xE74C
     $outputBox.AppendText(" VERFÜGBARE BEREINIGUNGEN:`r`n")
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
-    $outputBox.AppendText("  • Temp-Dateien (Einfach)  - Löscht TEMP-Ordner (%TEMP%, Windows\Temp)`r`n")
-    $outputBox.AppendText("  • Temp-Dateien (Erweitert)- Umfassend: TEMP, Prefetch, Browser-Cache`r`n")
-    $outputBox.AppendText("  • Disk Cleanup            - Windows-eigenes Bereinigungs-Tool`r`n")
-    $outputBox.AppendText("  • Cleanup-Übersicht       - Interaktive Auswahlmaske mit Vorschau`r`n`r`n")
+    $outputBox.AppendText("  • Disk Cleanup      - Windows-eigenes Bereinigungs-Tool (cleanmgr.exe)`r`n")
+    $outputBox.AppendText("  • Custom-Cleanup    - Interaktive Auswahlmaske: TEMP, Prefetch, Browser-Cache`r`n`r`n")
     
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
     Add-OutputIcon -OutputBox $outputBox -IconCode 0xE74E
