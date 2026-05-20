@@ -371,6 +371,21 @@ function Start-CHKDSK {
     if ($null -ne $mainform) {
         $wpfForm.Left = $mainform.Location.X + $mainform.Width + 10
         $wpfForm.Top = $mainform.Location.Y
+
+        # Hauptform-Bewegung mitverfolgen: WPF-Fenster folgt beim Verschieben
+        $offsetX = $mainform.Width + 10
+        $offsetY = 0
+        $script:_chkdskWpfMoveHandler = {
+            $wpfForm.Left = $mainform.Location.X + $offsetX
+            $wpfForm.Top  = $mainform.Location.Y + $offsetY
+        }.GetNewClosure()
+        $mainform.Add_LocationChanged($script:_chkdskWpfMoveHandler)
+        $wpfForm.Add_Closed({
+            if ($script:_chkdskWpfMoveHandler) {
+                $mainform.Remove_LocationChanged($script:_chkdskWpfMoveHandler)
+                $script:_chkdskWpfMoveHandler = $null
+            }
+        }.GetNewClosure())
     }
 
     # Controls holen
