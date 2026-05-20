@@ -235,7 +235,7 @@ $targets = @(
         )
     },
     @{
-        Path = Join-Path $projectRoot 'Tools\Create-GitHubRelease.ps1'
+        Path = Join-Path $projectRoot '#_Tools\Create-GitHubRelease.ps1'
         Replacements = @(
             @{ Label = 'ReleaseScriptDefaultVersion'; Pattern = '(?m)^\s*\[string\]\$Version\s*=\s*"[^"]*",\s*$'; Replacement = ('    [string]$Version = "' + $Version + '",') }
         )
