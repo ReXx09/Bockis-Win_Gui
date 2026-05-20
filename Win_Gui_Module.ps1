@@ -4661,6 +4661,12 @@ function New-CollapsiblePanel {
                         $otherHeader.Tag = "collapsed"
                         $otherContent.Visible = $false
                         $ctrl.Height = 35
+                        
+                        # OpenUpward-Panel: Container-Position und Header-Position zurücksetzen
+                        if ($null -ne $ctrl.OriginalY) {
+                            $ctrl.Location = New-Object System.Drawing.Point($ctrl.Location.X, $ctrl.OriginalY)
+                            $otherHeader.Location = New-Object System.Drawing.Point(0, 0)
+                        }
                     }
                 }
             }
