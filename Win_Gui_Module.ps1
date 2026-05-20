@@ -7104,7 +7104,8 @@ $btnCheckDependenciesH.Add_Click({
                                 } elseif ($actionType -eq "winget-version-select") {
                                     $actionResult = Invoke-WingetVersionAction -WingetId $depToHandle.WingetId -CurrentVersion $depToHandle.Version -ProgressCallback $uiProgressCallback -LogCallback $uiLogCallback
                                 } elseif ($actionType -eq "git-pull") {
-                                    $actionResult = Invoke-GitPullDependencyAction -RepositoryPath $PSScriptRoot -ProgressCallback $uiProgressCallback -LogCallback $uiLogCallback
+                                    $gitPullRepoPath = if (-not [string]::IsNullOrWhiteSpace($depToHandle.RepoPath)) { $depToHandle.RepoPath } else { $PSScriptRoot }
+                                    $actionResult = Invoke-GitPullDependencyAction -RepositoryPath $gitPullRepoPath -ProgressCallback $uiProgressCallback -LogCallback $uiLogCallback
                                 } elseif ($actionType -eq "upgrade") {
                                     $actionResult = Invoke-DependencyAction -WingetId $depToHandle.WingetId -Action 'upgrade' -ProgressCallback $uiProgressCallback -LogCallback $uiLogCallback
                                 } elseif ($actionType -eq "lhm-update") {
