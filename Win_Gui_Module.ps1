@@ -1167,7 +1167,8 @@ $script:pythonDashboardProcess = $null
 $script:pythonDashboardPort = 9500
 
 function Get-PythonDashboardProjectPath {
-    $legacyPath = Join-Path $PSScriptRoot 'Modules\Monitor\PythonDashboard'
+    $workspaceRoot = $PSScriptRoot | Split-Path
+    $defaultExternalPath = Join-Path $workspaceRoot 'Bockis-Dashboard'
     $configPath = Join-Path $PSScriptRoot 'config.json'
 
     $candidatePaths = New-Object System.Collections.Generic.List[string]
@@ -1218,7 +1219,7 @@ function Get-PythonDashboardProjectPath {
         }
     }
 
-    & $addCandidate $legacyPath
+    & $addCandidate $defaultExternalPath
 
     foreach ($candidate in $candidatePaths) {
         if (Test-Path $candidate) {
@@ -1226,7 +1227,7 @@ function Get-PythonDashboardProjectPath {
         }
     }
 
-    return $legacyPath
+    return $defaultExternalPath
 }
 
 function Get-PythonDashboardStartScriptPath {
@@ -1236,8 +1237,7 @@ function Get-PythonDashboardStartScriptPath {
         return $startScriptPath
     }
 
-    $legacyStartScriptPath = Join-Path (Join-Path $PSScriptRoot 'Modules\Monitor\PythonDashboard') 'Start-PythonDashboardBackground.ps1'
-    return $legacyStartScriptPath
+    return $startScriptPath
 }
 
 function Get-PythonDashboardPidFromPort {
@@ -1488,7 +1488,10 @@ function Get-ExtensionRepoDefinitions {
 }
 
 function Get-ExtensionRepoStatus {
-    param([object[]]$Definitions)
+    param(
+        [object[]]$Definitions,
+        [switch]$CheckRemoteUpdates
+    )
 
     $items = @()
     foreach ($def in @($Definitions)) {
@@ -1533,7 +1536,7 @@ function Get-ExtensionRepoStatus {
 
         $relativePath = [string]$def.relativePath
         if ([string]::IsNullOrWhiteSpace($relativePath)) {
-            $relativePath = Join-Path 'Extensions' $id
+            $relativePath = Join-Path 'Data\Add-ons' $id
         }
 
         $effectivePath = $relativePath
@@ -1549,6 +1552,38 @@ function Get-ExtensionRepoStatus {
 
         $installed = Test-Path $effectivePath
         $hasGit = Test-Path (Join-Path $effectivePath '.git')
+
+        $versionCheckOk = $false
+        $updateAvailable = $false
+        $localCommit = ''
+        $remoteCommit = ''
+        $commitsBehind = 0
+        $commitsAhead = 0
+        $versionStatusText = if (-not $installed) {
+            'Nicht installiert'
+        }
+        elseif (-not $hasGit) {
+            'Kein Git-Repository'
+        }
+        elseif (-not $CheckRemoteUpdates) {
+            'Versionspruefung ausstehend'
+        }
+        else {
+            'Versionsstatus unbekannt'
+        }
+
+        if ($installed -and $hasGit -and $CheckRemoteUpdates) {
+            $versionInfo = Get-ExtensionGitUpdateInfo -RepoPath $effectivePath -Ref $ref
+            if ($versionInfo) {
+                $versionCheckOk = [bool]$versionInfo.CheckOk
+                $updateAvailable = [bool]$versionInfo.UpdateAvailable
+                $localCommit = [string]$versionInfo.LocalCommit
+                $remoteCommit = [string]$versionInfo.RemoteCommit
+                $commitsBehind = [int]$versionInfo.CommitsBehind
+                $commitsAhead = [int]$versionInfo.CommitsAhead
+                $versionStatusText = [string]$versionInfo.StatusText
+            }
+        }
 
         $entryPointPath = $null
         if (-not [string]::IsNullOrWhiteSpace($entryPoint)) {
@@ -1579,6 +1614,13 @@ function Get-ExtensionRepoStatus {
             StartWithWindows = $startWithWindows
             ShowInTray = $showInTray
             Capabilities = @($capabilities)
+            VersionCheckOk = $versionCheckOk
+            UpdateAvailable = $updateAvailable
+            LocalCommit = $localCommit
+            RemoteCommit = $remoteCommit
+            CommitsBehind = $commitsBehind
+            CommitsAhead = $commitsAhead
+            VersionStatusText = $versionStatusText
         }
     }
 
@@ -1728,6 +1770,97 @@ function Invoke-ExtensionGitCommand {
         Success = ($exitCode -eq 0)
         ExitCode = $exitCode
         Output = $outputText
+    }
+}
+
+function Get-ExtensionGitUpdateInfo {
+    param(
+        [string]$RepoPath,
+        [string]$Ref
+    )
+
+    $refValue = if ([string]::IsNullOrWhiteSpace($Ref)) { 'main' } else { $Ref.Trim() }
+
+    if ([string]::IsNullOrWhiteSpace($RepoPath) -or -not (Test-Path $RepoPath)) {
+        return [pscustomobject]@{
+            CheckOk = $false
+            UpdateAvailable = $false
+            LocalCommit = ''
+            RemoteCommit = ''
+            CommitsBehind = 0
+            CommitsAhead = 0
+            StatusText = 'Versionspruefung nicht moeglich (Pfad fehlt)'
+        }
+    }
+
+    $fetchResult = Invoke-ExtensionGitCommand -WorkingDirectory $RepoPath -Arguments @('fetch', '--quiet', 'origin', $refValue)
+    if (-not $fetchResult.Success) {
+        return [pscustomobject]@{
+            CheckOk = $false
+            UpdateAvailable = $false
+            LocalCommit = ''
+            RemoteCommit = ''
+            CommitsBehind = 0
+            CommitsAhead = 0
+            StatusText = 'Versionspruefung fehlgeschlagen (kein Remote-Status)'
+        }
+    }
+
+    $localHashResult = Invoke-ExtensionGitCommand -WorkingDirectory $RepoPath -Arguments @('rev-parse', '--short', 'HEAD')
+    $remoteHashResult = Invoke-ExtensionGitCommand -WorkingDirectory $RepoPath -Arguments @('rev-parse', '--short', "origin/$refValue")
+    $distanceResult = Invoke-ExtensionGitCommand -WorkingDirectory $RepoPath -Arguments @('rev-list', '--left-right', '--count', "HEAD...origin/$refValue")
+
+    if (-not $localHashResult.Success -or -not $remoteHashResult.Success -or -not $distanceResult.Success) {
+        return [pscustomobject]@{
+            CheckOk = $false
+            UpdateAvailable = $false
+            LocalCommit = ''
+            RemoteCommit = ''
+            CommitsBehind = 0
+            CommitsAhead = 0
+            StatusText = 'Versionsstatus nicht auswertbar'
+        }
+    }
+
+    $localCommit = ($localHashResult.Output -split "`r?`n" | Select-Object -First 1).Trim()
+    $remoteCommit = ($remoteHashResult.Output -split "`r?`n" | Select-Object -First 1).Trim()
+    $distanceText = ($distanceResult.Output -split "`r?`n" | Select-Object -First 1).Trim()
+    $ahead = 0
+    $behind = 0
+
+    if ($distanceText -match '^(\d+)\s+(\d+)$') {
+        $ahead = [int]$matches[1]
+        $behind = [int]$matches[2]
+    }
+
+    $statusText = 'Versionsstatus nicht eindeutig'
+    $updateAvailable = $false
+
+    if ($behind -gt 0 -and $ahead -gt 0) {
+        $statusText = "Divergiert (+$behind neu, +$ahead lokal)"
+        $updateAvailable = $true
+    }
+    elseif ($behind -gt 0) {
+        $statusText = "Update verfuegbar (+$behind Commits)"
+        $updateAvailable = $true
+    }
+    elseif ($ahead -gt 0) {
+        $statusText = "Lokal voraus (+$ahead Commits)"
+        $updateAvailable = $false
+    }
+    else {
+        $statusText = 'Aktuell'
+        $updateAvailable = $false
+    }
+
+    return [pscustomobject]@{
+        CheckOk = $true
+        UpdateAvailable = $updateAvailable
+        LocalCommit = $localCommit
+        RemoteCommit = $remoteCommit
+        CommitsBehind = $behind
+        CommitsAhead = $ahead
+        StatusText = $statusText
     }
 }
 
@@ -1972,6 +2105,8 @@ function Open-ExtensionEntryPoint {
         Set-ExtensionProgress -Value 12 -Text ("Starte Erweiterung: {0}" -f $title)
     }
 
+    Write-ToolLog -ToolName 'EXTENSION' -Message "Starte '$extensionId' | EntryPoint: $entryPath"
+
     if ([string]::IsNullOrWhiteSpace($entryPath)) {
         & $writeOutput 'Warning' ('[!] {0}: Kein entryPoint konfiguriert.' -f $title)
         if (-not $BackgroundStart) {
@@ -2023,10 +2158,10 @@ function Open-ExtensionEntryPoint {
                 Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $entryPath) -WorkingDirectory ([System.IO.Path]::GetDirectoryName($entryPath)) | Out-Null
             }
             '.cmd' {
-                Start-Process -FilePath $entryPath -WorkingDirectory ([System.IO.Path]::GetDirectoryName($entryPath)) | Out-Null
+                Start-Process -FilePath 'cmd.exe' -ArgumentList @('/c', "`"$entryPath`"") -WorkingDirectory ([System.IO.Path]::GetDirectoryName($entryPath)) -WindowStyle Hidden -ErrorAction Stop | Out-Null
             }
             '.bat' {
-                Start-Process -FilePath $entryPath -WorkingDirectory ([System.IO.Path]::GetDirectoryName($entryPath)) | Out-Null
+                Start-Process -FilePath 'cmd.exe' -ArgumentList @('/c', "`"$entryPath`"") -WorkingDirectory ([System.IO.Path]::GetDirectoryName($entryPath)) -WindowStyle Hidden -ErrorAction Stop | Out-Null
             }
             default {
                 Start-Process -FilePath $entryPath -WorkingDirectory ([System.IO.Path]::GetDirectoryName($entryPath)) | Out-Null
@@ -2041,6 +2176,7 @@ function Open-ExtensionEntryPoint {
         return $true
     }
     catch {
+        Write-ToolLog -ToolName 'EXTENSION' -Message "Start fehlgeschlagen '$extensionId': $($_.Exception.Message)" -Level 'Error'
         & $writeOutput 'Error' ('[x] {0}: Start fehlgeschlagen: {1}' -f $title, $_.Exception.Message)
         if (-not $BackgroundStart) {
             Set-ExtensionProgress -Value 0 -Text ("Start fehlgeschlagen: {0}" -f $title) -Color ([System.Drawing.Color]::Red)
@@ -2288,6 +2424,8 @@ function Show-ExtensionsOverviewInOutput {
     $enabledCount = @($all | Where-Object { $_.Enabled }).Count
     $installedCount = @($all | Where-Object { $_.Installed }).Count
     $gitCount = @($all | Where-Object { $_.HasGit }).Count
+    $checkedCount = @($all | Where-Object { $_.VersionCheckOk }).Count
+    $updateCount = @($all | Where-Object { $_.UpdateAvailable }).Count
 
     $OutputBox.Clear()
     Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'BannerFrame'
@@ -2305,6 +2443,8 @@ function Show-ExtensionsOverviewInOutput {
     $OutputBox.AppendText("- Aktiviert: $enabledCount`r`n")
     $OutputBox.AppendText("- Lokal vorhanden: $installedCount`r`n")
     $OutputBox.AppendText("- Mit .git erkannt: $gitCount`r`n")
+    $OutputBox.AppendText("- Versionspruefung ausgefuehrt: $checkedCount`r`n")
+    $OutputBox.AppendText("- Updates verfuegbar: $updateCount`r`n")
 
     if ($Capabilities -and $Capabilities.Ok) {
         $requiredVersion = [string]$Capabilities.RequiredGuiVersion
@@ -2343,7 +2483,7 @@ function Show-ExtensionTiles {
 
     $refreshTiles = {
         $definitions = Get-ExtensionRepoDefinitions
-        $newStatus = Get-ExtensionRepoStatus -Definitions $definitions
+        $newStatus = Get-ExtensionRepoStatus -Definitions $definitions -CheckRemoteUpdates
         $caps = Get-PythonDashboardCapabilities -Port $script:pythonDashboardPort
         Show-ExtensionsOverviewInOutput -OutputBox $OutputBox -ExtensionStatus $newStatus -Capabilities $caps
         $null = Show-ExtensionTiles -WrapPanel $WrapPanel -ExtensionStatus $newStatus -OutputBox $OutputBox
@@ -2380,6 +2520,7 @@ function Show-ExtensionTiles {
         if ($item.Enabled) { $statusParts.Add('Konfiguriert') } else { $statusParts.Add('Deaktiviert') }
         if ($item.Installed) { $statusParts.Add('Installiert') } else { $statusParts.Add('Nicht installiert') }
         if ($item.HasGit) { $statusParts.Add('Git OK') } else { $statusParts.Add('Git fehlt') }
+        if (-not [string]::IsNullOrWhiteSpace([string]$item.VersionStatusText)) { $statusParts.Add([string]$item.VersionStatusText) }
 
         $statusText = New-Object Windows.Controls.TextBlock
         $statusText.Text = "Status: $($statusParts -join ' | ')"
@@ -2408,7 +2549,14 @@ function Show-ExtensionTiles {
 
         $isInstalledGit = ($item.Installed -and $item.HasGit)
         $installUpdateIcon = if ($isInstalledGit) { 0xE895 } else { 0xE896 }
-        $installUpdateTip = if ($isInstalledGit) { 'Aktualisieren' } else { 'Installieren' }
+        $installUpdateTip = if ($isInstalledGit) {
+            if ([bool]$item.UpdateAvailable) { 'Aktualisieren (neue Version verfuegbar)' }
+            elseif ([bool]$item.VersionCheckOk) { 'Bereits aktuell (Versionspruefung OK)' }
+            else { 'Aktualisieren' }
+        }
+        else {
+            'Installieren'
+        }
         $btnInstallUpdate = New-ExtensionTileActionButton -IconCode $installUpdateIcon -ToolTipText $installUpdateTip -Primary $true
         $btnInstallUpdate.IsEnabled = (-not [string]::IsNullOrWhiteSpace([string]$item.RepoUrl))
         $btnInstallUpdate.Opacity = if ($btnInstallUpdate.IsEnabled) { 1.0 } else { 0.55 }
@@ -2469,7 +2617,14 @@ function Show-ExtensionTiles {
                     return
                 }
 
-                $null = Open-ExtensionEntryPoint -ExtensionItem $itemSnapshot -OutputBox $outputBox
+                try {
+                    $null = Open-ExtensionEntryPoint -ExtensionItem $itemSnapshot -OutputBox $outputBox
+                }
+                catch {
+                    Write-ToolLog -ToolName 'EXTENSION' -Message "Start-Fehler '$($itemSnapshot.Id)': $_" -Level 'Error'
+                    Set-ExtensionProgress -Value 0 -Text "Fehler: $($itemSnapshot.Title)" -Color ([System.Drawing.Color]::Red)
+                    Reset-ExtensionProgress -DelayMs 3000
+                }
             }.GetNewClosure())
         $actionPanel.Children.Add($btnOpen) | Out-Null
 
@@ -2980,6 +3135,17 @@ function Open-UrlInBrowser {
 
     $attemptErrors = New-Object System.Collections.Generic.List[string]
 
+    # Methode: Shell.Application des laufenden (nicht-erhöhten) Explorers verwenden.
+    # Korrekte Behandlung wenn der GUI-Prozess als Administrator läuft (Chromium-Browser-Grenze).
+    try {
+        $shellApp = [System.Runtime.InteropServices.Marshal]::GetActiveObject('Shell.Application')
+        $shellApp.Open($Url)
+        return @{ Success = $true; Method = 'shell-active' }
+    }
+    catch {
+        $attemptErrors.Add("shell-active: $($_.Exception.Message)")
+    }
+
     try {
         Start-Process -FilePath $Url -ErrorAction Stop | Out-Null
         return @{ Success = $true; Method = 'direct' }
@@ -3209,77 +3375,12 @@ $infoButton.Add_MouseEnter({ $this.BackColor = [System.Drawing.Color]::SlateGray
 $infoButton.Add_MouseLeave({ $this.BackColor = [System.Drawing.Color]::DarkSlateGray })
 [void]$titleBar.Controls.Add($infoButton)
 
-# Python-Dashboard Toggle-Button
-$script:pythonDashboardButton = New-Object System.Windows.Forms.Button
-$script:pythonDashboardButton.Text      = [char]0xE62F
-$script:pythonDashboardButton.Font      = New-Object System.Drawing.Font("Segoe MDL2 Assets", 10)
-$script:pythonDashboardButton.Size      = New-Object System.Drawing.Size(30, 30)
-$script:pythonDashboardButton.Location  = New-Object System.Drawing.Point(850, 0)
-$script:pythonDashboardButton.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
-$script:pythonDashboardButton.FlatAppearance.BorderSize        = 0
-$script:pythonDashboardButton.FlatAppearance.BorderColor       = [System.Drawing.Color]::DarkSlateGray
-$script:pythonDashboardButton.FlatAppearance.MouseDownBackColor = [System.Drawing.Color]::FromArgb(40, 110, 40)
-$script:pythonDashboardButton.BackColor = [System.Drawing.Color]::DarkSlateGray
-$script:pythonDashboardButton.ForeColor = [System.Drawing.Color]::White
-$script:pythonDashboardButtonBusy = $false
-$script:pythonDashboardButton.Add_Click({
-    if ($script:pythonDashboardButtonBusy) { return }
-    $script:pythonDashboardButtonBusy = $true
-    try {
-        $result = Start-PythonDashboard
-        if ($result.Success) {
-            $script:pythonDashboardButton.BackColor = [System.Drawing.Color]::FromArgb(25, 90, 25)
-            $script:pythonDashboardButton.ForeColor = [System.Drawing.Color]::FromArgb(61, 220, 132)
-            $openResult = Open-UrlInBrowser -Url $result.Url
-            if (-not $openResult.Success) {
-                Update-LogFile -Message "Dashboard-Button: Browserstart fehlgeschlagen: $($openResult.Message)" -IsError
-                [System.Windows.Forms.MessageBox]::Show(
-                    "Das Python-Dashboard wurde gestartet, aber der Browser konnte nicht geoeffnet werden:`n$($openResult.Message)`n`nURL: $($result.Url)",
-                    "Browserstart fehlgeschlagen",
-                    [System.Windows.Forms.MessageBoxButtons]::OK,
-                    [System.Windows.Forms.MessageBoxIcon]::Warning
-                ) | Out-Null
-            }
-        } else {
-            [System.Windows.Forms.MessageBox]::Show(
-                "Python-Dashboard konnte nicht gestartet werden:`n$($result.Message)",
-                "Python-Dashboard Fehler",
-                [System.Windows.Forms.MessageBoxButtons]::OK,
-                [System.Windows.Forms.MessageBoxIcon]::Warning
-            ) | Out-Null
-        }
-    }
-    catch {
-        Update-LogFile -Message "Dashboard-Button: Unerwarteter Fehler beim Oeffnen: $_" -IsError
-        [System.Windows.Forms.MessageBox]::Show(
-            "Fehler beim Oeffnen des Python-Dashboards:`n$($_.Exception.Message)",
-            "Python-Dashboard Fehler",
-            [System.Windows.Forms.MessageBoxButtons]::OK,
-            [System.Windows.Forms.MessageBoxIcon]::Error
-        ) | Out-Null
-    }
-    finally {
-        $script:pythonDashboardButtonBusy = $false
-    }
-})
-$script:pythonDashboardButton.Add_MouseEnter({
-    $st = Get-PythonDashboardStatus
-    if ($st.Running) { $this.BackColor = [System.Drawing.Color]::FromArgb(35, 110, 35) }
-    else { $this.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43) }
-})
-$script:pythonDashboardButton.Add_MouseLeave({
-    $st = Get-PythonDashboardStatus
-    if ($st.Running) { $this.BackColor = [System.Drawing.Color]::FromArgb(25, 90, 25) }
-    else { $this.BackColor = [System.Drawing.Color]::DarkSlateGray }
-})
-[void]$titleBar.Controls.Add($script:pythonDashboardButton)
-
 # Einstellungen-Button
 $settingsButton = New-Object System.Windows.Forms.Button
 $script:settingsButton = $settingsButton
 $settingsButton.Text = "⚙"
 $settingsButton.Size = New-Object System.Drawing.Size(30, 30)
-$settingsButton.Location = New-Object System.Drawing.Point(880, 0)  # Position angepasst da Theme-Button entfernt
+$settingsButton.Location = New-Object System.Drawing.Point(880, 0)
 $settingsButton.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 $settingsButton.FlatAppearance.BorderSize = 0
 $settingsButton.FlatAppearance.BorderColor = [System.Drawing.Color]::DarkSlateGray
@@ -7185,9 +7286,14 @@ $externalToolsHorizontalPanel = New-HorizontalCollapsiblePanel -Title "Add-ons" 
         $externalToolsHorizontalPanel.Container.Visible = $true
     }
 
+    # Skeleton-Overlay einblenden während Netzwerk-Calls laufen
+    Show-OutputLoadingOverlay
+
     $definitions = Get-ExtensionRepoDefinitions
-    $extensionStatus = Get-ExtensionRepoStatus -Definitions $definitions
+    $extensionStatus = Get-ExtensionRepoStatus -Definitions $definitions -CheckRemoteUpdates
     $caps = Get-PythonDashboardCapabilities -Port $script:pythonDashboardPort
+
+    Hide-OutputLoadingOverlay
     Show-ExtensionsOverviewInOutput -OutputBox $outputBox -ExtensionStatus $extensionStatus -Capabilities $caps
     Switch-OutputView -viewName "downloadsView"
     $null = Show-ExtensionTiles -WrapPanel $toolWrapPanel -ExtensionStatus $extensionStatus -OutputBox $outputBox
@@ -7258,10 +7364,15 @@ $downloadsPanel = New-CollapsiblePanel -Title "Tool-Downloads" -YPosition 157 -T
     # Stelle sicher, dass OutputView sichtbar ist (Downloads-View bleibt versteckt bis Kategorie gewählt)
     if ($outputViewPanel) { $outputViewPanel.Visible = $true }
     
+    # Skeleton-Overlay einblenden während Kategorie-Zähler geladen wird
+    Show-OutputLoadingOverlay
+
     # Aktualisiere Kategorie-Zähler beim Öffnen
     Update-CategoryCounts -SearchQuery ""
-    
-    # OutputBox leeren und Info anzeigen
+
+    Hide-OutputLoadingOverlay
+
+    # OutputBox leeren und Banner anzeigen
     $outputBox.Clear()
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'BannerFrame'
     $outputBox.AppendText("`t╔═══════════════════════════════════════════════════════════════╗`r`n")
@@ -8218,6 +8329,102 @@ $outputBox.Add_SizeChanged({
         $rgn = [RoundedCorners]::CreateRoundRectRgn(0, 0, $outputBox.Width, $outputBox.Height, 12, 12)
         $outputBox.Region = [System.Drawing.Region]::FromHrgn($rgn)
     })
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Skeleton-Loading-Overlay für die OutputBox (liegt im selben outputViewPanel)
+# ─────────────────────────────────────────────────────────────────────────────
+$script:outputSkeletonOverlay = New-Object System.Windows.Forms.Panel
+$script:outputSkeletonOverlay.Dock      = [System.Windows.Forms.DockStyle]::Fill
+$script:outputSkeletonOverlay.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 37)
+$script:outputSkeletonOverlay.Visible   = $false
+
+# Skeleton-Balken: Y-Position, Breite als Anteil der Panel-Breite, Höhe, Typ
+$script:skeletonBars = @(
+    @{ Y =  28; WFrac = 0.55; H = 15; IsTitle = $true  }
+    @{ Y =  60; WFrac = 0.88; H = 11; IsTitle = $false }
+    @{ Y =  80; WFrac = 0.72; H = 11; IsTitle = $false }
+    @{ Y = 100; WFrac = 0.91; H = 11; IsTitle = $false }
+    @{ Y = 128; WFrac = 0.44; H = 15; IsTitle = $true  }
+    @{ Y = 158; WFrac = 0.76; H = 11; IsTitle = $false }
+    @{ Y = 178; WFrac = 0.62; H = 11; IsTitle = $false }
+    @{ Y = 198; WFrac = 0.83; H = 11; IsTitle = $false }
+    @{ Y = 226; WFrac = 0.50; H = 15; IsTitle = $true  }
+    @{ Y = 256; WFrac = 0.67; H = 11; IsTitle = $false }
+    @{ Y = 276; WFrac = 0.87; H = 11; IsTitle = $false }
+    @{ Y = 296; WFrac = 0.42; H = 11; IsTitle = $false }
+)
+$script:skeletonShimmerX = -150
+
+$script:outputSkeletonOverlay.Add_Paint({
+    param($s, $e)
+    $g     = $e.Graphics
+    $padL  = 18
+    $avail = $s.Width - $padL - 18
+    if ($avail -le 0) { return }
+
+    foreach ($bar in $script:skeletonBars) {
+        $bw  = [int]($avail * $bar.WFrac)
+        $clr = if ($bar.IsTitle) { [System.Drawing.Color]::FromArgb(62, 62, 62) } else { [System.Drawing.Color]::FromArgb(50, 50, 50) }
+        $br  = New-Object System.Drawing.SolidBrush($clr)
+        $g.FillRectangle($br, $padL, $bar.Y, $bw, $bar.H)
+        $br.Dispose()
+
+        # Shimmer-Streifen
+        $isX  = [Math]::Max($padL, $script:skeletonShimmerX)
+        $isXE = [Math]::Min($padL + $bw, $script:skeletonShimmerX + 130)
+        if ($isXE -gt $isX) {
+            $sBr = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(78, 78, 78))
+            $g.FillRectangle($sBr, $isX, $bar.Y, ($isXE - $isX), $bar.H)
+            $sBr.Dispose()
+        }
+    }
+
+    $lFont  = New-Object System.Drawing.Font("Segoe UI", 9)
+    $lBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(72, 72, 72))
+    $g.DrawString("wird geladen...", $lFont, $lBrush, [float]$padL, [float]320)
+    $lBrush.Dispose()
+    $lFont.Dispose()
+})
+
+$script:outputSkeletonOverlay.Add_SizeChanged({
+    if ($script:outputSkeletonOverlay.Width -gt 0 -and $script:outputSkeletonOverlay.Height -gt 0) {
+        $rgn = [RoundedCorners]::CreateRoundRectRgn(0, 0, $script:outputSkeletonOverlay.Width, $script:outputSkeletonOverlay.Height, 12, 12)
+        $script:outputSkeletonOverlay.Region = [System.Drawing.Region]::FromHrgn($rgn)
+    }
+})
+$script:outputSkeletonOverlay.Add_HandleCreated({
+    if ($script:outputSkeletonOverlay.Width -gt 0 -and $script:outputSkeletonOverlay.Height -gt 0) {
+        $rgn = [RoundedCorners]::CreateRoundRectRgn(0, 0, $script:outputSkeletonOverlay.Width, $script:outputSkeletonOverlay.Height, 12, 12)
+        $script:outputSkeletonOverlay.Region = [System.Drawing.Region]::FromHrgn($rgn)
+    }
+})
+
+$outputViewPanel.Controls.Add($script:outputSkeletonOverlay)
+
+# Shimmer-Animations-Timer (22 ms ≈ ~45 fps)
+$script:skeletonShimmerTimer = New-Object System.Windows.Forms.Timer
+$script:skeletonShimmerTimer.Interval = 22
+$script:skeletonShimmerTimer.Add_Tick({
+    $script:skeletonShimmerX += 7
+    $maxW = if ($script:outputSkeletonOverlay.Width -gt 0) { $script:outputSkeletonOverlay.Width } else { 900 }
+    if ($script:skeletonShimmerX -gt ($maxW + 20)) { $script:skeletonShimmerX = -150 }
+    if ($script:outputSkeletonOverlay.Visible) { $script:outputSkeletonOverlay.Invalidate() }
+})
+
+function Show-OutputLoadingOverlay {
+    $outputBox.Visible = $false
+    $script:skeletonShimmerX = -150
+    $script:outputSkeletonOverlay.BringToFront()
+    $script:outputSkeletonOverlay.Visible = $true
+    $script:skeletonShimmerTimer.Start()
+    [System.Windows.Forms.Application]::DoEvents()
+}
+
+function Hide-OutputLoadingOverlay {
+    $script:skeletonShimmerTimer.Stop()
+    $script:outputSkeletonOverlay.Visible = $false
+    $outputBox.Visible = $true
+}
 
 # Erstelle Output-Box für Hardware-Info
 $hardwareInfoBox = New-Object System.Windows.Forms.RichTextBox

@@ -1,0 +1,6 @@
+[submodule "Data/Add-ons/bockis-dashboard"]
+	path = Data/Add-ons/bockis-dashboard
+	url = https://github.com/ReXx09/Bockis-Dashboard
+[submodule "Data/Add-ons/multimonitor-profile-tool"]
+	path = Data/Add-ons/multimonitor-profile-tool
+	url = https://github.com/ReXx09/MultiMonitorProfileTool

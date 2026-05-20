@@ -518,6 +518,15 @@ $script:toolLibrary['coding'] = @(
         Category    = 'Coding / IT'
         Tags        = @('Network', 'Scanner', 'Security', 'Port Scan', 'Open-Source')
         Winget      = 'Insecure.Nmap'
+    },
+    @{
+        Name          = 'ADB Link'
+        Description   = 'Grafische Oberfläche für ADB – verbindet und steuert Android-Geräte per USB oder WLAN'
+        Version       = 'Aktuell'
+        DownloadUrl   = 'https://www.adblink.com/'
+        Category      = 'Coding / IT'
+        Tags          = @('ADB', 'Android', 'Remote', 'USB', 'Wireless', 'Device Manager')
+        DetectCommand = 'adb'
     }
 )
 
@@ -2820,8 +2829,11 @@ function Test-ToolInstalled {
         return $false
     }
     
-    # Wenn das Tool keine Winget-ID hat, können wir nicht prüfen
+    # Wenn das Tool keine Winget-ID hat, per DetectCommand (PATH-Prüfung) erkennen
     if (-not $Tool.Winget) {
+        if ($Tool.DetectCommand) {
+            return [bool](Get-Command $Tool.DetectCommand -ErrorAction SilentlyContinue)
+        }
         return $false
     }
     

@@ -145,8 +145,8 @@ function Close-DebugWindow {
             try {
                 if (-not $script:DebugWindowProcess.HasExited) {
                     # /F = Force, /T = Prozessbaum inkl. Kind-Prozess (powershell -Wait)
-                    $pid = $script:DebugWindowProcess.Id
-                    & taskkill /F /T /PID $pid 2>$null | Out-Null
+                    $procId = $script:DebugWindowProcess.Id
+                    & taskkill /F /T /PID $procId 2>$null | Out-Null
                     $script:DebugWindowProcess.WaitForExit(1000)
                     Write-Host "Debug-Fenster geschlossen" -ForegroundColor Yellow
                 }
@@ -2748,7 +2748,7 @@ function Get-RamTemperatureViaSMBus {
     $cacheTimeout = [TimeSpan]::FromSeconds(5)
     $now = Get-Date
     if (($now - $script:smBusTempCache.LastUpdate) -lt $cacheTimeout -and 
-        $script:smBusTempCache.Max -ne $null) {
+        $null -ne $script:smBusTempCache.Max) {
         
         if ($script:DebugModeRAM) {
             $cacheAge = [math]::Round(($now - $script:smBusTempCache.LastUpdate).TotalSeconds, 1)

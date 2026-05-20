@@ -4,7 +4,7 @@
     "title": "Bockis Dashboard",
     "repoUrl": "https://github.com/ReXx09/Bockis-Dashboard",
     "ref": "main",
-    "relativePath": "..\\Bockis-Dashboard",
+    "relativePath": "Data\\Add-ons\\bockis-dashboard",
     "entryPoint": "app.py",
     "capabilities": [
       "dashboard",
@@ -22,7 +22,7 @@
     "title": "MultiMonitor Profile Tool",
     "repoUrl": "https://github.com/ReXx09/MultiMonitorProfileTool",
     "ref": "master",
-    "relativePath": "..\\MultiMonitorProfileTool",
+    "relativePath": "Data\\Add-ons\\multimonitor-profile-tool",
     "entryPoint": "launcher.bat",
     "capabilities": [
       "monitoring",

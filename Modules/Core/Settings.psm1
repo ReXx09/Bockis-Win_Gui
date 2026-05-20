@@ -774,6 +774,56 @@ function Ensure-SettingsWpfAssemblies {
     Add-Type -AssemblyName WindowsBase
 }
 
+function Get-SettingsColorHexValue {
+    param(
+        [Parameter(Mandatory = $true)][hashtable]$SettingsSnapshot,
+        [Parameter(Mandatory = $true)]$DefaultScheme,
+        [Parameter(Mandatory = $true)][string]$ColorKey
+    )
+
+    if ($SettingsSnapshot.ContainsKey('ColorScheme') -and
+        $SettingsSnapshot.ColorScheme -is [hashtable] -and
+        $SettingsSnapshot.ColorScheme.ContainsKey('Output') -and
+        $SettingsSnapshot.ColorScheme.Output -is [hashtable] -and
+        $SettingsSnapshot.ColorScheme.Output.ContainsKey('Colors') -and
+        $SettingsSnapshot.ColorScheme.Output.Colors -is [hashtable] -and
+        $SettingsSnapshot.ColorScheme.Output.Colors.ContainsKey($ColorKey) -and
+        -not [string]::IsNullOrWhiteSpace("$($SettingsSnapshot.ColorScheme.Output.Colors[$ColorKey])")) {
+        return "$($SettingsSnapshot.ColorScheme.Output.Colors[$ColorKey])"
+    }
+
+    if ($DefaultScheme -and $DefaultScheme.Output -and $DefaultScheme.Output.Colors.ContainsKey($ColorKey)) {
+        return "$($DefaultScheme.Output.Colors[$ColorKey])"
+    }
+
+    return '#DCDCDC'
+}
+
+function Set-SettingsColorPreview {
+    param(
+        [Parameter(Mandatory = $true)][System.Windows.Controls.TextBlock]$PreviewBlock,
+        [Parameter(Mandatory = $true)][System.Windows.Controls.Button]$ColorButton,
+        [Parameter(Mandatory = $false)][string]$HexColor,
+        [Parameter(Mandatory = $false)][string]$PreviewIcon
+    )
+
+    $safeHex = if ([string]::IsNullOrWhiteSpace($HexColor)) { '#DCDCDC' } else { $HexColor }
+    $previewText = if ([string]::IsNullOrWhiteSpace($PreviewIcon)) { '[■]' } else { $PreviewIcon }
+
+    try {
+        $brush = ([System.Windows.Media.BrushConverter]::new().ConvertFrom($safeHex))
+        $PreviewBlock.Text = "$previewText  $safeHex"
+        $PreviewBlock.Foreground = $brush
+        $ColorButton.Background = $brush
+    }
+    catch {
+        $fallbackBrush = ([System.Windows.Media.BrushConverter]::new().ConvertFrom('#DCDCDC'))
+        $PreviewBlock.Text = "$previewText  #DCDCDC"
+        $PreviewBlock.Foreground = $fallbackBrush
+        $ColorButton.Background = $fallbackBrush
+    }
+}
+
 function Get-SettingsPathMap {
     $guiRoot = $PSScriptRoot | Split-Path | Split-Path
 
@@ -948,14 +998,11 @@ function Get-SettingsRegistry {
         [PSCustomObject]@{ Category = 'System'; Group = 'Wartung'; Type = 'Action'; SettingKey = 'RestartDefenderServicesAction'; Label = 'Windows Defender-Dienste neu starten'; Description = 'Startet Defender-Dienste neu, wenn Scans hängen oder Probleme auftreten.'; ButtonText = 'Defender-Dienste neu starten'; ActionCommand = 'Invoke-SettingsAction'; ActionKey = 'RestartDefenderServices' }
         [PSCustomObject]@{ Category = 'Startup'; Group = 'Profile'; Type = 'Choice'; SettingKey = 'StartupProfile'; Label = 'Startup-Profil'; Description = 'Vordefiniertes Verhalten beim Start.'; Options = @('Standard', 'Leicht', 'Diagnose', 'Performance') }
         [PSCustomObject]@{ Category = 'Startup'; Group = 'Ablauf'; Type = 'Toggle'; SettingKey = 'AutoStartPythonDashboardOnAppStart'; Label = 'Python-Dashboard bei App-Start'; Description = 'Startet das Dashboard direkt beim Öffnen von Bockis.' }
-        [PSCustomObject]@{ Category = 'Startup'; Group = 'Ablauf'; Type = 'Toggle'; SettingKey = 'AutoStartPythonDashboardOnWindowsLogin'; Label = 'Python-Dashboard bei Windows-Login'; Description = 'Registriert Dashboard-Start beim Benutzer-Login.' }
         [PSCustomObject]@{ Category = 'Startup'; Group = 'Ablauf'; Type = 'Toggle'; SettingKey = 'AutoStartGuiOnWindowsLogin'; Label = 'Bockis GUI bei Windows-Login'; Description = 'Startet die Haupt-GUI automatisch nach dem Login.' }
         [PSCustomObject]@{ Category = 'Startup'; Group = 'Ablauf'; Type = 'Toggle'; SettingKey = 'RunNetworkScanAtStartup'; Label = 'Netzwerk-Einstellungs-Scan beim Start'; Description = 'Führt nach Start einen Netzwerk-Scan aus.' }
         [PSCustomObject]@{ Category = 'Startup'; Group = 'Ablauf'; Type = 'Toggle'; SettingKey = 'RunSmartRepairAtStartup'; Label = 'Smart Repair beim Start'; Description = 'Führt nach Start Smart Repair aus.' }
         [PSCustomObject]@{ Category = 'Startup'; Group = 'Ablauf'; Type = 'Toggle'; SettingKey = 'MinimizeToTrayOnStartup'; Label = 'Beim Start minimiert im Tray'; Description = 'Öffnet die GUI minimiert im Infobereich.' }
         [PSCustomObject]@{ Category = 'Startup'; Group = 'Ablauf'; Type = 'Toggle'; SettingKey = 'MinimizeToTrayOnMinimizeClick'; Label = 'Beim Minimieren in den Tray'; Description = 'Der Minimize-Button versteckt die GUI im Infobereich statt nur in der Taskleiste.' }
-        [PSCustomObject]@{ Category = 'Startup'; Group = 'Erweiterungen'; Type = 'Toggle'; SettingKey = 'AutoStartExtensionsOnWindowsLogin'; Label = 'Erweiterungen bei Windows-Login starten'; Description = 'Startet markierte Erweiterungen automatisch, wenn die GUI durch den Windows-Login gestartet wird.' }
-        [PSCustomObject]@{ Category = 'Startup'; Group = 'Erweiterungen'; Type = 'Toggle'; SettingKey = 'ShowExtensionsInTrayMenu'; Label = 'Erweiterungen im Tray-Menü anzeigen'; Description = 'Blendet ein dynamisches Tray-Untermenü für dafür markierte Erweiterungen ein.' }
         [PSCustomObject]@{ Category = 'Startup'; Group = 'Erweiterungen'; Type = 'Action'; SettingKey = 'ManageExtensionLaunchOptions'; Label = 'Erweiterungs-Startoptionen'; Description = 'Öffnet die detailierte Konfiguration pro Erweiterung für Windows-Login und Tray.'; ButtonText = 'Erweiterungen konfigurieren'; ActionCommand = 'Invoke-SettingsAction'; ActionKey = 'ManageExtensionLaunchOptions' }
         [PSCustomObject]@{ Category = 'Pfade'; Group = 'Verzeichnisse'; Type = 'Action'; SettingKey = 'OpenPathLogsAction'; Label = 'Logs-Verzeichnis'; Description = 'Öffnet das Verzeichnis mit allen Log-Dateien.'; ButtonText = 'Logs öffnen'; ActionCommand = 'Invoke-SettingsAction'; ActionKey = 'OpenPathLogs' }
         [PSCustomObject]@{ Category = 'Pfade'; Group = 'Verzeichnisse'; Type = 'Action'; SettingKey = 'OpenPathDatabaseAction'; Label = 'Datenbank-Verzeichnis'; Description = 'Öffnet das SQLite-Datenbankverzeichnis.'; ButtonText = 'Datenbank öffnen'; ActionCommand = 'Invoke-SettingsAction'; ActionKey = 'OpenPathDatabase' }
@@ -992,52 +1039,6 @@ function Show-SettingsDialogModern {
     }
 
     $defaultScheme = Get-DefaultColorScheme
-
-    $getColorHex = {
-        param([string]$colorKey)
-
-        if ($settingsSnapshot.ContainsKey('ColorScheme') -and
-            $settingsSnapshot.ColorScheme -is [hashtable] -and
-            $settingsSnapshot.ColorScheme.ContainsKey('Output') -and
-            $settingsSnapshot.ColorScheme.Output -is [hashtable] -and
-            $settingsSnapshot.ColorScheme.Output.ContainsKey('Colors') -and
-            $settingsSnapshot.ColorScheme.Output.Colors -is [hashtable] -and
-            $settingsSnapshot.ColorScheme.Output.Colors.ContainsKey($colorKey) -and
-            -not [string]::IsNullOrWhiteSpace("$($settingsSnapshot.ColorScheme.Output.Colors[$colorKey])")) {
-            return "$($settingsSnapshot.ColorScheme.Output.Colors[$colorKey])"
-        }
-
-        if ($defaultScheme.Output.Colors.ContainsKey($colorKey)) {
-            return "$($defaultScheme.Output.Colors[$colorKey])"
-        }
-
-        return '#DCDCDC'
-    }
-
-    $setPreviewColor = {
-        param(
-            [System.Windows.Controls.TextBlock]$PreviewBlock,
-            [System.Windows.Controls.Button]$ColorButton,
-            [string]$HexColor,
-            [string]$PreviewIcon
-        )
-
-        $safeHex = if ([string]::IsNullOrWhiteSpace($HexColor)) { '#DCDCDC' } else { $HexColor }
-        $previewText = if ([string]::IsNullOrWhiteSpace($PreviewIcon)) { '[■]' } else { $PreviewIcon }
-
-        try {
-            $brush = ([System.Windows.Media.BrushConverter]::new().ConvertFrom($safeHex))
-            $PreviewBlock.Text = "$previewText  $safeHex"
-            $PreviewBlock.Foreground = $brush
-            $ColorButton.Background = $brush
-        }
-        catch {
-            $fallbackBrush = ([System.Windows.Media.BrushConverter]::new().ConvertFrom('#DCDCDC'))
-            $PreviewBlock.Text = "$previewText  #DCDCDC"
-            $PreviewBlock.Foreground = $fallbackBrush
-            $ColorButton.Background = $fallbackBrush
-        }
-    }
 
     [xml]$xaml = @'
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -1188,12 +1189,25 @@ function Show-SettingsDialogModern {
             if ($controlMap.ContainsKey($def.SettingKey)) {
                 $existingControl = $controlMap[$def.SettingKey].Control
                 switch ($def.Type) {
-                    'Toggle' { $currentValue = [bool]$existingControl.IsChecked }
-                    'Choice' { $currentValue = "$($existingControl.SelectedItem)" }
-                    'Color' { $currentValue = "$($existingControl.SelectedHex)" }
+                    'Toggle' {
+                        if ($null -ne $existingControl -and ($existingControl.PSObject.Properties.Name -contains 'IsChecked')) {
+                            $currentValue = [bool]$existingControl.IsChecked
+                        }
+                    }
+                    'Choice' {
+                        if ($null -ne $existingControl -and ($existingControl.PSObject.Properties.Name -contains 'SelectedItem')) {
+                            $currentValue = "$($existingControl.SelectedItem)"
+                        }
+                    }
+                    'Color' {
+                        if ($null -ne $existingControl -and ($existingControl.PSObject.Properties.Name -contains 'SelectedHex')) {
+                            $currentValue = "$($existingControl.SelectedHex)"
+                        }
+                    }
                 }
             }
-            elseif ($settingsSnapshot.ContainsKey($def.SettingKey)) {
+
+            if ($null -eq $currentValue -and $settingsSnapshot.ContainsKey($def.SettingKey)) {
                 $currentValue = $settingsSnapshot[$def.SettingKey]
             }
 
@@ -1259,37 +1273,63 @@ function Show-SettingsDialogModern {
                     [System.Windows.Controls.Grid]::SetColumn($preview, 2)
                     $colorRow.Children.Add($preview)
 
-                    $initialHex = if (-not [string]::IsNullOrWhiteSpace("$currentValue")) { "$currentValue" } else { & $getColorHex $def.ColorKey }
+                    $initialHex = if (-not [string]::IsNullOrWhiteSpace("$currentValue")) { "$currentValue" } else { Get-SettingsColorHexValue -SettingsSnapshot $settingsSnapshot -DefaultScheme $defaultScheme -ColorKey $def.ColorKey }
                     $colorState = [PSCustomObject]@{
                         PickButton = $pickBtn
                         ResetButton = $resetBtn
                         PreviewBlock = $preview
                         SelectedHex = $initialHex
+                        PreviewIcon = "$($def.PreviewIcon)"
+                        ColorKey = "$($def.ColorKey)"
                     }
 
-                    & $setPreviewColor -PreviewBlock $preview -ColorButton $pickBtn -HexColor $initialHex -PreviewIcon $def.PreviewIcon
+                    $pickBtn.Tag = $colorState
+                    $resetBtn.Tag = $colorState
+
+                    Set-SettingsColorPreview -PreviewBlock $preview -ColorButton $pickBtn -HexColor $initialHex -PreviewIcon $def.PreviewIcon
+
+                    # Capture module-private function as scriptblock variable so WPF event handlers can resolve it via closure
+                    $fnSetColorPreview = ${function:Set-SettingsColorPreview}
 
                     $pickBtn.Add_Click({
-                            $dialog = New-Object System.Windows.Forms.ColorDialog
-                            $dialog.FullOpen = $true
+                            param($sender, $e)
                             try {
-                                $dialog.Color = [System.Drawing.ColorTranslator]::FromHtml($colorState.SelectedHex)
+                                $state = if ($sender) { $sender.Tag } else { $null }
+                                if ($null -eq $state) { return }
+
+                                $dialog = New-Object System.Windows.Forms.ColorDialog
+                                $dialog.FullOpen = $true
+                                try {
+                                    $dialog.Color = [System.Drawing.ColorTranslator]::FromHtml("$($state.SelectedHex)")
+                                }
+                                catch {
+                                }
+
+                                if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+                                    $hex = '#{0:X2}{1:X2}{2:X2}' -f $dialog.Color.R, $dialog.Color.G, $dialog.Color.B
+                                    $state.SelectedHex = $hex
+                                    & $fnSetColorPreview -PreviewBlock $state.PreviewBlock -ColorButton $state.PickButton -HexColor $hex -PreviewIcon $state.PreviewIcon
+                                }
                             }
                             catch {
+                                [System.Windows.MessageBox]::Show("Fehler beim Ändern der Farbe:`n$_", 'Fehler', 'OK', 'Error') | Out-Null
                             }
-
-                            if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
-                                $hex = '#{0:X2}{1:X2}{2:X2}' -f $dialog.Color.R, $dialog.Color.G, $dialog.Color.B
-                                $colorState.SelectedHex = $hex
-                                & $setPreviewColor -PreviewBlock $colorState.PreviewBlock -ColorButton $colorState.PickButton -HexColor $hex -PreviewIcon $def.PreviewIcon
-                            }
-                        })
+                        }.GetNewClosure())
 
                     $resetBtn.Add_Click({
-                            $defaultHex = if ($defaultScheme.Output.Colors.ContainsKey($def.ColorKey)) { "$($defaultScheme.Output.Colors[$def.ColorKey])" } else { '#DCDCDC' }
-                            $colorState.SelectedHex = $defaultHex
-                            & $setPreviewColor -PreviewBlock $colorState.PreviewBlock -ColorButton $colorState.PickButton -HexColor $defaultHex -PreviewIcon $def.PreviewIcon
-                        })
+                            param($sender, $e)
+                            try {
+                                $state = if ($sender) { $sender.Tag } else { $null }
+                                if ($null -eq $state) { return }
+
+                                $defaultHex = if ($defaultScheme.Output.Colors.ContainsKey($state.ColorKey)) { "$($defaultScheme.Output.Colors[$state.ColorKey])" } else { '#DCDCDC' }
+                                $state.SelectedHex = $defaultHex
+                                & $fnSetColorPreview -PreviewBlock $state.PreviewBlock -ColorButton $state.PickButton -HexColor $defaultHex -PreviewIcon $state.PreviewIcon
+                            }
+                            catch {
+                                [System.Windows.MessageBox]::Show("Fehler beim Zurücksetzen der Farbe:`n$_", 'Fehler', 'OK', 'Error') | Out-Null
+                            }
+                        }.GetNewClosure())
 
                     $stack.Children.Add($colorRow)
                     $ctrl = $colorState
@@ -1405,6 +1445,15 @@ function Show-SettingsDialogModern {
             return
         }
 
+        # Originalzustand vor UI-Übernahme sichern (für Vorher-/Nachher-Vergleich)
+        $originalSettings = ConvertTo-SettingsHashtable -InputObject (Get-SystemToolSettings)
+        $originalColors = @{}
+        try {
+            if ($originalSettings.ColorScheme.Output.Colors -is [hashtable]) {
+                $originalColors = $originalSettings.ColorScheme.Output.Colors.Clone()
+            }
+        } catch {}
+
         foreach ($def in $registry) {
             if (-not $controlMap.ContainsKey($def.SettingKey)) { continue }
 
@@ -1436,7 +1485,14 @@ function Show-SettingsDialogModern {
                     if (-not $updatedSettings.ColorScheme.Output.ContainsKey('Colors')) { $updatedSettings.ColorScheme.Output['Colors'] = @{} }
                     if ($updatedSettings.ColorScheme.Output.Colors -isnot [hashtable]) { $updatedSettings.ColorScheme.Output.Colors = ConvertTo-SettingsHashtable -InputObject $updatedSettings.ColorScheme.Output.Colors }
 
-                    $selectedHex = "$($ctrlEntry.Control.SelectedHex)"
+                    $selectedHex = $null
+                    $colorControl = $ctrlEntry.Control
+                    if ($null -ne $colorControl -and ($colorControl.PSObject.Properties.Name -contains 'SelectedHex')) {
+                        $selectedHex = "$($colorControl.SelectedHex)"
+                    }
+                    if ([string]::IsNullOrWhiteSpace($selectedHex) -and $updatedSettings.ColorScheme.Output.Colors.ContainsKey($def.ColorKey)) {
+                        $selectedHex = "$($updatedSettings.ColorScheme.Output.Colors[$def.ColorKey])"
+                    }
                     if ([string]::IsNullOrWhiteSpace($selectedHex)) {
                         $selectedHex = if ($defaultScheme.Output.Colors.ContainsKey($def.ColorKey)) { "$($defaultScheme.Output.Colors[$def.ColorKey])" } else { '#DCDCDC' }
                     }
@@ -1497,9 +1553,95 @@ function Show-SettingsDialogModern {
             Write-Verbose "TextStyle konnte nicht neu initialisiert werden: $_"
         }
 
-        Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Success'
-        $OutputBox.AppendText("`r`nModernes Einstellungsmenue: Einstellungen gespeichert.`r`n")
-        Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Default'
+        # Ausgabe in der OutputBox – nur geänderte Werte
+        $OutputBox.Clear()
+
+        # Vergleich: einfache Schlüssel
+        $simpleChanges = [System.Collections.Generic.List[string]]::new()
+        $compareMap = @{
+            'Schriftgröße'                             = @{ Key = 'FontSize';                              Suffix = '' }
+            'Update-Intervall'                          = @{ Key = 'UpdateInterval';                        Suffix = ' ms' }
+            'CPU-Warnschwelle'                          = @{ Key = 'CpuThreshold';                          Suffix = '%' }
+            'RAM-Warnschwelle'                          = @{ Key = 'RamThreshold';                          Suffix = '%' }
+            'GPU-Warnschwelle'                          = @{ Key = 'GpuThreshold';                          Suffix = '%' }
+            'Log-Detailgrad'                            = @{ Key = 'LogLevel';                              Suffix = '' }
+            'Fenstergröße und Position speichern'       = @{ Key = 'SaveWindowSize';                        Suffix = '' }
+            'Benachrichtigungen aktivieren'             = @{ Key = 'EnableNotifications';                   Suffix = '' }
+            'Logs automatisch speichern'                = @{ Key = 'AutoSaveLogs';                          Suffix = '' }
+            'Aktionen bestätigen'                       = @{ Key = 'ConfirmActions';                        Suffix = '' }
+            'Erweiterte Bereinigung'                    = @{ Key = 'AdvancedCleanup';                       Suffix = '' }
+            'Automatisch nach Updates suchen'           = @{ Key = 'CheckUpdates';                          Suffix = '' }
+            'Splash-Screen anzeigen'                    = @{ Key = 'ShowSplash';                            Suffix = '' }
+            'Python-Dashboard bei App-Start'            = @{ Key = 'AutoStartPythonDashboardOnAppStart';    Suffix = '' }
+            'Bockis GUI bei Windows-Login'              = @{ Key = 'AutoStartGuiOnWindowsLogin';            Suffix = '' }
+            'Netzwerk-Einstellungs-Scan beim Start'     = @{ Key = 'RunNetworkScanAtStartup';               Suffix = '' }
+            'Smart Repair beim Start'                   = @{ Key = 'RunSmartRepairAtStartup';               Suffix = '' }
+            'Beim Start minimiert im Tray'              = @{ Key = 'MinimizeToTrayOnStartup';               Suffix = '' }
+            'Beim Minimieren in den Tray'               = @{ Key = 'MinimizeToTrayOnMinimizeClick';         Suffix = '' }
+            'Win11-Service-Hinweise anzeigen'           = @{ Key = 'EnableWin11ServiceHints';               Suffix = '' }
+            'Experimentelle Tweaks erlauben'            = @{ Key = 'EnableExperimentalTweaks';              Suffix = '' }
+        }
+        foreach ($label in $compareMap.Keys) {
+            $key    = $compareMap[$label].Key
+            $suffix = $compareMap[$label].Suffix
+            $oldVal = if ($originalSettings.ContainsKey($key)) { "$($originalSettings[$key])" } else { '' }
+            $newVal = if ($updatedSettings.ContainsKey($key))  { "$($updatedSettings[$key])"  } else { '' }
+            if ($oldVal -ne $newVal) {
+                $simpleChanges.Add("- $label`: $oldVal → $newVal$suffix")
+            }
+        }
+
+        # Vergleich: Farben
+        $changedColors = [System.Collections.Generic.List[string]]::new()
+        $newColors = @{}
+        try { if ($updatedSettings.ColorScheme.Output.Colors -is [hashtable]) { $newColors = $updatedSettings.ColorScheme.Output.Colors } } catch {}
+        foreach ($colorKey in $newColors.Keys) {
+            $oldHex = if ($originalColors.ContainsKey($colorKey)) { "$($originalColors[$colorKey])" } else { '' }
+            $newHex = "$($newColors[$colorKey])"
+            if ($oldHex -ne $newHex) {
+                 $changedColors.Add("  $colorKey`:`n    Alt:  $oldHex`n    Neu:  $newHex  ← geändert")
+            }
+        }
+
+        $hasChanges = $simpleChanges.Count -gt 0 -or $changedColors.Count -gt 0
+
+        if ($hasChanges) {
+            Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Success'
+            $OutputBox.AppendText("`r`nEinstellungen wurden aktualisiert und angewendet:`r`n")
+            Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Default'
+
+            foreach ($line in $simpleChanges) {
+                $OutputBox.AppendText("$line`r`n")
+            }
+
+            if ($changedColors.Count -gt 0) {
+                $OutputBox.AppendText("- Symbol-Farben geändert ($($changedColors.Count)):`r`n")
+                foreach ($cl in $changedColors) { $OutputBox.AppendText("$cl`r`n") }
+
+                $OutputBox.AppendText("`r`n--- Farbvorschau ---`r`n")
+                Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Success'
+                $OutputBox.AppendText("$(Get-Symbol -Type 'Success') Erfolgs-Nachrichten`r`n")
+                Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Error'
+                $OutputBox.AppendText("$(Get-Symbol -Type 'Error') Fehler-Meldungen`r`n")
+                Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Warning'
+                $OutputBox.AppendText("$(Get-Symbol -Type 'Warning') Warnungen`r`n")
+                Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Info'
+                $OutputBox.AppendText("$(Get-Symbol -Type 'Info') Informationen`r`n")
+                Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Process'
+                $OutputBox.AppendText("$(Get-Symbol -Type 'Process') Prozess-Status`r`n")
+                Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Alert'
+                $OutputBox.AppendText("Hinweis-Texte`r`n")
+                Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Default'
+                $OutputBox.AppendText("-------------------`r`n")
+            }
+        } else {
+            Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Info'
+            $OutputBox.AppendText("`r`nKeine Änderungen vorgenommen – Einstellungen unverändert gespeichert.`r`n")
+            Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Default'
+        }
+
+        $configPath2 = Join-Path ($PSScriptRoot | Split-Path | Split-Path) 'config.json'
+        $OutputBox.AppendText("`r`n- Gespeichert: $configPath2`r`n")
 
         if ($CloseAfterSave) {
             $window.DialogResult = $true
@@ -1507,18 +1649,41 @@ function Show-SettingsDialogModern {
         }
     }
 
+    $localApplyChanges = $applyChanges
+    $localRenderCategory = $renderCategory
+    $localListCategories = $lstCategories
+
     $dragHeader.Add_MouseLeftButtonDown({ $window.DragMove() })
     $btnClose.Add_Click({ $window.DialogResult = $false; $window.Close() })
     $btnCancel.Add_Click({ $window.DialogResult = $false; $window.Close() })
     $btnLegacy.Add_Click({ $window.Tag = 'legacy'; $window.DialogResult = $false; $window.Close() })
-    $btnApply.Add_Click({ & $applyChanges })
-    $btnOk.Add_Click({ & $applyChanges -CloseAfterSave })
+    $btnApply.Add_Click({
+            try {
+                $null = $localApplyChanges.Invoke()
+            }
+            catch {
+                [System.Windows.MessageBox]::Show("Fehler beim Anwenden der Einstellungen:`n$_", 'Fehler', 'OK', 'Error') | Out-Null
+            }
+        }.GetNewClosure())
+    $btnOk.Add_Click({
+            try {
+                $null = $localApplyChanges.Invoke($true)
+            }
+            catch {
+                [System.Windows.MessageBox]::Show("Fehler beim Speichern der Einstellungen:`n$_", 'Fehler', 'OK', 'Error') | Out-Null
+            }
+        }.GetNewClosure())
 
     $lstCategories.Add_SelectionChanged({
-            if ($lstCategories.SelectedItem) {
-                & $renderCategory $lstCategories.SelectedItem.ToString()
+            try {
+                if ($localListCategories.SelectedItem) {
+                    $null = $localRenderCategory.Invoke($localListCategories.SelectedItem.ToString())
+                }
             }
-        })
+            catch {
+                [System.Windows.MessageBox]::Show("Fehler beim Laden der Kategorie:`n$_", 'Fehler', 'OK', 'Error') | Out-Null
+            }
+        }.GetNewClosure())
 
     if ($lstCategories.Items.Count -gt 0) {
         $lstCategories.SelectedIndex = 0
@@ -1587,13 +1752,7 @@ function Show-SettingsDialog {
         }
         catch {
             Write-Verbose "Modernes Einstellungsmenue konnte nicht gestartet werden: $_"
-            [System.Windows.Forms.MessageBox]::Show(
-                "Das moderne Einstellungsmenue ist auf einen Fehler gelaufen.`r`n`r`nDetails:`r`n$_`r`n`r`nDie Legacy-Ansicht wird nur ueber den Button 'Legacy Ansicht' geoeffnet.",
-                'Einstellungen (Modern) - Fehler',
-                [System.Windows.Forms.MessageBoxButtons]::OK,
-                [System.Windows.Forms.MessageBoxIcon]::Error
-            ) | Out-Null
-            return
+            $useModernDialog = $false
         }
     }
     
@@ -2229,19 +2388,10 @@ function Show-SettingsDialog {
     $chkAutoStartPyDashboard.Checked = [bool]$script:settings.AutoStartPythonDashboardOnAppStart
     $tabBehavior.Controls.Add($chkAutoStartPyDashboard)
 
-    # Python-Dashboard beim Windows-Login im Hintergrund starten
-    $chkPyDashboardWindowsLogin = New-Object System.Windows.Forms.CheckBox
-    $chkPyDashboardWindowsLogin.Text = "Python-Dashboard beim Windows-Login im Hintergrund starten"
-    $chkPyDashboardWindowsLogin.Location = New-Object System.Drawing.Point(15, 215)
-    $chkPyDashboardWindowsLogin.Size = New-Object System.Drawing.Size(520, 25)
-    $chkPyDashboardWindowsLogin.ForeColor = $textColor
-    $chkPyDashboardWindowsLogin.Checked = [bool]$script:settings.AutoStartPythonDashboardOnWindowsLogin
-    $tabBehavior.Controls.Add($chkPyDashboardWindowsLogin)
-
     # Bockis GUI beim Windows-Login starten
     $chkGuiWindowsLogin = New-Object System.Windows.Forms.CheckBox
     $chkGuiWindowsLogin.Text = "Bockis GUI beim Windows-Login automatisch starten"
-    $chkGuiWindowsLogin.Location = New-Object System.Drawing.Point(15, 250)
+    $chkGuiWindowsLogin.Location = New-Object System.Drawing.Point(15, 215)
     $chkGuiWindowsLogin.Size = New-Object System.Drawing.Size(520, 25)
     $chkGuiWindowsLogin.ForeColor = $textColor
     $chkGuiWindowsLogin.Checked = [bool]$script:settings.AutoStartGuiOnWindowsLogin
@@ -2250,12 +2400,35 @@ function Show-SettingsDialog {
     # Beim Klick auf Minimieren in den Tray wechseln
     $chkMinimizeToTrayOnMinimizeClick = New-Object System.Windows.Forms.CheckBox
     $chkMinimizeToTrayOnMinimizeClick.Text = "Beim Klick auf Minimieren in den Tray"
-    $chkMinimizeToTrayOnMinimizeClick.Location = New-Object System.Drawing.Point(15, 285)
+    $chkMinimizeToTrayOnMinimizeClick.Location = New-Object System.Drawing.Point(15, 250)
     $chkMinimizeToTrayOnMinimizeClick.Size = New-Object System.Drawing.Size(520, 25)
     $chkMinimizeToTrayOnMinimizeClick.ForeColor = $textColor
     $chkMinimizeToTrayOnMinimizeClick.Checked = [bool]$script:settings.MinimizeToTrayOnMinimizeClick
     $tabBehavior.Controls.Add($chkMinimizeToTrayOnMinimizeClick)
 
+    $btnExtensionLaunchOptions = New-Object System.Windows.Forms.Button
+    $btnExtensionLaunchOptions.Text = "Erweiterungen konfigurieren"
+    $btnExtensionLaunchOptions.Location = New-Object System.Drawing.Point(15, 285)
+    $btnExtensionLaunchOptions.Size = New-Object System.Drawing.Size(220, 30)
+    $btnExtensionLaunchOptions.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+    $btnExtensionLaunchOptions.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(0, 122, 204)
+    $btnExtensionLaunchOptions.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
+    $btnExtensionLaunchOptions.ForeColor = [System.Drawing.Color]::White
+    $btnExtensionLaunchOptions.Add_Click({
+            if (-not (Get-Command -Name Show-ExtensionStartupSettingsDialog -ErrorAction SilentlyContinue)) {
+                [System.Windows.Forms.MessageBox]::Show(
+                    'Die Erweiterungs-Konfiguration ist aktuell nicht verfügbar.',
+                    'Nicht verfügbar',
+                    [System.Windows.Forms.MessageBoxButtons]::OK,
+                    [System.Windows.Forms.MessageBoxIcon]::Information
+                ) | Out-Null
+                return
+            }
+
+            Show-ExtensionStartupSettingsDialog -Owner $settingsForm -OutputBox $OutputBox
+        })
+    $tabBehavior.Controls.Add($btnExtensionLaunchOptions)
+    
     # Tab 5: System-Einstellungen
     $tabSystem_Settings = New-Object System.Windows.Forms.TabPage
     $tabSystem_Settings.Text = "System"
@@ -2586,15 +2759,17 @@ function Show-SettingsDialog {
                 CheckUpdates        = $chkCheckUpdates.Checked
                 ShowSplash          = $chkShowSplash.Checked
                 AutoStartPythonDashboardOnAppStart = $chkAutoStartPyDashboard.Checked
-                AutoStartPythonDashboardOnWindowsLogin = $chkPyDashboardWindowsLogin.Checked
+                AutoStartPythonDashboardOnWindowsLogin = [bool]$script:settings.AutoStartPythonDashboardOnWindowsLogin
                 AutoStartGuiOnWindowsLogin = $chkGuiWindowsLogin.Checked
+                AutoStartExtensionsOnWindowsLogin = [bool]$script:settings.AutoStartExtensionsOnWindowsLogin
                 MinimizeToTrayOnMinimizeClick = $chkMinimizeToTrayOnMinimizeClick.Checked
+                ShowExtensionsInTrayMenu = [bool]$script:settings.ShowExtensionsInTrayMenu
             }
 
             # Optional: Registry-Autostart fuer Python-Dashboard sofort umsetzen
             if (Get-Command -Name Set-PythonDashboardStartupRegistration -ErrorAction SilentlyContinue) {
                 try {
-                    Set-PythonDashboardStartupRegistration -Enable:$chkPyDashboardWindowsLogin.Checked | Out-Null
+                    Set-PythonDashboardStartupRegistration -Enable:$script:settings.AutoStartPythonDashboardOnWindowsLogin | Out-Null
                 }
                 catch {
                     Write-Verbose "Python-Dashboard Startup-Registrierung konnte nicht aktualisiert werden: $_"
@@ -2710,7 +2885,6 @@ function Show-SettingsDialog {
             $OutputBox.AppendText("- GPU-Warnschwelle: $($script:settings.GpuThreshold)%`r`n")
             $OutputBox.AppendText("- Log-Level: $($script:settings.LogLevel)`r`n")
             $OutputBox.AppendText("- Python-Dashboard Auto-Start (App): $($script:settings.AutoStartPythonDashboardOnAppStart)`r`n")
-            $OutputBox.AppendText("- Python-Dashboard Auto-Start (Windows): $($script:settings.AutoStartPythonDashboardOnWindowsLogin)`r`n")
             $OutputBox.AppendText("- Bockis GUI Auto-Start (Windows): $($script:settings.AutoStartGuiOnWindowsLogin)`r`n")
             $OutputBox.AppendText("- Beim Minimieren in den Tray: $($script:settings.MinimizeToTrayOnMinimizeClick)`r`n")
             
