@@ -6503,6 +6503,40 @@ $troubleshootHorizontalPanel = New-HorizontalCollapsiblePanel -Title "Support" -
     if ($troubleshootHorizontalPanel -and $troubleshootHorizontalPanel.Container) {
         $troubleshootHorizontalPanel.Container.Visible = $true
     }
+
+    # Support-Info im OutputBox anzeigen
+    $outputBox.Clear()
+    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'BannerFrame'
+    $outputBox.AppendText("`t╔═══════════════════════════════════════════════════════════════╗`r`n")
+    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'BannerTitle'
+    $outputBox.AppendText("`t║                        SUPPORT                                ║`r`n")
+    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'BannerFrame'
+    $outputBox.AppendText("`t╚═══════════════════════════════════════════════════════════════╝`r`n`r`n")
+
+    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Heading'
+    $outputBox.AppendText("Verfügbare Ansichten:`r`n`r`n")
+
+    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Accent'
+    Add-OutputIcon -OutputBox $outputBox -IconCode 0xE721
+    $outputBox.AppendText(" STATUS PRÜFEN:`r`n")
+    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
+    $outputBox.AppendText("  • Abhängigkeits- und Komponentenstatus der installierten Tools`r`n")
+    $outputBox.AppendText("  • Verfügbare Updates für GUI und installierte Bibliotheken`r`n")
+    $outputBox.AppendText("  • Git-Status (Pull verfügbar, aktuelle Version)`r`n")
+    $outputBox.AppendText("  • Direkte Update- und Reparatur-Aktionen pro Komponente`r`n`r`n")
+
+    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Accent'
+    Add-OutputIcon -OutputBox $outputBox -IconCode 0xE943
+    $outputBox.AppendText(" ADD-ONS:`r`n")
+    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
+    $outputBox.AppendText("  • Verwaltung externer Erweiterungen und GitHub-Repos`r`n")
+    $outputBox.AppendText("  • Installieren, Aktualisieren und Deinstallieren von Add-ons`r`n")
+    $outputBox.AppendText("  • Python-Dashboard-Integration (Start/Stop)`r`n")
+    $outputBox.AppendText("  • Automatischer Autostart beim Windows-Login`r`n`r`n")
+
+    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Muted'
+    Add-OutputIcon -OutputBox $outputBox -IconCode 0xE897
+    $outputBox.AppendText(" Tipp: Wählen Sie eine Option aus dem ausgeklappten Menü.`r`n")
 }
 
 # Setze Content-Panel-Breite für 2 Buttons (Status prüfen + Add-ons)
