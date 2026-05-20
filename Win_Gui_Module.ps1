@@ -6429,8 +6429,8 @@ $infoHorizontalPanel = New-HorizontalCollapsiblePanel -Title "Informationen" -XP
     $outputBox.AppendText(" Tipp: Wählen Sie eine Info-Kategorie aus dem ausgeklappten Menü.`r`n")
 }
 
-# Setze Content-Panel-Groesse fuer 2 Buttons nebeneinander
-$infoHorizontalPanel.Content.Width = 290  # 2 Buttons x 145px
+# Setze Content-Panel-Groesse fuer 3 Buttons nebeneinander
+$infoHorizontalPanel.Content.Width = 435  # 3 Buttons x 145px
 $infoHorizontalPanel.Content.Height = 35
 
 # Erstelle die Info-Buttons horizontal im Content-Panel
@@ -6462,6 +6462,7 @@ $btnStatusInfoH.Add_Click({
     
         $btnStatusInfoH.BackColor = [System.Drawing.Color]::FromArgb(55, 55, 55)
         $btnHardwareInfoH.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
+        $btnToolInfoH.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
     
         if (-not $script:statusInfoLoaded) {
             $systemStatusBox.Clear()
@@ -6504,6 +6505,7 @@ $btnHardwareInfoH.Add_Click({
     
         $btnStatusInfoH.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
         $btnHardwareInfoH.BackColor = [System.Drawing.Color]::FromArgb(55, 55, 55)
+        $btnToolInfoH.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
     
         if (-not $script:hardwareInfoLoaded) {
             Get-HardwareInfo -infoBox $hardwareInfoBox
@@ -6511,6 +6513,43 @@ $btnHardwareInfoH.Add_Click({
         }
     })
 $infoHorizontalPanel.Content.Controls.Add($btnHardwareInfoH)
+
+$btnToolInfoH = New-Object System.Windows.Forms.Button
+$btnToolInfoH.Text = "Tool-Info"
+$btnToolInfoH.Size = New-Object System.Drawing.Size(145, 35)
+$btnToolInfoH.Location = New-Object System.Drawing.Point(290, 0)
+$btnToolInfoH.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+$btnToolInfoH.FlatAppearance.BorderSize = 0
+$btnToolInfoH.FlatAppearance.MouseOverBackColor = [System.Drawing.Color]::FromArgb(55, 55, 55)
+$btnToolInfoH.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
+$btnToolInfoH.ForeColor = [System.Drawing.Color]::White
+$btnToolInfoH.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
+$btnToolInfoH.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
+Add-ButtonIcon -Button $btnToolInfoH -IconCode 0xE74C -IconSize 11 -LeftMargin 8
+
+# Runde Ecken für Button (8px Radius)
+try {
+    $regionHandle = [RoundedCorners]::CreateRoundRectRgn(0, 0, $btnToolInfoH.Width, $btnToolInfoH.Height, 8, 8)
+    if ($regionHandle -ne [IntPtr]::Zero) {
+        $btnToolInfoH.Region = [System.Drawing.Region]::FromHrgn($regionHandle)
+    }
+} catch {
+    # Falls runde Ecken nicht funktionieren, einfach ohne weitermachen
+}
+
+$btnToolInfoH.Add_Click({
+        Switch-OutputView -viewName "toolInfoView"
+
+        $btnStatusInfoH.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
+        $btnHardwareInfoH.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
+        $btnToolInfoH.BackColor = [System.Drawing.Color]::FromArgb(55, 55, 55)
+
+        if (-not $script:toolInfoLoaded) {
+            Get-ToolInfo -infoBox $toolInfoBox
+            $script:toolInfoLoaded = $true
+        }
+    })
+$infoHorizontalPanel.Content.Controls.Add($btnToolInfoH)
 
 $mainContentPanel.Controls.Add($infoHorizontalPanel.Container)
 
@@ -7502,8 +7541,7 @@ $downloadsPanel = New-CollapsiblePanel -Title "Tool-Downloads" -YPosition 157 -T
     $outputBox.AppendText(" Winget-Integration: Automatische Installations-Status-Erkennung`r`n")
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
     Add-OutputIcon -OutputBox $outputBox -IconCode 0xE73E
-    $outputBox.AppendText(" Ein-Klick-Installation: Direkte Installation über Winget`r`n`r`n")
-    
+    $outputBox.AppendText(" Ein-Klick-Installation: Direkte Installation über Winget`r`n")
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Muted'
     Add-OutputIcon -OutputBox $outputBox -IconCode 0xE946
     $outputBox.AppendText(" Tipp: Wählen Sie eine Kategorie oder nutzen Sie die Suchfunktion oben.`r`n")
