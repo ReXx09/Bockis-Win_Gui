@@ -1,7 +1,43 @@
 # Bockis System-Tool v4.2.4
 
-**Datum:** 2026-04-14  
+**Datum:** 2026-05-20  
 **Autor:** Bockis
+
+---
+
+## Bugfixes
+
+- **Browser öffnet sich nicht (Admin-Kontext)**: `Open-UrlInBrowser` nutzt jetzt `Shell.Application` des laufenden (nicht-erhöhten) Explorer-Prozesses als erste Methode — behebt die Chromium/Brave-Elevation-Barriere wenn die GUI mit Admin-Rechten läuft.
+- **Add-ons starten nicht**: `.bat`- und `.cmd`-Dateien werden jetzt explizit über `cmd.exe /c` ausgeführt — zuverlässiger aus erhöhtem Kontext als die Shell-File-Association.
+- **WPF-Fehler lautlos verschluckt**: `Add_Click`-Handler in Extension-Kacheln hat jetzt `try-catch` mit `Write-ToolLog`-Logging.
+- **Settings-Dialog Duplikate**: Doppelte Eintrags-Optionen für Extension-Start im Legacy-Dialog entfernt.
+- **Settings-Dialog Action-Buttons**: Direkte Funktionsaufrufe und korrekte Closure-Variablen-Erfassung.
+- **Tray-Wiederherstellung**: Stabilität beim GUI-Wiederherstellen aus dem Tray verbessert.
+
+## Neue Features
+
+- **Extensions-System**: Vollständig neues System zur Verwaltung externer Erweiterungen (bockis-dashboard, multimonitor-profile-tool) — Start, Status und Einstellungen direkt aus der GUI.
+- **ADB Link** in der Tool-Bibliothek unter `Coding / IT` hinzugefügt (direkter Download-Link).
+- **DetectCommand-Mechanismus**: Tools ohne Winget-ID können jetzt über einen PATH-Befehl (`adb`, etc.) als installiert erkannt werden.
+
+## Verbesserungen
+
+- **Extension-Logging**: `Open-ExtensionEntryPoint` schreibt Start- und Fehler-Ereignisse in die Tool-Logs (`EXTENSION`-ToolName).
+- **Settings-Modernisierung**: Aktualisierter Settings-Dialog mit modernem UI und direkter GUI-Integration.
+- **Submodule**: `Data/Add-ons/bockis-dashboard` und `Data/Add-ons/multimonitor-profile-tool` als Git-Submodule registriert.
+- **Set-ProjectVersion**: Pfadfehler `Tools\` → `#_Tools\` korrigiert.
+
+## Enthaltene Commits seit v4.2.3
+
+| Commit | Beschreibung |
+|--------|-------------|
+| `1c653ce` | bump: version 4.2.3 -> 4.2.4 |
+| `f2d58e3` | fix: Browser-Start bei Admin-Kontext, Add-on-Start, ADB Link; Submodule |
+| `d484afd` | Clean: Remove Duplicate Extension Startup Options from Legacy Settings Dialog |
+| `eb1e20d` | Fix: Settings Modern Dialog Action Buttons - Direct Function Calls |
+| `6f150ee` | Fix: Settings Action Button Closure Variable Capture |
+| `d04c3a7` | Feature: Add Extensions System & Settings Modernization |
+| `25a1759` | Fix tray restore stability and update GUI settings integration |
 
 ---
 

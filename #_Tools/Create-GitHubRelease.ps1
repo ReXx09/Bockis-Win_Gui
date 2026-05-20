@@ -33,28 +33,32 @@ Write-Host ""
 $tagName = "v$Version"
 $releaseName = "Bockis System-Tool v$Version"
 $releaseBody = @"
-## 🎉 Bockis System-Tool v$Version
+## Bockis System-Tool v$Version
 
-### ✨ Neue Features
-- Hardware-Monitoring mit LibreHardwareMonitor 0.9.5
-- Automatischer Update-Check für private Repos
-- Verbesserte Token-Authentifizierung
+### Bugfixes
+- **Browser oeffnet sich nicht (Admin-Kontext)**: Open-UrlInBrowser nutzt jetzt Shell.Application des laufenden (nicht-erhoehten) Explorer-Prozesses - behebt die Chromium/Brave-Elevation-Barriere
+- **Add-ons starten nicht**: .bat/.cmd-Dateien werden jetzt explizit ueber cmd.exe /c ausgefuehrt - zuverlaessiger aus erhoehtem Kontext
+- **WPF-Fehler lautlos verschluckt**: Add_Click-Handler hat jetzt try-catch mit Write-ToolLog
+- **Settings-Dialog**: Duplikate entfernt, Action-Buttons und Closure-Variable-Capture korrigiert
+- **Tray-Wiederherstellung**: Stabilitaet beim GUI-Restore aus dem Tray verbessert
 
-### 🔧 Verbesserungen
-- Optimierte UI-Performance
-- Bessere Fehlerbehandlung
-- Erweiterte Logging-Funktionen
+### Neue Features
+- **Extensions-System**: Verwaltung externer Erweiterungen (Dashboard, MultiMonitor) direkt aus der GUI
+- **ADB Link** in Tool-Bibliothek (Coding / IT) hinzugefuegt
+- **DetectCommand-Mechanismus**: Tools ohne Winget-ID ueber PATH-Befehl als installiert erkennbar
 
-### 🐛 Bugfixes
-- Diverse Stabilitätsverbesserungen
+### Verbesserungen
+- Extension-Logging via Write-ToolLog -ToolName 'EXTENSION'
+- Data/Add-ons als Git-Submodule (bockis-dashboard, multimonitor-profile-tool)
+- Set-ProjectVersion.ps1 Pfadfehler korrigiert
 
-### 📥 Installation
-1. ZIP-Datei herunterladen
-2. Entpacken
-3. `Bockis System-Tool starten.bat` ausführen
+### Installation
+1. ZIP-Datei herunterladen und entpacken
+2. Bockis System-Tool starten.bat ausfuehren
+3. Bei Erstinstallation: Abhaengigkeiten werden automatisch geprueft
 
 ---
-**Vollständiges Changelog:** [Hier einfügen]
+Vollstaendiges Changelog: https://github.com/ReXx09/Bockis-Win_Gui/blob/master/RELEASE_NOTES.md
 "@
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
@@ -132,7 +136,7 @@ $headers = @{
 
 $body = @{
     tag_name         = $tagName
-    target_commitish = "main"  # oder "master" je nach Branch
+    target_commitish = "master"  # Branch
     name             = $releaseName
     body             = $releaseBody
     draft            = $Draft.IsPresent
