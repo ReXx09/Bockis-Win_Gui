@@ -4671,6 +4671,30 @@ function New-CollapsiblePanel {
                 }
             }
             
+            # Panels in anderen Parent-Containern schließen (z.B. restartPanel in restartButtonPanel)
+            if ($script:allCollapsiblePanels) {
+                foreach ($otherPanel in $script:allCollapsiblePanels) {
+                    if ($otherPanel.Container -and
+                        $otherPanel.Container.Tag -ne $currentTag -and
+                        $otherPanel.Container.Parent -ne $ParentPanel -and
+                        $otherPanel.Header.Tag -eq "expanded") {
+
+                        $otherArrow = $otherPanel.Header.Controls | Where-Object { $_.Tag -eq "arrow" }
+                        if ($otherArrow) { $otherArrow.Text = "▼" }
+                        $otherPanel.Header.Tag = "collapsed"
+                        $otherPanel.Content.Visible = $false
+                        $otherPanel.Container.Height = 35
+
+                        if ($null -ne $otherPanel.Container.OriginalY) {
+                            $otherPanel.Container.Location = New-Object System.Drawing.Point(
+                                $otherPanel.Container.Location.X, $otherPanel.Container.OriginalY)
+                            $otherPanel.Header.Location = New-Object System.Drawing.Point(0, 0)
+                        }
+                        Update-PanelPositions -ParentPanel $otherPanel.Container.Parent
+                    }
+                }
+            }
+            
             # Dann aktuelles Panel ausklappen
             # Pfeil-Label finden und ändern
             $arrow = $this.Controls | Where-Object { $_.Tag -eq "arrow" }
@@ -4778,11 +4802,17 @@ function New-CollapsiblePanel {
     $container.Controls.Add($headerBtn)
     $container.Controls.Add($contentPanel)
     
-    return @{
+    $panelObj = @{
         Container = $container
         Header    = $headerBtn
         Content   = $contentPanel
     }
+    
+    # In globaler Panel-Liste registrieren fuer Cross-Parent-Schliessen
+    if (-not $script:allCollapsiblePanels) { $script:allCollapsiblePanels = @() }
+    $script:allCollapsiblePanels += $panelObj
+    
+    return $panelObj
 }
 
 # Hilfsfunktion zum Aktualisieren der Panel-Positionen
