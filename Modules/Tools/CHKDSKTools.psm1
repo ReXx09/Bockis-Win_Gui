@@ -557,8 +557,11 @@ function Start-CHKDSK {
     $btnCancel.Add_Click({ $script:_wpfResult = $false; $wpfForm.Close() })
     $btnOk.Add_Click({ $script:_wpfResult = $true; $wpfForm.Close() })
 
-    # ── Dialog anzeigen ──────────────────────────────────────────────
-    $wpfForm.ShowDialog() | Out-Null
+    # ── Dialog anzeigen (nicht-modal via DispatcherFrame – Hauptfenster bleibt bewegbar)
+    $chkdskFrame = New-Object System.Windows.Threading.DispatcherFrame
+    $wpfForm.Add_Closed({ $chkdskFrame.Continue = $false })
+    $wpfForm.Show()
+    [System.Windows.Threading.Dispatcher]::PushFrame($chkdskFrame)
     $outputBox.Clear()
 
     if (-not $script:_wpfResult) {

@@ -2143,8 +2143,11 @@ function Start-TempFilesCleanupAdvanced {
                 Update-CleanupSizeEstimates
             })
 
-        # Dialog anzeigen
-        $wpfCleanup.ShowDialog() | Out-Null
+        # Dialog anzeigen (nicht-modal via DispatcherFrame – Hauptfenster bleibt bewegbar)
+        $cleanupFrame = New-Object System.Windows.Threading.DispatcherFrame
+        $wpfCleanup.Add_Closed({ $cleanupFrame.Continue = $false })
+        $wpfCleanup.Show()
+        [System.Windows.Threading.Dispatcher]::PushFrame($cleanupFrame)
     } catch {
         Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
         $outputBox.AppendText("Fehler in der erweiterten Systemreinigung: $($_.Exception.Message)`r`n")
