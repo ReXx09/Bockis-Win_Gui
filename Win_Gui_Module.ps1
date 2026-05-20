@@ -6966,20 +6966,21 @@ $btnCheckDependenciesH.Add_Click({
                     }
 
                     if ($dep.Name -eq "GUI-Update (GitHub)") {
-                        $actionButton.Text = "Downgrade"
-                        $actionButton.BackColor = [System.Drawing.Color]::FromArgb(124, 77, 255)
+                        $guiIsUpgrade = ($dep.UpdateAvailable -eq $true)
+                        $actionButton.Text = if ($guiIsUpgrade) { "Aktualisieren" } else { "Downgrade" }
+                        $actionButton.BackColor = if ($guiIsUpgrade) { [System.Drawing.Color]::FromArgb(52, 152, 219) } else { [System.Drawing.Color]::FromArgb(124, 77, 255) }
                         $actionButton.ForeColor = [System.Drawing.Color]::White
-                        $actionButton.Tag = @{ Dependency = $dep; Action = "gui-release-select" }
+                        $actionButton.Tag = @{ Dependency = $dep; Action = "gui-release-select"; IsUpgrade = $guiIsUpgrade }
                     } elseif ($dep.Name -eq "Git Pull" -and $dep.Available) {
                         $actionButton.Text = "Git Pull"
                         $actionButton.BackColor = [System.Drawing.Color]::FromArgb(255, 152, 0)
                         $actionButton.ForeColor = [System.Drawing.Color]::White
                         $actionButton.Tag = @{ Dependency = $dep; Action = "git-pull" }
                     } elseif ($dep.Name -eq "Git Pull") {
-                        $actionButton.Text = "Nicht verfügbar"
-                        $actionButton.BackColor = [System.Drawing.Color]::FromArgb(70, 70, 70)
+                        $actionButton.Text = "Auf GitHub"
+                        $actionButton.BackColor = [System.Drawing.Color]::FromArgb(50, 50, 50)
                         $actionButton.ForeColor = [System.Drawing.Color]::Silver
-                        $actionButton.Enabled = $false
+                        $actionButton.Tag = @{ Dependency = $dep; Action = "open-releases-page" }
                     } elseif ($dep.Name -eq "Winget Package Manager" -and $dep.Found -and $dep.WingetId) {
                         # Winget selbst: Versionsauswahl möglich
                         $actionButton.Text = "Downgrade"
@@ -7043,6 +7044,7 @@ $btnCheckDependenciesH.Add_Click({
                                 "winget-version-select" { "Versionswechsel" }
                                 "git-pull" { "Git Pull" }
                                 "lhm-update" { "DLL-Update" }
+                                "open-releases-page" { "GitHub Releases" }
                                 default { "Installation" }
                             }
                             $this.Enabled = $false
@@ -7052,6 +7054,7 @@ $btnCheckDependenciesH.Add_Click({
                                 "winget-version-select" { "Suche Version..." }
                                 "git-pull" { "Pull laeuft..." }
                                 "lhm-update" { "Lade DLL..." }
+                                "open-releases-page" { "Öffne..." }
                                 default { "Installiere..." }
                             }
                             [System.Windows.Forms.Application]::DoEvents()
@@ -7092,7 +7095,11 @@ $btnCheckDependenciesH.Add_Click({
 
                             $actionResult = $null
                             try {
-                                if ($actionType -eq "gui-release-select") {
+                                if ($actionType -eq "open-releases-page") {
+                                    $releasesUrl = "https://github.com/$script:GuiUpdateRepoOwner/$script:GuiUpdateRepoName/releases"
+                                    Open-UrlInBrowser -Url $releasesUrl
+                                    $actionResult = @{ Success = $true; Cancelled = $false; Message = "GitHub Releases geöffnet" }
+                                } elseif ($actionType -eq "gui-release-select") {
                                     $actionResult = Invoke-GuiReleaseAction
                                 } elseif ($actionType -eq "winget-version-select") {
                                     $actionResult = Invoke-WingetVersionAction -WingetId $depToHandle.WingetId -CurrentVersion $depToHandle.Version -ProgressCallback $uiProgressCallback -LogCallback $uiLogCallback
@@ -7127,8 +7134,8 @@ $btnCheckDependenciesH.Add_Click({
 
                                 if ($actionResult -and $actionResult.Cancelled) {
                                     if ($actionType -eq "gui-release-select") {
-                                        $this.Text = "Downgrade"
-                                        $this.BackColor = [System.Drawing.Color]::FromArgb(124, 77, 255)
+                                        $this.Text = if ($payload.IsUpgrade) { "Aktualisieren" } else { "Downgrade" }
+                                        $this.BackColor = if ($payload.IsUpgrade) { [System.Drawing.Color]::FromArgb(52, 152, 219) } else { [System.Drawing.Color]::FromArgb(124, 77, 255) }
                                     } elseif ($actionType -eq "git-pull") {
                                         $this.Text = "Git Pull"
                                         $this.BackColor = [System.Drawing.Color]::FromArgb(255, 152, 0)
@@ -7144,7 +7151,11 @@ $btnCheckDependenciesH.Add_Click({
                                     }
                                     $this.Enabled = $true
                                 } elseif ($actionResult -and $actionResult.Success) {
-                                    if ($actionType -eq "git-pull" -and $actionResult.RestartRecommended) {
+                                    if ($actionType -eq "open-releases-page") {
+                                        $this.Text = "Auf GitHub"
+                                        $this.BackColor = [System.Drawing.Color]::FromArgb(50, 50, 50)
+                                        $this.Enabled = $true
+                                    } elseif ($actionType -eq "git-pull" -and $actionResult.RestartRecommended) {
                                         [System.Windows.Forms.MessageBox]::Show(
                                             "Git Pull erfolgreich. Es wurden neue Commits geladen.`n`nBitte die GUI neu starten, damit alle Änderungen aktiv werden.",
                                             "Neustart empfohlen",
@@ -7166,11 +7177,14 @@ $btnCheckDependenciesH.Add_Click({
                                         [System.Windows.Forms.MessageBox]::Show("Vorgang fehlgeschlagen (Exit Code: $($actionResult.ExitCode))", "Aktion fehlgeschlagen", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
                                     }
                                     if ($actionType -eq "gui-release-select") {
-                                        $this.Text = "Downgrade"
-                                        $this.BackColor = [System.Drawing.Color]::FromArgb(124, 77, 255)
+                                        $this.Text = if ($payload.IsUpgrade) { "Aktualisieren" } else { "Downgrade" }
+                                        $this.BackColor = if ($payload.IsUpgrade) { [System.Drawing.Color]::FromArgb(52, 152, 219) } else { [System.Drawing.Color]::FromArgb(124, 77, 255) }
                                     } elseif ($actionType -eq "git-pull") {
                                         $this.Text = "Git Pull"
                                         $this.BackColor = [System.Drawing.Color]::FromArgb(255, 152, 0)
+                                    } elseif ($actionType -eq "open-releases-page") {
+                                        $this.Text = "Auf GitHub"
+                                        $this.BackColor = [System.Drawing.Color]::FromArgb(50, 50, 50)
                                     } elseif ($actionType -eq "winget-version-select") {
                                         $this.Text = "Version wählen"
                                         $this.BackColor = [System.Drawing.Color]::FromArgb(156, 39, 176)
@@ -7187,8 +7201,8 @@ $btnCheckDependenciesH.Add_Click({
                                 & $uiProgressCallback -Value 100 -Text "$actionLabel fehlgeschlagen" -Color ([System.Drawing.Color]::Red)
                                 [System.Windows.Forms.MessageBox]::Show("Fehler: $($_.Exception.Message)", "Aktion fehlgeschlagen", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
                                 if ($actionType -eq "gui-release-select") {
-                                    $this.Text = "Downgrade"
-                                    $this.BackColor = [System.Drawing.Color]::FromArgb(124, 77, 255)
+                                    $this.Text = if ($payload.IsUpgrade) { "Aktualisieren" } else { "Downgrade" }
+                                    $this.BackColor = if ($payload.IsUpgrade) { [System.Drawing.Color]::FromArgb(52, 152, 219) } else { [System.Drawing.Color]::FromArgb(124, 77, 255) }
                                 } elseif ($actionType -eq "winget-version-select") {
                                     $this.Text = "Version wählen"
                                     $this.BackColor = [System.Drawing.Color]::FromArgb(156, 39, 176)
