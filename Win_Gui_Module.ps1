@@ -5001,9 +5001,6 @@ function Reset-MainPanelStates {
     if ($troubleshootHorizontalPanel -and $troubleshootHorizontalPanel.Container) {
         $troubleshootHorizontalPanel.Container.Visible = $false
     }
-    if ($externalToolsHorizontalPanel -and $externalToolsHorizontalPanel.Container) {
-        $externalToolsHorizontalPanel.Container.Visible = $false
-    }
     
     # Header-Buttons visuell zurücksetzen (alle inaktiv)
     if ($systemPanel) { $systemPanel.Header.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38) }
@@ -5032,22 +5029,15 @@ function Show-MainInfoSupportPanels {
         $troubleshootHorizontalPanel.Container.Visible = $true
         $troubleshootHorizontalPanel.Container.BringToFront()
     }
-    if ($externalToolsHorizontalPanel -and $externalToolsHorizontalPanel.Container) {
-        $externalToolsHorizontalPanel.Container.Visible = $true
-        $externalToolsHorizontalPanel.Container.BringToFront()
-    }
 }
 
-# Hilfsfunktion: Versteckt Informationen-, Support- und Externe-Tools-Panel (fuer Funktionsansichten)
+# Hilfsfunktion: Versteckt Informationen- und Support-Panel (fuer Funktionsansichten)
 function Hide-MainInfoSupportPanels {
     if ($infoHorizontalPanel -and $infoHorizontalPanel.Container) {
         $infoHorizontalPanel.Container.Visible = $false
     }
     if ($troubleshootHorizontalPanel -and $troubleshootHorizontalPanel.Container) {
         $troubleshootHorizontalPanel.Container.Visible = $false
-    }
-    if ($externalToolsHorizontalPanel -and $externalToolsHorizontalPanel.Container) {
-        $externalToolsHorizontalPanel.Container.Visible = $false
     }
 }
 
@@ -6366,9 +6356,6 @@ $infoHorizontalPanel = New-HorizontalCollapsiblePanel -Title "Informationen" -XP
     if ($troubleshootHorizontalPanel -and $troubleshootHorizontalPanel.Container) {
         $troubleshootHorizontalPanel.Container.Visible = $true
     }
-    if ($externalToolsHorizontalPanel -and $externalToolsHorizontalPanel.Container) {
-        $externalToolsHorizontalPanel.Container.Visible = $true
-    }
     
     # OutputBox leeren und Info anzeigen
     $outputBox.Clear()
@@ -6516,13 +6503,10 @@ $troubleshootHorizontalPanel = New-HorizontalCollapsiblePanel -Title "Support" -
     if ($troubleshootHorizontalPanel -and $troubleshootHorizontalPanel.Container) {
         $troubleshootHorizontalPanel.Container.Visible = $true
     }
-    if ($externalToolsHorizontalPanel -and $externalToolsHorizontalPanel.Container) {
-        $externalToolsHorizontalPanel.Container.Visible = $true
-    }
 }
 
-# Setze Content-Panel-Breite für 1 Button (kompakt, damit Add-ons näher folgt)
-$troubleshootHorizontalPanel.Content.Width = 145
+# Setze Content-Panel-Breite für 2 Buttons (Status prüfen + Add-ons)
+$troubleshootHorizontalPanel.Content.Width = 295
 $troubleshootHorizontalPanel.Content.Height = 35
 
 # Button: Status prüfen
@@ -7276,56 +7260,68 @@ $btnCheckDependenciesH.Add_Click({
     })
 $troubleshootHorizontalPanel.Content.Controls.Add($btnCheckDependenciesH)
 
+# Button: Add-ons (Erweiterungen) - im Support-Panel integriert
+$btnAddonsH = New-Object System.Windows.Forms.Button
+$btnAddonsH.Text = "Add-ons"
+$btnAddonsH.Size = New-Object System.Drawing.Size(145, 35)
+$btnAddonsH.Location = New-Object System.Drawing.Point(150, 0)
+$btnAddonsH.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+$btnAddonsH.FlatAppearance.BorderSize = 0
+$btnAddonsH.FlatAppearance.MouseOverBackColor = [System.Drawing.Color]::FromArgb(55, 55, 55)
+$btnAddonsH.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
+$btnAddonsH.ForeColor = [System.Drawing.Color]::White
+$btnAddonsH.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
+$btnAddonsH.Cursor = [System.Windows.Forms.Cursors]::Hand
+Add-ButtonIcon -Button $btnAddonsH -IconCode 0xE943 -IconSize 12 -LeftMargin 10
+
+try {
+    $regionHandle = [RoundedCorners]::CreateRoundRectRgn(0, 0, $btnAddonsH.Width, $btnAddonsH.Height, 8, 8)
+    if ($regionHandle -ne [IntPtr]::Zero) {
+        $btnAddonsH.Region = [System.Drawing.Region]::FromHrgn($regionHandle)
+    }
+} catch { }
+
+$btnAddonsH.Add_Click({
+        Set-ExtensionProgress -Value 18 -Text "Erweiterungen werden geladen..."
+
+        if ($outputViewPanel) { $outputViewPanel.Visible = $true }
+        if ($statusViewPanel) { $statusViewPanel.Visible = $false }
+        if ($hardwareViewPanel) { $hardwareViewPanel.Visible = $false }
+        if ($toolInfoViewPanel) { $toolInfoViewPanel.Visible = $false }
+
+        if ($searchPanel) { $searchPanel.Visible = $false }
+        if ($script:dependencyTableHost) { $script:dependencyTableHost.Visible = $false }
+        if ($outputBox) { $outputBox.Visible = $true }
+
+        if ($infoHorizontalPanel -and $infoHorizontalPanel.Container) {
+            $infoHorizontalPanel.Container.Visible = $true
+        }
+        if ($troubleshootHorizontalPanel -and $troubleshootHorizontalPanel.Container) {
+            $troubleshootHorizontalPanel.Container.Visible = $true
+        }
+
+        Show-OutputLoadingOverlay
+
+        $definitions = Get-ExtensionRepoDefinitions
+        $extensionStatus = Get-ExtensionRepoStatus -Definitions $definitions -CheckRemoteUpdates
+        $caps = Get-PythonDashboardCapabilities -Port $script:pythonDashboardPort
+
+        Hide-OutputLoadingOverlay
+        Show-ExtensionsOverviewInOutput -OutputBox $outputBox -ExtensionStatus $extensionStatus -Capabilities $caps
+        Switch-OutputView -viewName "downloadsView"
+        $null = Show-ExtensionTiles -WrapPanel $toolWrapPanel -ExtensionStatus $extensionStatus -OutputBox $outputBox
+
+        Set-ExtensionProgress -Value 100 -Text "Erweiterungen geladen" -Color ([System.Drawing.Color]::LightGreen)
+        Reset-ExtensionProgress -DelayMs 1200
+    })
+$troubleshootHorizontalPanel.Content.Controls.Add($btnAddonsH)
+
 $mainContentPanel.Controls.Add($troubleshootHorizontalPanel.Container)
 
-# Erstelle horizontales Collapsible Panel fuer Externe Tools (rechts neben Support)
-$externalToolsHorizontalPanel = New-HorizontalCollapsiblePanel -Title "Add-ons" -XPosition 280 -Tag "externalToolsHorizontalPanel" -ParentPanel $mainContentPanel -IconCode 0xE943 -OnExpand {
-    Set-ExtensionProgress -Value 18 -Text "Erweiterungen werden geladen..."
-
-    if ($outputViewPanel) { $outputViewPanel.Visible = $true }
-    if ($statusViewPanel) { $statusViewPanel.Visible = $false }
-    if ($hardwareViewPanel) { $hardwareViewPanel.Visible = $false }
-    if ($toolInfoViewPanel) { $toolInfoViewPanel.Visible = $false }
-
-    if ($searchPanel) { $searchPanel.Visible = $false }
-    if ($script:dependencyTableHost) { $script:dependencyTableHost.Visible = $false }
-    if ($outputBox) { $outputBox.Visible = $true }
-
-    if ($infoHorizontalPanel -and $infoHorizontalPanel.Container) {
-        $infoHorizontalPanel.Container.Visible = $true
-    }
-    if ($troubleshootHorizontalPanel -and $troubleshootHorizontalPanel.Container) {
-        $troubleshootHorizontalPanel.Container.Visible = $true
-    }
-    if ($externalToolsHorizontalPanel -and $externalToolsHorizontalPanel.Container) {
-        $externalToolsHorizontalPanel.Container.Visible = $true
-    }
-
-    # Skeleton-Overlay einblenden während Netzwerk-Calls laufen
-    Show-OutputLoadingOverlay
-
-    $definitions = Get-ExtensionRepoDefinitions
-    $extensionStatus = Get-ExtensionRepoStatus -Definitions $definitions -CheckRemoteUpdates
-    $caps = Get-PythonDashboardCapabilities -Port $script:pythonDashboardPort
-
-    Hide-OutputLoadingOverlay
-    Show-ExtensionsOverviewInOutput -OutputBox $outputBox -ExtensionStatus $extensionStatus -Capabilities $caps
-    Switch-OutputView -viewName "downloadsView"
-    $null = Show-ExtensionTiles -WrapPanel $toolWrapPanel -ExtensionStatus $extensionStatus -OutputBox $outputBox
-
-    Set-ExtensionProgress -Value 100 -Text "Erweiterungen geladen" -Color ([System.Drawing.Color]::LightGreen)
-    Reset-ExtensionProgress -DelayMs 1200
-}
-
-$externalToolsHorizontalPanel.Content.Width = 0
-$externalToolsHorizontalPanel.Content.Height = 35
-
-$mainContentPanel.Controls.Add($externalToolsHorizontalPanel.Container)
-
-# WICHTIG: Initiale Neupositionierung aller horizontalen Panels beim Laden
+# WICHTIG: Initiale Neupositionierung der horizontalen Panels beim Laden
 # um Überschneidungen zu vermeiden (alle Panels sind noch zugeklappt = 155px Breite)
 $initX = 10
-@($infoHorizontalPanel, $troubleshootHorizontalPanel, $externalToolsHorizontalPanel) | ForEach-Object {
+@($infoHorizontalPanel, $troubleshootHorizontalPanel) | ForEach-Object {
     if ($_ -and $_.Container) {
         $_.Container.Location = New-Object System.Drawing.Point($initX, 5)
         $initX += $_.Container.Width + 5
