@@ -4153,6 +4153,18 @@ $mainform.Add_Resize({
             return
         }
 
+        # Konsole beim Minimieren des Hauptfensters ausblenden
+        try {
+            if ([ConsoleHelper]::IsConsoleVisible()) {
+                [ConsoleHelper]::HideConsole()
+                $script:consoleAutoHidden = $true
+                if ($btnToggleConsole) {
+                    $btnToggleConsole.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
+                    $btnToggleConsole.Text = "►"
+                }
+            }
+        } catch { }
+
         $settingsForResize = Get-SystemToolSettings
         if ($settingsForResize -and [bool]$settingsForResize.MinimizeToTrayOnMinimizeClick) {
             Hide-MainFormToTray -ShowBalloon:$false
