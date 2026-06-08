@@ -228,6 +228,13 @@ function Initialize-SystemToolSettings {
         ShowExtensionsInTrayMenu = $true
         EnableWin11ServiceHints = $true
         EnableExperimentalTweaks = $false
+        ExtensionProgressDelayMs = 3000
+        WebOutputBufferLimit = 500
+        OperationTimeoutSeconds = 2
+        ErrorMaxRetries = 3
+        NetworkPingDefaultCount = 4
+        NetworkPingDefaultTimeoutMs = 1000
+        NetworkPingDefaultBufferBytes = 32
         ColorScheme         = Get-DefaultColorScheme
     }
     
@@ -337,6 +344,34 @@ function Import-SystemToolSettings {
             }
             if (-not $settingsHashtable.ContainsKey("EnableExperimentalTweaks")) {
                 $settingsHashtable["EnableExperimentalTweaks"] = $false
+                $needsSave = $true
+            }
+            if (-not $settingsHashtable.ContainsKey("ExtensionProgressDelayMs")) {
+                $settingsHashtable["ExtensionProgressDelayMs"] = 3000
+                $needsSave = $true
+            }
+            if (-not $settingsHashtable.ContainsKey("WebOutputBufferLimit")) {
+                $settingsHashtable["WebOutputBufferLimit"] = 500
+                $needsSave = $true
+            }
+            if (-not $settingsHashtable.ContainsKey("OperationTimeoutSeconds")) {
+                $settingsHashtable["OperationTimeoutSeconds"] = 2
+                $needsSave = $true
+            }
+            if (-not $settingsHashtable.ContainsKey("ErrorMaxRetries")) {
+                $settingsHashtable["ErrorMaxRetries"] = 3
+                $needsSave = $true
+            }
+            if (-not $settingsHashtable.ContainsKey("NetworkPingDefaultCount")) {
+                $settingsHashtable["NetworkPingDefaultCount"] = 4
+                $needsSave = $true
+            }
+            if (-not $settingsHashtable.ContainsKey("NetworkPingDefaultTimeoutMs")) {
+                $settingsHashtable["NetworkPingDefaultTimeoutMs"] = 1000
+                $needsSave = $true
+            }
+            if (-not $settingsHashtable.ContainsKey("NetworkPingDefaultBufferBytes")) {
+                $settingsHashtable["NetworkPingDefaultBufferBytes"] = 32
                 $needsSave = $true
             }
             
@@ -995,6 +1030,13 @@ function Get-SettingsRegistry {
         [PSCustomObject]@{ Category = 'System'; Group = 'Verhalten'; Type = 'Toggle'; SettingKey = 'AdvancedCleanup'; Label = 'Erweiterte Bereinigung'; Description = 'Aktiviert erweiterte Bereinigungsfunktionen.' }
         [PSCustomObject]@{ Category = 'System'; Group = 'Verhalten'; Type = 'Toggle'; SettingKey = 'CheckUpdates'; Label = 'Automatisch nach Updates suchen'; Description = 'Aktiviert die Update-Prüfung beim Start.' }
         [PSCustomObject]@{ Category = 'System'; Group = 'Verhalten'; Type = 'Toggle'; SettingKey = 'ShowSplash'; Label = 'Splash-Screen anzeigen'; Description = 'Zeigt beim Programmstart den Splash-Screen.' }
+        [PSCustomObject]@{ Category = 'System'; Group = 'Erweitert'; Type = 'Choice'; SettingKey = 'OperationTimeoutSeconds'; Label = 'Netzwerk-Timeout (Sekunden)'; Description = 'Timeout fuer interne API-Aufrufe an lokale Dienste.'; Options = @(2, 3, 5, 8, 10) }
+        [PSCustomObject]@{ Category = 'System'; Group = 'Erweitert'; Type = 'Choice'; SettingKey = 'ErrorMaxRetries'; Label = 'Maximale Wiederholungen bei Log-Schreibfehlern'; Description = 'Anzahl der Wiederholversuche bei temporaeren Datei-/IO-Problemen.'; Options = @(1, 2, 3, 4, 5, 7, 10) }
+        [PSCustomObject]@{ Category = 'System'; Group = 'Erweitert'; Type = 'Choice'; SettingKey = 'ExtensionProgressDelayMs'; Label = 'Extension-Progress Ruecksetzverzoegerung (ms)'; Description = 'Wartezeit, bevor der Fortschrittsbalken wieder auf "Bereit" springt.'; Options = @(500, 1000, 1500, 2000, 3000, 5000, 8000) }
+        [PSCustomObject]@{ Category = 'System'; Group = 'Erweitert'; Type = 'Choice'; SettingKey = 'WebOutputBufferLimit'; Label = 'Web-Output-Pufferlimit'; Description = 'Maximale Anzahl gepufferter Web-Logeintraege (RAM/Live-Output).'; Options = @(200, 300, 500, 750, 1000, 1500, 2000) }
+        [PSCustomObject]@{ Category = 'System'; Group = 'Erweitert'; Type = 'Choice'; SettingKey = 'NetworkPingDefaultCount'; Label = 'Ping Standard: Anzahl'; Description = 'Voreinstellung fuer die Anzahl an Ping-Anfragen.'; Options = @(1, 2, 3, 4, 5, 8, 10, 20) }
+        [PSCustomObject]@{ Category = 'System'; Group = 'Erweitert'; Type = 'Choice'; SettingKey = 'NetworkPingDefaultTimeoutMs'; Label = 'Ping Standard: Timeout (ms)'; Description = 'Voreinstellung fuer Ping-Timeout in Millisekunden.'; Options = @(100, 250, 500, 750, 1000, 1500, 2000, 5000, 10000) }
+        [PSCustomObject]@{ Category = 'System'; Group = 'Erweitert'; Type = 'Choice'; SettingKey = 'NetworkPingDefaultBufferBytes'; Label = 'Ping Standard: Buffer (Bytes)'; Description = 'Voreinstellung fuer die Paketgroesse des Ping-Tests.'; Options = @(32, 64, 128, 256, 512, 1024, 1472) }
         [PSCustomObject]@{ Category = 'System'; Group = 'Wartung'; Type = 'Action'; SettingKey = 'RestartDefenderServicesAction'; Label = 'Windows Defender-Dienste neu starten'; Description = 'Startet Defender-Dienste neu, wenn Scans hängen oder Probleme auftreten.'; ButtonText = 'Defender-Dienste neu starten'; ActionCommand = 'Invoke-SettingsAction'; ActionKey = 'RestartDefenderServices' }
         [PSCustomObject]@{ Category = 'Startup'; Group = 'Profile'; Type = 'Choice'; SettingKey = 'StartupProfile'; Label = 'Startup-Profil'; Description = 'Vordefiniertes Verhalten beim Start.'; Options = @('Standard', 'Leicht', 'Diagnose', 'Performance') }
         [PSCustomObject]@{ Category = 'Startup'; Group = 'Ablauf'; Type = 'Toggle'; SettingKey = 'AutoStartPythonDashboardOnAppStart'; Label = 'Python-Dashboard bei App-Start'; Description = 'Startet das Dashboard direkt beim Öffnen von Bockis.' }
@@ -1468,7 +1510,7 @@ function Show-SettingsDialogModern {
                         $selected = "$($def.Options[0])"
                     }
 
-                    if ($def.SettingKey -in @('FontSize', 'UpdateInterval', 'CpuThreshold', 'RamThreshold', 'GpuThreshold')) {
+                    if ($def.SettingKey -in @('FontSize', 'UpdateInterval', 'CpuThreshold', 'RamThreshold', 'GpuThreshold', 'OperationTimeoutSeconds', 'ErrorMaxRetries', 'ExtensionProgressDelayMs', 'WebOutputBufferLimit', 'NetworkPingDefaultCount', 'NetworkPingDefaultTimeoutMs', 'NetworkPingDefaultBufferBytes')) {
                         $intValue = 10
                         [void][int]::TryParse($selected, [ref]$intValue)
                         $updatedSettings[$def.SettingKey] = $intValue

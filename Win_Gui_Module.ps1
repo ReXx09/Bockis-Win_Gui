@@ -108,6 +108,17 @@ function global:Write-ToolLog {
 
     # Web-Dashboard: Ausgabe in gemeinsamen Buffer schreiben (thread-safe)
     if ($null -ne $global:WebOutputBuffer) {
+        $webBufferLimit = 500
+        try {
+            $currentSettings = Get-SystemToolSettings
+            if ($currentSettings -and $currentSettings.WebOutputBufferLimit) {
+                $webBufferLimit = [int]$currentSettings.WebOutputBufferLimit
+            }
+        }
+        catch {
+        }
+        $webBufferLimit = [Math]::Max(100, [Math]::Min(5000, $webBufferLimit))
+
         $wbEntry = @{
             ts    = [System.DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
             tool  = if ($ToolName) { $ToolName } else { 'System' }
@@ -115,7 +126,7 @@ function global:Write-ToolLog {
             msg   = $Message
         }
         [void]$global:WebOutputBuffer.Enqueue($wbEntry)
-        if ($global:WebOutputBuffer.Count -gt 500) {
+        if ($global:WebOutputBuffer.Count -gt $webBufferLimit) {
             $wbDiscard = $null
             [void]$global:WebOutputBuffer.TryDequeue([ref]$wbDiscard)
         }
@@ -327,6 +338,15 @@ function global:Write-ToolLog {
         # Schreibe in Log-Datei mit Retry-Logik
         $retryCount = 0
         $maxRetries = 3
+        try {
+            $currentSettings = Get-SystemToolSettings
+            if ($currentSettings -and $currentSettings.ErrorMaxRetries) {
+                $maxRetries = [int]$currentSettings.ErrorMaxRetries
+            }
+        }
+        catch {
+        }
+        $maxRetries = [Math]::Max(1, [Math]::Min(10, $maxRetries))
         do {
             try {
                 $payloadLines = @()
@@ -1258,8 +1278,19 @@ function Get-PythonDashboardPidFromPort {
 function Test-PythonDashboardApiCompatibility {
     param([int]$Port)
 
+    $timeoutSec = 2
     try {
-        $schema = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/openapi.json" -Method Get -TimeoutSec 2
+        $currentSettings = Get-SystemToolSettings
+        if ($currentSettings -and $currentSettings.OperationTimeoutSeconds) {
+            $timeoutSec = [int]$currentSettings.OperationTimeoutSeconds
+        }
+    }
+    catch {
+    }
+    $timeoutSec = [Math]::Max(1, [Math]::Min(30, $timeoutSec))
+
+    try {
+        $schema = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/openapi.json" -Method Get -TimeoutSec $timeoutSec
         if (-not $schema -or -not $schema.paths) { return $false }
         $pathNames = @($schema.paths.PSObject.Properties.Name)
         if (-not ($pathNames -contains '/api/gpu' -and $pathNames -contains '/api/audio')) {
@@ -1269,9 +1300,9 @@ function Test-PythonDashboardApiCompatibility {
         # Audio-Endpunkte muessen nicht nur existieren, sondern auch funktionsfaehig sein.
         # Dadurch werden alte/beschaedigte Dashboard-Prozesse automatisch ersetzt.
         try {
-            $audio = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/audio" -Method Get -TimeoutSec 2
-            $devices = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/audio/devices" -Method Get -TimeoutSec 2
-            $sessions = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/audio/sessions" -Method Get -TimeoutSec 2
+            $audio = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/audio" -Method Get -TimeoutSec $timeoutSec
+            $devices = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/audio/devices" -Method Get -TimeoutSec $timeoutSec
+            $sessions = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/audio/sessions" -Method Get -TimeoutSec $timeoutSec
 
             $deviceCount = if ($devices -and $devices.PSObject.Properties.Name -contains 'devices') { @($devices.devices).Count } else { 0 }
             $sessionCount = if ($sessions -and $sessions.PSObject.Properties.Name -contains 'sessions') { @($sessions.sessions).Count } else { 0 }
@@ -1294,8 +1325,19 @@ function Test-PythonDashboardApiCompatibility {
 function Get-PythonDashboardCapabilities {
     param([int]$Port)
 
+    $timeoutSec = 2
     try {
-        $caps = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/capabilities" -Method Get -TimeoutSec 2
+        $currentSettings = Get-SystemToolSettings
+        if ($currentSettings -and $currentSettings.OperationTimeoutSeconds) {
+            $timeoutSec = [int]$currentSettings.OperationTimeoutSeconds
+        }
+    }
+    catch {
+    }
+    $timeoutSec = [Math]::Max(1, [Math]::Min(30, $timeoutSec))
+
+    try {
+        $caps = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/capabilities" -Method Get -TimeoutSec $timeoutSec
         if ($caps -and $caps.ok) {
             return @{
                 Ok = $true
@@ -1696,7 +1738,19 @@ function Set-ExtensionProgress {
 }
 
 function Reset-ExtensionProgress {
-    param([int]$DelayMs = 1800)
+    param([int]$DelayMs = -1)
+
+    if ($DelayMs -lt 0) {
+        $DelayMs = 3000
+        try {
+            $currentSettings = Get-SystemToolSettings
+            if ($currentSettings -and $currentSettings.ExtensionProgressDelayMs) {
+                $DelayMs = [int]$currentSettings.ExtensionProgressDelayMs
+            }
+        }
+        catch {
+        }
+    }
 
     if (-not $global:progressBar) { return }
 
