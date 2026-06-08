@@ -240,6 +240,9 @@ function Initialize-SystemToolSettings {
         TrayEnforceIntervalMs = 150
         ExtensionSettingsDialogSizeMode = "Fixed"
         ExtensionSettingsDialogResizable = $false
+        TrayBehavior = "Never"
+        AutoStartApplicationOnWindowsLogin = $false
+        AutoStartPythonDashboardMode = "Never"
         ColorScheme         = Get-DefaultColorScheme
     }
     
@@ -399,6 +402,71 @@ function Import-SystemToolSettings {
                 $settingsHashtable["ExtensionSettingsDialogResizable"] = $false
                 $needsSave = $true
             }
+
+            # Konsolidierte Startup-/Tray-Settings (neu) aus Legacy-Settings ableiten
+            if (-not $settingsHashtable.ContainsKey("TrayBehavior")) {
+                $legacyMinOnStartup = [bool]$settingsHashtable["MinimizeToTrayOnStartup"]
+                $legacyMinOnClick = [bool]$settingsHashtable["MinimizeToTrayOnMinimizeClick"]
+                $trayBehavior = 'Never'
+                if ($legacyMinOnStartup -and $legacyMinOnClick) {
+                    $trayBehavior = 'Always'
+                }
+                elseif ($legacyMinOnStartup) {
+                    $trayBehavior = 'OnStartup'
+                }
+                elseif ($legacyMinOnClick) {
+                    $trayBehavior = 'OnClickMinimize'
+                }
+                $settingsHashtable["TrayBehavior"] = $trayBehavior
+                $needsSave = $true
+            }
+
+            if (-not $settingsHashtable.ContainsKey("AutoStartApplicationOnWindowsLogin")) {
+                $settingsHashtable["AutoStartApplicationOnWindowsLogin"] = [bool]$settingsHashtable["AutoStartGuiOnWindowsLogin"]
+                $needsSave = $true
+            }
+            if (-not $settingsHashtable.ContainsKey("AutoStartPythonDashboardMode")) {
+                $legacyDashOnApp = [bool]$settingsHashtable["AutoStartPythonDashboardOnAppStart"]
+                $legacyDashOnLogin = [bool]$settingsHashtable["AutoStartPythonDashboardOnWindowsLogin"]
+                $dashMode = 'Never'
+                if ($legacyDashOnApp -and $legacyDashOnLogin) {
+                    $dashMode = 'Both'
+                }
+                elseif ($legacyDashOnApp) {
+                    $dashMode = 'OnAppStart'
+                }
+                elseif ($legacyDashOnLogin) {
+                    $dashMode = 'OnWindowsLogin'
+                }
+                $settingsHashtable["AutoStartPythonDashboardMode"] = $dashMode
+                $needsSave = $true
+            }
+
+            # Legacy-Keys aus konsolidierten Werten synchron halten (non-breaking)
+            $trayBehaviorCurrent = [string]$settingsHashtable["TrayBehavior"]
+            switch ($trayBehaviorCurrent) {
+                'Always' {
+                    $settingsHashtable["MinimizeToTrayOnStartup"] = $true
+                    $settingsHashtable["MinimizeToTrayOnMinimizeClick"] = $true
+                }
+                'OnStartup' {
+                    $settingsHashtable["MinimizeToTrayOnStartup"] = $true
+                    $settingsHashtable["MinimizeToTrayOnMinimizeClick"] = $false
+                }
+                'OnClickMinimize' {
+                    $settingsHashtable["MinimizeToTrayOnStartup"] = $false
+                    $settingsHashtable["MinimizeToTrayOnMinimizeClick"] = $true
+                }
+                default {
+                    $settingsHashtable["MinimizeToTrayOnStartup"] = $false
+                    $settingsHashtable["MinimizeToTrayOnMinimizeClick"] = $false
+                }
+            }
+
+            $settingsHashtable["AutoStartGuiOnWindowsLogin"] = [bool]$settingsHashtable["AutoStartApplicationOnWindowsLogin"]
+            $dashModeCurrent = [string]$settingsHashtable["AutoStartPythonDashboardMode"]
+            $settingsHashtable["AutoStartPythonDashboardOnAppStart"] = ($dashModeCurrent -eq 'OnAppStart' -or $dashModeCurrent -eq 'Both')
+            $settingsHashtable["AutoStartPythonDashboardOnWindowsLogin"] = ($dashModeCurrent -eq 'OnWindowsLogin' -or $dashModeCurrent -eq 'Both')
             
             # Setze die Einstellungen
             Set-SystemToolSettings -Settings $settingsHashtable
@@ -1069,12 +1137,12 @@ function Get-SettingsRegistry {
         [PSCustomObject]@{ Category = 'System'; Group = 'Erweitert'; Type = 'Toggle'; SettingKey = 'ExtensionSettingsDialogResizable'; Label = 'Erweiterungsdialog frei skalierbar'; Description = 'Erlaubt manuelles Veraendern der Groesse im Erweiterungsdialog.' }
         [PSCustomObject]@{ Category = 'System'; Group = 'Wartung'; Type = 'Action'; SettingKey = 'RestartDefenderServicesAction'; Label = 'Windows Defender-Dienste neu starten'; Description = 'Startet Defender-Dienste neu, wenn Scans hängen oder Probleme auftreten.'; ButtonText = 'Defender-Dienste neu starten'; ActionCommand = 'Invoke-SettingsAction'; ActionKey = 'RestartDefenderServices' }
         [PSCustomObject]@{ Category = 'Startup'; Group = 'Profile'; Type = 'Choice'; SettingKey = 'StartupProfile'; Label = 'Startup-Profil'; Description = 'Vordefiniertes Verhalten beim Start.'; Options = @('Standard', 'Leicht', 'Diagnose', 'Performance') }
-        [PSCustomObject]@{ Category = 'Startup'; Group = 'Ablauf'; Type = 'Toggle'; SettingKey = 'AutoStartPythonDashboardOnAppStart'; Label = 'Python-Dashboard bei App-Start'; Description = 'Startet das Dashboard direkt beim Öffnen von Bockis.' }
-        [PSCustomObject]@{ Category = 'Startup'; Group = 'Ablauf'; Type = 'Toggle'; SettingKey = 'AutoStartGuiOnWindowsLogin'; Label = 'Bockis GUI bei Windows-Login'; Description = 'Startet die Haupt-GUI automatisch nach dem Login.' }
+        [PSCustomObject]@{ Category = 'Startup'; Group = 'Ablauf'; Type = 'Toggle'; SettingKey = 'AutoStartApplicationOnWindowsLogin'; Label = 'Bockis GUI bei Windows-Login'; Description = 'Startet die Haupt-GUI automatisch nach dem Login.' }
+        [PSCustomObject]@{ Category = 'Startup'; Group = 'Ablauf'; Type = 'Toggle'; SettingKey = 'AutoStartExtensionsOnWindowsLogin'; Label = 'Erweiterungen bei Windows-Login'; Description = 'Startet als Login-Autostart konfigurierte Erweiterungen zusammen mit der GUI.' }
+        [PSCustomObject]@{ Category = 'Startup'; Group = 'Ablauf'; Type = 'Choice'; SettingKey = 'AutoStartPythonDashboardMode'; Label = 'Python-Dashboard Autostart'; Description = 'Steuert, wann das Dashboard automatisch gestartet wird.'; Options = @('Never', 'OnAppStart', 'OnWindowsLogin', 'Both') }
         [PSCustomObject]@{ Category = 'Startup'; Group = 'Ablauf'; Type = 'Toggle'; SettingKey = 'RunNetworkScanAtStartup'; Label = 'Netzwerk-Einstellungs-Scan beim Start'; Description = 'Führt nach Start einen Netzwerk-Scan aus.' }
         [PSCustomObject]@{ Category = 'Startup'; Group = 'Ablauf'; Type = 'Toggle'; SettingKey = 'RunSmartRepairAtStartup'; Label = 'Smart Repair beim Start'; Description = 'Führt nach Start Smart Repair aus.' }
-        [PSCustomObject]@{ Category = 'Startup'; Group = 'Ablauf'; Type = 'Toggle'; SettingKey = 'MinimizeToTrayOnStartup'; Label = 'Beim Start minimiert im Tray'; Description = 'Öffnet die GUI minimiert im Infobereich.' }
-        [PSCustomObject]@{ Category = 'Startup'; Group = 'Ablauf'; Type = 'Toggle'; SettingKey = 'MinimizeToTrayOnMinimizeClick'; Label = 'Beim Minimieren in den Tray'; Description = 'Der Minimize-Button versteckt die GUI im Infobereich statt nur in der Taskleiste.' }
+        [PSCustomObject]@{ Category = 'Startup'; Group = 'Ablauf'; Type = 'Choice'; SettingKey = 'TrayBehavior'; Label = 'Tray-Verhalten'; Description = 'Legt fest, ob die GUI beim Start und/oder beim Minimieren in den Tray verschwindet.'; Options = @('Never', 'OnStartup', 'OnClickMinimize', 'Always') }
         [PSCustomObject]@{ Category = 'Startup'; Group = 'Erweiterungen'; Type = 'Action'; SettingKey = 'ManageExtensionLaunchOptions'; Label = 'Erweiterungs-Startoptionen'; Description = 'Öffnet die detailierte Konfiguration pro Erweiterung für Windows-Login und Tray.'; ButtonText = 'Erweiterungen konfigurieren'; ActionCommand = 'Invoke-SettingsAction'; ActionKey = 'ManageExtensionLaunchOptions' }
         [PSCustomObject]@{ Category = 'Pfade'; Group = 'Verzeichnisse'; Type = 'Action'; SettingKey = 'OpenPathLogsAction'; Label = 'Logs-Verzeichnis'; Description = 'Öffnet das Verzeichnis mit allen Log-Dateien.'; ButtonText = 'Logs öffnen'; ActionCommand = 'Invoke-SettingsAction'; ActionKey = 'OpenPathLogs' }
         [PSCustomObject]@{ Category = 'Pfade'; Group = 'Verzeichnisse'; Type = 'Action'; SettingKey = 'OpenPathDatabaseAction'; Label = 'Datenbank-Verzeichnis'; Description = 'Öffnet das SQLite-Datenbankverzeichnis.'; ButtonText = 'Datenbank öffnen'; ActionCommand = 'Invoke-SettingsAction'; ActionKey = 'OpenPathDatabase' }
@@ -1575,6 +1643,35 @@ function Show-SettingsDialogModern {
                 }
             }
         }
+
+        # Konsolidierte Startup-/Tray-Settings in Legacy-Keys spiegeln (Kompatibilität)
+        $trayBehavior = if ($updatedSettings.ContainsKey('TrayBehavior')) { [string]$updatedSettings['TrayBehavior'] } else { 'Never' }
+        switch ($trayBehavior) {
+            'Always' {
+                $updatedSettings['MinimizeToTrayOnStartup'] = $true
+                $updatedSettings['MinimizeToTrayOnMinimizeClick'] = $true
+            }
+            'OnStartup' {
+                $updatedSettings['MinimizeToTrayOnStartup'] = $true
+                $updatedSettings['MinimizeToTrayOnMinimizeClick'] = $false
+            }
+            'OnClickMinimize' {
+                $updatedSettings['MinimizeToTrayOnStartup'] = $false
+                $updatedSettings['MinimizeToTrayOnMinimizeClick'] = $true
+            }
+            default {
+                $updatedSettings['MinimizeToTrayOnStartup'] = $false
+                $updatedSettings['MinimizeToTrayOnMinimizeClick'] = $false
+            }
+        }
+
+        if ($updatedSettings.ContainsKey('AutoStartApplicationOnWindowsLogin')) {
+            $updatedSettings['AutoStartGuiOnWindowsLogin'] = [bool]$updatedSettings['AutoStartApplicationOnWindowsLogin']
+        }
+
+        $dashMode = if ($updatedSettings.ContainsKey('AutoStartPythonDashboardMode')) { [string]$updatedSettings['AutoStartPythonDashboardMode'] } else { 'Never' }
+        $updatedSettings['AutoStartPythonDashboardOnAppStart'] = ($dashMode -eq 'OnAppStart' -or $dashMode -eq 'Both')
+        $updatedSettings['AutoStartPythonDashboardOnWindowsLogin'] = ($dashMode -eq 'OnWindowsLogin' -or $dashMode -eq 'Both')
 
         Set-SystemToolSettings -Settings $updatedSettings
 
