@@ -235,6 +235,11 @@ function Initialize-SystemToolSettings {
         NetworkPingDefaultCount = 4
         NetworkPingDefaultTimeoutMs = 1000
         NetworkPingDefaultBufferBytes = 32
+        WindowMinWidth = 1000
+        WindowMinHeight = 800
+        TrayEnforceIntervalMs = 150
+        ExtensionSettingsDialogSizeMode = "Fixed"
+        ExtensionSettingsDialogResizable = $false
         ColorScheme         = Get-DefaultColorScheme
     }
     
@@ -372,6 +377,26 @@ function Import-SystemToolSettings {
             }
             if (-not $settingsHashtable.ContainsKey("NetworkPingDefaultBufferBytes")) {
                 $settingsHashtable["NetworkPingDefaultBufferBytes"] = 32
+                $needsSave = $true
+            }
+            if (-not $settingsHashtable.ContainsKey("WindowMinWidth")) {
+                $settingsHashtable["WindowMinWidth"] = 1000
+                $needsSave = $true
+            }
+            if (-not $settingsHashtable.ContainsKey("WindowMinHeight")) {
+                $settingsHashtable["WindowMinHeight"] = 800
+                $needsSave = $true
+            }
+            if (-not $settingsHashtable.ContainsKey("TrayEnforceIntervalMs")) {
+                $settingsHashtable["TrayEnforceIntervalMs"] = 150
+                $needsSave = $true
+            }
+            if (-not $settingsHashtable.ContainsKey("ExtensionSettingsDialogSizeMode")) {
+                $settingsHashtable["ExtensionSettingsDialogSizeMode"] = "Fixed"
+                $needsSave = $true
+            }
+            if (-not $settingsHashtable.ContainsKey("ExtensionSettingsDialogResizable")) {
+                $settingsHashtable["ExtensionSettingsDialogResizable"] = $false
                 $needsSave = $true
             }
             
@@ -1016,6 +1041,8 @@ function Get-SettingsRegistry {
         [PSCustomObject]@{ Category = 'Allgemein'; Group = 'Symbol-Farben'; Type = 'Color'; SettingKey = 'Color.Alert'; ColorKey = 'Alert'; Label = 'Hinweis'; PreviewIcon = '[⚠]'; Description = 'Farbe für Hinweise/Alert-Symbole.' }
         [PSCustomObject]@{ Category = 'Allgemein'; Group = 'Anzeige'; Type = 'Choice'; SettingKey = 'FontSize'; Label = 'Schriftgröße'; Description = 'Steuert die Basis-Schriftgröße für Ausgaben.'; Options = @(8, 9, 10, 11, 12, 14) }
         [PSCustomObject]@{ Category = 'Allgemein'; Group = 'Anzeige'; Type = 'Toggle'; SettingKey = 'SaveWindowSize'; Label = 'Fenstergröße und Position speichern'; Description = 'Speichert Größe und Position beim Beenden.' }
+        [PSCustomObject]@{ Category = 'Allgemein'; Group = 'Anzeige'; Type = 'Choice'; SettingKey = 'WindowMinWidth'; Label = 'Minimale Fensterbreite'; Description = 'Untere Grenze fuer die Breite des Hauptfensters.'; Options = @(800, 900, 1000, 1100, 1200) }
+        [PSCustomObject]@{ Category = 'Allgemein'; Group = 'Anzeige'; Type = 'Choice'; SettingKey = 'WindowMinHeight'; Label = 'Minimale Fensterhöhe'; Description = 'Untere Grenze fuer die Hoehe des Hauptfensters.'; Options = @(600, 700, 800, 900) }
         [PSCustomObject]@{ Category = 'Monitoring'; Group = 'Überwachung'; Type = 'Choice'; SettingKey = 'UpdateInterval'; Label = 'Update-Intervall (ms)'; Description = 'Aktualisierungsintervall für die Hardware-Überwachung.'; Options = @(500, 750, 1000, 1500, 2000, 3000, 5000, 10000) }
         [PSCustomObject]@{ Category = 'Monitoring'; Group = 'Schwellenwerte'; Type = 'Choice'; SettingKey = 'CpuThreshold'; Label = 'CPU-Warnschwelle (%)'; Description = 'Ab welcher CPU-Last eine Warnung angezeigt wird.'; Options = @(50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100) }
         [PSCustomObject]@{ Category = 'Monitoring'; Group = 'Schwellenwerte'; Type = 'Choice'; SettingKey = 'RamThreshold'; Label = 'RAM-Warnschwelle (%)'; Description = 'Ab welcher RAM-Auslastung eine Warnung angezeigt wird.'; Options = @(50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100) }
@@ -1037,6 +1064,9 @@ function Get-SettingsRegistry {
         [PSCustomObject]@{ Category = 'System'; Group = 'Erweitert'; Type = 'Choice'; SettingKey = 'NetworkPingDefaultCount'; Label = 'Ping Standard: Anzahl'; Description = 'Voreinstellung fuer die Anzahl an Ping-Anfragen.'; Options = @(1, 2, 3, 4, 5, 8, 10, 20) }
         [PSCustomObject]@{ Category = 'System'; Group = 'Erweitert'; Type = 'Choice'; SettingKey = 'NetworkPingDefaultTimeoutMs'; Label = 'Ping Standard: Timeout (ms)'; Description = 'Voreinstellung fuer Ping-Timeout in Millisekunden.'; Options = @(100, 250, 500, 750, 1000, 1500, 2000, 5000, 10000) }
         [PSCustomObject]@{ Category = 'System'; Group = 'Erweitert'; Type = 'Choice'; SettingKey = 'NetworkPingDefaultBufferBytes'; Label = 'Ping Standard: Buffer (Bytes)'; Description = 'Voreinstellung fuer die Paketgroesse des Ping-Tests.'; Options = @(32, 64, 128, 256, 512, 1024, 1472) }
+        [PSCustomObject]@{ Category = 'System'; Group = 'Erweitert'; Type = 'Choice'; SettingKey = 'TrayEnforceIntervalMs'; Label = 'Tray-Zustand erzwingen (ms)'; Description = 'Intervall fuer den Tray-Nachlauf beim Minimieren.'; Options = @(50, 100, 150, 200, 300, 500, 750, 1000) }
+        [PSCustomObject]@{ Category = 'System'; Group = 'Erweitert'; Type = 'Choice'; SettingKey = 'ExtensionSettingsDialogSizeMode'; Label = 'Erweiterungsdialog Größe'; Description = 'Fixed = feste Größe, Adaptive = groesser auf grossen Bildschirmen.'; Options = @('Fixed', 'Adaptive') }
+        [PSCustomObject]@{ Category = 'System'; Group = 'Erweitert'; Type = 'Toggle'; SettingKey = 'ExtensionSettingsDialogResizable'; Label = 'Erweiterungsdialog frei skalierbar'; Description = 'Erlaubt manuelles Veraendern der Groesse im Erweiterungsdialog.' }
         [PSCustomObject]@{ Category = 'System'; Group = 'Wartung'; Type = 'Action'; SettingKey = 'RestartDefenderServicesAction'; Label = 'Windows Defender-Dienste neu starten'; Description = 'Startet Defender-Dienste neu, wenn Scans hängen oder Probleme auftreten.'; ButtonText = 'Defender-Dienste neu starten'; ActionCommand = 'Invoke-SettingsAction'; ActionKey = 'RestartDefenderServices' }
         [PSCustomObject]@{ Category = 'Startup'; Group = 'Profile'; Type = 'Choice'; SettingKey = 'StartupProfile'; Label = 'Startup-Profil'; Description = 'Vordefiniertes Verhalten beim Start.'; Options = @('Standard', 'Leicht', 'Diagnose', 'Performance') }
         [PSCustomObject]@{ Category = 'Startup'; Group = 'Ablauf'; Type = 'Toggle'; SettingKey = 'AutoStartPythonDashboardOnAppStart'; Label = 'Python-Dashboard bei App-Start'; Description = 'Startet das Dashboard direkt beim Öffnen von Bockis.' }
@@ -1510,7 +1540,7 @@ function Show-SettingsDialogModern {
                         $selected = "$($def.Options[0])"
                     }
 
-                    if ($def.SettingKey -in @('FontSize', 'UpdateInterval', 'CpuThreshold', 'RamThreshold', 'GpuThreshold', 'OperationTimeoutSeconds', 'ErrorMaxRetries', 'ExtensionProgressDelayMs', 'WebOutputBufferLimit', 'NetworkPingDefaultCount', 'NetworkPingDefaultTimeoutMs', 'NetworkPingDefaultBufferBytes')) {
+                    if ($def.SettingKey -in @('FontSize', 'UpdateInterval', 'CpuThreshold', 'RamThreshold', 'GpuThreshold', 'OperationTimeoutSeconds', 'ErrorMaxRetries', 'ExtensionProgressDelayMs', 'WebOutputBufferLimit', 'NetworkPingDefaultCount', 'NetworkPingDefaultTimeoutMs', 'NetworkPingDefaultBufferBytes', 'WindowMinWidth', 'WindowMinHeight', 'TrayEnforceIntervalMs')) {
                         $intValue = 10
                         [void][int]::TryParse($selected, [ref]$intValue)
                         $updatedSettings[$def.SettingKey] = $intValue

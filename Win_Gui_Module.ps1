@@ -1028,7 +1028,20 @@ $mainform = New-Object System.Windows.Forms.Form
 $mainform.Text = "$script:AppName $script:AppVersion"
 $mainform.Font = New-Object System.Drawing.Font("Segoe UI", 10)
 $mainform.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::None  # Kein Rahmen
-$mainform.MinimumSize = New-Object System.Drawing.Size(1000, 800)
+$minWindowWidth = 1000
+$minWindowHeight = 800
+try {
+    $currentSettings = Get-SystemToolSettings
+    if ($currentSettings) {
+        if ($currentSettings.WindowMinWidth) { $minWindowWidth = [int]$currentSettings.WindowMinWidth }
+        if ($currentSettings.WindowMinHeight) { $minWindowHeight = [int]$currentSettings.WindowMinHeight }
+    }
+}
+catch {
+}
+$minWindowWidth = [Math]::Max(600, [Math]::Min(3000, $minWindowWidth))
+$minWindowHeight = [Math]::Max(450, [Math]::Min(2000, $minWindowHeight))
+$mainform.MinimumSize = New-Object System.Drawing.Size($minWindowWidth, $minWindowHeight)
 $mainform.BackColor = $script:BgColor
 
 # DoubleBuffered via Reflection – verhindert weißes Flackern bei Fokus-Wechsel
@@ -2262,12 +2275,43 @@ function Show-ExtensionStartupSettingsDialog {
         $statusById[$item.Id] = $item
     }
 
+    $dialogSizeMode = 'Fixed'
+    $dialogResizable = $false
+    try {
+        $currentSettings = Get-SystemToolSettings
+        if ($currentSettings) {
+            if ($currentSettings.ExtensionSettingsDialogSizeMode) {
+                $dialogSizeMode = [string]$currentSettings.ExtensionSettingsDialogSizeMode
+            }
+            if ($null -ne $currentSettings.ExtensionSettingsDialogResizable) {
+                $dialogResizable = [bool]$currentSettings.ExtensionSettingsDialogResizable
+            }
+        }
+    }
+    catch {
+    }
+
+    $dialogWidth = 780
+    $dialogHeight = 440
+    if ($dialogSizeMode -eq 'Adaptive') {
+        try {
+            $workingArea = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+            $dialogWidth = [Math]::Max(780, [Math]::Min(1200, $workingArea.Width - 160))
+            $dialogHeight = [Math]::Max(440, [Math]::Min(850, $workingArea.Height - 120))
+        }
+        catch {
+            $dialogWidth = 920
+            $dialogHeight = 560
+        }
+    }
+
     $form = New-Object System.Windows.Forms.Form
     $form.Text = 'Erweiterungs-Startoptionen'
-    $form.Size = New-Object System.Drawing.Size(780, 440)
+    $form.Size = New-Object System.Drawing.Size($dialogWidth, $dialogHeight)
+    $form.MinimumSize = New-Object System.Drawing.Size(780, 440)
     $form.StartPosition = 'CenterParent'
-    $form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedDialog
-    $form.MaximizeBox = $false
+    $form.FormBorderStyle = if ($dialogResizable) { [System.Windows.Forms.FormBorderStyle]::Sizable } else { [System.Windows.Forms.FormBorderStyle]::FixedDialog }
+    $form.MaximizeBox = $dialogResizable
     $form.MinimizeBox = $false
     $form.BackColor = [System.Drawing.Color]::FromArgb(30, 30, 30)
     $form.ForeColor = [System.Drawing.Color]::FromArgb(220, 220, 220)
@@ -2276,6 +2320,7 @@ function Show-ExtensionStartupSettingsDialog {
     $lblInfo.Text = 'Hier legen Sie pro Erweiterung fest, ob sie beim Windows-Login mit der GUI gestartet wird und ob sie im Tray-Untermenue erscheint.'
     $lblInfo.Location = New-Object System.Drawing.Point(15, 15)
     $lblInfo.Size = New-Object System.Drawing.Size(735, 34)
+    $lblInfo.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right
     $lblInfo.ForeColor = [System.Drawing.Color]::FromArgb(200, 200, 200)
     $form.Controls.Add($lblInfo)
 
@@ -2298,6 +2343,7 @@ function Show-ExtensionStartupSettingsDialog {
     $grid.SelectionMode = [System.Windows.Forms.DataGridViewSelectionMode]::FullRowSelect
     $grid.MultiSelect = $false
     $grid.AutoSizeColumnsMode = [System.Windows.Forms.DataGridViewAutoSizeColumnsMode]::Fill
+    $grid.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right
 
     $null = $grid.Columns.Add('Title', 'Erweiterung')
     $null = $grid.Columns.Add('Installed', 'Installiert')
@@ -2334,6 +2380,7 @@ function Show-ExtensionStartupSettingsDialog {
     $lblHint.Text = 'Hinweis: Der Windows-Login-Start fuer Erweiterungen greift nur, wenn die GUI selbst beim Login gestartet wird.'
     $lblHint.Location = New-Object System.Drawing.Point(15, 355)
     $lblHint.Size = New-Object System.Drawing.Size(735, 18)
+    $lblHint.Anchor = [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right
     $lblHint.ForeColor = [System.Drawing.Color]::FromArgb(150, 150, 150)
     $form.Controls.Add($lblHint)
 
@@ -2341,6 +2388,7 @@ function Show-ExtensionStartupSettingsDialog {
     $btnSave.Text = 'Speichern'
     $btnSave.Location = New-Object System.Drawing.Point(545, 380)
     $btnSave.Size = New-Object System.Drawing.Size(95, 30)
+    $btnSave.Anchor = [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Right
     $btnSave.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
     $btnSave.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(0, 122, 204)
     $btnSave.BackColor = [System.Drawing.Color]::FromArgb(0, 122, 204)
@@ -2350,6 +2398,7 @@ function Show-ExtensionStartupSettingsDialog {
     $btnCancel.Text = 'Abbrechen'
     $btnCancel.Location = New-Object System.Drawing.Point(655, 380)
     $btnCancel.Size = New-Object System.Drawing.Size(95, 30)
+    $btnCancel.Anchor = [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Right
     $btnCancel.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
     $btnCancel.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(90, 90, 90)
     $btnCancel.BackColor = [System.Drawing.Color]::FromArgb(60, 60, 60)
@@ -3329,8 +3378,19 @@ function Hide-MainFormToTray {
 
     # Einige Systeme oder UI-Events machen das Fenster direkt wieder sichtbar.
     # Daher nach kurzer Verzoegerung den Tray-Zustand nochmals erzwingen.
+    $trayEnforceInterval = 150
+    try {
+        $currentSettings = Get-SystemToolSettings
+        if ($currentSettings -and $currentSettings.TrayEnforceIntervalMs) {
+            $trayEnforceInterval = [int]$currentSettings.TrayEnforceIntervalMs
+        }
+    }
+    catch {
+    }
+    $trayEnforceInterval = [Math]::Max(50, [Math]::Min(2000, $trayEnforceInterval))
+
     $enforceTrayTimer = New-Object System.Windows.Forms.Timer
-    $enforceTrayTimer.Interval = 150
+    $enforceTrayTimer.Interval = $trayEnforceInterval
     $enforceTrayTimer.Add_Tick({
             $this.Stop()
             try {
