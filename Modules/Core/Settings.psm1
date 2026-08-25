@@ -228,21 +228,6 @@ function Initialize-SystemToolSettings {
         ShowExtensionsInTrayMenu = $true
         EnableWin11ServiceHints = $true
         EnableExperimentalTweaks = $false
-        ExtensionProgressDelayMs = 3000
-        WebOutputBufferLimit = 500
-        OperationTimeoutSeconds = 2
-        ErrorMaxRetries = 3
-        NetworkPingDefaultCount = 4
-        NetworkPingDefaultTimeoutMs = 1000
-        NetworkPingDefaultBufferBytes = 32
-        WindowMinWidth = 1000
-        WindowMinHeight = 800
-        TrayEnforceIntervalMs = 150
-        ExtensionSettingsDialogSizeMode = "Fixed"
-        ExtensionSettingsDialogResizable = $false
-        TrayBehavior = "Never"
-        AutoStartApplicationOnWindowsLogin = $false
-        AutoStartPythonDashboardMode = "Never"
         ColorScheme         = Get-DefaultColorScheme
     }
     
@@ -354,119 +339,6 @@ function Import-SystemToolSettings {
                 $settingsHashtable["EnableExperimentalTweaks"] = $false
                 $needsSave = $true
             }
-            if (-not $settingsHashtable.ContainsKey("ExtensionProgressDelayMs")) {
-                $settingsHashtable["ExtensionProgressDelayMs"] = 3000
-                $needsSave = $true
-            }
-            if (-not $settingsHashtable.ContainsKey("WebOutputBufferLimit")) {
-                $settingsHashtable["WebOutputBufferLimit"] = 500
-                $needsSave = $true
-            }
-            if (-not $settingsHashtable.ContainsKey("OperationTimeoutSeconds")) {
-                $settingsHashtable["OperationTimeoutSeconds"] = 2
-                $needsSave = $true
-            }
-            if (-not $settingsHashtable.ContainsKey("ErrorMaxRetries")) {
-                $settingsHashtable["ErrorMaxRetries"] = 3
-                $needsSave = $true
-            }
-            if (-not $settingsHashtable.ContainsKey("NetworkPingDefaultCount")) {
-                $settingsHashtable["NetworkPingDefaultCount"] = 4
-                $needsSave = $true
-            }
-            if (-not $settingsHashtable.ContainsKey("NetworkPingDefaultTimeoutMs")) {
-                $settingsHashtable["NetworkPingDefaultTimeoutMs"] = 1000
-                $needsSave = $true
-            }
-            if (-not $settingsHashtable.ContainsKey("NetworkPingDefaultBufferBytes")) {
-                $settingsHashtable["NetworkPingDefaultBufferBytes"] = 32
-                $needsSave = $true
-            }
-            if (-not $settingsHashtable.ContainsKey("WindowMinWidth")) {
-                $settingsHashtable["WindowMinWidth"] = 1000
-                $needsSave = $true
-            }
-            if (-not $settingsHashtable.ContainsKey("WindowMinHeight")) {
-                $settingsHashtable["WindowMinHeight"] = 800
-                $needsSave = $true
-            }
-            if (-not $settingsHashtable.ContainsKey("TrayEnforceIntervalMs")) {
-                $settingsHashtable["TrayEnforceIntervalMs"] = 150
-                $needsSave = $true
-            }
-            if (-not $settingsHashtable.ContainsKey("ExtensionSettingsDialogSizeMode")) {
-                $settingsHashtable["ExtensionSettingsDialogSizeMode"] = "Fixed"
-                $needsSave = $true
-            }
-            if (-not $settingsHashtable.ContainsKey("ExtensionSettingsDialogResizable")) {
-                $settingsHashtable["ExtensionSettingsDialogResizable"] = $false
-                $needsSave = $true
-            }
-
-            # Konsolidierte Startup-/Tray-Settings (neu) aus Legacy-Settings ableiten
-            if (-not $settingsHashtable.ContainsKey("TrayBehavior")) {
-                $legacyMinOnStartup = [bool]$settingsHashtable["MinimizeToTrayOnStartup"]
-                $legacyMinOnClick = [bool]$settingsHashtable["MinimizeToTrayOnMinimizeClick"]
-                $trayBehavior = 'Never'
-                if ($legacyMinOnStartup -and $legacyMinOnClick) {
-                    $trayBehavior = 'Always'
-                }
-                elseif ($legacyMinOnStartup) {
-                    $trayBehavior = 'OnStartup'
-                }
-                elseif ($legacyMinOnClick) {
-                    $trayBehavior = 'OnClickMinimize'
-                }
-                $settingsHashtable["TrayBehavior"] = $trayBehavior
-                $needsSave = $true
-            }
-
-            if (-not $settingsHashtable.ContainsKey("AutoStartApplicationOnWindowsLogin")) {
-                $settingsHashtable["AutoStartApplicationOnWindowsLogin"] = [bool]$settingsHashtable["AutoStartGuiOnWindowsLogin"]
-                $needsSave = $true
-            }
-            if (-not $settingsHashtable.ContainsKey("AutoStartPythonDashboardMode")) {
-                $legacyDashOnApp = [bool]$settingsHashtable["AutoStartPythonDashboardOnAppStart"]
-                $legacyDashOnLogin = [bool]$settingsHashtable["AutoStartPythonDashboardOnWindowsLogin"]
-                $dashMode = 'Never'
-                if ($legacyDashOnApp -and $legacyDashOnLogin) {
-                    $dashMode = 'Both'
-                }
-                elseif ($legacyDashOnApp) {
-                    $dashMode = 'OnAppStart'
-                }
-                elseif ($legacyDashOnLogin) {
-                    $dashMode = 'OnWindowsLogin'
-                }
-                $settingsHashtable["AutoStartPythonDashboardMode"] = $dashMode
-                $needsSave = $true
-            }
-
-            # Legacy-Keys aus konsolidierten Werten synchron halten (non-breaking)
-            $trayBehaviorCurrent = [string]$settingsHashtable["TrayBehavior"]
-            switch ($trayBehaviorCurrent) {
-                'Always' {
-                    $settingsHashtable["MinimizeToTrayOnStartup"] = $true
-                    $settingsHashtable["MinimizeToTrayOnMinimizeClick"] = $true
-                }
-                'OnStartup' {
-                    $settingsHashtable["MinimizeToTrayOnStartup"] = $true
-                    $settingsHashtable["MinimizeToTrayOnMinimizeClick"] = $false
-                }
-                'OnClickMinimize' {
-                    $settingsHashtable["MinimizeToTrayOnStartup"] = $false
-                    $settingsHashtable["MinimizeToTrayOnMinimizeClick"] = $true
-                }
-                default {
-                    $settingsHashtable["MinimizeToTrayOnStartup"] = $false
-                    $settingsHashtable["MinimizeToTrayOnMinimizeClick"] = $false
-                }
-            }
-
-            $settingsHashtable["AutoStartGuiOnWindowsLogin"] = [bool]$settingsHashtable["AutoStartApplicationOnWindowsLogin"]
-            $dashModeCurrent = [string]$settingsHashtable["AutoStartPythonDashboardMode"]
-            $settingsHashtable["AutoStartPythonDashboardOnAppStart"] = ($dashModeCurrent -eq 'OnAppStart' -or $dashModeCurrent -eq 'Both')
-            $settingsHashtable["AutoStartPythonDashboardOnWindowsLogin"] = ($dashModeCurrent -eq 'OnWindowsLogin' -or $dashModeCurrent -eq 'Both')
             
             # Setze die Einstellungen
             Set-SystemToolSettings -Settings $settingsHashtable
@@ -1109,8 +981,6 @@ function Get-SettingsRegistry {
         [PSCustomObject]@{ Category = 'Allgemein'; Group = 'Symbol-Farben'; Type = 'Color'; SettingKey = 'Color.Alert'; ColorKey = 'Alert'; Label = 'Hinweis'; PreviewIcon = '[⚠]'; Description = 'Farbe für Hinweise/Alert-Symbole.' }
         [PSCustomObject]@{ Category = 'Allgemein'; Group = 'Anzeige'; Type = 'Choice'; SettingKey = 'FontSize'; Label = 'Schriftgröße'; Description = 'Steuert die Basis-Schriftgröße für Ausgaben.'; Options = @(8, 9, 10, 11, 12, 14) }
         [PSCustomObject]@{ Category = 'Allgemein'; Group = 'Anzeige'; Type = 'Toggle'; SettingKey = 'SaveWindowSize'; Label = 'Fenstergröße und Position speichern'; Description = 'Speichert Größe und Position beim Beenden.' }
-        [PSCustomObject]@{ Category = 'Allgemein'; Group = 'Anzeige'; Type = 'Choice'; SettingKey = 'WindowMinWidth'; Label = 'Minimale Fensterbreite'; Description = 'Untere Grenze fuer die Breite des Hauptfensters.'; Options = @(800, 900, 1000, 1100, 1200) }
-        [PSCustomObject]@{ Category = 'Allgemein'; Group = 'Anzeige'; Type = 'Choice'; SettingKey = 'WindowMinHeight'; Label = 'Minimale Fensterhöhe'; Description = 'Untere Grenze fuer die Hoehe des Hauptfensters.'; Options = @(600, 700, 800, 900) }
         [PSCustomObject]@{ Category = 'Monitoring'; Group = 'Überwachung'; Type = 'Choice'; SettingKey = 'UpdateInterval'; Label = 'Update-Intervall (ms)'; Description = 'Aktualisierungsintervall für die Hardware-Überwachung.'; Options = @(500, 750, 1000, 1500, 2000, 3000, 5000, 10000) }
         [PSCustomObject]@{ Category = 'Monitoring'; Group = 'Schwellenwerte'; Type = 'Choice'; SettingKey = 'CpuThreshold'; Label = 'CPU-Warnschwelle (%)'; Description = 'Ab welcher CPU-Last eine Warnung angezeigt wird.'; Options = @(50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100) }
         [PSCustomObject]@{ Category = 'Monitoring'; Group = 'Schwellenwerte'; Type = 'Choice'; SettingKey = 'RamThreshold'; Label = 'RAM-Warnschwelle (%)'; Description = 'Ab welcher RAM-Auslastung eine Warnung angezeigt wird.'; Options = @(50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100) }
@@ -1125,24 +995,14 @@ function Get-SettingsRegistry {
         [PSCustomObject]@{ Category = 'System'; Group = 'Verhalten'; Type = 'Toggle'; SettingKey = 'AdvancedCleanup'; Label = 'Erweiterte Bereinigung'; Description = 'Aktiviert erweiterte Bereinigungsfunktionen.' }
         [PSCustomObject]@{ Category = 'System'; Group = 'Verhalten'; Type = 'Toggle'; SettingKey = 'CheckUpdates'; Label = 'Automatisch nach Updates suchen'; Description = 'Aktiviert die Update-Prüfung beim Start.' }
         [PSCustomObject]@{ Category = 'System'; Group = 'Verhalten'; Type = 'Toggle'; SettingKey = 'ShowSplash'; Label = 'Splash-Screen anzeigen'; Description = 'Zeigt beim Programmstart den Splash-Screen.' }
-        [PSCustomObject]@{ Category = 'System'; Group = 'Erweitert'; Type = 'Choice'; SettingKey = 'OperationTimeoutSeconds'; Label = 'Netzwerk-Timeout (Sekunden)'; Description = 'Timeout fuer interne API-Aufrufe an lokale Dienste.'; Options = @(2, 3, 5, 8, 10) }
-        [PSCustomObject]@{ Category = 'System'; Group = 'Erweitert'; Type = 'Choice'; SettingKey = 'ErrorMaxRetries'; Label = 'Maximale Wiederholungen bei Log-Schreibfehlern'; Description = 'Anzahl der Wiederholversuche bei temporaeren Datei-/IO-Problemen.'; Options = @(1, 2, 3, 4, 5, 7, 10) }
-        [PSCustomObject]@{ Category = 'System'; Group = 'Erweitert'; Type = 'Choice'; SettingKey = 'ExtensionProgressDelayMs'; Label = 'Extension-Progress Ruecksetzverzoegerung (ms)'; Description = 'Wartezeit, bevor der Fortschrittsbalken wieder auf "Bereit" springt.'; Options = @(500, 1000, 1500, 2000, 3000, 5000, 8000) }
-        [PSCustomObject]@{ Category = 'System'; Group = 'Erweitert'; Type = 'Choice'; SettingKey = 'WebOutputBufferLimit'; Label = 'Web-Output-Pufferlimit'; Description = 'Maximale Anzahl gepufferter Web-Logeintraege (RAM/Live-Output).'; Options = @(200, 300, 500, 750, 1000, 1500, 2000) }
-        [PSCustomObject]@{ Category = 'System'; Group = 'Erweitert'; Type = 'Choice'; SettingKey = 'NetworkPingDefaultCount'; Label = 'Ping Standard: Anzahl'; Description = 'Voreinstellung fuer die Anzahl an Ping-Anfragen.'; Options = @(1, 2, 3, 4, 5, 8, 10, 20) }
-        [PSCustomObject]@{ Category = 'System'; Group = 'Erweitert'; Type = 'Choice'; SettingKey = 'NetworkPingDefaultTimeoutMs'; Label = 'Ping Standard: Timeout (ms)'; Description = 'Voreinstellung fuer Ping-Timeout in Millisekunden.'; Options = @(100, 250, 500, 750, 1000, 1500, 2000, 5000, 10000) }
-        [PSCustomObject]@{ Category = 'System'; Group = 'Erweitert'; Type = 'Choice'; SettingKey = 'NetworkPingDefaultBufferBytes'; Label = 'Ping Standard: Buffer (Bytes)'; Description = 'Voreinstellung fuer die Paketgroesse des Ping-Tests.'; Options = @(32, 64, 128, 256, 512, 1024, 1472) }
-        [PSCustomObject]@{ Category = 'System'; Group = 'Erweitert'; Type = 'Choice'; SettingKey = 'TrayEnforceIntervalMs'; Label = 'Tray-Zustand erzwingen (ms)'; Description = 'Intervall fuer den Tray-Nachlauf beim Minimieren.'; Options = @(50, 100, 150, 200, 300, 500, 750, 1000) }
-        [PSCustomObject]@{ Category = 'System'; Group = 'Erweitert'; Type = 'Choice'; SettingKey = 'ExtensionSettingsDialogSizeMode'; Label = 'Erweiterungsdialog Größe'; Description = 'Fixed = feste Größe, Adaptive = groesser auf grossen Bildschirmen.'; Options = @('Fixed', 'Adaptive') }
-        [PSCustomObject]@{ Category = 'System'; Group = 'Erweitert'; Type = 'Toggle'; SettingKey = 'ExtensionSettingsDialogResizable'; Label = 'Erweiterungsdialog frei skalierbar'; Description = 'Erlaubt manuelles Veraendern der Groesse im Erweiterungsdialog.' }
         [PSCustomObject]@{ Category = 'System'; Group = 'Wartung'; Type = 'Action'; SettingKey = 'RestartDefenderServicesAction'; Label = 'Windows Defender-Dienste neu starten'; Description = 'Startet Defender-Dienste neu, wenn Scans hängen oder Probleme auftreten.'; ButtonText = 'Defender-Dienste neu starten'; ActionCommand = 'Invoke-SettingsAction'; ActionKey = 'RestartDefenderServices' }
         [PSCustomObject]@{ Category = 'Startup'; Group = 'Profile'; Type = 'Choice'; SettingKey = 'StartupProfile'; Label = 'Startup-Profil'; Description = 'Vordefiniertes Verhalten beim Start.'; Options = @('Standard', 'Leicht', 'Diagnose', 'Performance') }
-        [PSCustomObject]@{ Category = 'Startup'; Group = 'Ablauf'; Type = 'Toggle'; SettingKey = 'AutoStartApplicationOnWindowsLogin'; Label = 'Bockis GUI bei Windows-Login'; Description = 'Startet die Haupt-GUI automatisch nach dem Login.' }
-        [PSCustomObject]@{ Category = 'Startup'; Group = 'Ablauf'; Type = 'Toggle'; SettingKey = 'AutoStartExtensionsOnWindowsLogin'; Label = 'Erweiterungen bei Windows-Login'; Description = 'Startet als Login-Autostart konfigurierte Erweiterungen zusammen mit der GUI.' }
-        [PSCustomObject]@{ Category = 'Startup'; Group = 'Ablauf'; Type = 'Choice'; SettingKey = 'AutoStartPythonDashboardMode'; Label = 'Python-Dashboard Autostart'; Description = 'Steuert, wann das Dashboard automatisch gestartet wird.'; Options = @('Never', 'OnAppStart', 'OnWindowsLogin', 'Both') }
+        [PSCustomObject]@{ Category = 'Startup'; Group = 'Ablauf'; Type = 'Toggle'; SettingKey = 'AutoStartPythonDashboardOnAppStart'; Label = 'Python-Dashboard bei App-Start'; Description = 'Startet das Dashboard direkt beim Öffnen von Bockis.' }
+        [PSCustomObject]@{ Category = 'Startup'; Group = 'Ablauf'; Type = 'Toggle'; SettingKey = 'AutoStartGuiOnWindowsLogin'; Label = 'Bockis GUI bei Windows-Login'; Description = 'Startet die Haupt-GUI automatisch nach dem Login.' }
         [PSCustomObject]@{ Category = 'Startup'; Group = 'Ablauf'; Type = 'Toggle'; SettingKey = 'RunNetworkScanAtStartup'; Label = 'Netzwerk-Einstellungs-Scan beim Start'; Description = 'Führt nach Start einen Netzwerk-Scan aus.' }
         [PSCustomObject]@{ Category = 'Startup'; Group = 'Ablauf'; Type = 'Toggle'; SettingKey = 'RunSmartRepairAtStartup'; Label = 'Smart Repair beim Start'; Description = 'Führt nach Start Smart Repair aus.' }
-        [PSCustomObject]@{ Category = 'Startup'; Group = 'Ablauf'; Type = 'Choice'; SettingKey = 'TrayBehavior'; Label = 'Tray-Verhalten'; Description = 'Legt fest, ob die GUI beim Start und/oder beim Minimieren in den Tray verschwindet.'; Options = @('Never', 'OnStartup', 'OnClickMinimize', 'Always') }
+        [PSCustomObject]@{ Category = 'Startup'; Group = 'Ablauf'; Type = 'Toggle'; SettingKey = 'MinimizeToTrayOnStartup'; Label = 'Beim Start minimiert im Tray'; Description = 'Öffnet die GUI minimiert im Infobereich.' }
+        [PSCustomObject]@{ Category = 'Startup'; Group = 'Ablauf'; Type = 'Toggle'; SettingKey = 'MinimizeToTrayOnMinimizeClick'; Label = 'Beim Minimieren in den Tray'; Description = 'Der Minimize-Button versteckt die GUI im Infobereich statt nur in der Taskleiste.' }
         [PSCustomObject]@{ Category = 'Startup'; Group = 'Erweiterungen'; Type = 'Action'; SettingKey = 'ManageExtensionLaunchOptions'; Label = 'Erweiterungs-Startoptionen'; Description = 'Öffnet die detailierte Konfiguration pro Erweiterung für Windows-Login und Tray.'; ButtonText = 'Erweiterungen konfigurieren'; ActionCommand = 'Invoke-SettingsAction'; ActionKey = 'ManageExtensionLaunchOptions' }
         [PSCustomObject]@{ Category = 'Pfade'; Group = 'Verzeichnisse'; Type = 'Action'; SettingKey = 'OpenPathLogsAction'; Label = 'Logs-Verzeichnis'; Description = 'Öffnet das Verzeichnis mit allen Log-Dateien.'; ButtonText = 'Logs öffnen'; ActionCommand = 'Invoke-SettingsAction'; ActionKey = 'OpenPathLogs' }
         [PSCustomObject]@{ Category = 'Pfade'; Group = 'Verzeichnisse'; Type = 'Action'; SettingKey = 'OpenPathDatabaseAction'; Label = 'Datenbank-Verzeichnis'; Description = 'Öffnet das SQLite-Datenbankverzeichnis.'; ButtonText = 'Datenbank öffnen'; ActionCommand = 'Invoke-SettingsAction'; ActionKey = 'OpenPathDatabase' }
@@ -1608,7 +1468,7 @@ function Show-SettingsDialogModern {
                         $selected = "$($def.Options[0])"
                     }
 
-                    if ($def.SettingKey -in @('FontSize', 'UpdateInterval', 'CpuThreshold', 'RamThreshold', 'GpuThreshold', 'OperationTimeoutSeconds', 'ErrorMaxRetries', 'ExtensionProgressDelayMs', 'WebOutputBufferLimit', 'NetworkPingDefaultCount', 'NetworkPingDefaultTimeoutMs', 'NetworkPingDefaultBufferBytes', 'WindowMinWidth', 'WindowMinHeight', 'TrayEnforceIntervalMs')) {
+                    if ($def.SettingKey -in @('FontSize', 'UpdateInterval', 'CpuThreshold', 'RamThreshold', 'GpuThreshold')) {
                         $intValue = 10
                         [void][int]::TryParse($selected, [ref]$intValue)
                         $updatedSettings[$def.SettingKey] = $intValue
@@ -1643,35 +1503,6 @@ function Show-SettingsDialogModern {
                 }
             }
         }
-
-        # Konsolidierte Startup-/Tray-Settings in Legacy-Keys spiegeln (Kompatibilität)
-        $trayBehavior = if ($updatedSettings.ContainsKey('TrayBehavior')) { [string]$updatedSettings['TrayBehavior'] } else { 'Never' }
-        switch ($trayBehavior) {
-            'Always' {
-                $updatedSettings['MinimizeToTrayOnStartup'] = $true
-                $updatedSettings['MinimizeToTrayOnMinimizeClick'] = $true
-            }
-            'OnStartup' {
-                $updatedSettings['MinimizeToTrayOnStartup'] = $true
-                $updatedSettings['MinimizeToTrayOnMinimizeClick'] = $false
-            }
-            'OnClickMinimize' {
-                $updatedSettings['MinimizeToTrayOnStartup'] = $false
-                $updatedSettings['MinimizeToTrayOnMinimizeClick'] = $true
-            }
-            default {
-                $updatedSettings['MinimizeToTrayOnStartup'] = $false
-                $updatedSettings['MinimizeToTrayOnMinimizeClick'] = $false
-            }
-        }
-
-        if ($updatedSettings.ContainsKey('AutoStartApplicationOnWindowsLogin')) {
-            $updatedSettings['AutoStartGuiOnWindowsLogin'] = [bool]$updatedSettings['AutoStartApplicationOnWindowsLogin']
-        }
-
-        $dashMode = if ($updatedSettings.ContainsKey('AutoStartPythonDashboardMode')) { [string]$updatedSettings['AutoStartPythonDashboardMode'] } else { 'Never' }
-        $updatedSettings['AutoStartPythonDashboardOnAppStart'] = ($dashMode -eq 'OnAppStart' -or $dashMode -eq 'Both')
-        $updatedSettings['AutoStartPythonDashboardOnWindowsLogin'] = ($dashMode -eq 'OnWindowsLogin' -or $dashMode -eq 'Both')
 
         Set-SystemToolSettings -Settings $updatedSettings
 

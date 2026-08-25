@@ -954,21 +954,6 @@ function Start-TempFilesCleanupAdvanced {
         if ($null -ne $mainform) {
             $wpfCleanup.Left = $mainform.Location.X + $mainform.Width + 10
             $wpfCleanup.Top = $mainform.Location.Y
-
-            # Hauptform-Bewegung mitverfolgen: WPF-Fenster folgt beim Verschieben
-            $offsetX = $mainform.Width + 10
-            $offsetY = 0
-            $script:_cleanupWpfMoveHandler = {
-                $wpfCleanup.Left = $mainform.Location.X + $offsetX
-                $wpfCleanup.Top  = $mainform.Location.Y + $offsetY
-            }.GetNewClosure()
-            $mainform.Add_LocationChanged($script:_cleanupWpfMoveHandler)
-            $wpfCleanup.Add_Closed({
-                if ($script:_cleanupWpfMoveHandler) {
-                    $mainform.Remove_LocationChanged($script:_cleanupWpfMoveHandler)
-                    $script:_cleanupWpfMoveHandler = $null
-                }
-            }.GetNewClosure())
         }
 
         # Controls holen
@@ -2143,11 +2128,8 @@ function Start-TempFilesCleanupAdvanced {
                 Update-CleanupSizeEstimates
             })
 
-        # Dialog anzeigen (nicht-modal via DispatcherFrame – Hauptfenster bleibt bewegbar)
-        $cleanupFrame = New-Object System.Windows.Threading.DispatcherFrame
-        $wpfCleanup.Add_Closed({ $cleanupFrame.Continue = $false })
-        $wpfCleanup.Show()
-        [System.Windows.Threading.Dispatcher]::PushFrame($cleanupFrame)
+        # Dialog anzeigen
+        $wpfCleanup.ShowDialog() | Out-Null
     } catch {
         Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Error'
         $outputBox.AppendText("Fehler in der erweiterten Systemreinigung: $($_.Exception.Message)`r`n")

@@ -24,26 +24,6 @@ function Start-PingTest {
         [System.Windows.Forms.RichTextBox]$outputBox,
         $progressBar
     )
-
-    $pingDefaultCount = 4
-    $pingDefaultTimeoutMs = 1000
-    $pingDefaultBufferBytes = 32
-    try {
-        if (Get-Command -Name Get-SystemToolSettings -ErrorAction SilentlyContinue) {
-            $currentSettings = Get-SystemToolSettings
-            if ($currentSettings) {
-                if ($currentSettings.NetworkPingDefaultCount) { $pingDefaultCount = [int]$currentSettings.NetworkPingDefaultCount }
-                if ($currentSettings.NetworkPingDefaultTimeoutMs) { $pingDefaultTimeoutMs = [int]$currentSettings.NetworkPingDefaultTimeoutMs }
-                if ($currentSettings.NetworkPingDefaultBufferBytes) { $pingDefaultBufferBytes = [int]$currentSettings.NetworkPingDefaultBufferBytes }
-            }
-        }
-    }
-    catch {
-    }
-
-    $pingDefaultCount = [Math]::Max(1, [Math]::Min(100, $pingDefaultCount))
-    $pingDefaultTimeoutMs = [Math]::Max(100, [Math]::Min(10000, $pingDefaultTimeoutMs))
-    $pingDefaultBufferBytes = [Math]::Max(32, [Math]::Min(65500, $pingDefaultBufferBytes))
     
     # Log-Eintrag erstellen
     Write-ToolLog -ToolName "NetworkTools" -Message "Ping-Test wird gestartet" -OutputBox $outputBox -Style 'Action' -Level "Information" -SaveToDatabase
@@ -90,7 +70,7 @@ function Start-PingTest {
     $countNumeric.Size = New-Object System.Drawing.Size(80, 25)
     $countNumeric.Minimum = 1
     $countNumeric.Maximum = 100
-    $countNumeric.Value = $pingDefaultCount
+    $countNumeric.Value = 4
     $pingForm.Controls.Add($countNumeric)
     
     # Timeout Label
@@ -107,7 +87,7 @@ function Start-PingTest {
     $timeoutNumeric.Minimum = 100
     $timeoutNumeric.Maximum = 10000
     $timeoutNumeric.Increment = 100
-    $timeoutNumeric.Value = $pingDefaultTimeoutMs
+    $timeoutNumeric.Value = 1000
     $pingForm.Controls.Add($timeoutNumeric)
     
     # Buffer-Größe Label
@@ -124,7 +104,7 @@ function Start-PingTest {
     $bufferNumeric.Minimum = 32
     $bufferNumeric.Maximum = 65500
     $bufferNumeric.Increment = 32
-    $bufferNumeric.Value = $pingDefaultBufferBytes
+    $bufferNumeric.Value = 32
     $pingForm.Controls.Add($bufferNumeric)
     
     # OK Button

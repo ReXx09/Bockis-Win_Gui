@@ -288,24 +288,6 @@ $script:toolLibrary['applications'] = @(
         Category    = 'Anwendungen'
         Tags        = @('Email', 'Mail Client', 'Communication', 'Calendar', 'Mozilla')
         Winget      = 'Mozilla.Thunderbird.de'
-    },
-    @{
-        Name        = 'Epic Games Launcher'
-        Description = 'Gaming-Plattform von Epic Games zum Verwalten und Spielen von Spielen (Fortnite, Unreal Engine u.a.)'
-        Version     = 'Aktuell'
-        DownloadUrl = 'https://store.epicgames.com/'
-        Category    = 'Anwendungen'
-        Tags        = @('Gaming', 'Games', 'Store', 'Epic', 'Launcher')
-        Winget      = 'EpicGames.EpicGamesLauncher'
-    },
-    @{
-        Name        = 'MediaHuman MP3 Converter'
-        Description = 'Kostenloser Audio-Konverter zum Umwandeln von Musikdateien in MP3, AAC, WMA, FLAC, OGG u.v.m.'
-        Version     = 'Aktuell'
-        DownloadUrl = 'https://www.mediahuman.com/mp3-converter/'
-        Category    = 'Anwendungen'
-        Tags        = @('Audio', 'Converter', 'MP3', 'Music', 'Media')
-        Winget      = 'MediaHuman.MP3Converter'
     }
 )
 

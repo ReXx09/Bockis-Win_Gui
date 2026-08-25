@@ -108,17 +108,6 @@ function global:Write-ToolLog {
 
     # Web-Dashboard: Ausgabe in gemeinsamen Buffer schreiben (thread-safe)
     if ($null -ne $global:WebOutputBuffer) {
-        $webBufferLimit = 500
-        try {
-            $currentSettings = Get-SystemToolSettings
-            if ($currentSettings -and $currentSettings.WebOutputBufferLimit) {
-                $webBufferLimit = [int]$currentSettings.WebOutputBufferLimit
-            }
-        }
-        catch {
-        }
-        $webBufferLimit = [Math]::Max(100, [Math]::Min(5000, $webBufferLimit))
-
         $wbEntry = @{
             ts    = [System.DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
             tool  = if ($ToolName) { $ToolName } else { 'System' }
@@ -126,7 +115,7 @@ function global:Write-ToolLog {
             msg   = $Message
         }
         [void]$global:WebOutputBuffer.Enqueue($wbEntry)
-        if ($global:WebOutputBuffer.Count -gt $webBufferLimit) {
+        if ($global:WebOutputBuffer.Count -gt 500) {
             $wbDiscard = $null
             [void]$global:WebOutputBuffer.TryDequeue([ref]$wbDiscard)
         }
@@ -338,15 +327,6 @@ function global:Write-ToolLog {
         # Schreibe in Log-Datei mit Retry-Logik
         $retryCount = 0
         $maxRetries = 3
-        try {
-            $currentSettings = Get-SystemToolSettings
-            if ($currentSettings -and $currentSettings.ErrorMaxRetries) {
-                $maxRetries = [int]$currentSettings.ErrorMaxRetries
-            }
-        }
-        catch {
-        }
-        $maxRetries = [Math]::Max(1, [Math]::Min(10, $maxRetries))
         do {
             try {
                 $payloadLines = @()
@@ -1028,20 +1008,7 @@ $mainform = New-Object System.Windows.Forms.Form
 $mainform.Text = "$script:AppName $script:AppVersion"
 $mainform.Font = New-Object System.Drawing.Font("Segoe UI", 10)
 $mainform.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::None  # Kein Rahmen
-$minWindowWidth = 1000
-$minWindowHeight = 800
-try {
-    $currentSettings = Get-SystemToolSettings
-    if ($currentSettings) {
-        if ($currentSettings.WindowMinWidth) { $minWindowWidth = [int]$currentSettings.WindowMinWidth }
-        if ($currentSettings.WindowMinHeight) { $minWindowHeight = [int]$currentSettings.WindowMinHeight }
-    }
-}
-catch {
-}
-$minWindowWidth = [Math]::Max(600, [Math]::Min(3000, $minWindowWidth))
-$minWindowHeight = [Math]::Max(450, [Math]::Min(2000, $minWindowHeight))
-$mainform.MinimumSize = New-Object System.Drawing.Size($minWindowWidth, $minWindowHeight)
+$mainform.MinimumSize = New-Object System.Drawing.Size(1000, 800)
 $mainform.BackColor = $script:BgColor
 
 # DoubleBuffered via Reflection – verhindert weißes Flackern bei Fokus-Wechsel
@@ -1291,19 +1258,8 @@ function Get-PythonDashboardPidFromPort {
 function Test-PythonDashboardApiCompatibility {
     param([int]$Port)
 
-    $timeoutSec = 2
     try {
-        $currentSettings = Get-SystemToolSettings
-        if ($currentSettings -and $currentSettings.OperationTimeoutSeconds) {
-            $timeoutSec = [int]$currentSettings.OperationTimeoutSeconds
-        }
-    }
-    catch {
-    }
-    $timeoutSec = [Math]::Max(1, [Math]::Min(30, $timeoutSec))
-
-    try {
-        $schema = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/openapi.json" -Method Get -TimeoutSec $timeoutSec
+        $schema = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/openapi.json" -Method Get -TimeoutSec 2
         if (-not $schema -or -not $schema.paths) { return $false }
         $pathNames = @($schema.paths.PSObject.Properties.Name)
         if (-not ($pathNames -contains '/api/gpu' -and $pathNames -contains '/api/audio')) {
@@ -1313,9 +1269,9 @@ function Test-PythonDashboardApiCompatibility {
         # Audio-Endpunkte muessen nicht nur existieren, sondern auch funktionsfaehig sein.
         # Dadurch werden alte/beschaedigte Dashboard-Prozesse automatisch ersetzt.
         try {
-            $audio = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/audio" -Method Get -TimeoutSec $timeoutSec
-            $devices = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/audio/devices" -Method Get -TimeoutSec $timeoutSec
-            $sessions = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/audio/sessions" -Method Get -TimeoutSec $timeoutSec
+            $audio = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/audio" -Method Get -TimeoutSec 2
+            $devices = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/audio/devices" -Method Get -TimeoutSec 2
+            $sessions = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/audio/sessions" -Method Get -TimeoutSec 2
 
             $deviceCount = if ($devices -and $devices.PSObject.Properties.Name -contains 'devices') { @($devices.devices).Count } else { 0 }
             $sessionCount = if ($sessions -and $sessions.PSObject.Properties.Name -contains 'sessions') { @($sessions.sessions).Count } else { 0 }
@@ -1338,19 +1294,8 @@ function Test-PythonDashboardApiCompatibility {
 function Get-PythonDashboardCapabilities {
     param([int]$Port)
 
-    $timeoutSec = 2
     try {
-        $currentSettings = Get-SystemToolSettings
-        if ($currentSettings -and $currentSettings.OperationTimeoutSeconds) {
-            $timeoutSec = [int]$currentSettings.OperationTimeoutSeconds
-        }
-    }
-    catch {
-    }
-    $timeoutSec = [Math]::Max(1, [Math]::Min(30, $timeoutSec))
-
-    try {
-        $caps = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/capabilities" -Method Get -TimeoutSec $timeoutSec
+        $caps = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/capabilities" -Method Get -TimeoutSec 2
         if ($caps -and $caps.ok) {
             return @{
                 Ok = $true
@@ -1751,19 +1696,7 @@ function Set-ExtensionProgress {
 }
 
 function Reset-ExtensionProgress {
-    param([int]$DelayMs = -1)
-
-    if ($DelayMs -lt 0) {
-        $DelayMs = 3000
-        try {
-            $currentSettings = Get-SystemToolSettings
-            if ($currentSettings -and $currentSettings.ExtensionProgressDelayMs) {
-                $DelayMs = [int]$currentSettings.ExtensionProgressDelayMs
-            }
-        }
-        catch {
-        }
-    }
+    param([int]$DelayMs = 1800)
 
     if (-not $global:progressBar) { return }
 
@@ -2275,43 +2208,12 @@ function Show-ExtensionStartupSettingsDialog {
         $statusById[$item.Id] = $item
     }
 
-    $dialogSizeMode = 'Fixed'
-    $dialogResizable = $false
-    try {
-        $currentSettings = Get-SystemToolSettings
-        if ($currentSettings) {
-            if ($currentSettings.ExtensionSettingsDialogSizeMode) {
-                $dialogSizeMode = [string]$currentSettings.ExtensionSettingsDialogSizeMode
-            }
-            if ($null -ne $currentSettings.ExtensionSettingsDialogResizable) {
-                $dialogResizable = [bool]$currentSettings.ExtensionSettingsDialogResizable
-            }
-        }
-    }
-    catch {
-    }
-
-    $dialogWidth = 780
-    $dialogHeight = 440
-    if ($dialogSizeMode -eq 'Adaptive') {
-        try {
-            $workingArea = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
-            $dialogWidth = [Math]::Max(780, [Math]::Min(1200, $workingArea.Width - 160))
-            $dialogHeight = [Math]::Max(440, [Math]::Min(850, $workingArea.Height - 120))
-        }
-        catch {
-            $dialogWidth = 920
-            $dialogHeight = 560
-        }
-    }
-
     $form = New-Object System.Windows.Forms.Form
     $form.Text = 'Erweiterungs-Startoptionen'
-    $form.Size = New-Object System.Drawing.Size($dialogWidth, $dialogHeight)
-    $form.MinimumSize = New-Object System.Drawing.Size(780, 440)
+    $form.Size = New-Object System.Drawing.Size(780, 440)
     $form.StartPosition = 'CenterParent'
-    $form.FormBorderStyle = if ($dialogResizable) { [System.Windows.Forms.FormBorderStyle]::Sizable } else { [System.Windows.Forms.FormBorderStyle]::FixedDialog }
-    $form.MaximizeBox = $dialogResizable
+    $form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedDialog
+    $form.MaximizeBox = $false
     $form.MinimizeBox = $false
     $form.BackColor = [System.Drawing.Color]::FromArgb(30, 30, 30)
     $form.ForeColor = [System.Drawing.Color]::FromArgb(220, 220, 220)
@@ -2320,7 +2222,6 @@ function Show-ExtensionStartupSettingsDialog {
     $lblInfo.Text = 'Hier legen Sie pro Erweiterung fest, ob sie beim Windows-Login mit der GUI gestartet wird und ob sie im Tray-Untermenue erscheint.'
     $lblInfo.Location = New-Object System.Drawing.Point(15, 15)
     $lblInfo.Size = New-Object System.Drawing.Size(735, 34)
-    $lblInfo.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right
     $lblInfo.ForeColor = [System.Drawing.Color]::FromArgb(200, 200, 200)
     $form.Controls.Add($lblInfo)
 
@@ -2343,7 +2244,6 @@ function Show-ExtensionStartupSettingsDialog {
     $grid.SelectionMode = [System.Windows.Forms.DataGridViewSelectionMode]::FullRowSelect
     $grid.MultiSelect = $false
     $grid.AutoSizeColumnsMode = [System.Windows.Forms.DataGridViewAutoSizeColumnsMode]::Fill
-    $grid.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right
 
     $null = $grid.Columns.Add('Title', 'Erweiterung')
     $null = $grid.Columns.Add('Installed', 'Installiert')
@@ -2380,7 +2280,6 @@ function Show-ExtensionStartupSettingsDialog {
     $lblHint.Text = 'Hinweis: Der Windows-Login-Start fuer Erweiterungen greift nur, wenn die GUI selbst beim Login gestartet wird.'
     $lblHint.Location = New-Object System.Drawing.Point(15, 355)
     $lblHint.Size = New-Object System.Drawing.Size(735, 18)
-    $lblHint.Anchor = [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right
     $lblHint.ForeColor = [System.Drawing.Color]::FromArgb(150, 150, 150)
     $form.Controls.Add($lblHint)
 
@@ -2388,7 +2287,6 @@ function Show-ExtensionStartupSettingsDialog {
     $btnSave.Text = 'Speichern'
     $btnSave.Location = New-Object System.Drawing.Point(545, 380)
     $btnSave.Size = New-Object System.Drawing.Size(95, 30)
-    $btnSave.Anchor = [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Right
     $btnSave.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
     $btnSave.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(0, 122, 204)
     $btnSave.BackColor = [System.Drawing.Color]::FromArgb(0, 122, 204)
@@ -2398,7 +2296,6 @@ function Show-ExtensionStartupSettingsDialog {
     $btnCancel.Text = 'Abbrechen'
     $btnCancel.Location = New-Object System.Drawing.Point(655, 380)
     $btnCancel.Size = New-Object System.Drawing.Size(95, 30)
-    $btnCancel.Anchor = [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Right
     $btnCancel.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
     $btnCancel.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(90, 90, 90)
     $btnCancel.BackColor = [System.Drawing.Color]::FromArgb(60, 60, 60)
@@ -3378,19 +3275,8 @@ function Hide-MainFormToTray {
 
     # Einige Systeme oder UI-Events machen das Fenster direkt wieder sichtbar.
     # Daher nach kurzer Verzoegerung den Tray-Zustand nochmals erzwingen.
-    $trayEnforceInterval = 150
-    try {
-        $currentSettings = Get-SystemToolSettings
-        if ($currentSettings -and $currentSettings.TrayEnforceIntervalMs) {
-            $trayEnforceInterval = [int]$currentSettings.TrayEnforceIntervalMs
-        }
-    }
-    catch {
-    }
-    $trayEnforceInterval = [Math]::Max(50, [Math]::Min(2000, $trayEnforceInterval))
-
     $enforceTrayTimer = New-Object System.Windows.Forms.Timer
-    $enforceTrayTimer.Interval = $trayEnforceInterval
+    $enforceTrayTimer.Interval = 150
     $enforceTrayTimer.Add_Tick({
             $this.Stop()
             try {
@@ -4267,18 +4153,6 @@ $mainform.Add_Resize({
             return
         }
 
-        # Konsole beim Minimieren des Hauptfensters ausblenden
-        try {
-            if ([ConsoleHelper]::IsConsoleVisible()) {
-                [ConsoleHelper]::HideConsole()
-                $script:consoleAutoHidden = $true
-                if ($btnToggleConsole) {
-                    $btnToggleConsole.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
-                    $btnToggleConsole.Text = "►"
-                }
-            }
-        } catch { }
-
         $settingsForResize = Get-SystemToolSettings
         if ($settingsForResize -and [bool]$settingsForResize.MinimizeToTrayOnMinimizeClick) {
             Hide-MainFormToTray -ShowBalloon:$false
@@ -4787,36 +4661,6 @@ function New-CollapsiblePanel {
                         $otherHeader.Tag = "collapsed"
                         $otherContent.Visible = $false
                         $ctrl.Height = 35
-                        
-                        # OpenUpward-Panel: Container-Position und Header-Position zurücksetzen
-                        if ($null -ne $ctrl.OriginalY) {
-                            $ctrl.Location = New-Object System.Drawing.Point($ctrl.Location.X, $ctrl.OriginalY)
-                            $otherHeader.Location = New-Object System.Drawing.Point(0, 0)
-                        }
-                    }
-                }
-            }
-            
-            # Panels in anderen Parent-Containern schließen (z.B. restartPanel in restartButtonPanel)
-            if ($script:allCollapsiblePanels) {
-                foreach ($otherPanel in $script:allCollapsiblePanels) {
-                    if ($otherPanel.Container -and
-                        $otherPanel.Container.Tag -ne $currentTag -and
-                        $otherPanel.Container.Parent -ne $ParentPanel -and
-                        $otherPanel.Header.Tag -eq "expanded") {
-
-                        $otherArrow = $otherPanel.Header.Controls | Where-Object { $_.Tag -eq "arrow" }
-                        if ($otherArrow) { $otherArrow.Text = "▼" }
-                        $otherPanel.Header.Tag = "collapsed"
-                        $otherPanel.Content.Visible = $false
-                        $otherPanel.Container.Height = 35
-
-                        if ($null -ne $otherPanel.Container.OriginalY) {
-                            $otherPanel.Container.Location = New-Object System.Drawing.Point(
-                                $otherPanel.Container.Location.X, $otherPanel.Container.OriginalY)
-                            $otherPanel.Header.Location = New-Object System.Drawing.Point(0, 0)
-                        }
-                        Update-PanelPositions -ParentPanel $otherPanel.Container.Parent
                     }
                 }
             }
@@ -4928,17 +4772,11 @@ function New-CollapsiblePanel {
     $container.Controls.Add($headerBtn)
     $container.Controls.Add($contentPanel)
     
-    $panelObj = @{
+    return @{
         Container = $container
         Header    = $headerBtn
         Content   = $contentPanel
     }
-    
-    # In globaler Panel-Liste registrieren fuer Cross-Parent-Schliessen
-    if (-not $script:allCollapsiblePanels) { $script:allCollapsiblePanels = @() }
-    $script:allCollapsiblePanels += $panelObj
-    
-    return $panelObj
 }
 
 # Hilfsfunktion zum Aktualisieren der Panel-Positionen
@@ -5163,6 +5001,9 @@ function Reset-MainPanelStates {
     if ($troubleshootHorizontalPanel -and $troubleshootHorizontalPanel.Container) {
         $troubleshootHorizontalPanel.Container.Visible = $false
     }
+    if ($externalToolsHorizontalPanel -and $externalToolsHorizontalPanel.Container) {
+        $externalToolsHorizontalPanel.Container.Visible = $false
+    }
     
     # Header-Buttons visuell zurücksetzen (alle inaktiv)
     if ($systemPanel) { $systemPanel.Header.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38) }
@@ -5191,15 +5032,22 @@ function Show-MainInfoSupportPanels {
         $troubleshootHorizontalPanel.Container.Visible = $true
         $troubleshootHorizontalPanel.Container.BringToFront()
     }
+    if ($externalToolsHorizontalPanel -and $externalToolsHorizontalPanel.Container) {
+        $externalToolsHorizontalPanel.Container.Visible = $true
+        $externalToolsHorizontalPanel.Container.BringToFront()
+    }
 }
 
-# Hilfsfunktion: Versteckt Informationen- und Support-Panel (fuer Funktionsansichten)
+# Hilfsfunktion: Versteckt Informationen-, Support- und Externe-Tools-Panel (fuer Funktionsansichten)
 function Hide-MainInfoSupportPanels {
     if ($infoHorizontalPanel -and $infoHorizontalPanel.Container) {
         $infoHorizontalPanel.Container.Visible = $false
     }
     if ($troubleshootHorizontalPanel -and $troubleshootHorizontalPanel.Container) {
         $troubleshootHorizontalPanel.Container.Visible = $false
+    }
+    if ($externalToolsHorizontalPanel -and $externalToolsHorizontalPanel.Container) {
+        $externalToolsHorizontalPanel.Container.Visible = $false
     }
 }
 
@@ -5664,8 +5512,10 @@ $cleanupPanel = New-CollapsiblePanel -Title "Bereinigung" -YPosition 145 -Tag "c
     Add-OutputIcon -OutputBox $outputBox -IconCode 0xE74C
     $outputBox.AppendText(" VERFÜGBARE BEREINIGUNGEN:`r`n")
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
-    $outputBox.AppendText("  • Disk Cleanup      - Windows-eigenes Bereinigungs-Tool (cleanmgr.exe)`r`n")
-    $outputBox.AppendText("  • Custom-Cleanup    - Interaktive Auswahlmaske: TEMP, Prefetch, Browser-Cache`r`n`r`n")
+    $outputBox.AppendText("  • Temp-Dateien (Einfach)  - Löscht TEMP-Ordner (%TEMP%, Windows\Temp)`r`n")
+    $outputBox.AppendText("  • Temp-Dateien (Erweitert)- Umfassend: TEMP, Prefetch, Browser-Cache`r`n")
+    $outputBox.AppendText("  • Disk Cleanup            - Windows-eigenes Bereinigungs-Tool`r`n")
+    $outputBox.AppendText("  • Cleanup-Übersicht       - Interaktive Auswahlmaske mit Vorschau`r`n`r`n")
     
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
     Add-OutputIcon -OutputBox $outputBox -IconCode 0xE74E
@@ -6516,6 +6366,9 @@ $infoHorizontalPanel = New-HorizontalCollapsiblePanel -Title "Informationen" -XP
     if ($troubleshootHorizontalPanel -and $troubleshootHorizontalPanel.Container) {
         $troubleshootHorizontalPanel.Container.Visible = $true
     }
+    if ($externalToolsHorizontalPanel -and $externalToolsHorizontalPanel.Container) {
+        $externalToolsHorizontalPanel.Container.Visible = $true
+    }
     
     # OutputBox leeren und Info anzeigen
     $outputBox.Clear()
@@ -6555,8 +6408,8 @@ $infoHorizontalPanel = New-HorizontalCollapsiblePanel -Title "Informationen" -XP
     $outputBox.AppendText(" Tipp: Wählen Sie eine Info-Kategorie aus dem ausgeklappten Menü.`r`n")
 }
 
-# Setze Content-Panel-Groesse fuer 3 Buttons nebeneinander
-$infoHorizontalPanel.Content.Width = 435  # 3 Buttons x 145px
+# Setze Content-Panel-Groesse fuer 2 Buttons nebeneinander
+$infoHorizontalPanel.Content.Width = 290  # 2 Buttons x 145px
 $infoHorizontalPanel.Content.Height = 35
 
 # Erstelle die Info-Buttons horizontal im Content-Panel
@@ -6588,7 +6441,6 @@ $btnStatusInfoH.Add_Click({
     
         $btnStatusInfoH.BackColor = [System.Drawing.Color]::FromArgb(55, 55, 55)
         $btnHardwareInfoH.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
-        $btnToolInfoH.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
     
         if (-not $script:statusInfoLoaded) {
             $systemStatusBox.Clear()
@@ -6631,7 +6483,6 @@ $btnHardwareInfoH.Add_Click({
     
         $btnStatusInfoH.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
         $btnHardwareInfoH.BackColor = [System.Drawing.Color]::FromArgb(55, 55, 55)
-        $btnToolInfoH.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
     
         if (-not $script:hardwareInfoLoaded) {
             Get-HardwareInfo -infoBox $hardwareInfoBox
@@ -6639,43 +6490,6 @@ $btnHardwareInfoH.Add_Click({
         }
     })
 $infoHorizontalPanel.Content.Controls.Add($btnHardwareInfoH)
-
-$btnToolInfoH = New-Object System.Windows.Forms.Button
-$btnToolInfoH.Text = "Tool-Info"
-$btnToolInfoH.Size = New-Object System.Drawing.Size(145, 35)
-$btnToolInfoH.Location = New-Object System.Drawing.Point(290, 0)
-$btnToolInfoH.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
-$btnToolInfoH.FlatAppearance.BorderSize = 0
-$btnToolInfoH.FlatAppearance.MouseOverBackColor = [System.Drawing.Color]::FromArgb(55, 55, 55)
-$btnToolInfoH.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
-$btnToolInfoH.ForeColor = [System.Drawing.Color]::White
-$btnToolInfoH.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
-$btnToolInfoH.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
-Add-ButtonIcon -Button $btnToolInfoH -IconCode 0xE74C -IconSize 11 -LeftMargin 8
-
-# Runde Ecken für Button (8px Radius)
-try {
-    $regionHandle = [RoundedCorners]::CreateRoundRectRgn(0, 0, $btnToolInfoH.Width, $btnToolInfoH.Height, 8, 8)
-    if ($regionHandle -ne [IntPtr]::Zero) {
-        $btnToolInfoH.Region = [System.Drawing.Region]::FromHrgn($regionHandle)
-    }
-} catch {
-    # Falls runde Ecken nicht funktionieren, einfach ohne weitermachen
-}
-
-$btnToolInfoH.Add_Click({
-        Switch-OutputView -viewName "toolInfoView"
-
-        $btnStatusInfoH.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
-        $btnHardwareInfoH.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
-        $btnToolInfoH.BackColor = [System.Drawing.Color]::FromArgb(55, 55, 55)
-
-        if (-not $script:toolInfoLoaded) {
-            Get-ToolInfo -infoBox $toolInfoBox
-            $script:toolInfoLoaded = $true
-        }
-    })
-$infoHorizontalPanel.Content.Controls.Add($btnToolInfoH)
 
 $mainContentPanel.Controls.Add($infoHorizontalPanel.Container)
 
@@ -6702,44 +6516,13 @@ $troubleshootHorizontalPanel = New-HorizontalCollapsiblePanel -Title "Support" -
     if ($troubleshootHorizontalPanel -and $troubleshootHorizontalPanel.Container) {
         $troubleshootHorizontalPanel.Container.Visible = $true
     }
-
-    # Support-Info im OutputBox anzeigen
-    $outputBox.Clear()
-    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'BannerFrame'
-    $outputBox.AppendText("`t╔═══════════════════════════════════════════════════════════════╗`r`n")
-    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'BannerTitle'
-    $outputBox.AppendText("`t║                        SUPPORT                                ║`r`n")
-    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'BannerFrame'
-    $outputBox.AppendText("`t╚═══════════════════════════════════════════════════════════════╝`r`n`r`n")
-
-    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Heading'
-    $outputBox.AppendText("Verfügbare Ansichten:`r`n`r`n")
-
-    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Accent'
-    Add-OutputIcon -OutputBox $outputBox -IconCode 0xE721
-    $outputBox.AppendText(" STATUS PRÜFEN:`r`n")
-    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
-    $outputBox.AppendText("  • Abhängigkeits- und Komponentenstatus der installierten Tools`r`n")
-    $outputBox.AppendText("  • Verfügbare Updates für GUI und installierte Bibliotheken`r`n")
-    $outputBox.AppendText("  • Git-Status (Pull verfügbar, aktuelle Version)`r`n")
-    $outputBox.AppendText("  • Direkte Update- und Reparatur-Aktionen pro Komponente`r`n`r`n")
-
-    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Accent'
-    Add-OutputIcon -OutputBox $outputBox -IconCode 0xE943
-    $outputBox.AppendText(" ADD-ONS:`r`n")
-    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
-    $outputBox.AppendText("  • Verwaltung externer Erweiterungen und GitHub-Repos`r`n")
-    $outputBox.AppendText("  • Installieren, Aktualisieren und Deinstallieren von Add-ons`r`n")
-    $outputBox.AppendText("  • Python-Dashboard-Integration (Start/Stop)`r`n")
-    $outputBox.AppendText("  • Automatischer Autostart beim Windows-Login`r`n`r`n")
-
-    Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Muted'
-    Add-OutputIcon -OutputBox $outputBox -IconCode 0xE897
-    $outputBox.AppendText(" Tipp: Wählen Sie eine Option aus dem ausgeklappten Menü.`r`n")
+    if ($externalToolsHorizontalPanel -and $externalToolsHorizontalPanel.Container) {
+        $externalToolsHorizontalPanel.Container.Visible = $true
+    }
 }
 
-# Setze Content-Panel-Breite für 2 Buttons (Status prüfen + Add-ons)
-$troubleshootHorizontalPanel.Content.Width = 295
+# Setze Content-Panel-Breite für 1 Button (kompakt, damit Add-ons näher folgt)
+$troubleshootHorizontalPanel.Content.Width = 145
 $troubleshootHorizontalPanel.Content.Height = 35
 
 # Button: Status prüfen
@@ -7183,21 +6966,20 @@ $btnCheckDependenciesH.Add_Click({
                     }
 
                     if ($dep.Name -eq "GUI-Update (GitHub)") {
-                        $guiIsUpgrade = ($dep.UpdateAvailable -eq $true)
-                        $actionButton.Text = if ($guiIsUpgrade) { "Aktualisieren" } else { "Downgrade" }
-                        $actionButton.BackColor = if ($guiIsUpgrade) { [System.Drawing.Color]::FromArgb(52, 152, 219) } else { [System.Drawing.Color]::FromArgb(124, 77, 255) }
+                        $actionButton.Text = "Downgrade"
+                        $actionButton.BackColor = [System.Drawing.Color]::FromArgb(124, 77, 255)
                         $actionButton.ForeColor = [System.Drawing.Color]::White
-                        $actionButton.Tag = @{ Dependency = $dep; Action = "gui-release-select"; IsUpgrade = $guiIsUpgrade }
+                        $actionButton.Tag = @{ Dependency = $dep; Action = "gui-release-select" }
                     } elseif ($dep.Name -eq "Git Pull" -and $dep.Available) {
                         $actionButton.Text = "Git Pull"
                         $actionButton.BackColor = [System.Drawing.Color]::FromArgb(255, 152, 0)
                         $actionButton.ForeColor = [System.Drawing.Color]::White
                         $actionButton.Tag = @{ Dependency = $dep; Action = "git-pull" }
                     } elseif ($dep.Name -eq "Git Pull") {
-                        $actionButton.Text = "Auf GitHub"
-                        $actionButton.BackColor = [System.Drawing.Color]::FromArgb(50, 50, 50)
+                        $actionButton.Text = "Nicht verfügbar"
+                        $actionButton.BackColor = [System.Drawing.Color]::FromArgb(70, 70, 70)
                         $actionButton.ForeColor = [System.Drawing.Color]::Silver
-                        $actionButton.Tag = @{ Dependency = $dep; Action = "open-releases-page" }
+                        $actionButton.Enabled = $false
                     } elseif ($dep.Name -eq "Winget Package Manager" -and $dep.Found -and $dep.WingetId) {
                         # Winget selbst: Versionsauswahl möglich
                         $actionButton.Text = "Downgrade"
@@ -7261,7 +7043,6 @@ $btnCheckDependenciesH.Add_Click({
                                 "winget-version-select" { "Versionswechsel" }
                                 "git-pull" { "Git Pull" }
                                 "lhm-update" { "DLL-Update" }
-                                "open-releases-page" { "GitHub Releases" }
                                 default { "Installation" }
                             }
                             $this.Enabled = $false
@@ -7271,7 +7052,6 @@ $btnCheckDependenciesH.Add_Click({
                                 "winget-version-select" { "Suche Version..." }
                                 "git-pull" { "Pull laeuft..." }
                                 "lhm-update" { "Lade DLL..." }
-                                "open-releases-page" { "Öffne..." }
                                 default { "Installiere..." }
                             }
                             [System.Windows.Forms.Application]::DoEvents()
@@ -7312,17 +7092,12 @@ $btnCheckDependenciesH.Add_Click({
 
                             $actionResult = $null
                             try {
-                                if ($actionType -eq "open-releases-page") {
-                                    $releasesUrl = "https://github.com/$script:GuiUpdateRepoOwner/$script:GuiUpdateRepoName/releases"
-                                    Open-UrlInBrowser -Url $releasesUrl
-                                    $actionResult = @{ Success = $true; Cancelled = $false; Message = "GitHub Releases geöffnet" }
-                                } elseif ($actionType -eq "gui-release-select") {
+                                if ($actionType -eq "gui-release-select") {
                                     $actionResult = Invoke-GuiReleaseAction
                                 } elseif ($actionType -eq "winget-version-select") {
                                     $actionResult = Invoke-WingetVersionAction -WingetId $depToHandle.WingetId -CurrentVersion $depToHandle.Version -ProgressCallback $uiProgressCallback -LogCallback $uiLogCallback
                                 } elseif ($actionType -eq "git-pull") {
-                                    $gitPullRepoPath = if (-not [string]::IsNullOrWhiteSpace($depToHandle.RepoPath)) { $depToHandle.RepoPath } else { $PSScriptRoot }
-                                    $actionResult = Invoke-GitPullDependencyAction -RepositoryPath $gitPullRepoPath -ProgressCallback $uiProgressCallback -LogCallback $uiLogCallback
+                                    $actionResult = Invoke-GitPullDependencyAction -RepositoryPath $PSScriptRoot -ProgressCallback $uiProgressCallback -LogCallback $uiLogCallback
                                 } elseif ($actionType -eq "upgrade") {
                                     $actionResult = Invoke-DependencyAction -WingetId $depToHandle.WingetId -Action 'upgrade' -ProgressCallback $uiProgressCallback -LogCallback $uiLogCallback
                                 } elseif ($actionType -eq "lhm-update") {
@@ -7352,8 +7127,8 @@ $btnCheckDependenciesH.Add_Click({
 
                                 if ($actionResult -and $actionResult.Cancelled) {
                                     if ($actionType -eq "gui-release-select") {
-                                        $this.Text = if ($payload.IsUpgrade) { "Aktualisieren" } else { "Downgrade" }
-                                        $this.BackColor = if ($payload.IsUpgrade) { [System.Drawing.Color]::FromArgb(52, 152, 219) } else { [System.Drawing.Color]::FromArgb(124, 77, 255) }
+                                        $this.Text = "Downgrade"
+                                        $this.BackColor = [System.Drawing.Color]::FromArgb(124, 77, 255)
                                     } elseif ($actionType -eq "git-pull") {
                                         $this.Text = "Git Pull"
                                         $this.BackColor = [System.Drawing.Color]::FromArgb(255, 152, 0)
@@ -7369,11 +7144,7 @@ $btnCheckDependenciesH.Add_Click({
                                     }
                                     $this.Enabled = $true
                                 } elseif ($actionResult -and $actionResult.Success) {
-                                    if ($actionType -eq "open-releases-page") {
-                                        $this.Text = "Auf GitHub"
-                                        $this.BackColor = [System.Drawing.Color]::FromArgb(50, 50, 50)
-                                        $this.Enabled = $true
-                                    } elseif ($actionType -eq "git-pull" -and $actionResult.RestartRecommended) {
+                                    if ($actionType -eq "git-pull" -and $actionResult.RestartRecommended) {
                                         [System.Windows.Forms.MessageBox]::Show(
                                             "Git Pull erfolgreich. Es wurden neue Commits geladen.`n`nBitte die GUI neu starten, damit alle Änderungen aktiv werden.",
                                             "Neustart empfohlen",
@@ -7395,14 +7166,11 @@ $btnCheckDependenciesH.Add_Click({
                                         [System.Windows.Forms.MessageBox]::Show("Vorgang fehlgeschlagen (Exit Code: $($actionResult.ExitCode))", "Aktion fehlgeschlagen", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
                                     }
                                     if ($actionType -eq "gui-release-select") {
-                                        $this.Text = if ($payload.IsUpgrade) { "Aktualisieren" } else { "Downgrade" }
-                                        $this.BackColor = if ($payload.IsUpgrade) { [System.Drawing.Color]::FromArgb(52, 152, 219) } else { [System.Drawing.Color]::FromArgb(124, 77, 255) }
+                                        $this.Text = "Downgrade"
+                                        $this.BackColor = [System.Drawing.Color]::FromArgb(124, 77, 255)
                                     } elseif ($actionType -eq "git-pull") {
                                         $this.Text = "Git Pull"
                                         $this.BackColor = [System.Drawing.Color]::FromArgb(255, 152, 0)
-                                    } elseif ($actionType -eq "open-releases-page") {
-                                        $this.Text = "Auf GitHub"
-                                        $this.BackColor = [System.Drawing.Color]::FromArgb(50, 50, 50)
                                     } elseif ($actionType -eq "winget-version-select") {
                                         $this.Text = "Version wählen"
                                         $this.BackColor = [System.Drawing.Color]::FromArgb(156, 39, 176)
@@ -7419,8 +7187,8 @@ $btnCheckDependenciesH.Add_Click({
                                 & $uiProgressCallback -Value 100 -Text "$actionLabel fehlgeschlagen" -Color ([System.Drawing.Color]::Red)
                                 [System.Windows.Forms.MessageBox]::Show("Fehler: $($_.Exception.Message)", "Aktion fehlgeschlagen", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
                                 if ($actionType -eq "gui-release-select") {
-                                    $this.Text = if ($payload.IsUpgrade) { "Aktualisieren" } else { "Downgrade" }
-                                    $this.BackColor = if ($payload.IsUpgrade) { [System.Drawing.Color]::FromArgb(52, 152, 219) } else { [System.Drawing.Color]::FromArgb(124, 77, 255) }
+                                    $this.Text = "Downgrade"
+                                    $this.BackColor = [System.Drawing.Color]::FromArgb(124, 77, 255)
                                 } elseif ($actionType -eq "winget-version-select") {
                                     $this.Text = "Version wählen"
                                     $this.BackColor = [System.Drawing.Color]::FromArgb(156, 39, 176)
@@ -7493,68 +7261,56 @@ $btnCheckDependenciesH.Add_Click({
     })
 $troubleshootHorizontalPanel.Content.Controls.Add($btnCheckDependenciesH)
 
-# Button: Add-ons (Erweiterungen) - im Support-Panel integriert
-$btnAddonsH = New-Object System.Windows.Forms.Button
-$btnAddonsH.Text = "Add-ons"
-$btnAddonsH.Size = New-Object System.Drawing.Size(145, 35)
-$btnAddonsH.Location = New-Object System.Drawing.Point(150, 0)
-$btnAddonsH.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
-$btnAddonsH.FlatAppearance.BorderSize = 0
-$btnAddonsH.FlatAppearance.MouseOverBackColor = [System.Drawing.Color]::FromArgb(55, 55, 55)
-$btnAddonsH.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
-$btnAddonsH.ForeColor = [System.Drawing.Color]::White
-$btnAddonsH.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
-$btnAddonsH.Cursor = [System.Windows.Forms.Cursors]::Hand
-Add-ButtonIcon -Button $btnAddonsH -IconCode 0xE943 -IconSize 12 -LeftMargin 10
-
-try {
-    $regionHandle = [RoundedCorners]::CreateRoundRectRgn(0, 0, $btnAddonsH.Width, $btnAddonsH.Height, 8, 8)
-    if ($regionHandle -ne [IntPtr]::Zero) {
-        $btnAddonsH.Region = [System.Drawing.Region]::FromHrgn($regionHandle)
-    }
-} catch { }
-
-$btnAddonsH.Add_Click({
-        Set-ExtensionProgress -Value 18 -Text "Erweiterungen werden geladen..."
-
-        if ($outputViewPanel) { $outputViewPanel.Visible = $true }
-        if ($statusViewPanel) { $statusViewPanel.Visible = $false }
-        if ($hardwareViewPanel) { $hardwareViewPanel.Visible = $false }
-        if ($toolInfoViewPanel) { $toolInfoViewPanel.Visible = $false }
-
-        if ($searchPanel) { $searchPanel.Visible = $false }
-        if ($script:dependencyTableHost) { $script:dependencyTableHost.Visible = $false }
-        if ($outputBox) { $outputBox.Visible = $true }
-
-        if ($infoHorizontalPanel -and $infoHorizontalPanel.Container) {
-            $infoHorizontalPanel.Container.Visible = $true
-        }
-        if ($troubleshootHorizontalPanel -and $troubleshootHorizontalPanel.Container) {
-            $troubleshootHorizontalPanel.Container.Visible = $true
-        }
-
-        Show-OutputLoadingOverlay
-
-        $definitions = Get-ExtensionRepoDefinitions
-        $extensionStatus = Get-ExtensionRepoStatus -Definitions $definitions -CheckRemoteUpdates
-        $caps = Get-PythonDashboardCapabilities -Port $script:pythonDashboardPort
-
-        Hide-OutputLoadingOverlay
-        Show-ExtensionsOverviewInOutput -OutputBox $outputBox -ExtensionStatus $extensionStatus -Capabilities $caps
-        Switch-OutputView -viewName "downloadsView"
-        $null = Show-ExtensionTiles -WrapPanel $toolWrapPanel -ExtensionStatus $extensionStatus -OutputBox $outputBox
-
-        Set-ExtensionProgress -Value 100 -Text "Erweiterungen geladen" -Color ([System.Drawing.Color]::LightGreen)
-        Reset-ExtensionProgress -DelayMs 1200
-    })
-$troubleshootHorizontalPanel.Content.Controls.Add($btnAddonsH)
-
 $mainContentPanel.Controls.Add($troubleshootHorizontalPanel.Container)
 
-# WICHTIG: Initiale Neupositionierung der horizontalen Panels beim Laden
+# Erstelle horizontales Collapsible Panel fuer Externe Tools (rechts neben Support)
+$externalToolsHorizontalPanel = New-HorizontalCollapsiblePanel -Title "Add-ons" -XPosition 280 -Tag "externalToolsHorizontalPanel" -ParentPanel $mainContentPanel -IconCode 0xE943 -OnExpand {
+    Set-ExtensionProgress -Value 18 -Text "Erweiterungen werden geladen..."
+
+    if ($outputViewPanel) { $outputViewPanel.Visible = $true }
+    if ($statusViewPanel) { $statusViewPanel.Visible = $false }
+    if ($hardwareViewPanel) { $hardwareViewPanel.Visible = $false }
+    if ($toolInfoViewPanel) { $toolInfoViewPanel.Visible = $false }
+
+    if ($searchPanel) { $searchPanel.Visible = $false }
+    if ($script:dependencyTableHost) { $script:dependencyTableHost.Visible = $false }
+    if ($outputBox) { $outputBox.Visible = $true }
+
+    if ($infoHorizontalPanel -and $infoHorizontalPanel.Container) {
+        $infoHorizontalPanel.Container.Visible = $true
+    }
+    if ($troubleshootHorizontalPanel -and $troubleshootHorizontalPanel.Container) {
+        $troubleshootHorizontalPanel.Container.Visible = $true
+    }
+    if ($externalToolsHorizontalPanel -and $externalToolsHorizontalPanel.Container) {
+        $externalToolsHorizontalPanel.Container.Visible = $true
+    }
+
+    # Skeleton-Overlay einblenden während Netzwerk-Calls laufen
+    Show-OutputLoadingOverlay
+
+    $definitions = Get-ExtensionRepoDefinitions
+    $extensionStatus = Get-ExtensionRepoStatus -Definitions $definitions -CheckRemoteUpdates
+    $caps = Get-PythonDashboardCapabilities -Port $script:pythonDashboardPort
+
+    Hide-OutputLoadingOverlay
+    Show-ExtensionsOverviewInOutput -OutputBox $outputBox -ExtensionStatus $extensionStatus -Capabilities $caps
+    Switch-OutputView -viewName "downloadsView"
+    $null = Show-ExtensionTiles -WrapPanel $toolWrapPanel -ExtensionStatus $extensionStatus -OutputBox $outputBox
+
+    Set-ExtensionProgress -Value 100 -Text "Erweiterungen geladen" -Color ([System.Drawing.Color]::LightGreen)
+    Reset-ExtensionProgress -DelayMs 1200
+}
+
+$externalToolsHorizontalPanel.Content.Width = 0
+$externalToolsHorizontalPanel.Content.Height = 35
+
+$mainContentPanel.Controls.Add($externalToolsHorizontalPanel.Container)
+
+# WICHTIG: Initiale Neupositionierung aller horizontalen Panels beim Laden
 # um Überschneidungen zu vermeiden (alle Panels sind noch zugeklappt = 155px Breite)
 $initX = 10
-@($infoHorizontalPanel, $troubleshootHorizontalPanel) | ForEach-Object {
+@($infoHorizontalPanel, $troubleshootHorizontalPanel, $externalToolsHorizontalPanel) | ForEach-Object {
     if ($_ -and $_.Container) {
         $_.Container.Location = New-Object System.Drawing.Point($initX, 5)
         $initX += $_.Container.Width + 5
@@ -7626,7 +7382,7 @@ $downloadsPanel = New-CollapsiblePanel -Title "Tool-Downloads" -YPosition 157 -T
     $outputBox.AppendText("`t╚═══════════════════════════════════════════════════════════════╝`r`n`r`n")
     
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Heading'
-    $outputBox.AppendText("Verfügbare Tool-Kategorien (53 Tools):`r`n`r`n")
+    $outputBox.AppendText("Verfügbare Tool-Kategorien (51 Tools):`r`n`r`n")
     
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Accent'
     Add-OutputIcon -OutputBox $outputBox -IconCode 0xE90F
@@ -7639,7 +7395,7 @@ $downloadsPanel = New-CollapsiblePanel -Title "Tool-Downloads" -YPosition 157 -T
     
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Accent'
     Add-OutputIcon -OutputBox $outputBox -IconCode 0xE8A5
-    $outputBox.AppendText(" ANWENDUNGEN (15 Tools):`r`n")
+    $outputBox.AppendText(" ANWENDUNGEN (13 Tools):`r`n")
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
     $outputBox.AppendText("  • Browser: Brave, Firefox, Chrome`r`n")
     $outputBox.AppendText("  • E-Mail: Thunderbird, Tutanota`r`n")
@@ -7667,7 +7423,8 @@ $downloadsPanel = New-CollapsiblePanel -Title "Tool-Downloads" -YPosition 157 -T
     $outputBox.AppendText(" Winget-Integration: Automatische Installations-Status-Erkennung`r`n")
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Success'
     Add-OutputIcon -OutputBox $outputBox -IconCode 0xE73E
-    $outputBox.AppendText(" Ein-Klick-Installation: Direkte Installation über Winget`r`n")
+    $outputBox.AppendText(" Ein-Klick-Installation: Direkte Installation über Winget`r`n`r`n")
+    
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Muted'
     Add-OutputIcon -OutputBox $outputBox -IconCode 0xE946
     $outputBox.AppendText(" Tipp: Wählen Sie eine Kategorie oder nutzen Sie die Suchfunktion oben.`r`n")
