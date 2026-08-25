@@ -1,6 +1,6 @@
 ﻿# Win_Gui_Module.ps1 - Hauptskript für die PowerShell-GUI
 # Autor: Bocki
-# Version: 4.2.4
+# Version: 4.2.5
 
 param(
     [switch]$StartedFromWindowsLogin
@@ -9,10 +9,10 @@ param(
 # ===================================================================
 # VERSIONS-INFORMATION
 # ===================================================================
-$script:AppVersion = "4.2.4"
+$script:AppVersion = "4.2.5"
 $script:AppName = "Bockis System-Tool"
 $script:AppPublisher = "Bocki"
-$script:VersionDate = "2026-05-20"
+$script:VersionDate = "2026-08-25"
 $script:GuiUpdateRepoOwner = "ReXx09"
 $script:GuiUpdateRepoName = "Bockis-Win_Gui"
 
@@ -11017,6 +11017,11 @@ $mainform.Add_Shown({
 # YyKNcb+HLXv5YRdKfIIqqa+B6DBOZyfjNhFHwrTqq8oIU0LFn0Azy7KgyhL50Jq4
 # l+HJ+GdN9Loq4LF/M1igCdJu8Xr+jRRS+rIN+rK7K+zTTamLn0ttCuFe14gUeA==
 # SIG # End signature block
+
+
+
+
+
 
 
 

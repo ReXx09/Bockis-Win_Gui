@@ -1,7 +1,22 @@
-# Bockis System-Tool v4.2.4
+# Bockis System-Tool v4.2.5
 
-**Datum:** 2026-05-20  
+**Datum:** 2026-08-25
 **Autor:** Bockis
+
+---
+
+## Version 4.2.5
+
+### Git Pull und Updates
+
+- **Repository-Pfad korrigiert**: Dependency-Statusprüfung und Git Pull verwenden jetzt denselben explizit übergebenen GUI-Repository-Pfad.
+- **ToolLibrary-Reload**: Die ToolLibrary wird beim Öffnen der Tool-Downloads-Ansicht mit `-Force` neu geladen, damit Änderungen nach einem Pull sichtbar werden.
+- **Dynamische Zähler**: Gesamt- und Anwendungstool-Zähler werden aus der tatsächlichen ToolLibrary ermittelt.
+
+### Neue Anwendungen
+
+- **Epic Games Launcher** (`EpicGames.EpicGamesLauncher`) für Fortnite, Unreal Engine und weitere Spiele.
+- **MediaHuman MP3 Converter** (`MediaHuman.MP3Converter`) für MP3, AAC, FLAC, OGG und weitere Audioformate.
 
 ---
 
