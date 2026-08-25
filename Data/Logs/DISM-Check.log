@@ -15,3 +15,9 @@
 [2026-04-10 22:44:00.888] [INFO ] [DISM-CHECK] Es wurde keine Komponentenspeicherbesch�digung erkannt. | SessionId=20260410224301 | EntryId=000002 | Phase=event | RunId=0001 | ProcId=22172 | Process=dism.exe | Command=dism.exe /Online /Cleanup-Image /CheckHealth | Operation=CheckHealth | Status=INFO | Error=- | ExitCode=0 | Duration=-
 [2026-04-10 22:44:00.894] [OK   ] [DISM-CHECK] DISM CheckHealth erfolgreich abgeschlossen | SessionId=20260410224301 | EntryId=000003 | Phase=end | RunId=0001 | ProcId=22172 | Process=dism.exe | Command=dism.exe /Online /Cleanup-Image /CheckHealth | Operation=CheckHealth | Status=OK | Error=- | ExitCode=0 | Duration=00:00:05 | PID=22820
 ========== RUN 0001 END   | [DISM-CHECK] | 2026-04-10 22:44:00.894 | Dauer=00:00:05 ==========
+
+========== RUN 0001 START | [DISM-CHECK] | 2026-08-21 18:03:37.463 ==========
+[2026-08-21 18:03:37.463] [INFO ] [DISM-CHECK] DISM CheckHealth wird gestartet | SessionId=20260821180131 | EntryId=000001 | Phase=start | RunId=0001 | ProcId=8952 | Process=dism.exe | Command=dism.exe /Online /Cleanup-Image /CheckHealth | Operation=CheckHealth | Status=START | Error=- | ExitCode=0 | Duration=-
+[2026-08-21 18:03:43.410] [INFO ] [DISM-CHECK] Der Komponentenspeicher kann repariert werden. | SessionId=20260821180131 | EntryId=000002 | Phase=event | RunId=0001 | ProcId=8952 | Process=dism.exe | Command=dism.exe /Online /Cleanup-Image /CheckHealth | Operation=CheckHealth | Status=INFO | Error=- | ExitCode=0 | Duration=-
+[2026-08-21 18:03:43.419] [OK   ] [DISM-CHECK] DISM CheckHealth erfolgreich abgeschlossen | SessionId=20260821180131 | EntryId=000003 | Phase=end | RunId=0001 | ProcId=8952 | Process=dism.exe | Command=dism.exe /Online /Cleanup-Image /CheckHealth | Operation=CheckHealth | Status=OK | Error=- | ExitCode=0 | Duration=00:00:05 | PID=8380
+========== RUN 0001 END   | [DISM-CHECK] | 2026-08-21 18:03:43.419 | Dauer=00:00:05 ==========
