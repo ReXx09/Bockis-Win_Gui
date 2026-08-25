@@ -7626,7 +7626,7 @@ $downloadsPanel = New-CollapsiblePanel -Title "Tool-Downloads" -YPosition 157 -T
     $outputBox.AppendText("`t╚═══════════════════════════════════════════════════════════════╝`r`n`r`n")
     
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Heading'
-    $outputBox.AppendText("Verfügbare Tool-Kategorien (51 Tools):`r`n`r`n")
+    $outputBox.AppendText("Verfügbare Tool-Kategorien (53 Tools):`r`n`r`n")
     
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Accent'
     Add-OutputIcon -OutputBox $outputBox -IconCode 0xE90F
@@ -7639,7 +7639,7 @@ $downloadsPanel = New-CollapsiblePanel -Title "Tool-Downloads" -YPosition 157 -T
     
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Accent'
     Add-OutputIcon -OutputBox $outputBox -IconCode 0xE8A5
-    $outputBox.AppendText(" ANWENDUNGEN (13 Tools):`r`n")
+    $outputBox.AppendText(" ANWENDUNGEN (15 Tools):`r`n")
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
     $outputBox.AppendText("  • Browser: Brave, Firefox, Chrome`r`n")
     $outputBox.AppendText("  • E-Mail: Thunderbird, Tutanota`r`n")
