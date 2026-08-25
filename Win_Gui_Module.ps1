@@ -6964,11 +6964,16 @@ $btnCheckDependenciesH.Add_Click({
                         $tooltipObj.SetToolTip($actionButton, $dependencyTooltipText)
                     }
 
-                    if ($dep.Name -eq "GUI-Update (GitHub)") {
+                    if ($dep.Name -eq "GUI-Update (GitHub)" -and $dep.UpdateAvailable) {
+                        $actionButton.Text = "Aktualisieren"
+                        $actionButton.BackColor = [System.Drawing.Color]::FromArgb(52, 152, 219)
+                        $actionButton.ForeColor = [System.Drawing.Color]::White
+                        $actionButton.Tag = @{ Dependency = $dep; Action = "gui-release-select"; IsUpgrade = $true }
+                    } elseif ($dep.Name -eq "GUI-Update (GitHub)") {
                         $actionButton.Text = "Downgrade"
                         $actionButton.BackColor = [System.Drawing.Color]::FromArgb(124, 77, 255)
                         $actionButton.ForeColor = [System.Drawing.Color]::White
-                        $actionButton.Tag = @{ Dependency = $dep; Action = "gui-release-select" }
+                        $actionButton.Tag = @{ Dependency = $dep; Action = "gui-release-select"; IsUpgrade = $false }
                     } elseif ($dep.Name -eq "Git Pull" -and $dep.Available) {
                         $actionButton.Text = "Git Pull"
                         $actionButton.BackColor = [System.Drawing.Color]::FromArgb(255, 152, 0)
@@ -7126,8 +7131,8 @@ $btnCheckDependenciesH.Add_Click({
 
                                 if ($actionResult -and $actionResult.Cancelled) {
                                     if ($actionType -eq "gui-release-select") {
-                                        $this.Text = "Downgrade"
-                                        $this.BackColor = [System.Drawing.Color]::FromArgb(124, 77, 255)
+                                        $this.Text = if ($payload.IsUpgrade) { "Aktualisieren" } else { "Downgrade" }
+                                        $this.BackColor = if ($payload.IsUpgrade) { [System.Drawing.Color]::FromArgb(52, 152, 219) } else { [System.Drawing.Color]::FromArgb(124, 77, 255) }
                                     } elseif ($actionType -eq "git-pull") {
                                         $this.Text = "Git Pull"
                                         $this.BackColor = [System.Drawing.Color]::FromArgb(255, 152, 0)
@@ -7165,8 +7170,8 @@ $btnCheckDependenciesH.Add_Click({
                                         [System.Windows.Forms.MessageBox]::Show("Vorgang fehlgeschlagen (Exit Code: $($actionResult.ExitCode))", "Aktion fehlgeschlagen", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
                                     }
                                     if ($actionType -eq "gui-release-select") {
-                                        $this.Text = "Downgrade"
-                                        $this.BackColor = [System.Drawing.Color]::FromArgb(124, 77, 255)
+                                        $this.Text = if ($payload.IsUpgrade) { "Aktualisieren" } else { "Downgrade" }
+                                        $this.BackColor = if ($payload.IsUpgrade) { [System.Drawing.Color]::FromArgb(52, 152, 219) } else { [System.Drawing.Color]::FromArgb(124, 77, 255) }
                                     } elseif ($actionType -eq "git-pull") {
                                         $this.Text = "Git Pull"
                                         $this.BackColor = [System.Drawing.Color]::FromArgb(255, 152, 0)
@@ -7186,8 +7191,8 @@ $btnCheckDependenciesH.Add_Click({
                                 & $uiProgressCallback -Value 100 -Text "$actionLabel fehlgeschlagen" -Color ([System.Drawing.Color]::Red)
                                 [System.Windows.Forms.MessageBox]::Show("Fehler: $($_.Exception.Message)", "Aktion fehlgeschlagen", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
                                 if ($actionType -eq "gui-release-select") {
-                                    $this.Text = "Downgrade"
-                                    $this.BackColor = [System.Drawing.Color]::FromArgb(124, 77, 255)
+                                    $this.Text = if ($payload.IsUpgrade) { "Aktualisieren" } else { "Downgrade" }
+                                    $this.BackColor = if ($payload.IsUpgrade) { [System.Drawing.Color]::FromArgb(52, 152, 219) } else { [System.Drawing.Color]::FromArgb(124, 77, 255) }
                                 } elseif ($actionType -eq "winget-version-select") {
                                     $this.Text = "Version wählen"
                                     $this.BackColor = [System.Drawing.Color]::FromArgb(156, 39, 176)

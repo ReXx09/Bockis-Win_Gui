@@ -595,6 +595,8 @@ Start-Process powershell.exe -ArgumentList '-ExecutionPolicy Bypass -File "$Appl
     
     Start-Sleep -Milliseconds 500
     $MainForm.Close()
+
+    return $true
 }
 
 function Show-UpdateError {
