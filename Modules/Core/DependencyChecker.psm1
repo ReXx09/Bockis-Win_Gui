@@ -1942,7 +1942,10 @@ function Get-DependencyStatusForGUI {
         [string]$RepoName = "Bockis-Win_Gui",
 
         [Parameter(Mandatory = $false)]
-        [string]$GitHubToken
+        [string]$GitHubToken,
+
+        [Parameter(Mandatory = $false)]
+        [string]$RepositoryPath
     )
 
     $dependencies = @()
@@ -2152,7 +2155,7 @@ function Get-DependencyStatusForGUI {
     }
 
     # Git Pull (optional, nur bei echter Git-Clone-Installation)
-    $dependencies += Get-GitPullDependencyStatus
+    $dependencies += Get-GitPullDependencyStatus -RepositoryPath $RepositoryPath
 
     # Python Runtime (optional, für Python-Dashboard)
     $pythonRuntime = Find-PythonRuntime

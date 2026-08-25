@@ -4435,10 +4435,8 @@ $searchPanel.Controls.Add($searchResultLabel)
 function Update-CategoryCounts {
     param([string]$SearchQuery = "")
     
-    # Importiere ToolLibrary falls nicht geladen
-    if (-not (Get-Command -Name Get-ToolsByCategory -ErrorAction SilentlyContinue)) {
-        Import-Module "$PSScriptRoot\Modules\ToolLibrary.psm1" -Force
-    }
+    # Nach einem Git Pull die ToolLibrary aus dem aktuellen Arbeitsstand neu laden.
+    Import-Module "$PSScriptRoot\Modules\ToolLibrary.psm1" -Force -ErrorAction Stop
     
     # Hilfsfunktion zum Zählen der Tools mit Suchfilter
     $countToolsWithSearch = {
@@ -6665,7 +6663,8 @@ $btnCheckDependenciesH.Add_Click({
                 -CurrentVersion $script:AppVersion `
                 -RepoOwner $script:GuiUpdateRepoOwner `
                 -RepoName $script:GuiUpdateRepoName `
-                -GitHubToken $resolvedGitHubToken
+                -GitHubToken $resolvedGitHubToken `
+                -RepositoryPath $PSScriptRoot
             & $updateDependencyProgress -Value 45 -Text "Analysiere Prüfergebnisse..."
         
             if (-not $depResult) {
@@ -7382,7 +7381,9 @@ $downloadsPanel = New-CollapsiblePanel -Title "Tool-Downloads" -YPosition 157 -T
     $outputBox.AppendText("`t╚═══════════════════════════════════════════════════════════════╝`r`n`r`n")
     
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Heading'
-    $outputBox.AppendText("Verfügbare Tool-Kategorien (51 Tools):`r`n`r`n")
+    $allToolsCount = @(Get-AllTools).Count
+    $applicationsToolsCount = @(Get-ToolsByCategory -Category "applications").Count
+    $outputBox.AppendText("Verfügbare Tool-Kategorien ($allToolsCount Tools):`r`n`r`n")
     
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Accent'
     Add-OutputIcon -OutputBox $outputBox -IconCode 0xE90F
@@ -7395,7 +7396,7 @@ $downloadsPanel = New-CollapsiblePanel -Title "Tool-Downloads" -YPosition 157 -T
     
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Accent'
     Add-OutputIcon -OutputBox $outputBox -IconCode 0xE8A5
-    $outputBox.AppendText(" ANWENDUNGEN (13 Tools):`r`n")
+    $outputBox.AppendText(" ANWENDUNGEN ($applicationsToolsCount Tools):`r`n")
     Set-OutputSelectionStyle -OutputBox $outputBox -Style 'Info'
     $outputBox.AppendText("  • Browser: Brave, Firefox, Chrome`r`n")
     $outputBox.AppendText("  • E-Mail: Thunderbird, Tutanota`r`n")
