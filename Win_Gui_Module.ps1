@@ -7449,7 +7449,6 @@ $downloadsPanel = New-CollapsiblePanel -Title "Tool-Downloads" -YPosition 157 -T
     # Setze alle Info-Buttons zurück
     $btnStatusInfoH.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
     $btnHardwareInfoH.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
-    $btnToolInfoH.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
 }
 $mainButtonPanel.Controls.Add($downloadsPanel.Container)
 
@@ -8134,8 +8133,6 @@ function Switch-OutputView {
         }
         "toolInfoView" {
             $toolInfoViewPanel.Visible = $true
-            $btnToolInfoH.BackColor = [System.Drawing.Color]::FromArgb(55, 55, 55)
-            $btnToolInfoH.ForeColor = [System.Drawing.Color]::White
             
             # Tool-Informationen aktualisieren
             if (-not $script:toolInfoLoaded) {
@@ -8249,7 +8246,6 @@ $btnOutput.Add_Click({
         $btnOutput.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
         $btnStatusInfoH.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
         $btnHardwareInfoH.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
-        $btnToolInfoH.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
         $btnToolDownloads.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
         $troubleshootPanel.Header.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
     
