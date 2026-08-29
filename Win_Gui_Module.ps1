@@ -4397,6 +4397,36 @@ $searchClearButton.Add_Click({
     })
 $searchBoxWrapper.Controls.Add($searchClearButton)
 
+# Zentrale Suche in die Titelleiste verschieben; die eigentliche Filterlogik bleibt unverändert.
+$searchLabel.Visible = $false
+[void]$searchPanel.Controls.Remove($searchBoxWrapper)
+$searchBoxWrapper.Location = New-Object System.Drawing.Point(230, 2)
+$searchBoxWrapper.Size = New-Object System.Drawing.Size(340, 26)
+$searchTextBox.Location = New-Object System.Drawing.Point(8, 2)
+$searchTextBox.Size = New-Object System.Drawing.Size(296, 22)
+$searchClearButton.Location = New-Object System.Drawing.Point(308, 0)
+$titleBar.Controls.Add($searchBoxWrapper)
+
+# Zeigt den aktuell passenden Suchkontext direkt neben dem Eingabefeld an.
+$titleSearchModeLabel = New-Object System.Windows.Forms.Label
+$titleSearchModeLabel.Text = "Lokale Suche"
+$titleSearchModeLabel.Location = New-Object System.Drawing.Point(575, 6)
+$titleSearchModeLabel.Size = New-Object System.Drawing.Size(125, 18)
+$titleSearchModeLabel.ForeColor = [System.Drawing.Color]::FromArgb(160, 160, 160)
+$titleSearchModeLabel.Font = New-Object System.Drawing.Font("Segoe UI", 8)
+$titleSearchModeLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
+$titleBar.Controls.Add($titleSearchModeLabel)
+
+function Update-SearchModeLabel {
+    if ($titleSearchModeLabel -and -not [string]::IsNullOrWhiteSpace($script:currentDownloadCategory)) {
+        $titleSearchModeLabel.Text = "Paketsuche"
+        $searchTextBox.AccessibleName = "Paketsuche"
+    } elseif ($titleSearchModeLabel) {
+        $titleSearchModeLabel.Text = "Lokale Suche"
+        $searchTextBox.AccessibleName = "Lokale Suche"
+    }
+}
+
 # Filter-Button für Updates
 $script:showOnlyUpdates = $false
 $btnFilterUpdates = New-Object System.Windows.Forms.Button
@@ -4494,6 +4524,8 @@ function Update-CategoryCounts {
 
 # TextChanged-Event für Echtzeit-Suche
 $searchTextBox.Add_TextChanged({
+    Update-SearchModeLabel
+
         # Nur ausführen, wenn eine Kategorie gewählt wurde
         if ([string]::IsNullOrWhiteSpace($script:currentDownloadCategory)) {
             return
@@ -7358,6 +7390,7 @@ $downloadsPanel = New-CollapsiblePanel -Title "Tool-Downloads" -YPosition 157 -T
     
     # Suchfeld im mainContentPanel einblenden
     if ($searchPanel) { $searchPanel.Visible = $true }
+    Update-SearchModeLabel
 
     # Abhängigkeits-Tabelle ausblenden
     if ($script:dependencyTableHost) { $script:dependencyTableHost.Visible = $false }
@@ -7529,6 +7562,7 @@ $btnAllTools.Add_Click({
     
         # Aktuelle Kategorie speichern
         $script:currentDownloadCategory = "all"
+        Update-SearchModeLabel
     
         # Buttons hervorheben/zurücksetzen
         Reset-DownloadCategoryButtons -ActiveCategory "all"
@@ -7588,6 +7622,7 @@ $btnSystemTools.Add_Click({
     
         # Aktuelle Kategorie speichern
         $script:currentDownloadCategory = "system"
+        Update-SearchModeLabel
     
         # Buttons hervorheben/zurücksetzen
         Reset-DownloadCategoryButtons -ActiveCategory "system"
@@ -7647,6 +7682,7 @@ $btnApplications.Add_Click({
     
         # Aktuelle Kategorie speichern
         $script:currentDownloadCategory = "applications"
+        Update-SearchModeLabel
     
         # Buttons hervorheben/zurücksetzen
         Reset-DownloadCategoryButtons -ActiveCategory "applications"
@@ -7706,6 +7742,7 @@ $btnAudioTV.Add_Click({
     
         # Aktuelle Kategorie speichern
         $script:currentDownloadCategory = "audiotv"
+        Update-SearchModeLabel
     
         # Buttons hervorheben/zurücksetzen
         Reset-DownloadCategoryButtons -ActiveCategory "audiotv"
@@ -7765,6 +7802,7 @@ $btnCodingTools.Add_Click({
     
         # Aktuelle Kategorie speichern
         $script:currentDownloadCategory = "coding"
+        Update-SearchModeLabel
     
         # Buttons hervorheben/zurücksetzen
         Reset-DownloadCategoryButtons -ActiveCategory "coding"
@@ -8071,6 +8109,11 @@ function Switch-OutputView {
     param(
         [string]$viewName
     )
+
+    if ($viewName -ne "downloadsView") {
+        $script:currentDownloadCategory = ""
+        Update-SearchModeLabel
+    }
     
     # Vorherige Buttons zurücksetzen
     $btnOutput.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
