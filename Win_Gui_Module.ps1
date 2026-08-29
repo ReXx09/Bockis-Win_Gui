@@ -4302,7 +4302,7 @@ $btnLargeTiles.Add_Click({
         }
         $script:currentTileSize = "Large"
         Update-TileViewButtons
-        $null = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category $script:currentDownloadCategory -MainProgressBar $progressBar -SearchQuery (Get-ActiveSearchQuery) -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates
+        $null = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category $script:currentDownloadCategory -MainProgressBar $progressBar -SearchQuery (Get-ActiveSearchQuery) -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates -StatusFilter $script:statusFilter
     })
 $tooltipObj.SetToolTip($btnLargeTiles, "Große Kacheln")
 $searchPanel.Controls.Add($btnLargeTiles)
@@ -4326,7 +4326,7 @@ $btnMediumTiles.Add_Click({
         }
         $script:currentTileSize = "Medium"
         Update-TileViewButtons
-        $null = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category $script:currentDownloadCategory -MainProgressBar $progressBar -SearchQuery (Get-ActiveSearchQuery) -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates
+        $null = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category $script:currentDownloadCategory -MainProgressBar $progressBar -SearchQuery (Get-ActiveSearchQuery) -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates -StatusFilter $script:statusFilter
     })
 $tooltipObj.SetToolTip($btnMediumTiles, "Mittlere Kacheln (Standard)")
 $searchPanel.Controls.Add($btnMediumTiles)
@@ -4399,6 +4399,13 @@ $searchTextBox.Add_HandleCreated({
         [SearchCueBanner]::Set($searchTextBox.Handle, "Nach Paketen suchen")
     })
 
+function Set-SearchCueText {
+    param([string]$Text)
+    if ($searchTextBox -and $searchTextBox.IsHandleCreated) {
+        [SearchCueBanner]::Set($searchTextBox.Handle, $Text)
+    }
+}
+
 # Clear-Button (innerhalb des Wrappers, am rechten Rand)
 $searchClearButton = New-Object System.Windows.Forms.Button
 $searchClearButton.Text = "✕"
@@ -4424,7 +4431,7 @@ $searchBoxWrapper.Size = New-Object System.Drawing.Size(340, 26)
 $searchTextBox.Location = New-Object System.Drawing.Point(8, 2)
 $searchTextBox.Size = New-Object System.Drawing.Size(296, 22)
 $searchClearButton.Location = New-Object System.Drawing.Point(308, 0)
-$searchBoxWrapper.Visible = $false
+$searchBoxWrapper.Visible = $true
 $titleBar.Controls.Add($searchBoxWrapper)
 
 function Update-SearchModeLabel {
@@ -4439,28 +4446,147 @@ function Get-ActiveSearchQuery {
 
 # Filter-Button für Updates
 $script:showOnlyUpdates = $false
+$updateButtonFont = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
 $btnFilterUpdates = New-Object System.Windows.Forms.Button
-$btnFilterUpdates.Text = "⬆ Updates"
-$btnFilterUpdates.Location = New-Object System.Drawing.Point(422, 12)
-$btnFilterUpdates.Size = New-Object System.Drawing.Size(90, 25)
+$btnFilterUpdates.Text = "Auswahl aktualisieren"
+$btnFilterUpdates.Location = New-Object System.Drawing.Point(10, 12)
+$btnFilterUpdates.Size = New-Object System.Drawing.Size(135, 25)
 $btnFilterUpdates.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
-$btnFilterUpdates.FlatAppearance.BorderSize = 1
-$btnFilterUpdates.FlatAppearance.BorderColor = [System.Drawing.Color]::Gray
+$btnFilterUpdates.FlatAppearance.BorderSize = 0
 $btnFilterUpdates.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
 $btnFilterUpdates.ForeColor = [System.Drawing.Color]::White
-$btnFilterUpdates.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+$btnFilterUpdates.Font = $updateButtonFont
+$btnFilterUpdates.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
 $btnFilterUpdates.Cursor = [System.Windows.Forms.Cursors]::Hand
 $btnFilterUpdates.Add_Click({
         # Nur ausführen, wenn eine Kategorie gewählt wurde
         if ([string]::IsNullOrWhiteSpace($script:currentDownloadCategory)) {
             return
         }
-        $script:showOnlyUpdates = -not $script:showOnlyUpdates
-        $this.BackColor = if ($script:showOnlyUpdates) { [System.Drawing.Color]::FromArgb(255, 140, 0) } else { [System.Drawing.Color]::FromArgb(43, 43, 43) }
-        $null = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category $script:currentDownloadCategory -MainProgressBar $progressBar -SearchQuery (Get-ActiveSearchQuery) -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates
+        $wingetCommand = Get-Command winget.exe -ErrorAction SilentlyContinue
+        if (-not $wingetCommand) {
+            $progressBar.CustomText = "Winget wurde nicht gefunden"
+            return
+        }
+        $selectedTools = if ($script:currentDownloadCategory -eq "all") { @(Get-AllTools) } else { @(Get-ToolsByCategory -Category $script:currentDownloadCategory) }
+        $updateCache = Initialize-AvailableUpdatesCache
+        $selectedUpdateIds = @($selectedTools | Where-Object { $_.Winget -and $updateCache.ContainsKey($_.Winget.ToLower()) } | ForEach-Object { $_.Winget })
+        if ($selectedUpdateIds.Count -eq 0) {
+            $progressBar.CustomText = "Keine Updates in der Auswahl"
+            return
+        }
+        $progressBar.CustomText = "Aktualisiere Auswahl..."
+        foreach ($packageId in $selectedUpdateIds) {
+            Start-Process -FilePath $wingetCommand.Source -ArgumentList "upgrade --id $packageId --silent --accept-source-agreements --accept-package-agreements --disable-interactivity" -Wait -WindowStyle Hidden
+        }
+        $null = Initialize-InstalledPackagesCache
+        $null = Initialize-AvailableUpdatesCache -ForceRefresh
+        $null = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category $script:currentDownloadCategory -MainProgressBar $progressBar -ForceRefresh -SearchQuery (Get-ActiveSearchQuery) -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates -StatusFilter $script:statusFilter
+        Update-AvailableUpdatesMarker
     })
-$tooltipObj.SetToolTip($btnFilterUpdates, "Nur Tools mit verfügbaren Updates anzeigen")
+$tooltipObj.SetToolTip($btnFilterUpdates, "Updates der aktuell ausgewählten Kategorie installieren")
 $searchPanel.Controls.Add($btnFilterUpdates)
+
+# Aktionen für die gesamte Tool-Liste
+$btnUpdateAll = New-Object System.Windows.Forms.Button
+$btnUpdateAll.Text = "Alle aktualisieren"
+$btnUpdateAll.Location = New-Object System.Drawing.Point(150, 12)
+$btnUpdateAll.Size = New-Object System.Drawing.Size(130, 25)
+$btnUpdateAll.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+$btnUpdateAll.FlatAppearance.BorderSize = 0
+$btnUpdateAll.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
+$btnUpdateAll.ForeColor = [System.Drawing.Color]::White
+$btnUpdateAll.Font = $updateButtonFont
+$btnUpdateAll.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
+$btnUpdateAll.Cursor = [System.Windows.Forms.Cursors]::Hand
+$btnUpdateAll.Add_Click({
+        if ([string]::IsNullOrWhiteSpace($script:currentDownloadCategory)) { return }
+        $wingetCommand = Get-Command winget.exe -ErrorAction SilentlyContinue
+        if (-not $wingetCommand) {
+            [System.Windows.Forms.MessageBox]::Show(
+                "Winget wurde nicht gefunden.",
+                "Aktualisierung nicht möglich",
+                [System.Windows.Forms.MessageBoxButtons]::OK,
+                [System.Windows.Forms.MessageBoxIcon]::Warning
+            )
+            return
+        }
+
+        $progressBar.CustomText = "Aktualisiere alle Pakete..."
+        $progressBar.TextColor = [System.Drawing.Color]::Yellow
+        $updateProcess = Start-Process -FilePath $wingetCommand.Source -ArgumentList "upgrade --all --silent --accept-source-agreements --accept-package-agreements --disable-interactivity" -Wait -PassThru -WindowStyle Hidden
+        $null = Initialize-InstalledPackagesCache
+        $null = Initialize-AvailableUpdatesCache -ForceRefresh
+        $null = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category $script:currentDownloadCategory -MainProgressBar $progressBar -ForceRefresh -SearchQuery (Get-ActiveSearchQuery) -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates -StatusFilter $script:statusFilter
+        Update-AvailableUpdatesMarker
+        $progressBar.CustomText = if ($updateProcess.ExitCode -eq 0) { "Alle Pakete aktualisiert" } else { "Aktualisierung beendet (Code $($updateProcess.ExitCode))" }
+    })
+$tooltipObj.SetToolTip($btnUpdateAll, "Alle verfügbaren Pakete aktualisieren")
+$searchPanel.Controls.Add($btnUpdateAll)
+
+$btnReloadTools = New-Object System.Windows.Forms.Button
+$btnReloadTools.Text = "Neu laden"
+$btnReloadTools.Location = New-Object System.Drawing.Point(285, 12)
+$btnReloadTools.Size = New-Object System.Drawing.Size(85, 25)
+$btnReloadTools.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+$btnReloadTools.FlatAppearance.BorderSize = 0
+$btnReloadTools.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
+$btnReloadTools.ForeColor = [System.Drawing.Color]::White
+$btnReloadTools.Font = $updateButtonFont
+$btnReloadTools.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
+$btnReloadTools.Cursor = [System.Windows.Forms.Cursors]::Hand
+$btnReloadTools.Add_Click({
+        if ([string]::IsNullOrWhiteSpace($script:currentDownloadCategory)) { return }
+        $progressBar.CustomText = "Lade Tool-Liste neu..."
+        $progressBar.TextColor = [System.Drawing.Color]::White
+        $null = Initialize-InstalledPackagesCache
+        $null = Initialize-AvailableUpdatesCache -ForceRefresh
+        $null = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category $script:currentDownloadCategory -MainProgressBar $progressBar -ForceRefresh -SearchQuery (Get-ActiveSearchQuery) -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates
+        Update-CategoryCounts -SearchQuery (Get-ActiveSearchQuery)
+        Update-AvailableUpdatesMarker
+        $progressBar.CustomText = "Tool-Liste neu geladen"
+    })
+$tooltipObj.SetToolTip($btnReloadTools, "Tool-Liste und Status neu laden")
+$searchPanel.Controls.Add($btnReloadTools)
+
+# Statusfilter für installierte und aktualisierbare Tools
+$script:statusFilter = "All"
+$statusFilterCombo = New-Object System.Windows.Forms.ComboBox
+$statusFilterCombo.Location = New-Object System.Drawing.Point(380, 12)
+$statusFilterCombo.Size = New-Object System.Drawing.Size(130, 25)
+$statusFilterCombo.DropDownStyle = [System.Windows.Forms.ComboBoxStyle]::DropDownList
+$statusFilterCombo.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
+$statusFilterCombo.ForeColor = [System.Drawing.Color]::White
+$statusFilterCombo.Font = $updateButtonFont
+[void]$statusFilterCombo.Items.Add("Alle Tools")
+[void]$statusFilterCombo.Items.Add("Installiert")
+[void]$statusFilterCombo.Items.Add("Aktualisierbar")
+$statusFilterCombo.SelectedIndex = 0
+$statusFilterCombo.Add_SelectedIndexChanged({
+        $script:statusFilter = switch ($statusFilterCombo.SelectedIndex) {
+            1 { "Installed" }
+            2 { "Updates" }
+            default { "All" }
+        }
+        if (-not [string]::IsNullOrWhiteSpace($script:currentDownloadCategory)) {
+            $null = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category $script:currentDownloadCategory -MainProgressBar $progressBar -ForceRefresh -SearchQuery (Get-ActiveSearchQuery) -TileSize $script:currentTileSize -ShowOnlyUpdates $false -StatusFilter $script:statusFilter
+        }
+    })
+$tooltipObj.SetToolTip($statusFilterCombo, "Tools nach Installations- oder Update-Status filtern")
+$searchPanel.Controls.Add($statusFilterCombo)
+
+function Update-AvailableUpdatesMarker {
+    $updateCache = Initialize-AvailableUpdatesCache
+    $updateCount = @($updateCache.Keys).Count
+    if ($updateCount -gt 0) {
+        $btnFilterUpdates.ForeColor = [System.Drawing.Color]::Orange
+        $tooltipText = "$updateCount verfügbare Updates in der Auswahl aktualisieren"
+    } else {
+        $btnFilterUpdates.ForeColor = [System.Drawing.Color]::LightGreen
+        $tooltipText = "Keine Updates verfügbar"
+    }
+    $tooltipObj.SetToolTip($btnFilterUpdates, $tooltipText)
+}
 
 # Info-Text für Suchergebnisse
 $searchResultBox = New-Object System.Windows.Forms.Panel
@@ -4468,6 +4594,7 @@ $searchResultBox.Location = New-Object System.Drawing.Point(520, 10)
 $searchResultBox.Size = New-Object System.Drawing.Size(125, 30)
 $searchResultBox.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
 $searchResultBox.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
+$searchResultBox.Visible = $false
 $searchResultLabel = New-Object System.Windows.Forms.Label
 $searchResultLabel.Location = New-Object System.Drawing.Point(8, 4)
 $searchResultLabel.Size = New-Object System.Drawing.Size(107, 20)
@@ -4476,7 +4603,8 @@ $searchResultLabel.Font = New-Object System.Drawing.Font("Segoe UI", 9)
 $searchResultLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
 $searchResultLabel.Text = ""
 $searchResultBox.Controls.Add($searchResultLabel)
-$searchPanel.Controls.Add($searchResultBox)
+$searchResultBox.Location = New-Object System.Drawing.Point(580, 0)
+$titleBar.Controls.Add($searchResultBox)
 
 # Hilfsfunktion zum Aktualisieren aller Kategorie-Zähler
 function Update-CategoryCounts {
@@ -4539,6 +4667,33 @@ function Update-CategoryCounts {
     $lblCodingToolsCount.Text = "($codingCount)"
 }
 
+function Set-SearchResultStatus {
+    param([int]$ResultCount)
+
+    if ($ResultCount -eq 0) {
+        $searchResultLabel.Text = "Keine Ergebnisse"
+        $searchResultLabel.ForeColor = [System.Drawing.Color]::Salmon
+        $progressBar.CustomText = "Suche: Keine Ergebnisse"
+        $progressBar.TextColor = [System.Drawing.Color]::Salmon
+        $global:progressBarPostText = "Suche: Keine Ergebnisse"
+        $global:progressBarPostColor = [System.Drawing.Color]::Salmon
+    } elseif ($ResultCount -eq 1) {
+        $searchResultLabel.Text = "1 Tool gefunden"
+        $searchResultLabel.ForeColor = [System.Drawing.Color]::LightGreen
+        $progressBar.CustomText = "Suche: 1 Tool gefunden"
+        $progressBar.TextColor = [System.Drawing.Color]::LightGreen
+        $global:progressBarPostText = "Suche: 1 Tool gefunden"
+        $global:progressBarPostColor = [System.Drawing.Color]::LightGreen
+    } else {
+        $searchResultLabel.Text = "$ResultCount Tools gefunden"
+        $searchResultLabel.ForeColor = [System.Drawing.Color]::LightGreen
+        $progressBar.CustomText = "Suche: $ResultCount Tools gefunden"
+        $progressBar.TextColor = [System.Drawing.Color]::LightGreen
+        $global:progressBarPostText = "Suche: $ResultCount Tools gefunden"
+        $global:progressBarPostColor = [System.Drawing.Color]::LightGreen
+    }
+}
+
 # TextChanged-Event für Echtzeit-Suche
 $searchTextBox.Add_TextChanged({
         $searchQuery = Get-ActiveSearchQuery
@@ -4558,28 +4713,27 @@ $searchTextBox.Add_TextChanged({
         # Aktualisiere Suchergebnis-Label und Tool-Anzeige
         if ([string]::IsNullOrWhiteSpace($searchQuery)) {
             $searchResultLabel.Text = ""
+            $progressBar.CustomText = "Bereit"
+            $progressBar.TextColor = [System.Drawing.Color]::White
+            $global:progressBarPostText = "Bereit"
+            $global:progressBarPostColor = [System.Drawing.Color]::White
             # Zeige alle Tools ohne Filter
-            $resultCount = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category $script:currentDownloadCategory -MainProgressBar $progressBar -SearchQuery "" -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates
+            $resultCount = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category $script:currentDownloadCategory -MainProgressBar $progressBar -SearchQuery "" -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates -StatusFilter $script:statusFilter
         } elseif ($searchQuery.Length -lt 3) {
             # Zu kurzer Suchbegriff
             $searchResultLabel.Text = "Mindestens 3 Zeichen eingeben"
             $searchResultLabel.ForeColor = [System.Drawing.Color]::Orange
+            $progressBar.CustomText = "Suche: Mindestens 3 Zeichen eingeben"
+            $progressBar.TextColor = [System.Drawing.Color]::Orange
+            $global:progressBarPostText = "Suche: Mindestens 3 Zeichen eingeben"
+            $global:progressBarPostColor = [System.Drawing.Color]::Orange
             # Übergebe den aktuellen Suchbegriff, damit Update-ToolsDisplay die Tools ausblendet
-            $resultCount = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category $script:currentDownloadCategory -MainProgressBar $progressBar -SearchQuery $searchQuery -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates
+            $resultCount = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category $script:currentDownloadCategory -MainProgressBar $progressBar -SearchQuery $searchQuery -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates -StatusFilter $script:statusFilter
         } else {
             # Suche mit mindestens 3 Zeichen
-            $resultCount = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category $script:currentDownloadCategory -MainProgressBar $progressBar -SearchQuery $searchQuery -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates
+            $resultCount = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category $script:currentDownloadCategory -MainProgressBar $progressBar -SearchQuery $searchQuery -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates -StatusFilter $script:statusFilter
         
-            if ($resultCount -eq 0) {
-                $searchResultLabel.Text = "Keine Ergebnisse gefunden"
-                $searchResultLabel.ForeColor = [System.Drawing.Color]::Salmon
-            } elseif ($resultCount -eq 1) {
-                $searchResultLabel.Text = "1 Tool gefunden"
-                $searchResultLabel.ForeColor = [System.Drawing.Color]::LightGreen
-            } else {
-                $searchResultLabel.Text = "$resultCount Tools gefunden"
-                $searchResultLabel.ForeColor = [System.Drawing.Color]::LightGreen
-            }
+            Set-SearchResultStatus -ResultCount $resultCount
         }
     
         # Aktualisiere Kategorie-Zähler
@@ -7412,7 +7566,9 @@ $downloadsPanel = New-CollapsiblePanel -Title "Tool-Downloads" -YPosition 157 -T
     
     # Suchfeld im mainContentPanel einblenden
     if ($searchPanel) { $searchPanel.Visible = $true }
-    $searchBoxWrapper.Visible = $false
+    $searchBoxWrapper.Visible = $true
+    $searchResultBox.Visible = $false
+    Set-SearchCueText ""
     Update-SearchModeLabel
 
     # Abhängigkeits-Tabelle ausblenden
@@ -7572,6 +7728,8 @@ $btnAllTools.Add_Click({
         # Suchfeld einblenden
         if ($searchPanel) { $searchPanel.Visible = $true }
         $searchBoxWrapper.Visible = $true
+        $searchResultBox.Visible = $true
+        Set-SearchCueText "Nach Paketen suchen"
     
         # mainContentPanel-Panels ausblenden
         if ($global:tblSystem) { $global:tblSystem.Visible = $false }
@@ -7586,13 +7744,17 @@ $btnAllTools.Add_Click({
     
         # Aktuelle Kategorie speichern
         $script:currentDownloadCategory = "all"
+        $searchResultBox.Visible = $true
+        Set-SearchCueText "Nach Paketen suchen"
         Update-SearchModeLabel
     
         # Buttons hervorheben/zurücksetzen
         Reset-DownloadCategoryButtons -ActiveCategory "all"
     
         # Tools mit Installationsüberprüfung anzeigen und Progressbar aktualisieren
-        $null = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category "all" -MainProgressBar $progressBar -SearchQuery (Get-ActiveSearchQuery) -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates
+        $resultCount = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category "all" -MainProgressBar $progressBar -SearchQuery (Get-ActiveSearchQuery) -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates -StatusFilter $script:statusFilter
+        if (-not [string]::IsNullOrWhiteSpace((Get-ActiveSearchQuery))) { Set-SearchResultStatus -ResultCount $resultCount }
+        Update-AvailableUpdatesMarker
     })
 $downloadsPanel.Content.Controls.Add($btnAllTools)
 
@@ -7647,13 +7809,17 @@ $btnSystemTools.Add_Click({
         # Aktuelle Kategorie speichern
         $script:currentDownloadCategory = "system"
         $searchBoxWrapper.Visible = $true
+        $searchResultBox.Visible = $true
+        Set-SearchCueText "Nach Paketen suchen"
         Update-SearchModeLabel
     
         # Buttons hervorheben/zurücksetzen
         Reset-DownloadCategoryButtons -ActiveCategory "system"
     
         # Tools mit Installationsüberprüfung anzeigen und Progressbar aktualisieren
-        $null = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category "system" -MainProgressBar $progressBar -SearchQuery (Get-ActiveSearchQuery) -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates
+        $resultCount = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category "system" -MainProgressBar $progressBar -SearchQuery (Get-ActiveSearchQuery) -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates -StatusFilter $script:statusFilter
+        if (-not [string]::IsNullOrWhiteSpace((Get-ActiveSearchQuery))) { Set-SearchResultStatus -ResultCount $resultCount }
+        Update-AvailableUpdatesMarker
     })
 $downloadsPanel.Content.Controls.Add($btnSystemTools)
 
@@ -7708,13 +7874,17 @@ $btnApplications.Add_Click({
         # Aktuelle Kategorie speichern
         $script:currentDownloadCategory = "applications"
         $searchBoxWrapper.Visible = $true
+        $searchResultBox.Visible = $true
+        Set-SearchCueText "Nach Paketen suchen"
         Update-SearchModeLabel
     
         # Buttons hervorheben/zurücksetzen
         Reset-DownloadCategoryButtons -ActiveCategory "applications"
     
         # Tools mit Installationsüberprüfung anzeigen und Progressbar aktualisieren
-        $null = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category "applications" -MainProgressBar $progressBar -SearchQuery (Get-ActiveSearchQuery) -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates
+        $resultCount = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category "applications" -MainProgressBar $progressBar -SearchQuery (Get-ActiveSearchQuery) -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates -StatusFilter $script:statusFilter
+        if (-not [string]::IsNullOrWhiteSpace((Get-ActiveSearchQuery))) { Set-SearchResultStatus -ResultCount $resultCount }
+        Update-AvailableUpdatesMarker
     })
 $downloadsPanel.Content.Controls.Add($btnApplications)
 
@@ -7769,13 +7939,17 @@ $btnAudioTV.Add_Click({
         # Aktuelle Kategorie speichern
         $script:currentDownloadCategory = "audiotv"
         $searchBoxWrapper.Visible = $true
+        $searchResultBox.Visible = $true
+        Set-SearchCueText "Nach Paketen suchen"
         Update-SearchModeLabel
     
         # Buttons hervorheben/zurücksetzen
         Reset-DownloadCategoryButtons -ActiveCategory "audiotv"
     
         # Tools mit Installationsüberprüfung anzeigen und Progressbar aktualisieren
-        $null = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category "audiotv" -MainProgressBar $progressBar -SearchQuery (Get-ActiveSearchQuery) -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates
+        $resultCount = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category "audiotv" -MainProgressBar $progressBar -SearchQuery (Get-ActiveSearchQuery) -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates -StatusFilter $script:statusFilter
+        if (-not [string]::IsNullOrWhiteSpace((Get-ActiveSearchQuery))) { Set-SearchResultStatus -ResultCount $resultCount }
+        Update-AvailableUpdatesMarker
     })
 $downloadsPanel.Content.Controls.Add($btnAudioTV)
 
@@ -7830,13 +8004,17 @@ $btnCodingTools.Add_Click({
         # Aktuelle Kategorie speichern
         $script:currentDownloadCategory = "coding"
         $searchBoxWrapper.Visible = $true
+        $searchResultBox.Visible = $true
+        Set-SearchCueText "Nach Paketen suchen"
         Update-SearchModeLabel
     
         # Buttons hervorheben/zurücksetzen
         Reset-DownloadCategoryButtons -ActiveCategory "coding"
     
         # Tools mit Installationsüberprüfung anzeigen und Progressbar aktualisieren
-        $null = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category "coding" -MainProgressBar $progressBar -SearchQuery (Get-ActiveSearchQuery) -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates
+        $resultCount = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category "coding" -MainProgressBar $progressBar -SearchQuery (Get-ActiveSearchQuery) -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates -StatusFilter $script:statusFilter
+        if (-not [string]::IsNullOrWhiteSpace((Get-ActiveSearchQuery))) { Set-SearchResultStatus -ResultCount $resultCount }
+        Update-AvailableUpdatesMarker
     })
 $downloadsPanel.Content.Controls.Add($btnCodingTools)
 

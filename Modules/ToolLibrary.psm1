@@ -2955,6 +2955,10 @@ function Update-ToolsDisplay {
         [bool]$ShowOnlyUpdates = $false,
 
         [Parameter(Mandatory = $false)]
+        [ValidateSet("All", "Installed", "Updates")]
+        [string]$StatusFilter = "All",
+
+        [Parameter(Mandatory = $false)]
         [string]$PostStatusText = "Bereit",
 
         [Parameter(Mandatory = $false)]
@@ -3209,6 +3213,7 @@ function Update-ToolsDisplay {
         "UseCache"        = $useCachedTools
         "TileSize"        = $TileSize
         "ShowOnlyUpdates" = $ShowOnlyUpdates
+        "StatusFilter"    = $StatusFilter
         "PostStatusText"  = $PostStatusText
         "PostStatusColor" = $PostStatusColor
     }
@@ -3223,6 +3228,7 @@ function Update-ToolsDisplay {
             $useCache = $this.Tag.UseCache
             $TileSize = $this.Tag.TileSize
             $ShowOnlyUpdates = $this.Tag.ShowOnlyUpdates
+            $StatusFilter = $this.Tag.StatusFilter
             $PostStatusText = $this.Tag.PostStatusText
             $PostStatusColor = $this.Tag.PostStatusColor
         
@@ -3290,9 +3296,9 @@ function Update-ToolsDisplay {
                 
                     # Nur verarbeiten, wenn das Tool nicht null ist
                     if ($null -ne $tool) {
-                        # Prüfe ob Update-Filter aktiv ist
+                        # Prüfe die gewählte Statusfilterung
                         $shouldDisplay = $true
-                        if ($ShowOnlyUpdates) {
+                        if ($ShowOnlyUpdates -or $StatusFilter -eq "Updates") {
                             # Prüfe ob Tool installiert ist und Update verfügbar
                             if ($tool.Winget) {
                                 $isInstalled = Test-ToolInstalled -Tool $tool
@@ -3305,6 +3311,8 @@ function Update-ToolsDisplay {
                             } else {
                                 $shouldDisplay = $false
                             }
+                        } elseif ($StatusFilter -eq "Installed") {
+                            $shouldDisplay = Test-ToolInstalled -Tool $tool
                         }
                     
                         # Tool nur anzeigen wenn Filter-Bedingung erfüllt
