@@ -32,6 +32,22 @@ try {
 Add-Type -AssemblyName System.Drawing
 Add-Type -AssemblyName System.Windows.Forms
 
+if (-not ([System.Management.Automation.PSTypeName]'SearchCueBanner').Type) {
+    Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+
+public static class SearchCueBanner {
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, string lParam);
+
+    public static void Set(IntPtr handle, string text) {
+        SendMessage(handle, 0x1501, IntPtr.Zero, text);
+    }
+}
+"@ -ErrorAction SilentlyContinue
+}
+
 
 
 # WinAPI für internen RichTextBox-Einzug (EM_SETRECT)
@@ -4286,7 +4302,7 @@ $btnLargeTiles.Add_Click({
         }
         $script:currentTileSize = "Large"
         Update-TileViewButtons
-        $null = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category $script:currentDownloadCategory -MainProgressBar $progressBar -SearchQuery $searchTextBox.Text -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates
+        $null = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category $script:currentDownloadCategory -MainProgressBar $progressBar -SearchQuery (Get-ActiveSearchQuery) -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates
     })
 $tooltipObj.SetToolTip($btnLargeTiles, "Große Kacheln")
 $searchPanel.Controls.Add($btnLargeTiles)
@@ -4310,7 +4326,7 @@ $btnMediumTiles.Add_Click({
         }
         $script:currentTileSize = "Medium"
         Update-TileViewButtons
-        $null = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category $script:currentDownloadCategory -MainProgressBar $progressBar -SearchQuery $searchTextBox.Text -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates
+        $null = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category $script:currentDownloadCategory -MainProgressBar $progressBar -SearchQuery (Get-ActiveSearchQuery) -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates
     })
 $tooltipObj.SetToolTip($btnMediumTiles, "Mittlere Kacheln (Standard)")
 $searchPanel.Controls.Add($btnMediumTiles)
@@ -4334,7 +4350,7 @@ $btnListView.Add_Click({
         }
         $script:currentTileSize = "List"
         Update-TileViewButtons
-        $null = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category $script:currentDownloadCategory -MainProgressBar $progressBar -SearchQuery $searchTextBox.Text -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates
+        $null = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category $script:currentDownloadCategory -MainProgressBar $progressBar -SearchQuery (Get-ActiveSearchQuery) -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates
     })
 $tooltipObj.SetToolTip($btnListView, "Listen-Ansicht")
 $searchPanel.Controls.Add($btnListView)
@@ -4379,6 +4395,9 @@ $searchTextBox.BackColor = [System.Drawing.Color]::FromArgb(55, 55, 58)
 $searchTextBox.ForeColor = [System.Drawing.Color]::White
 $searchTextBox.BorderStyle = [System.Windows.Forms.BorderStyle]::None
 $searchBoxWrapper.Controls.Add($searchTextBox)
+$searchTextBox.Add_HandleCreated({
+        [SearchCueBanner]::Set($searchTextBox.Handle, "Nach Paketen suchen")
+    })
 
 # Clear-Button (innerhalb des Wrappers, am rechten Rand)
 $searchClearButton = New-Object System.Windows.Forms.Button
@@ -4405,26 +4424,17 @@ $searchBoxWrapper.Size = New-Object System.Drawing.Size(340, 26)
 $searchTextBox.Location = New-Object System.Drawing.Point(8, 2)
 $searchTextBox.Size = New-Object System.Drawing.Size(296, 22)
 $searchClearButton.Location = New-Object System.Drawing.Point(308, 0)
+$searchBoxWrapper.Visible = $false
 $titleBar.Controls.Add($searchBoxWrapper)
 
-# Zeigt den aktuell passenden Suchkontext direkt neben dem Eingabefeld an.
-$titleSearchModeLabel = New-Object System.Windows.Forms.Label
-$titleSearchModeLabel.Text = "Lokale Suche"
-$titleSearchModeLabel.Location = New-Object System.Drawing.Point(575, 6)
-$titleSearchModeLabel.Size = New-Object System.Drawing.Size(125, 18)
-$titleSearchModeLabel.ForeColor = [System.Drawing.Color]::FromArgb(160, 160, 160)
-$titleSearchModeLabel.Font = New-Object System.Drawing.Font("Segoe UI", 8)
-$titleSearchModeLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
-$titleBar.Controls.Add($titleSearchModeLabel)
-
 function Update-SearchModeLabel {
-    if ($titleSearchModeLabel -and -not [string]::IsNullOrWhiteSpace($script:currentDownloadCategory)) {
-        $titleSearchModeLabel.Text = "Paketsuche"
+    if ($searchTextBox) {
         $searchTextBox.AccessibleName = "Paketsuche"
-    } elseif ($titleSearchModeLabel) {
-        $titleSearchModeLabel.Text = "Lokale Suche"
-        $searchTextBox.AccessibleName = "Lokale Suche"
     }
+}
+
+function Get-ActiveSearchQuery {
+    return $searchTextBox.Text
 }
 
 # Filter-Button für Updates
@@ -4447,19 +4457,26 @@ $btnFilterUpdates.Add_Click({
         }
         $script:showOnlyUpdates = -not $script:showOnlyUpdates
         $this.BackColor = if ($script:showOnlyUpdates) { [System.Drawing.Color]::FromArgb(255, 140, 0) } else { [System.Drawing.Color]::FromArgb(43, 43, 43) }
-        $null = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category $script:currentDownloadCategory -MainProgressBar $progressBar -SearchQuery $searchTextBox.Text -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates
+        $null = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category $script:currentDownloadCategory -MainProgressBar $progressBar -SearchQuery (Get-ActiveSearchQuery) -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates
     })
 $tooltipObj.SetToolTip($btnFilterUpdates, "Nur Tools mit verfügbaren Updates anzeigen")
 $searchPanel.Controls.Add($btnFilterUpdates)
 
 # Info-Text für Suchergebnisse
+$searchResultBox = New-Object System.Windows.Forms.Panel
+$searchResultBox.Location = New-Object System.Drawing.Point(520, 10)
+$searchResultBox.Size = New-Object System.Drawing.Size(125, 30)
+$searchResultBox.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
+$searchResultBox.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
 $searchResultLabel = New-Object System.Windows.Forms.Label
-$searchResultLabel.Location = New-Object System.Drawing.Point(520, 15)
-$searchResultLabel.Size = New-Object System.Drawing.Size(200, 20)
+$searchResultLabel.Location = New-Object System.Drawing.Point(8, 4)
+$searchResultLabel.Size = New-Object System.Drawing.Size(107, 20)
 $searchResultLabel.ForeColor = [System.Drawing.Color]::Gray
 $searchResultLabel.Font = New-Object System.Drawing.Font("Segoe UI", 9)
+$searchResultLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
 $searchResultLabel.Text = ""
-$searchPanel.Controls.Add($searchResultLabel)
+$searchResultBox.Controls.Add($searchResultLabel)
+$searchPanel.Controls.Add($searchResultBox)
 
 # Hilfsfunktion zum Aktualisieren aller Kategorie-Zähler
 function Update-CategoryCounts {
@@ -4524,14 +4541,19 @@ function Update-CategoryCounts {
 
 # TextChanged-Event für Echtzeit-Suche
 $searchTextBox.Add_TextChanged({
-    Update-SearchModeLabel
+        $searchQuery = Get-ActiveSearchQuery
 
-        # Nur ausführen, wenn eine Kategorie gewählt wurde
+        # Die zentrale Suche öffnet bei einem gültigen Begriff automatisch die Toolsuche.
         if ([string]::IsNullOrWhiteSpace($script:currentDownloadCategory)) {
-            return
+            if ($searchQuery.Length -lt 3) {
+                return
+            }
+            $script:currentDownloadCategory = "all"
+            if ($searchPanel) { $searchPanel.Visible = $true }
+            $searchBoxWrapper.Visible = $true
+            Switch-OutputView -viewName "downloadsView"
+            Update-SearchModeLabel
         }
-    
-        $searchQuery = $searchTextBox.Text
     
         # Aktualisiere Suchergebnis-Label und Tool-Anzeige
         if ([string]::IsNullOrWhiteSpace($searchQuery)) {
@@ -7390,6 +7412,7 @@ $downloadsPanel = New-CollapsiblePanel -Title "Tool-Downloads" -YPosition 157 -T
     
     # Suchfeld im mainContentPanel einblenden
     if ($searchPanel) { $searchPanel.Visible = $true }
+    $searchBoxWrapper.Visible = $false
     Update-SearchModeLabel
 
     # Abhängigkeits-Tabelle ausblenden
@@ -7548,6 +7571,7 @@ $btnAllTools.Add_Click({
     
         # Suchfeld einblenden
         if ($searchPanel) { $searchPanel.Visible = $true }
+        $searchBoxWrapper.Visible = $true
     
         # mainContentPanel-Panels ausblenden
         if ($global:tblSystem) { $global:tblSystem.Visible = $false }
@@ -7568,7 +7592,7 @@ $btnAllTools.Add_Click({
         Reset-DownloadCategoryButtons -ActiveCategory "all"
     
         # Tools mit Installationsüberprüfung anzeigen und Progressbar aktualisieren
-        $null = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category "all" -MainProgressBar $progressBar -SearchQuery $searchTextBox.Text -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates
+        $null = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category "all" -MainProgressBar $progressBar -SearchQuery (Get-ActiveSearchQuery) -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates
     })
 $downloadsPanel.Content.Controls.Add($btnAllTools)
 
@@ -7622,13 +7646,14 @@ $btnSystemTools.Add_Click({
     
         # Aktuelle Kategorie speichern
         $script:currentDownloadCategory = "system"
+        $searchBoxWrapper.Visible = $true
         Update-SearchModeLabel
     
         # Buttons hervorheben/zurücksetzen
         Reset-DownloadCategoryButtons -ActiveCategory "system"
     
         # Tools mit Installationsüberprüfung anzeigen und Progressbar aktualisieren
-        $null = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category "system" -MainProgressBar $progressBar -SearchQuery $searchTextBox.Text -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates
+        $null = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category "system" -MainProgressBar $progressBar -SearchQuery (Get-ActiveSearchQuery) -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates
     })
 $downloadsPanel.Content.Controls.Add($btnSystemTools)
 
@@ -7682,13 +7707,14 @@ $btnApplications.Add_Click({
     
         # Aktuelle Kategorie speichern
         $script:currentDownloadCategory = "applications"
+        $searchBoxWrapper.Visible = $true
         Update-SearchModeLabel
     
         # Buttons hervorheben/zurücksetzen
         Reset-DownloadCategoryButtons -ActiveCategory "applications"
     
         # Tools mit Installationsüberprüfung anzeigen und Progressbar aktualisieren
-        $null = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category "applications" -MainProgressBar $progressBar -SearchQuery $searchTextBox.Text -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates
+        $null = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category "applications" -MainProgressBar $progressBar -SearchQuery (Get-ActiveSearchQuery) -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates
     })
 $downloadsPanel.Content.Controls.Add($btnApplications)
 
@@ -7742,13 +7768,14 @@ $btnAudioTV.Add_Click({
     
         # Aktuelle Kategorie speichern
         $script:currentDownloadCategory = "audiotv"
+        $searchBoxWrapper.Visible = $true
         Update-SearchModeLabel
     
         # Buttons hervorheben/zurücksetzen
         Reset-DownloadCategoryButtons -ActiveCategory "audiotv"
     
         # Tools mit Installationsüberprüfung anzeigen und Progressbar aktualisieren
-        $null = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category "audiotv" -MainProgressBar $progressBar -SearchQuery $searchTextBox.Text -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates
+        $null = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category "audiotv" -MainProgressBar $progressBar -SearchQuery (Get-ActiveSearchQuery) -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates
     })
 $downloadsPanel.Content.Controls.Add($btnAudioTV)
 
@@ -7802,13 +7829,14 @@ $btnCodingTools.Add_Click({
     
         # Aktuelle Kategorie speichern
         $script:currentDownloadCategory = "coding"
+        $searchBoxWrapper.Visible = $true
         Update-SearchModeLabel
     
         # Buttons hervorheben/zurücksetzen
         Reset-DownloadCategoryButtons -ActiveCategory "coding"
     
         # Tools mit Installationsüberprüfung anzeigen und Progressbar aktualisieren
-        $null = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category "coding" -MainProgressBar $progressBar -SearchQuery $searchTextBox.Text -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates
+        $null = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category "coding" -MainProgressBar $progressBar -SearchQuery (Get-ActiveSearchQuery) -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates
     })
 $downloadsPanel.Content.Controls.Add($btnCodingTools)
 
