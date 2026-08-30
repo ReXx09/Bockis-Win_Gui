@@ -1027,6 +1027,80 @@ $mainform.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::None  # Kein
 $mainform.MinimumSize = New-Object System.Drawing.Size(1000, 800)
 $mainform.BackColor = $script:BgColor
 
+function Show-DarkConfirmationDialog {
+    param(
+        [string]$Message,
+        [string]$Title = "Bestätigung",
+        [System.Windows.Forms.MessageBoxIcon]$Icon = [System.Windows.Forms.MessageBoxIcon]::Question,
+        [System.Windows.Forms.Form]$Owner = $null
+    )
+
+    $dialog = New-Object System.Windows.Forms.Form
+    $dialog.Text = $Title
+    $dialog.ClientSize = New-Object System.Drawing.Size(500, 240)
+    $dialog.AutoScaleMode = [System.Windows.Forms.AutoScaleMode]::None
+    $dialog.StartPosition = if ($Owner) { [System.Windows.Forms.FormStartPosition]::CenterParent } else { [System.Windows.Forms.FormStartPosition]::CenterScreen }
+    $dialog.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedDialog
+    $dialog.MaximizeBox = $false
+    $dialog.MinimizeBox = $false
+    $dialog.ShowInTaskbar = $false
+    $dialog.BackColor = [System.Drawing.Color]::FromArgb(30, 30, 30)
+    $dialog.ForeColor = [System.Drawing.Color]::FromArgb(235, 235, 235)
+
+    $accentColor = if ($Icon -eq [System.Windows.Forms.MessageBoxIcon]::Warning) {
+        [System.Drawing.Color]::FromArgb(232, 163, 58)
+    } else {
+        [System.Drawing.Color]::FromArgb(0, 122, 204)
+    }
+
+    $accent = New-Object System.Windows.Forms.Panel
+    $accent.Location = New-Object System.Drawing.Point(0, 0)
+    $accent.Size = New-Object System.Drawing.Size(500, 4)
+    $accent.BackColor = $accentColor
+    $dialog.Controls.Add($accent)
+
+    $messageLabel = New-Object System.Windows.Forms.Label
+    $messageLabel.Location = New-Object System.Drawing.Point(28, 25)
+    $messageLabel.Size = New-Object System.Drawing.Size(444, 135)
+    $messageLabel.Text = $Message
+    $messageLabel.Font = New-Object System.Drawing.Font("Segoe UI", 10)
+    $messageLabel.ForeColor = [System.Drawing.Color]::FromArgb(235, 235, 235)
+    $messageLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
+    $messageLabel.AutoEllipsis = $false
+    $dialog.Controls.Add($messageLabel)
+
+    $yesButton = New-Object System.Windows.Forms.Button
+    $yesButton.Text = "Ja"
+    $yesButton.Location = New-Object System.Drawing.Point(292, 195)
+    $yesButton.Size = New-Object System.Drawing.Size(92, 32)
+    $yesButton.DialogResult = [System.Windows.Forms.DialogResult]::Yes
+    $yesButton.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+    $yesButton.FlatAppearance.BorderSize = 0
+    $yesButton.BackColor = $accentColor
+    $yesButton.ForeColor = [System.Drawing.Color]::White
+    $yesButton.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+    $dialog.Controls.Add($yesButton)
+
+    $noButton = New-Object System.Windows.Forms.Button
+    $noButton.Text = "Nein"
+    $noButton.Location = New-Object System.Drawing.Point(392, 195)
+    $noButton.Size = New-Object System.Drawing.Size(92, 32)
+    $noButton.DialogResult = [System.Windows.Forms.DialogResult]::No
+    $noButton.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+    $noButton.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(90, 90, 90)
+    $noButton.BackColor = [System.Drawing.Color]::FromArgb(55, 55, 55)
+    $noButton.ForeColor = [System.Drawing.Color]::FromArgb(235, 235, 235)
+    $noButton.Font = New-Object System.Drawing.Font("Segoe UI", 9)
+    $dialog.Controls.Add($noButton)
+
+    $dialog.AcceptButton = $yesButton
+    $dialog.CancelButton = $noButton
+    if ($Owner) {
+        return $dialog.ShowDialog($Owner)
+    }
+    return $dialog.ShowDialog()
+}
+
 # DoubleBuffered via Reflection – verhindert weißes Flackern bei Fokus-Wechsel
 $mainform.GetType().GetProperty('DoubleBuffered',
     [System.Reflection.BindingFlags]::Instance -bor [System.Reflection.BindingFlags]::NonPublic
@@ -2603,12 +2677,7 @@ function Show-ExtensionTiles {
                 return
             }
 
-                $confirmResult = [System.Windows.Forms.MessageBox]::Show(
-                    "Soll die Erweiterung '$($itemSnapshot.Title)' wirklich deinstalliert werden?",
-                    'Erweiterung deinstallieren',
-                    [System.Windows.Forms.MessageBoxButtons]::YesNo,
-                    [System.Windows.Forms.MessageBoxIcon]::Question
-                )
+                $confirmResult = Show-DarkConfirmationDialog -Message "Soll die Erweiterung '$($itemSnapshot.Title)' wirklich deinstalliert werden?" -Title 'Erweiterung deinstallieren' -Icon ([System.Windows.Forms.MessageBoxIcon]::Question) -Owner $mainform
 
                 if ($confirmResult -ne [System.Windows.Forms.DialogResult]::Yes) {
                     return
@@ -4766,10 +4835,6 @@ function New-CollapsiblePanel {
     $container = New-Object System.Windows.Forms.Panel
     $container.Location = New-Object System.Drawing.Point(5, $YPosition)
     $container.Size = New-Object System.Drawing.Size(210, 35)  # Initial nur Header sichtbar
-    $container.BackColor = $script:BgColor
-    $container.Tag = $Tag
-    
-    # DoubleBuffered via Reflection – verhindert weißes Flackern bei Fokus-Wechsel
     $null = [System.Windows.Forms.Control].GetProperty('DoubleBuffered',
         [System.Reflection.BindingFlags]::Instance -bor [System.Reflection.BindingFlags]::NonPublic
     ).SetValue($container, $true, $null)
@@ -5022,11 +5087,7 @@ function New-HorizontalCollapsiblePanel {
     # Container für den gesamten zusammenklappbaren Bereich
     $container = New-Object System.Windows.Forms.Panel
     $container.Location = New-Object System.Drawing.Point($XPosition, 5)
-    $container.Size = New-Object System.Drawing.Size(155, 35)  # Höhe 35px für horizontal
     $container.BackColor = $script:BgColor
-    $container.Tag = $Tag
-    
-    # DoubleBuffered via Reflection – verhindert weißes Flackern bei Fokus-Wechsel
     $null = [System.Windows.Forms.Control].GetProperty('DoubleBuffered',
         [System.Reflection.BindingFlags]::Instance -bor [System.Reflection.BindingFlags]::NonPublic
     ).SetValue($container, $true, $null)
@@ -5957,12 +6018,7 @@ $btnStartSmartRepair.Add_Click({
                 if ($smartResult.NeedsChkdsk) { $repairMsg += "  ‣  CHKDSK              (Datenträgerprüfung)`r`n" }
                 $repairMsg += "`r`nDiese Scans finden Sie unter 'Diagnose & Reparatur'.`r`nJetzt dorthin navigieren?"
 
-                $repairChoice = [System.Windows.Forms.MessageBox]::Show(
-                    $repairMsg,
-                    "Tiefergehende Scans empfohlen",
-                    [System.Windows.Forms.MessageBoxButtons]::YesNo,
-                    [System.Windows.Forms.MessageBoxIcon]::Information
-                )
+                $repairChoice = Show-DarkConfirmationDialog -Message $repairMsg -Title "Tiefergehende Scans empfohlen" -Icon ([System.Windows.Forms.MessageBoxIcon]::Information) -Owner $mainform
 
                 if ($repairChoice -eq [System.Windows.Forms.DialogResult]::Yes) {
                     # Disk-Panel aufklappen (enthält DISM, CHKDSK, SFC)
@@ -8129,12 +8185,8 @@ $btnGUIReload.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Draw
 $btnGUIReload.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
 Add-ButtonIcon -Button $btnGUIReload -IconCode 0xE72C -IconSize 12 -LeftMargin 10
 $btnGUIReload.Add_Click({
-        $confirmReload = [System.Windows.Forms.MessageBox]::Show(
-            "Die GUI wird neugeladen.`n`nAlle aktuellen Vorgänge werden abgebrochen.`n`nMöchten Sie fortfahren?",
-            "GUI neuladen",
-            [System.Windows.Forms.MessageBoxButtons]::YesNo,
-            [System.Windows.Forms.MessageBoxIcon]::Question
-        )
+    $confirmReloadMessage = "Die GUI wird neugeladen.`n`nAlle aktuellen Vorgänge werden abgebrochen.`n`nMöchten Sie fortfahren?"
+    $confirmReload = Show-DarkConfirmationDialog -Message $confirmReloadMessage -Title "GUI neuladen" -Icon ([System.Windows.Forms.MessageBoxIcon]::Question) -Owner $mainform
 
         if ($confirmReload -eq [System.Windows.Forms.DialogResult]::Yes) {
             Update-LogFile -Message "GUI-Reload wurde vom Benutzer initiiert"
@@ -8157,12 +8209,8 @@ $btnSystemRestart.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.
 $btnSystemRestart.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
 Add-ButtonIcon -Button $btnSystemRestart -IconCode 0xE7E8 -IconSize 12 -LeftMargin 10
 $btnSystemRestart.Add_Click({
-        $result = [System.Windows.Forms.MessageBox]::Show(
-            "WARNUNG: Der Computer wird neu gestartet.`n`nBitte speichern Sie alle offenen Dokumente und schließen Sie alle Programme.`n`nMöchten Sie den Neustart jetzt durchführen?",
-            "System Neustart",
-            [System.Windows.Forms.MessageBoxButtons]::YesNo,
-            [System.Windows.Forms.MessageBoxIcon]::Warning
-        )
+    $restartConfirmMessage = "WARNUNG: Der Computer wird neu gestartet.`n`nBitte speichern Sie alle offenen Dokumente und schließen Sie alle Programme.`n`nMöchten Sie den Neustart jetzt durchführen?"
+    $result = Show-DarkConfirmationDialog -Message $restartConfirmMessage -Title "System Neustart" -Icon ([System.Windows.Forms.MessageBoxIcon]::Warning) -Owner $mainform
 
         if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
             $script:countdownSeconds = 10
@@ -8223,18 +8271,16 @@ Add-ButtonIcon -Button $btnSafeModeRestart -IconCode 0xE83D -IconSize 12 -LeftMa
 
 $btnSafeModeRestart.Add_Click({
 
-        $result = [System.Windows.Forms.MessageBox]::Show(
+    $safeModeConfirmMessage = (
             "Das System wird neu gestartet und zeigt die Starteinstellungen.`n`n" +
             "Drücken Sie dann F4 für den abgesicherten Modus.`n`n" +
             "✓ Funktioniert mit GRUB/Dual-Boot`n" +
             "✓ Automatisch einmalig (kein Häkchen)`n" +
             "✓ Nur 1x F4 drücken - fertig!`n`n" +
             "Bitte speichern Sie alle offenen Dokumente.`n`n" +
-            "Möchten Sie fortfahren?",
-            "Starteinstellungen",
-            [System.Windows.Forms.MessageBoxButtons]::YesNo,
-            [System.Windows.Forms.MessageBoxIcon]::Information
+            "Möchten Sie fortfahren?"
         )
+        $result = Show-DarkConfirmationDialog -Message $safeModeConfirmMessage -Title "Starteinstellungen" -Icon ([System.Windows.Forms.MessageBoxIcon]::Information) -Owner $mainform
 
         if ($result -ne [System.Windows.Forms.DialogResult]::Yes) {
             return
@@ -8324,12 +8370,6 @@ function Switch-OutputView {
     # Vorherige Buttons zurücksetzen
     $btnOutput.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
     $btnOutput.ForeColor = [System.Drawing.Color]::White
-    $btnToolDownloads.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
-    $btnToolDownloads.ForeColor = [System.Drawing.Color]::White
-    
-    # Alle Panels ausblenden
-    $outputViewPanel.Visible = $false
-    $statusViewPanel.Visible = $false
     $hardwareViewPanel.Visible = $false
     $toolInfoViewPanel.Visible = $false
     $downloadsViewPanel.Visible = $false
@@ -9176,12 +9216,7 @@ $btnWinUpdate.Add_Click({
             }
 
             # Nach dem Scan: Nutzer fragen, ob das Windows-Update-Fenster geöffnet werden soll
-            $result = [System.Windows.Forms.MessageBox]::Show(
-                "Möchten Sie die Windows Update Einstellungen öffnen?",
-                "Windows Update öffnen",
-                [System.Windows.Forms.MessageBoxButtons]::YesNo,
-                [System.Windows.Forms.MessageBoxIcon]::Question
-            )
+            $result = Show-DarkConfirmationDialog -Message "Möchten Sie die Windows Update Einstellungen öffnen?" -Title "Windows Update öffnen" -Icon ([System.Windows.Forms.MessageBoxIcon]::Question) -Owner $mainform
             if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
                 Start-Process "ms-settings:windowsupdate"
             }
@@ -9786,12 +9821,7 @@ $menuItemGUIReload.AutoSize = $false
 $menuItemGUIReload.Size = New-Object System.Drawing.Size(140, 28)
 $menuItemGUIReload.Add_Click({
         # GUI-Reload
-        $confirmReload = [System.Windows.Forms.MessageBox]::Show(
-            "Die GUI wird neugeladen.`n`nAlle aktuellen Vorgänge werden abgebrochen.`n`nMöchten Sie fortfahren?",
-            "GUI neuladen",
-            [System.Windows.Forms.MessageBoxButtons]::YesNo,
-            [System.Windows.Forms.MessageBoxIcon]::Question
-        )
+        $confirmReload = Show-DarkConfirmationDialog -Message "Die GUI wird neugeladen.`n`nAlle aktuellen Vorgänge werden abgebrochen.`n`nMöchten Sie fortfahren?" -Title "GUI neuladen" -Icon ([System.Windows.Forms.MessageBoxIcon]::Question) -Owner $mainform
 
         if ($confirmReload -eq [System.Windows.Forms.DialogResult]::Yes) {
             Update-LogFile -Message "GUI-Reload wurde vom Benutzer initiiert"
@@ -9814,12 +9844,7 @@ $menuItemSystemRestart.AutoSize = $false
 $menuItemSystemRestart.Size = New-Object System.Drawing.Size(140, 28)
 $menuItemSystemRestart.Add_Click({
         # System-Neustart
-        $result = [System.Windows.Forms.MessageBox]::Show(
-            "WARNUNG: Der Computer wird neu gestartet.`n`nBitte speichern Sie alle offenen Dokumente und schließen Sie alle Programme.`n`nMöchten Sie den Neustart jetzt durchführen?",
-            "System Neustart",
-            [System.Windows.Forms.MessageBoxButtons]::YesNo,
-            [System.Windows.Forms.MessageBoxIcon]::Warning
-        )
+        $result = Show-DarkConfirmationDialog -Message "WARNUNG: Der Computer wird neu gestartet.`n`nBitte speichern Sie alle offenen Dokumente und schließen Sie alle Programme.`n`nMöchten Sie den Neustart jetzt durchführen?" -Title "System Neustart" -Icon ([System.Windows.Forms.MessageBoxIcon]::Warning) -Owner $mainform
 
         if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
             # Timer für den Countdown erstellen
@@ -9844,12 +9869,7 @@ $menuItemSystemRestart.Add_Click({
 
                         # Warnung bei 10 Sekunden
                         if ($script:countdownSeconds -eq 10) {
-                            $result = [System.Windows.Forms.MessageBox]::Show(
-                                "WARNUNG: Der Computer wird in 10 Sekunden neu gestartet!`n`nSpeichern Sie alle Arbeiten!`n`nMöchten Sie den Neustart abbrechen?",
-                                "Letzte Warnung",
-                                [System.Windows.Forms.MessageBoxButtons]::YesNo,
-                                [System.Windows.Forms.MessageBoxIcon]::Warning
-                            )
+                            $result = Show-DarkConfirmationDialog -Message "WARNUNG: Der Computer wird in 10 Sekunden neu gestartet!`n`nSpeichern Sie alle Arbeiten!`n`nMöchten Sie den Neustart abbrechen?" -Title "Letzte Warnung" -Icon ([System.Windows.Forms.MessageBoxIcon]::Warning) -Owner $mainform
 
                             if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
                                 # Neustart abbrechen
@@ -10122,12 +10142,7 @@ Quelle: $upstream
 WICHTIG: Der Pull kann Beta-Daten enthalten.
 Lokale Aenderungen werden mit --autostash zwischengespeichert (sofern moeglich).
 "@
-        $confirmResult = [System.Windows.Forms.MessageBox]::Show(
-            $confirmText,
-            "Git Pull bestaetigen",
-            [System.Windows.Forms.MessageBoxButtons]::YesNo,
-            [System.Windows.Forms.MessageBoxIcon]::Warning
-        )
+        $confirmResult = Show-DarkConfirmationDialog -Message $confirmText -Title "Git Pull bestaetigen" -Icon ([System.Windows.Forms.MessageBoxIcon]::Warning) -Owner $mainform
 
         if ($confirmResult -ne [System.Windows.Forms.DialogResult]::Yes) {
             return @{ Success = $false; Cancelled = $true; Message = "Abgebrochen" }
@@ -10927,12 +10942,7 @@ $mainform.Add_Shown({
                             }
 
                             $dialogText = "Eine neue GUI-Version ist verfügbar ($availableVersionText).`r`n`r`nJetzt 'Status prüfen' öffnen?"
-                            $dialogResult = [System.Windows.Forms.MessageBox]::Show(
-                                $dialogText,
-                                "Neue Version verfügbar",
-                                [System.Windows.Forms.MessageBoxButtons]::YesNo,
-                                [System.Windows.Forms.MessageBoxIcon]::Information
-                            )
+                            $dialogResult = Show-DarkConfirmationDialog -Message $dialogText -Title "Neue Version verfügbar" -Icon ([System.Windows.Forms.MessageBoxIcon]::Information) -Owner $mainform
 
                             if ($dialogResult -eq [System.Windows.Forms.DialogResult]::Yes -and $btnCheckDependenciesH) {
                                 $btnCheckDependenciesH.PerformClick()
