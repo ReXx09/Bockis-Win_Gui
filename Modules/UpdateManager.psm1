@@ -96,7 +96,7 @@ function Install-Update {
         default { "Möchten Sie jetzt updaten?" }
     }
 
-    $result = [System.Windows.Forms.MessageBox]::Show(
+    $result = Show-ModernMessageDialog -Arguments @(
         "Ausgewählte Version: v$LatestVersion`n`nAktuell installiert: v$CurrentVersion`n`nRelease-Notes:`n$releaseNotesPreview`n`n$operationQuestion",
         $operationTitle,
         [System.Windows.Forms.MessageBoxButtons]::YesNo,
@@ -615,7 +615,7 @@ function Show-UpdateError {
         $ErrorRecord.Exception.Message
     }
     
-    [System.Windows.Forms.MessageBox]::Show(
+    Show-ModernMessageDialog -Arguments @(
         "Fehler beim Prüfen auf Updates:`n`n$errorDetails`n`nMögliche Ursachen:`n• Keine Internetverbindung`n• Repository existiert nicht`n• Kein Release vorhanden`n• Token ungültig",
         "Update-Fehler",
         [System.Windows.Forms.MessageBoxButtons]::OK,

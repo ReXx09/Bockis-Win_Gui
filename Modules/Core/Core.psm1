@@ -161,72 +161,115 @@ function Show-CustomMessageBox {
         [int]$fontSize = 20
     )
 
-    # Create the main window
-    $msgBoxWindow = New-Object System.Windows.Window
-    $msgBoxWindow.Title = $title
-    $msgBoxWindow.Width = 400
-    $msgBoxWindow.Height = 300
-    $msgBoxWindow.WindowStartupLocation = 'CenterScreen'
+    $result = Show-ModernMessageDialog -Message $message -Title $title -Buttons 'OKCancel' -Icon 'Question'
+    if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
+        return 'OK'
+    }
+    return 'Cancel'
+}
 
-    # Create a StackPanel for layout
-    $stackPanel = New-Object System.Windows.Controls.StackPanel
-    $stackPanel.Orientation = "Vertical"
-    $stackPanel.HorizontalAlignment = "Center"
-    $stackPanel.VerticalAlignment = "Center"
-    $stackPanel.Margin = [System.Windows.Thickness]::new(10)
+function global:Show-ModernMessageDialog {
+    param(
+        [object]$Message,
+        [string]$Title = 'Bockis System-Tool',
+        [object]$Buttons = 'OK',
+        [object]$Icon = 'Information',
+        [object[]]$Arguments
+    )
 
-    # Create the TextBlock for the message
-    $textBlock = New-Object System.Windows.Controls.TextBlock
-    $textBlock.Text = $message
-    $textBlock.FontSize = $fontSize
-    $textBlock.Margin = [System.Windows.Thickness]::new(10)
-    $textBlock.FontFamily = New-Object System.Windows.Media.FontFamily("Segoe UI")
-    $textBlock.TextWrapping = "Wrap"
-    $textBlock.HorizontalAlignment = 'Center'
-    
-    # Create the OK button
-    $okButton = New-Object System.Windows.Controls.Button
-    $okButton.Content = "OK"
-    $okButton.Width = 80
-    $okButton.Height = 30
-    $okButton.Margin = [System.Windows.Thickness]::new(10)
-    $okButton.HorizontalAlignment = 'Center'
-    $okButton.Add_Click({
-            $msgBoxWindow.Tag = "OK"
-            $msgBoxWindow.Close()
-        })
-    
-    # Create the Cancel button
-    $cancelButton = New-Object System.Windows.Controls.Button
-    $cancelButton.Content = "Cancel"
-    $cancelButton.Width = 80
-    $cancelButton.Height = 30
-    $cancelButton.Margin = [System.Windows.Thickness]::new(10)
-    $cancelButton.HorizontalAlignment = 'Center'
-    $cancelButton.Add_Click({
-            $msgBoxWindow.Tag = "Cancel"
-            $msgBoxWindow.Close()
-        })
+    if ($Arguments -and $Arguments.Count -gt 0) {
+        $Message = $Arguments[0]
+        if ($Arguments.Count -gt 1) { $Title = [string]$Arguments[1] }
+        if ($Arguments.Count -gt 2) { $Buttons = $Arguments[2] }
+        if ($Arguments.Count -gt 3) { $Icon = $Arguments[3] }
+    }
 
-    # Create a StackPanel for buttons
-    $buttonPanel = New-Object System.Windows.Controls.StackPanel
-    $buttonPanel.Orientation = "Horizontal"
-    $buttonPanel.HorizontalAlignment = "Center"
-    $buttonPanel.Margin = [System.Windows.Thickness]::new(10)
-    $buttonPanel.Children.Add($okButton)
-    $buttonPanel.Children.Add($cancelButton)
-    
-    # Add controls to the main StackPanel
-    $stackPanel.Children.Add($textBlock)
-    $stackPanel.Children.Add($buttonPanel)
-    
-    # Set the StackPanel as the content of the window
-    $msgBoxWindow.Content = $stackPanel
+    $buttonSet = try { [System.Windows.Forms.MessageBoxButtons]$Buttons } catch { [System.Windows.Forms.MessageBoxButtons]::OK }
+    $iconName = [string]$Icon
+    $accentColor = switch -Regex ($iconName) {
+        'Error|Stop' { [System.Drawing.Color]::FromArgb(210, 80, 80); break }
+        'Warning|Exclamation' { [System.Drawing.Color]::FromArgb(220, 160, 55); break }
+        'Question' { [System.Drawing.Color]::FromArgb(0, 122, 204); break }
+        default { [System.Drawing.Color]::FromArgb(70, 170, 115) }
+    }
 
-    # Show the window
-    $msgBoxWindow.ShowDialog() | Out-Null
-    
-    return $msgBoxWindow.Tag
+    $messageText = [string]$Message
+    $lineCount = [Math]::Max(1, ($messageText -split "`r?`n").Count)
+    $dialogHeight = [Math]::Min(430, [Math]::Max(190, 125 + ($lineCount * 19)))
+    $dialog = New-Object System.Windows.Forms.Form
+    $dialog.Text = $Title
+    $dialog.Size = New-Object System.Drawing.Size(480, $dialogHeight)
+    $dialog.MinimumSize = $dialog.Size
+    $dialog.MaximumSize = $dialog.Size
+    $dialog.StartPosition = [System.Windows.Forms.FormStartPosition]::CenterScreen
+    $dialog.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::None
+    $dialog.BackColor = [System.Drawing.Color]::FromArgb(30, 30, 30)
+    $dialog.ForeColor = [System.Drawing.Color]::FromArgb(235, 235, 235)
+    $dialog.ShowInTaskbar = $false
+
+    $titleBar = New-Object System.Windows.Forms.Panel
+    $titleBar.Dock = [System.Windows.Forms.DockStyle]::Top
+    $titleBar.Height = 42
+    $titleBar.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
+    $dialog.Controls.Add($titleBar)
+
+    $accent = New-Object System.Windows.Forms.Panel
+    $accent.Dock = [System.Windows.Forms.DockStyle]::Left
+    $accent.Width = 5
+    $accent.BackColor = $accentColor
+    $titleBar.Controls.Add($accent)
+
+    $titleLabel = New-Object System.Windows.Forms.Label
+    $titleLabel.Text = $Title
+    $titleLabel.Location = New-Object System.Drawing.Point(18, 0)
+    $titleLabel.Size = New-Object System.Drawing.Size(420, 42)
+    $titleLabel.Font = New-Object System.Drawing.Font('Segoe UI', 10, [System.Drawing.FontStyle]::Bold)
+    $titleLabel.ForeColor = [System.Drawing.Color]::White
+    $titleLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
+    $titleBar.Controls.Add($titleLabel)
+
+    $messageLabel = New-Object System.Windows.Forms.Label
+    $messageLabel.Text = $messageText
+    $messageLabel.Location = New-Object System.Drawing.Point(24, 62)
+    $messageLabel.Size = New-Object System.Drawing.Size(432, ($dialogHeight - 132))
+    $messageLabel.Font = New-Object System.Drawing.Font('Segoe UI', 10)
+    $messageLabel.ForeColor = [System.Drawing.Color]::FromArgb(225, 225, 225)
+    $messageLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
+    $dialog.Controls.Add($messageLabel)
+
+    $buttonNames = switch ($buttonSet) {
+        ([System.Windows.Forms.MessageBoxButtons]::YesNo) { @('Ja', 'Nein') }
+        ([System.Windows.Forms.MessageBoxButtons]::YesNoCancel) { @('Ja', 'Nein', 'Abbrechen') }
+        ([System.Windows.Forms.MessageBoxButtons]::OKCancel) { @('OK', 'Abbrechen') }
+        default { @('OK') }
+    }
+    $buttonResults = switch ($buttonSet) {
+        ([System.Windows.Forms.MessageBoxButtons]::YesNo) { @([System.Windows.Forms.DialogResult]::Yes, [System.Windows.Forms.DialogResult]::No) }
+        ([System.Windows.Forms.MessageBoxButtons]::YesNoCancel) { @([System.Windows.Forms.DialogResult]::Yes, [System.Windows.Forms.DialogResult]::No, [System.Windows.Forms.DialogResult]::Cancel) }
+        ([System.Windows.Forms.MessageBoxButtons]::OKCancel) { @([System.Windows.Forms.DialogResult]::OK, [System.Windows.Forms.DialogResult]::Cancel) }
+        default { @([System.Windows.Forms.DialogResult]::OK) }
+    }
+
+    $buttonWidth = 96
+    $buttonGap = 8
+    $buttonStartX = 480 - 24 - (($buttonNames.Count * $buttonWidth) + (($buttonNames.Count - 1) * $buttonGap))
+    for ($index = 0; $index -lt $buttonNames.Count; $index++) {
+        $button = New-Object System.Windows.Forms.Button
+        $button.Text = $buttonNames[$index]
+        $button.DialogResult = $buttonResults[$index]
+        $button.Location = New-Object System.Drawing.Point(($buttonStartX + (($buttonWidth + $buttonGap) * $index)), ($dialogHeight - 50))
+        $button.Size = New-Object System.Drawing.Size($buttonWidth, 32)
+        $button.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+        $button.FlatAppearance.BorderSize = 0
+        $button.BackColor = if ($index -eq 0) { $accentColor } else { [System.Drawing.Color]::FromArgb(55, 55, 55) }
+        $button.ForeColor = [System.Drawing.Color]::White
+        $button.Font = New-Object System.Drawing.Font('Segoe UI', 9, [System.Drawing.FontStyle]::Bold)
+        $dialog.Controls.Add($button)
+        if ($index -eq 0) { $dialog.AcceptButton = $button }
+        if ($buttonResults[$index] -eq [System.Windows.Forms.DialogResult]::Cancel) { $dialog.CancelButton = $button }
+    }
+
+    return $dialog.ShowDialog()
 }
 
 

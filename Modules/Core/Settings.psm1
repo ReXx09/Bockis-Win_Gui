@@ -228,6 +228,10 @@ function Initialize-SystemToolSettings {
         ShowExtensionsInTrayMenu = $true
         EnableWin11ServiceHints = $true
         EnableExperimentalTweaks = $false
+        EnableTransparencyEffects = $true
+        EnableVisualEffects = $true
+        EnableMouseAcceleration = $true
+        EnableGameMode = $true
         ColorScheme         = Get-DefaultColorScheme
     }
     
@@ -337,6 +341,22 @@ function Import-SystemToolSettings {
             }
             if (-not $settingsHashtable.ContainsKey("EnableExperimentalTweaks")) {
                 $settingsHashtable["EnableExperimentalTweaks"] = $false
+                $needsSave = $true
+            }
+            if (-not $settingsHashtable.ContainsKey("EnableTransparencyEffects")) {
+                $settingsHashtable["EnableTransparencyEffects"] = $true
+                $needsSave = $true
+            }
+            if (-not $settingsHashtable.ContainsKey("EnableVisualEffects")) {
+                $settingsHashtable["EnableVisualEffects"] = $true
+                $needsSave = $true
+            }
+            if (-not $settingsHashtable.ContainsKey("EnableMouseAcceleration")) {
+                $settingsHashtable["EnableMouseAcceleration"] = $true
+                $needsSave = $true
+            }
+            if (-not $settingsHashtable.ContainsKey("EnableGameMode")) {
+                $settingsHashtable["EnableGameMode"] = $true
                 $needsSave = $true
             }
             
@@ -924,7 +944,7 @@ function Invoke-SettingsAction {
             return
         }
         'ResetLogs' {
-            $confirm = [System.Windows.Forms.MessageBox]::Show(
+            $confirm = Show-ModernMessageDialog -Arguments @(
                 "Möchten Sie wirklich alle Log-Dateien zurücksetzen?`n`nDiese Aktion kann nicht rückgängig gemacht werden.",
                 'Logs zurücksetzen',
                 [System.Windows.Forms.MessageBoxButtons]::YesNo,
@@ -935,7 +955,7 @@ function Invoke-SettingsAction {
 
             $result = Reset-SettingsLogFiles
             if ($result.Errors.Count -eq 0) {
-                [System.Windows.Forms.MessageBox]::Show(
+                Show-ModernMessageDialog -Arguments @(
                     "Erfolgreich $($result.DeletedCount) Log-Dateien zurückgesetzt.`n`nVerzeichnis:`n$($result.LogPath)",
                     'Logs erfolgreich zurückgesetzt',
                     [System.Windows.Forms.MessageBoxButtons]::OK,
@@ -944,7 +964,7 @@ function Invoke-SettingsAction {
             }
             else {
                 $errorText = ($result.Errors -join "`n")
-                [System.Windows.Forms.MessageBox]::Show(
+                Show-ModernMessageDialog -Arguments @(
                     "Log-Reset teilweise erfolgreich:`n`n$($result.DeletedCount) Dateien gelöscht.`n`nFehler:`n$errorText",
                     'Log-Reset mit Fehlern',
                     [System.Windows.Forms.MessageBoxButtons]::OK,
@@ -1010,8 +1030,79 @@ function Get-SettingsRegistry {
         [PSCustomObject]@{ Category = 'Pfade'; Group = 'Verzeichnisse'; Type = 'Action'; SettingKey = 'OpenPathDownloadAction'; Label = 'Tool-Downloads'; Description = 'Öffnet das Download-Verzeichnis für Tools.'; ButtonText = 'Downloads öffnen'; ActionCommand = 'Invoke-SettingsAction'; ActionKey = 'OpenPathDownload' }
         [PSCustomObject]@{ Category = 'Pfade'; Group = 'Verzeichnisse'; Type = 'Action'; SettingKey = 'OpenPathToolsInstallAction'; Label = 'Tool-Installationen'; Description = 'Öffnet den Standardpfad für Tool-Installationen.'; ButtonText = 'Tool-Installationen öffnen'; ActionCommand = 'Invoke-SettingsAction'; ActionKey = 'OpenPathToolsInstall' }
         [PSCustomObject]@{ Category = 'Tweaks'; Group = 'Windows 11 Services'; Type = 'Toggle'; SettingKey = 'EnableWin11ServiceHints'; Label = 'Win11-Service-Hinweise anzeigen'; Description = 'Aktiviert kontextbasierte Hinweise für Services und ms-settings Ziele.' }
+        [PSCustomObject]@{ Category = 'Tweaks'; Group = 'Performance'; Type = 'Toggle'; SettingKey = 'EnableTransparencyEffects'; Label = 'Transparenzeffekte aktivieren'; Description = 'Steuert die Windows-Transparenz für Menüs, Taskleiste und Fenster.' }
+        [PSCustomObject]@{ Category = 'Tweaks'; Group = 'Performance'; Type = 'Toggle'; SettingKey = 'EnableVisualEffects'; Label = 'Visuelle Effekte aktivieren'; Description = 'Schaltet die Windows-Einstellung für optimale Darstellung oder Leistung.' }
+        [PSCustomObject]@{ Category = 'Tweaks'; Group = 'Performance'; Type = 'Toggle'; SettingKey = 'EnableMouseAcceleration'; Label = 'Mausbeschleunigung aktivieren'; Description = 'Steuert die Windows-Zeigerpräzision und Mausbeschleunigung des aktuellen Benutzers.' }
+        [PSCustomObject]@{ Category = 'Tweaks'; Group = 'Performance'; Type = 'Toggle'; SettingKey = 'EnableGameMode'; Label = 'Windows Game Mode aktivieren'; Description = 'Aktiviert oder deaktiviert den Windows Game Mode für den aktuellen Benutzer.' }
         [PSCustomObject]@{ Category = 'Tweaks'; Group = 'Erweitert'; Type = 'Toggle'; SettingKey = 'EnableExperimentalTweaks'; Label = 'Experimentelle Tweaks erlauben'; Description = 'Schaltet zukünftige experimentelle Tweak-Optionen frei.' }
     )
+}
+
+function Invoke-PerformanceTweaks {
+    param(
+        [Parameter(Mandatory = $true)][hashtable]$Settings
+    )
+
+    $registryValues = @(
+        @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize'; Name = 'EnableTransparency'; Value = if ([bool]$Settings.EnableTransparencyEffects) { 1 } else { 0 } },
+        @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects'; Name = 'VisualFXSetting'; Value = if ([bool]$Settings.EnableVisualEffects) { 2 } else { 3 } },
+        @{ Path = 'HKCU:\Control Panel\Mouse'; Name = 'MouseSpeed'; Value = if ([bool]$Settings.EnableMouseAcceleration) { '1' } else { '0' } },
+        @{ Path = 'HKCU:\Control Panel\Mouse'; Name = 'MouseThreshold1'; Value = if ([bool]$Settings.EnableMouseAcceleration) { '6' } else { '0' } },
+        @{ Path = 'HKCU:\Control Panel\Mouse'; Name = 'MouseThreshold2'; Value = if ([bool]$Settings.EnableMouseAcceleration) { '10' } else { '0' } },
+        @{ Path = 'HKCU:\Software\Microsoft\GameBar'; Name = 'AutoGameModeEnabled'; Value = if ([bool]$Settings.EnableGameMode) { 1 } else { 0 } }
+    )
+
+    $backupDirectory = Join-Path ((Get-SettingsPathMap).Install) 'Data\Backups'
+    $backupPath = Join-Path $backupDirectory 'performance-tweaks-backup.json'
+    try {
+        if (-not (Test-Path $backupPath)) {
+            New-Item -Path $backupDirectory -ItemType Directory -Force | Out-Null
+            $backup = foreach ($entry in $registryValues) {
+                $property = Get-ItemProperty -Path $entry.Path -Name $entry.Name -ErrorAction SilentlyContinue
+                [PSCustomObject]@{
+                    Path = $entry.Path
+                    Name = $entry.Name
+                    Exists = $null -ne $property
+                    Value = if ($null -ne $property) { $property.($entry.Name) } else { $null }
+                }
+            }
+            $backup | ConvertTo-Json -Depth 4 | Out-File -FilePath $backupPath -Encoding UTF8
+        }
+
+        foreach ($entry in $registryValues) {
+            if (-not (Test-Path $entry.Path)) { New-Item -Path $entry.Path -Force | Out-Null }
+            Set-ItemProperty -Path $entry.Path -Name $entry.Name -Value $entry.Value -Force -ErrorAction Stop
+        }
+
+        return [PSCustomObject]@{ Success = $true; BackupPath = $backupPath; Error = $null }
+    }
+    catch {
+        return [PSCustomObject]@{ Success = $false; BackupPath = $backupPath; Error = $_.Exception.Message }
+    }
+}
+
+function Restore-PerformanceTweaks {
+    $backupPath = Join-Path ((Get-SettingsPathMap).Install) 'Data\Backups\performance-tweaks-backup.json'
+    if (-not (Test-Path $backupPath)) {
+        return [PSCustomObject]@{ Success = $false; Error = 'Keine Performance-Tweak-Sicherung gefunden.' }
+    }
+
+    try {
+        $backup = @(Get-Content -Path $backupPath -Raw -ErrorAction Stop | ConvertFrom-Json)
+        foreach ($entry in $backup) {
+            if (-not (Test-Path $entry.Path)) { New-Item -Path $entry.Path -Force | Out-Null }
+            if ([bool]$entry.Exists) {
+                Set-ItemProperty -Path $entry.Path -Name $entry.Name -Value $entry.Value -Force -ErrorAction Stop
+            }
+            else {
+                Remove-ItemProperty -Path $entry.Path -Name $entry.Name -Force -ErrorAction SilentlyContinue
+            }
+        }
+        return [PSCustomObject]@{ Success = $true; Error = $null }
+    }
+    catch {
+        return [PSCustomObject]@{ Success = $false; Error = $_.Exception.Message }
+    }
 }
 
 function Show-SettingsDialogModern {
@@ -1312,7 +1403,7 @@ function Show-SettingsDialogModern {
                                 }
                             }
                             catch {
-                                [System.Windows.MessageBox]::Show("Fehler beim Ändern der Farbe:`n$_", 'Fehler', 'OK', 'Error') | Out-Null
+                                Show-ModernMessageDialog -Arguments @("Fehler beim Ändern der Farbe:`n$_", 'Fehler', 'OK', 'Error') | Out-Null
                             }
                         }.GetNewClosure())
 
@@ -1327,7 +1418,7 @@ function Show-SettingsDialogModern {
                                 & $fnSetColorPreview -PreviewBlock $state.PreviewBlock -ColorButton $state.PickButton -HexColor $defaultHex -PreviewIcon $state.PreviewIcon
                             }
                             catch {
-                                [System.Windows.MessageBox]::Show("Fehler beim Zurücksetzen der Farbe:`n$_", 'Fehler', 'OK', 'Error') | Out-Null
+                                Show-ModernMessageDialog -Arguments @("Fehler beim Zurücksetzen der Farbe:`n$_", 'Fehler', 'OK', 'Error') | Out-Null
                             }
                         }.GetNewClosure())
 
@@ -1358,11 +1449,11 @@ function Show-SettingsDialogModern {
                                             Restart-DefenderService -outputBox $OutputBox -progressBar $global:progressBar -MainForm $MainForm
                                         }
                                         else {
-                                            [System.Windows.MessageBox]::Show('Restart-DefenderService ist nicht verfügbar.', 'Fehler', 'OK', 'Error') | Out-Null
+                                            Show-ModernMessageDialog -Arguments @('Restart-DefenderService ist nicht verfügbar.', 'Fehler', 'OK', 'Error') | Out-Null
                                         }
                                     }
                                     'ResetLogs' {
-                                        $confirm = [System.Windows.Forms.MessageBox]::Show(
+                                        $confirm = Show-ModernMessageDialog -Arguments @(
                                             "Möchten Sie wirklich alle Log-Dateien zurücksetzen?`n`nDiese Aktion kann nicht rückgängig gemacht werden.",
                                             'Logs zurücksetzen',
                                             [System.Windows.Forms.MessageBoxButtons]::YesNo,
@@ -1372,14 +1463,14 @@ function Show-SettingsDialogModern {
                                         if ($confirm -eq [System.Windows.Forms.DialogResult]::Yes) {
                                             $result = Reset-SettingsLogFiles
                                             if ($result.Errors.Count -eq 0) {
-                                                [System.Windows.MessageBox]::Show(
+                                                Show-ModernMessageDialog -Arguments @(
                                                     "Erfolgreich $($result.DeletedCount) Log-Dateien zurückgesetzt.",
                                                     'Logs erfolgreich zurückgesetzt',
                                                     'OK', 'Information'
                                                 ) | Out-Null
                                             }
                                             else {
-                                                [System.Windows.MessageBox]::Show(
+                                                Show-ModernMessageDialog -Arguments @(
                                                     "Log-Reset mit Fehlern: $($result.Errors -join ', ')",
                                                     'Log-Reset fehlgeschlagen',
                                                     'OK', 'Warning'
@@ -1395,7 +1486,7 @@ function Show-SettingsDialogModern {
                                             Show-DatabaseOverview
                                         }
                                         else {
-                                            [System.Windows.MessageBox]::Show('Show-DatabaseOverview ist nicht verfügbar.', 'Fehler', 'OK', 'Error') | Out-Null
+                                            Show-ModernMessageDialog -Arguments @('Show-DatabaseOverview ist nicht verfügbar.', 'Fehler', 'OK', 'Error') | Out-Null
                                         }
                                     }
                                     'OpenPathLogs' {
@@ -1414,12 +1505,12 @@ function Show-SettingsDialogModern {
                                         Open-SettingsPathByKey -PathKey 'ToolsInstall'
                                     }
                                     default {
-                                        [System.Windows.MessageBox]::Show("Die Aktion '$actionKeyName' ist nicht implementiert.", 'Unbekannte Aktion', 'OK', 'Warning') | Out-Null
+                                        Show-ModernMessageDialog -Arguments @("Die Aktion '$actionKeyName' ist nicht implementiert.", 'Unbekannte Aktion', 'OK', 'Warning') | Out-Null
                                     }
                                 }
                             }
                             catch {
-                                [System.Windows.MessageBox]::Show("Fehler bei der Aktion '$actionKeyName':`n$_", 'Fehler', 'OK', 'Error') | Out-Null
+                                Show-ModernMessageDialog -Arguments @("Fehler bei der Aktion '$actionKeyName':`n$_", 'Fehler', 'OK', 'Error') | Out-Null
                             }
                         }.GetNewClosure())
                     $stack.Children.Add($ctrl)
@@ -1441,7 +1532,7 @@ function Show-SettingsDialogModern {
 
         $updatedSettings = ConvertTo-SettingsHashtable -InputObject (Get-SystemToolSettings)
         if ($updatedSettings -isnot [hashtable]) {
-            [System.Windows.MessageBox]::Show('Einstellungen konnten nicht geladen werden.', 'Fehler', 'OK', 'Error') | Out-Null
+            Show-ModernMessageDialog -Arguments @('Einstellungen konnten nicht geladen werden.', 'Fehler', 'OK', 'Error') | Out-Null
             return
         }
 
@@ -1504,6 +1595,20 @@ function Show-SettingsDialogModern {
             }
         }
 
+        $performanceKeys = @('EnableTransparencyEffects', 'EnableVisualEffects', 'EnableMouseAcceleration', 'EnableGameMode')
+        $performanceChanged = @($performanceKeys | Where-Object { [bool]$updatedSettings[$_] -ne [bool]$originalSettings[$_] })
+        if ($performanceChanged.Count -gt 0) {
+            $confirmTweaks = Show-ModernMessageDialog -Arguments @(
+                'Windows-Performance-Tweaks jetzt anwenden? Der bisherige Registry-Zustand wird einmalig gesichert.',
+                'Performance-Tweaks',
+                [System.Windows.Forms.MessageBoxButtons]::YesNo,
+                [System.Windows.Forms.MessageBoxIcon]::Question
+            )
+            if ($confirmTweaks -ne [System.Windows.Forms.DialogResult]::Yes) {
+                foreach ($key in $performanceKeys) { $updatedSettings[$key] = $originalSettings[$key] }
+            }
+        }
+
         Set-SystemToolSettings -Settings $updatedSettings
 
         if (Get-Command -Name Set-PythonDashboardStartupRegistration -ErrorAction SilentlyContinue) {
@@ -1530,6 +1635,13 @@ function Show-SettingsDialogModern {
             }
             catch {
                 Write-Verbose "Extension-Tray-Menue konnte nicht aktualisiert werden: $_"
+            }
+        }
+
+        if ($performanceChanged.Count -gt 0 -and $confirmTweaks -eq [System.Windows.Forms.DialogResult]::Yes) {
+            $tweakResult = Invoke-PerformanceTweaks -Settings $updatedSettings
+            if (-not $tweakResult.Success) {
+                Show-ModernMessageDialog -Arguments @("Performance-Tweaks konnten nicht vollständig angewendet werden:`n$($tweakResult.Error)", 'Tweaks', 'OK', 'Warning') | Out-Null
             }
         }
 
@@ -1662,7 +1774,7 @@ function Show-SettingsDialogModern {
                 $null = $localApplyChanges.Invoke()
             }
             catch {
-                [System.Windows.MessageBox]::Show("Fehler beim Anwenden der Einstellungen:`n$_", 'Fehler', 'OK', 'Error') | Out-Null
+                Show-ModernMessageDialog -Arguments @("Fehler beim Anwenden der Einstellungen:`n$_", 'Fehler', 'OK', 'Error') | Out-Null
             }
         }.GetNewClosure())
     $btnOk.Add_Click({
@@ -1670,7 +1782,7 @@ function Show-SettingsDialogModern {
                 $null = $localApplyChanges.Invoke($true)
             }
             catch {
-                [System.Windows.MessageBox]::Show("Fehler beim Speichern der Einstellungen:`n$_", 'Fehler', 'OK', 'Error') | Out-Null
+                Show-ModernMessageDialog -Arguments @("Fehler beim Speichern der Einstellungen:`n$_", 'Fehler', 'OK', 'Error') | Out-Null
             }
         }.GetNewClosure())
 
@@ -1681,7 +1793,7 @@ function Show-SettingsDialogModern {
                 }
             }
             catch {
-                [System.Windows.MessageBox]::Show("Fehler beim Laden der Kategorie:`n$_", 'Fehler', 'OK', 'Error') | Out-Null
+                Show-ModernMessageDialog -Arguments @("Fehler beim Laden der Kategorie:`n$_", 'Fehler', 'OK', 'Error') | Out-Null
             }
         }.GetNewClosure())
 
@@ -2165,7 +2277,7 @@ function Show-SettingsDialog {
     $btnResetLogs.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
     $btnResetLogs.Add_Click({
             # Bestätigungsdialog anzeigen
-            $result = [System.Windows.Forms.MessageBox]::Show(
+            $result = Show-ModernMessageDialog -Arguments @(
                 "Möchten Sie wirklich alle Log-Dateien zurücksetzen?`n`nDiese Aktion kann nicht rückgängig gemacht werden.`n`nFolgende Logs werden gelöscht:`n• CHKDSK.log`n• DISM-Check.log`n• DISM-Scan.log`n• FullMRT.log`n• QuickMRT.log`n• SFCCheck.log`n• WindowsDefender.log`n• WindowsUpdate.log`n• DefenderOfflineScan.log`n• gui_closing.log",
                 "Logs zurücksetzen",
                 [System.Windows.Forms.MessageBoxButtons]::YesNo,
@@ -2223,7 +2335,7 @@ function Show-SettingsDialog {
                     
                     # Ergebnis anzeigen
                     if ($errors.Count -eq 0) {
-                        [System.Windows.Forms.MessageBox]::Show(
+                        Show-ModernMessageDialog -Arguments @(
                             "Erfolgreich $deletedCount Log-Dateien zurückgesetzt.`n`nAlle Logs wurden aus dem Verzeichnis gelöscht:`n$logsFolder",
                             "Logs erfolgreich zurückgesetzt",
                             [System.Windows.Forms.MessageBoxButtons]::OK,
@@ -2232,7 +2344,7 @@ function Show-SettingsDialog {
                     }
                     else {
                         $errorMessage = "Log-Reset teilweise erfolgreich:`n`n$deletedCount Dateien gelöscht.`n`nFehler:`n" + ($errors -join "`n")
-                        [System.Windows.Forms.MessageBox]::Show(
+                        Show-ModernMessageDialog -Arguments @(
                             $errorMessage,
                             "Log-Reset mit Fehlern",
                             [System.Windows.Forms.MessageBoxButtons]::OK,
@@ -2241,7 +2353,7 @@ function Show-SettingsDialog {
                     }
                 }
                 catch {
-                    [System.Windows.Forms.MessageBox]::Show(
+                    Show-ModernMessageDialog -Arguments @(
                         "Fehler beim Zurücksetzen der Logs:`n`n$_",
                         "Fehler",
                         [System.Windows.Forms.MessageBoxButtons]::OK,
@@ -2278,7 +2390,7 @@ function Show-SettingsDialog {
                     Start-Process "explorer.exe" -ArgumentList $logsFolder
                 }
                 else {
-                    [System.Windows.Forms.MessageBox]::Show(
+                    Show-ModernMessageDialog -Arguments @(
                         "Log-Ordner nicht gefunden:`n$logsFolder",
                         "Ordner nicht gefunden",
                         [System.Windows.Forms.MessageBoxButtons]::OK,
@@ -2287,7 +2399,7 @@ function Show-SettingsDialog {
                 }
             }
             catch {
-                [System.Windows.Forms.MessageBox]::Show(
+                Show-ModernMessageDialog -Arguments @(
                     "Fehler beim Öffnen des Log-Ordners:`n`n$_",
                     "Fehler",
                     [System.Windows.Forms.MessageBoxButtons]::OK,
@@ -2318,7 +2430,7 @@ function Show-SettingsDialog {
                     Show-DatabaseOverview
                 }
                 else {
-                    [System.Windows.Forms.MessageBox]::Show(
+                    Show-ModernMessageDialog -Arguments @(
                         "Datenbank-Übersicht-Funktion nicht verfügbar.`n`nStellen Sie sicher, dass DatabaseManager.psm1 korrekt geladen ist.",
                         "Fehler",
                         [System.Windows.Forms.MessageBoxButtons]::OK,
@@ -2327,7 +2439,7 @@ function Show-SettingsDialog {
                 }
             }
             catch {
-                [System.Windows.Forms.MessageBox]::Show(
+                Show-ModernMessageDialog -Arguments @(
                     "Fehler beim Öffnen der Datenbank-Übersicht:`n`n$_",
                     "Fehler",
                     [System.Windows.Forms.MessageBoxButtons]::OK,
@@ -2416,7 +2528,7 @@ function Show-SettingsDialog {
     $btnExtensionLaunchOptions.ForeColor = [System.Drawing.Color]::White
     $btnExtensionLaunchOptions.Add_Click({
             if (-not (Get-Command -Name Show-ExtensionStartupSettingsDialog -ErrorAction SilentlyContinue)) {
-                [System.Windows.Forms.MessageBox]::Show(
+                Show-ModernMessageDialog -Arguments @(
                     'Die Erweiterungs-Konfiguration ist aktuell nicht verfügbar.',
                     'Nicht verfügbar',
                     [System.Windows.Forms.MessageBoxButtons]::OK,
@@ -2519,7 +2631,7 @@ function Show-SettingsDialog {
     $btnOpenLogs.Tag = $logsPath
     $btnOpenLogs.Add_Click({
         if (Test-Path $this.Tag) { Start-Process "explorer.exe" -ArgumentList $this.Tag }
-        else { [System.Windows.Forms.MessageBox]::Show("Verzeichnis nicht gefunden: $($this.Tag)", "Fehler", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning) }
+        else { Show-ModernMessageDialog -Arguments @("Verzeichnis nicht gefunden: $($this.Tag)", "Fehler", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning) }
     })
     $tabPaths.Controls.Add($btnOpenLogs)
     $currentY += 30
@@ -2564,7 +2676,7 @@ function Show-SettingsDialog {
     $btnOpenDatabase.Tag = $databasePath
     $btnOpenDatabase.Add_Click({
         if (Test-Path $this.Tag) { Start-Process "explorer.exe" -ArgumentList $this.Tag }
-        else { [System.Windows.Forms.MessageBox]::Show("Verzeichnis nicht gefunden: $($this.Tag)", "Fehler", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning) }
+        else { Show-ModernMessageDialog -Arguments @("Verzeichnis nicht gefunden: $($this.Tag)", "Fehler", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning) }
     })
     $tabPaths.Controls.Add($btnOpenDatabase)
     $currentY += 30
@@ -2609,7 +2721,7 @@ function Show-SettingsDialog {
     $btnOpenInstall.Tag = $installPath
     $btnOpenInstall.Add_Click({
         if (Test-Path $this.Tag) { Start-Process "explorer.exe" -ArgumentList $this.Tag }
-        else { [System.Windows.Forms.MessageBox]::Show("Verzeichnis nicht gefunden: $($this.Tag)", "Fehler", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning) }
+        else { Show-ModernMessageDialog -Arguments @("Verzeichnis nicht gefunden: $($this.Tag)", "Fehler", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning) }
     })
     $tabPaths.Controls.Add($btnOpenInstall)
     $currentY += 30
@@ -2654,7 +2766,7 @@ function Show-SettingsDialog {
     $btnOpenDownload.Tag = $downloadPath
     $btnOpenDownload.Add_Click({
         if (Test-Path $this.Tag) { Start-Process "explorer.exe" -ArgumentList $this.Tag }
-        else { [System.Windows.Forms.MessageBox]::Show("Verzeichnis nicht gefunden: $($this.Tag)", "Fehler", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning) }
+        else { Show-ModernMessageDialog -Arguments @("Verzeichnis nicht gefunden: $($this.Tag)", "Fehler", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning) }
     })
     $tabPaths.Controls.Add($btnOpenDownload)
     $currentY += 30
@@ -2699,7 +2811,7 @@ function Show-SettingsDialog {
     $btnOpenToolsInstall.Tag = $toolsInstallPath
     $btnOpenToolsInstall.Add_Click({
         if (Test-Path $this.Tag) { Start-Process "explorer.exe" -ArgumentList $this.Tag }
-        else { [System.Windows.Forms.MessageBox]::Show("Verzeichnis nicht gefunden: $($this.Tag)", "Fehler", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning) }
+        else { Show-ModernMessageDialog -Arguments @("Verzeichnis nicht gefunden: $($this.Tag)", "Fehler", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning) }
     })
     $tabPaths.Controls.Add($btnOpenToolsInstall)
     $currentY += 30
@@ -2995,6 +3107,8 @@ Export-ModuleMember -Function Get-SettingsRegistry
 Export-ModuleMember -Function Get-SettingsPathMap
 Export-ModuleMember -Function Open-SettingsPathByKey
 Export-ModuleMember -Function Reset-SettingsLogFiles
+Export-ModuleMember -Function Invoke-PerformanceTweaks
+Export-ModuleMember -Function Restore-PerformanceTweaks
 
 
 

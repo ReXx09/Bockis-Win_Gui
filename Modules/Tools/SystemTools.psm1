@@ -1045,7 +1045,7 @@ function Start-MemoryDiagnostic {
             $outputBox.AppendText("[!] Ein Memory Diagnostic ist bereits geplant.`r`n")
             $outputBox.AppendText("[i] Möchten Sie den geplanten Scan ausführen?`r`n")
             
-            $result = [System.Windows.Forms.MessageBox]::Show(
+            $result = Show-ModernMessageDialog -Arguments @(
                 "Ein Memory Diagnostic ist bereits geplant.`n`nMöchten Sie den Scan jetzt ausführen?",
                 "Memory Diagnostic geplant",
                 [System.Windows.Forms.MessageBoxButtons]::YesNo,
@@ -1696,7 +1696,7 @@ function Start-SFCCheck {
                 }
                 
                 # Neustart-Dialog
-                $result = [System.Windows.Forms.MessageBox]::Show(
+                $result = Show-ModernMessageDialog -Arguments @(
                     "Der SFC-Scan hat Reparaturen durchgeführt. Ein Neustart wird empfohlen.`n`nJetzt neu starten?",
                     "Neustart empfohlen",
                     [System.Windows.Forms.MessageBoxButtons]::YesNo,
@@ -1758,7 +1758,7 @@ function Start-SFCCheck {
                 }
                 
                 # Frage, ob DISM ausgeführt werden soll
-                $result = [System.Windows.Forms.MessageBox]::Show(
+                $result = Show-ModernMessageDialog -Arguments @(
                     "Beschädigte Dateien wurden gefunden, die nicht repariert werden können.`n`nMöchten Sie jetzt eine DISM-Reparatur durchführen?",
                     "DISM-Reparatur empfohlen",
                     [System.Windows.Forms.MessageBoxButtons]::YesNo,

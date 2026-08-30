@@ -135,7 +135,7 @@ function Start-PingTest {
         $bufferSize = $bufferNumeric.Value
         
         if ([string]::IsNullOrWhiteSpace($targetHost)) {
-            [System.Windows.Forms.MessageBox]::Show("Bitte geben Sie einen Host oder eine IP-Adresse ein.", "Fehler", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
+            Show-ModernMessageDialog -Arguments @("Bitte geben Sie einen Host oder eine IP-Adresse ein.", "Fehler", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
             
             # Log-Eintrag für fehlende Host-Eingabe
             Write-ToolLog -ToolName "NetworkTools" -Message "Ping-Test abgebrochen: Kein Host angegeben" -OutputBox $null -Level "Warning" -SaveToDatabase

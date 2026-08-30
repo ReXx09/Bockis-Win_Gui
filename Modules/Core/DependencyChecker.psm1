@@ -506,7 +506,7 @@ Möchten Sie JETZT auf v0.9.5 updaten?
 (Download von NuGet, ca. 1 MB)
 "@
                     
-                    $dialogResult = [System.Windows.Forms.MessageBox]::Show(
+                    $dialogResult = Show-ModernMessageDialog -Arguments @(
                         $updateMsg,
                         "DLL-Update verfügbar",
                         [System.Windows.Forms.MessageBoxButtons]::YesNo,
@@ -529,7 +529,7 @@ Möchten Sie JETZT auf v0.9.5 updaten?
                                 Update-Progress -Value 85 -Text "Update erfolgreich, starte neu..."
                                 
                                 # Erfolgsmeldung
-                                [System.Windows.Forms.MessageBox]::Show(
+                                Show-ModernMessageDialog -Arguments @(
                                     "Update erfolgreich!
 
 Neue Version: $($updateResult.NewVersion)

@@ -881,7 +881,7 @@ function Initialize-LibreHardwareMonitor {
         if ($hwStatus.MissingDLLs.Count -gt 0 -and -not $SuppressVisualFeedback) {
             # Zeige fehlende DLLs an
             $missingList = ($hwStatus.MissingDLLs | ForEach-Object { "  - $($_.FileName)`n    ($($_.Description))" }) -join "`n"
-            [System.Windows.Forms.MessageBox]::Show(
+            Show-ModernMessageDialog -Arguments @(
                 "Hardware-Monitor kann nicht gestartet werden.`n`n" +
                 "Fehlende Dateien im Lib-Ordner:`n$missingList`n`n" +
                 "Bitte alle benötigten DLL-Dateien im Lib-Ordner bereitstellen.",
@@ -1710,7 +1710,7 @@ function Update-RamInfo {
                         if ($script:ramStats.SPD -and $script:ramStats.SPD.FoundSensors) {
                             Show-RamSPDTempDetails -SPDData $script:ramStats.SPD
                         } else {
-                            [System.Windows.Forms.MessageBox]::Show(
+                            Show-ModernMessageDialog -Arguments @(
                                 "Keine SPD-Temperatursensoren gefunden. Aktiviere den Debug-Modus für mehr Informationen.",
                                 "RAM-Temperatursensoren",
                                 [System.Windows.Forms.MessageBoxButtons]::OK,
@@ -1736,7 +1736,7 @@ function Update-RamInfo {
                         if ($script:ramStats.SPD -and $script:ramStats.SPD.FoundSensors) {
                             Show-RamSPDTempDetails -SPDData $script:ramStats.SPD
                         } else {
-                            [System.Windows.Forms.MessageBox]::Show(
+                            Show-ModernMessageDialog -Arguments @(
                                 "Keine SPD-Temperatursensoren gefunden. Aktiviere den Debug-Modus für mehr Informationen.",
                                 "RAM-Temperatursensoren",
                                 [System.Windows.Forms.MessageBoxButtons]::OK,
@@ -2241,7 +2241,7 @@ function Show-HardwareStatsTable {
     }
 
     if (-not $statsFiltered -or $statsFiltered.Count -eq 0) {
-        [System.Windows.Forms.MessageBox]::Show(
+        Show-ModernMessageDialog -Arguments @(
             "Keine Statistikdaten verfügbar.",
             "$Component Statistik",
             [System.Windows.Forms.MessageBoxButtons]::OK,

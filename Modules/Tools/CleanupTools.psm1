@@ -1933,7 +1933,7 @@ function Start-TempFilesCleanupAdvanced {
                 }
 
                 if ($selectedDrives.Count -eq 0) {
-                    [System.Windows.MessageBox]::Show(
+                    Show-ModernMessageDialog -Arguments @(
                         "Bitte wählen Sie mindestens ein Laufwerk aus.",
                         "Keine Laufwerke ausgewählt",
                         [System.Windows.MessageBoxButton]::OK,
@@ -1943,7 +1943,7 @@ function Start-TempFilesCleanupAdvanced {
 
                 $activeOptions = $cleanupOptions | Where-Object { $cleanupCheckboxes[$_.Name].IsChecked -eq $true }
                 if ($activeOptions.Count -eq 0) {
-                    [System.Windows.MessageBox]::Show(
+                    Show-ModernMessageDialog -Arguments @(
                         "Bitte wählen Sie mindestens eine Bereinigungsoption aus.",
                         "Keine Optionen ausgewählt",
                         [System.Windows.MessageBoxButton]::OK,

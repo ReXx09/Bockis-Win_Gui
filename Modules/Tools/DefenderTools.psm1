@@ -385,7 +385,7 @@ function Start-WindowsDefender {
     }
 
     # Nach dem Scan: Nutzer fragen, ob das Windows-Sicherheitscenter geöffnet werden soll
-    $result = [System.Windows.Forms.MessageBox]::Show(
+    $result = Show-ModernMessageDialog -Arguments @(
         "Möchten Sie das Windows-Sicherheitscenter (Defender) öffnen?",
         "Windows Defender öffnen",
         [System.Windows.Forms.MessageBoxButtons]::YesNo,
@@ -749,7 +749,7 @@ function Start-DefenderOfflineScan {
     "Bitte speichern Sie wichtige Dokumente und schließen Sie alle Programme.`n`n" +
     "Möchten Sie fortfahren und den Offline-Scan starten?"
     
-    $result = [System.Windows.Forms.MessageBox]::Show(
+    $result = Show-ModernMessageDialog -Arguments @(
         $confirmMessage,
         "Windows Defender Offline-Scan",
         [System.Windows.Forms.MessageBoxButtons]::YesNo,
@@ -834,7 +834,7 @@ function Start-DefenderOfflineScan {
                 "Bitte schalten Sie den Computer während des Scans nicht aus.`n" +
                 "Der Scan kann bis zu einer Stunde dauern."
                 
-                [System.Windows.Forms.MessageBox]::Show(
+                Show-ModernMessageDialog -Arguments @(
                     $shutdownInfo,
                     "Windows Defender Offline-Scan",
                     [System.Windows.Forms.MessageBoxButtons]::OK,
@@ -845,7 +845,7 @@ function Start-DefenderOfflineScan {
                 Update-ProgressStatus -StatusText "Fehler bei der Konfiguration des Offline-Scans" -ProgressValue 0 -TextColor ([System.Drawing.Color]::Red) -progressBarParam $progressBar
                 
                 # Fehlermeldung für den Benutzer
-                [System.Windows.Forms.MessageBox]::Show(
+                Show-ModernMessageDialog -Arguments @(
                     "Der Windows Defender Offline-Scan konnte nicht konfiguriert werden.`n" +
                     "Bitte versuchen Sie es später erneut oder kontaktieren Sie den Support.",
                     "Windows Defender Offline-Scan",
@@ -884,7 +884,7 @@ function Clear-DefenderProtectionHistory {
     
     try {
         # Bestätigungsdialog
-        $result = [System.Windows.Forms.MessageBox]::Show(
+        $result = Show-ModernMessageDialog -Arguments @(
             "Möchten Sie wirklich den gesamten Defender-Schutzverlauf löschen?`n`nDies entfernt alle Einträge aus dem Bedrohungsverlauf.",
             "Schutzverlauf löschen",
             [System.Windows.Forms.MessageBoxButtons]::YesNo,
@@ -986,7 +986,7 @@ function Clear-DefenderProtectionHistory {
                 -SaveToDatabase
         }
         
-        [System.Windows.Forms.MessageBox]::Show(
+        Show-ModernMessageDialog -Arguments @(
             "Der Defender-Schutzverlauf wurde erfolgreich gelöscht.",
             "Erfolgreich",
             [System.Windows.Forms.MessageBoxButtons]::OK,
@@ -1003,7 +1003,7 @@ function Clear-DefenderProtectionHistory {
                 -SaveToDatabase
         }
         
-        [System.Windows.Forms.MessageBox]::Show(
+        Show-ModernMessageDialog -Arguments @(
             "Fehler beim Löschen des Schutzverlaufs:`n`n$_",
             "Fehler",
             [System.Windows.Forms.MessageBoxButtons]::OK,

@@ -608,7 +608,7 @@ function Get-ToolDownload {
     
     $tool = $script:toolLibrary.Values | ForEach-Object { $_ } | Flatten | Where-Object { $_.Name -eq $ToolName }
     if (-not $tool) {
-        [System.Windows.Forms.MessageBox]::Show(
+        Show-ModernMessageDialog -Arguments @(
             "Das Tool '$ToolName' ist nicht in der Liste verfügbar.",
             "Fehler",
             [System.Windows.Forms.MessageBoxButtons]::OK,
@@ -621,7 +621,7 @@ function Get-ToolDownload {
         # Öffne den Download-Link im Standard-Browser
         Start-Process $tool.DownloadUrl
         
-        [System.Windows.Forms.MessageBox]::Show(
+        Show-ModernMessageDialog -Arguments @(
             "Der Download-Link für $($tool.Name) wurde in Ihrem Browser geöffnet.`n`nBitte folgen Sie den Anweisungen auf der Website, um das Tool herunterzuladen und zu installieren.",
             "Download gestartet",
             [System.Windows.Forms.MessageBoxButtons]::OK,
@@ -629,7 +629,7 @@ function Get-ToolDownload {
         )
         return $true
     } catch {
-        [System.Windows.Forms.MessageBox]::Show(
+        Show-ModernMessageDialog -Arguments @(
             "Fehler beim Öffnen des Download-Links: $_",
             "Fehler",
             [System.Windows.Forms.MessageBoxButtons]::OK,
@@ -1448,7 +1448,7 @@ function Stop-ToolProcess {
             $processes | Stop-Process -Force
             return $true
         } else {
-            $result = [System.Windows.Forms.MessageBox]::Show(
+            $result = Show-ModernMessageDialog -Arguments @(
                 "$ProcessName läuft noch ($($processes.Count) Instanz(en)).`n`nMöchten Sie den Prozess beenden, um fortzufahren?",
                 "Prozess läuft",
                 [System.Windows.Forms.MessageBoxButtons]::YesNo,
@@ -1461,7 +1461,7 @@ function Stop-ToolProcess {
                     Start-Sleep -Milliseconds 500  # Kurz warten bis Prozess beendet ist
                     return $true
                 } catch {
-                    [System.Windows.Forms.MessageBox]::Show(
+                    Show-ModernMessageDialog -Arguments @(
                         "Fehler beim Beenden des Prozesses: $($_.Exception.Message)",
                         "Fehler",
                         [System.Windows.Forms.MessageBoxButtons]::OK,
@@ -2096,7 +2096,7 @@ function Initialize-ToolEntry {
             }
             $infoText += "Download-URL: $($toolInfo.DownloadUrl)`n"
         
-            [System.Windows.Forms.MessageBox]::Show(
+            Show-ModernMessageDialog -Arguments @(
                 $infoText,
                 "Information - $($toolInfo.Name)",
                 [System.Windows.Forms.MessageBoxButtons]::OK,
@@ -2169,7 +2169,7 @@ function Initialize-ToolEntry {
                         $canContinue = Stop-ToolProcess -ProcessName $processName
                         
                         if (-not $canContinue) {
-                            [System.Windows.Forms.MessageBox]::Show(
+                            Show-ModernMessageDialog -Arguments @(
                                 "Update abgebrochen.`n`nBitte schließen Sie $($toolInfo.Name) manuell und versuchen Sie es erneut.",
                                 "Update abgebrochen",
                                 [System.Windows.Forms.MessageBoxButtons]::OK,
@@ -2179,7 +2179,7 @@ function Initialize-ToolEntry {
                         }
                         
                         # Update durchführen mit Fortschrittsanzeige
-                        [System.Windows.Forms.MessageBox]::Show(
+                        Show-ModernMessageDialog -Arguments @(
                             "Update für $($toolInfo.Name) wird gestartet.`n`nBitte warten Sie, bis das Update abgeschlossen ist.",
                             "Update - $($toolInfo.Name)",
                             [System.Windows.Forms.MessageBoxButtons]::OK,
@@ -2197,7 +2197,7 @@ function Initialize-ToolEntry {
 
                         if ($wingetResult.Success) {
                             Update-ToolWorkflowProgress -ProgressBar $global:progressBar -StatusText "Update erfolgreich: $($toolInfo.Name)" -ProgressValue 100 -TextColor ([System.Drawing.Color]::LightGreen)
-                            [System.Windows.Forms.MessageBox]::Show(
+                            Show-ModernMessageDialog -Arguments @(
                                 "$($toolInfo.Name) wurde erfolgreich aktualisiert!",
                                 "Update erfolgreich",
                                 [System.Windows.Forms.MessageBoxButtons]::OK,
@@ -2205,7 +2205,7 @@ function Initialize-ToolEntry {
                             )
                         } elseif ($wingetResult.TimedOut) {
                             Update-ToolWorkflowProgress -ProgressBar $global:progressBar -StatusText "Update Timeout: $($toolInfo.Name)" -ProgressValue 0 -TextColor ([System.Drawing.Color]::Red)
-                            [System.Windows.Forms.MessageBox]::Show(
+                            Show-ModernMessageDialog -Arguments @(
                                 "Update Timeout (>5 Min). Bitte manuell prüfen.",
                                 "Timeout",
                                 [System.Windows.Forms.MessageBoxButtons]::OK,
@@ -2214,7 +2214,7 @@ function Initialize-ToolEntry {
                         } else {
                             Update-ToolWorkflowProgress -ProgressBar $global:progressBar -StatusText "Update fehlgeschlagen: $($toolInfo.Name)" -ProgressValue 0 -TextColor ([System.Drawing.Color]::Red)
                             $errorDesc = Get-WingetErrorDescription -ErrorCode $wingetResult.ExitCode
-                            [System.Windows.Forms.MessageBox]::Show(
+                            Show-ModernMessageDialog -Arguments @(
                                 "Update fehlgeschlagen!`n`nFehlercode: $($wingetResult.ExitCode)`n`n$errorDesc`n`nDebug-Tipp: Führen Sie 'winget upgrade --id $($toolInfo.Winget)' in PowerShell aus.",
                                 "Update fehlgeschlagen",
                                 [System.Windows.Forms.MessageBoxButtons]::OK,
@@ -2224,7 +2224,7 @@ function Initialize-ToolEntry {
                     }
                     # ===== Zustand 2: INSTALLIEREN (von lokal) =====
                     elseif ($isDownloaded -and -not $isInstalled) {
-                        $result = [System.Windows.Forms.MessageBox]::Show(
+                        $result = Show-ModernMessageDialog -Arguments @(
                             "Möchten Sie $($toolInfo.Name) aus dem lokalen Download installieren?`n`nDatei: $localInstallerPath",
                             "Installation - $($toolInfo.Name)",
                             [System.Windows.Forms.MessageBoxButtons]::YesNo,
@@ -2232,7 +2232,7 @@ function Initialize-ToolEntry {
                         )
                         
                         if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
-                            [System.Windows.Forms.MessageBox]::Show(
+                            Show-ModernMessageDialog -Arguments @(
                                 "Installation von $($toolInfo.Name) wird gestartet.`n`nBitte folgen Sie den Anweisungen des Installers.",
                                 "Installation - $($toolInfo.Name)",
                                 [System.Windows.Forms.MessageBoxButtons]::OK,
@@ -2247,7 +2247,7 @@ function Initialize-ToolEntry {
                             $installResult = Install-ToolFromLocal @installParams
                             
                             if ($installResult.Success) {
-                                [System.Windows.Forms.MessageBox]::Show(
+                                Show-ModernMessageDialog -Arguments @(
                                     "$($toolInfo.Name) wurde gestartet!`n`n$($installResult.Message)",
                                     "Installation",
                                     [System.Windows.Forms.MessageBoxButtons]::OK,
@@ -2259,7 +2259,7 @@ function Initialize-ToolEntry {
                                     Update-ToolInstallationStatus -Tool $toolInfo -IsInstalled $true
                                 }
                             } else {
-                                [System.Windows.Forms.MessageBox]::Show(
+                                Show-ModernMessageDialog -Arguments @(
                                     "Installation fehlgeschlagen!`n`n$($installResult.Message)",
                                     "Fehler",
                                     [System.Windows.Forms.MessageBoxButtons]::OK,
@@ -2276,7 +2276,7 @@ function Initialize-ToolEntry {
                             
                             if ($choice -eq "Install") {
                                 # Via Winget installieren
-                                [System.Windows.Forms.MessageBox]::Show(
+                                Show-ModernMessageDialog -Arguments @(
                                     "Installation von $($toolInfo.Name) wird gestartet.`n`nBitte warten Sie, bis die Installation abgeschlossen ist.",
                                     "Installation - $($toolInfo.Name)",
                                     [System.Windows.Forms.MessageBoxButtons]::OK,
@@ -2294,7 +2294,7 @@ function Initialize-ToolEntry {
 
                                 if ($wingetResult.Success) {
                                     Update-ToolWorkflowProgress -ProgressBar $global:progressBar -StatusText "Installation erfolgreich: $($toolInfo.Name)" -ProgressValue 100 -TextColor ([System.Drawing.Color]::LightGreen)
-                                    [System.Windows.Forms.MessageBox]::Show(
+                                    Show-ModernMessageDialog -Arguments @(
                                         "$($toolInfo.Name) wurde erfolgreich installiert!",
                                         "Installation erfolgreich",
                                         [System.Windows.Forms.MessageBoxButtons]::OK,
@@ -2305,7 +2305,7 @@ function Initialize-ToolEntry {
                                 } else {
                                     Update-ToolWorkflowProgress -ProgressBar $global:progressBar -StatusText "Installation fehlgeschlagen: $($toolInfo.Name)" -ProgressValue 0 -TextColor ([System.Drawing.Color]::Red)
                                     $errorDesc = Get-WingetErrorDescription -ErrorCode $wingetResult.ExitCode
-                                    [System.Windows.Forms.MessageBox]::Show(
+                                    Show-ModernMessageDialog -Arguments @(
                                         "Installation fehlgeschlagen!`n`nFehlercode: $($wingetResult.ExitCode)`n`n$errorDesc",
                                         "Fehler",
                                         [System.Windows.Forms.MessageBoxButtons]::OK,
@@ -2314,7 +2314,7 @@ function Initialize-ToolEntry {
                                 }
                             } elseif ($choice -eq "Download") {
                                 # Herunterladen
-                                [System.Windows.Forms.MessageBox]::Show(
+                                Show-ModernMessageDialog -Arguments @(
                                     "Download von $($toolInfo.Name) wird gestartet...",
                                     "Download - $($toolInfo.Name)",
                                     [System.Windows.Forms.MessageBoxButtons]::OK,
@@ -2330,7 +2330,7 @@ function Initialize-ToolEntry {
                                 
                                 $dlgTitle = if ($downloadResult.Success) { "Download erfolgreich" } else { "Download" }
                                 $dlgIcon = if ($downloadResult.Success) { [System.Windows.Forms.MessageBoxIcon]::Information } else { [System.Windows.Forms.MessageBoxIcon]::Warning }
-                                [System.Windows.Forms.MessageBox]::Show(
+                                Show-ModernMessageDialog -Arguments @(
                                     $downloadResult.Message,
                                     $dlgTitle,
                                     [System.Windows.Forms.MessageBoxButtons]::OK,
@@ -2383,7 +2383,7 @@ function Initialize-ToolEntry {
                             }
                         } else {
                             # Nur Download verfügbar (kein Winget)
-                            [System.Windows.Forms.MessageBox]::Show(
+                            Show-ModernMessageDialog -Arguments @(
                                 "Download von $($toolInfo.Name) wird gestartet...",
                                 "Download - $($toolInfo.Name)",
                                 [System.Windows.Forms.MessageBoxButtons]::OK,
@@ -2399,7 +2399,7 @@ function Initialize-ToolEntry {
                             
                             $dlgTitle = if ($downloadResult.Success) { "Download erfolgreich" } else { "Download" }
                             $dlgIcon = if ($downloadResult.Success) { [System.Windows.Forms.MessageBoxIcon]::Information } else { [System.Windows.Forms.MessageBoxIcon]::Warning }
-                            [System.Windows.Forms.MessageBox]::Show(
+                            Show-ModernMessageDialog -Arguments @(
                                 $downloadResult.Message,
                                 $dlgTitle,
                                 [System.Windows.Forms.MessageBoxButtons]::OK,
@@ -2453,7 +2453,7 @@ function Initialize-ToolEntry {
                     }
                     # ===== Installiert, kein Update → Neu installieren/reparieren =====
                     elseif ($isInstalled -and -not $hasUpdate) {
-                        $result = [System.Windows.Forms.MessageBox]::Show(
+                        $result = Show-ModernMessageDialog -Arguments @(
                             "Möchten Sie $($toolInfo.Name) neu installieren/reparieren?",
                             "Neuinstallation",
                             [System.Windows.Forms.MessageBoxButtons]::YesNo,
@@ -2464,7 +2464,7 @@ function Initialize-ToolEntry {
                             $canContinue = Stop-ToolProcess -ProcessName $processName
                             
                             if (-not $canContinue) {
-                                [System.Windows.Forms.MessageBox]::Show(
+                                Show-ModernMessageDialog -Arguments @(
                                     "Neuinstallation abgebrochen.`n`nBitte schließen Sie $($toolInfo.Name) manuell und versuchen Sie es erneut.",
                                     "Neuinstallation abgebrochen",
                                     [System.Windows.Forms.MessageBoxButtons]::OK,
@@ -2473,7 +2473,7 @@ function Initialize-ToolEntry {
                                 return
                             }
                             
-                            [System.Windows.Forms.MessageBox]::Show(
+                            Show-ModernMessageDialog -Arguments @(
                                 "Neuinstallation von $($toolInfo.Name) wird gestartet.`n`nBitte warten Sie, bis die Installation abgeschlossen ist.",
                                 "Neuinstallation - $($toolInfo.Name)",
                                 [System.Windows.Forms.MessageBoxButtons]::OK,
@@ -2491,7 +2491,7 @@ function Initialize-ToolEntry {
 
                             if ($wingetResult.Success) {
                                 Update-ToolWorkflowProgress -ProgressBar $global:progressBar -StatusText "Neuinstallation erfolgreich: $($toolInfo.Name)" -ProgressValue 100 -TextColor ([System.Drawing.Color]::LightGreen)
-                                [System.Windows.Forms.MessageBox]::Show(
+                                Show-ModernMessageDialog -Arguments @(
                                     "$($toolInfo.Name) wurde erfolgreich neu installiert!",
                                     "Neuinstallation erfolgreich",
                                     [System.Windows.Forms.MessageBoxButtons]::OK,
@@ -2499,7 +2499,7 @@ function Initialize-ToolEntry {
                                 )
                             } elseif ($wingetResult.TimedOut) {
                                 Update-ToolWorkflowProgress -ProgressBar $global:progressBar -StatusText "Neuinstallation Timeout: $($toolInfo.Name)" -ProgressValue 0 -TextColor ([System.Drawing.Color]::Red)
-                                [System.Windows.Forms.MessageBox]::Show(
+                                Show-ModernMessageDialog -Arguments @(
                                     "Neuinstallation Timeout (>5 Min). Bitte manuell prüfen.",
                                     "Timeout",
                                     [System.Windows.Forms.MessageBoxButtons]::OK,
@@ -2508,7 +2508,7 @@ function Initialize-ToolEntry {
                             } else {
                                 Update-ToolWorkflowProgress -ProgressBar $global:progressBar -StatusText "Neuinstallation fehlgeschlagen: $($toolInfo.Name)" -ProgressValue 0 -TextColor ([System.Drawing.Color]::Red)
                                 $errorDesc = Get-WingetErrorDescription -ErrorCode $wingetResult.ExitCode
-                                [System.Windows.Forms.MessageBox]::Show(
+                                Show-ModernMessageDialog -Arguments @(
                                     "Neuinstallation fehlgeschlagen!`n`nFehlercode: $($wingetResult.ExitCode)`n`n$errorDesc",
                                     "Fehler",
                                     [System.Windows.Forms.MessageBoxButtons]::OK,
@@ -2523,7 +2523,7 @@ function Initialize-ToolEntry {
                         Update-ToolInstallationStatus -Tool $toolInfo -IsInstalled $true
                     }
                 } catch {
-                    [System.Windows.Forms.MessageBox]::Show(
+                    Show-ModernMessageDialog -Arguments @(
                         "Fehler beim Ausführen der Aktion: $($_.Exception.Message)",
                         "Fehler",
                         [System.Windows.Forms.MessageBoxButtons]::OK,
@@ -2551,7 +2551,7 @@ function Initialize-ToolEntry {
             try {
                 Start-Process $toolInfo.DownloadUrl
             } catch {
-                [System.Windows.Forms.MessageBox]::Show(
+                Show-ModernMessageDialog -Arguments @(
                     "Fehler beim Öffnen der Download-URL: $($_.Exception.Message)",
                     "Fehler",
                     [System.Windows.Forms.MessageBoxButtons]::OK,
@@ -2579,7 +2579,7 @@ function Initialize-ToolEntry {
 
                 # Geschützte Pflichtkomponenten dürfen nicht über die UI deinstalliert werden
                 if ($toolInfo.Protected -eq $true) {
-                    [System.Windows.Forms.MessageBox]::Show(
+                    Show-ModernMessageDialog -Arguments @(
                         "'$($toolInfo.Name)' ist eine Pflichtkomponente des Systems und kann nicht über die Tool-Bibliothek deinstalliert werden.`n`nDieses Paket wird für das Hardware-Monitoring benötigt. Eine Deinstallation würde die GUI-Kernfunktionen beschädigen.",
                         "Deinstallation gesperrt",
                         [System.Windows.Forms.MessageBoxButtons]::OK,
@@ -2588,7 +2588,7 @@ function Initialize-ToolEntry {
                     return
                 }
 
-                $result = [System.Windows.Forms.MessageBox]::Show(
+                $result = Show-ModernMessageDialog -Arguments @(
                     "Möchten Sie $($toolInfo.Name) wirklich deinstallieren?",
                     "Deinstallation bestätigen",
                     [System.Windows.Forms.MessageBoxButtons]::YesNo,
@@ -2607,7 +2607,7 @@ function Initialize-ToolEntry {
 
                         if ($wingetResult.Success) {
                             Update-ToolWorkflowProgress -ProgressBar $global:progressBar -StatusText "Deinstallation erfolgreich: $($toolInfo.Name)" -ProgressValue 100 -TextColor ([System.Drawing.Color]::LightGreen)
-                            [System.Windows.Forms.MessageBox]::Show(
+                            Show-ModernMessageDialog -Arguments @(
                                 "$($toolInfo.Name) wurde erfolgreich deinstalliert.",
                                 "Deinstallation erfolgreich",
                                 [System.Windows.Forms.MessageBoxButtons]::OK,
@@ -2620,7 +2620,7 @@ function Initialize-ToolEntry {
                             }
                         } elseif ($wingetResult.TimedOut) {
                             Update-ToolWorkflowProgress -ProgressBar $global:progressBar -StatusText "Deinstallation Timeout: $($toolInfo.Name)" -ProgressValue 0 -TextColor ([System.Drawing.Color]::Red)
-                            [System.Windows.Forms.MessageBox]::Show(
+                            Show-ModernMessageDialog -Arguments @(
                                 "Deinstallation Timeout (>5 Min). Bitte manuell prüfen.",
                                 "Timeout",
                                 [System.Windows.Forms.MessageBoxButtons]::OK,
@@ -2629,7 +2629,7 @@ function Initialize-ToolEntry {
                         } else {
                             Update-ToolWorkflowProgress -ProgressBar $global:progressBar -StatusText "Deinstallation fehlgeschlagen: $($toolInfo.Name)" -ProgressValue 0 -TextColor ([System.Drawing.Color]::Red)
                             $errorDesc = Get-WingetErrorDescription -ErrorCode $wingetResult.ExitCode
-                            [System.Windows.Forms.MessageBox]::Show(
+                            Show-ModernMessageDialog -Arguments @(
                                 "Deinstallation fehlgeschlagen!`n`nFehlercode: $($wingetResult.ExitCode)`n`n$errorDesc",
                                 "Fehler",
                                 [System.Windows.Forms.MessageBoxButtons]::OK,
@@ -2637,7 +2637,7 @@ function Initialize-ToolEntry {
                             )
                         }
                     } catch {
-                        [System.Windows.Forms.MessageBox]::Show(
+                        Show-ModernMessageDialog -Arguments @(
                             "Fehler beim Starten der Deinstallation: $($_.Exception.Message)",
                             "Fehler",
                             [System.Windows.Forms.MessageBoxButtons]::OK,

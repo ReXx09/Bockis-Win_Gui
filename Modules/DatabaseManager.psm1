@@ -244,7 +244,7 @@ function Show-DatabaseOverview {
         $dbPath = Join-Path $env:APPDATA "WinGuiTools\system_data.db"
         
         if (-not (Test-Path $dbPath)) {
-            [System.Windows.Forms.MessageBox]::Show(
+            Show-ModernMessageDialog -Arguments @(
                 "Datenbank nicht gefunden:`n$dbPath`n`nEs wurden noch keine Daten gespeichert.",
                 "Datenbank leer",
                 [System.Windows.Forms.MessageBoxButtons]::OK,
@@ -325,7 +325,7 @@ function Show-DatabaseOverview {
         $btnClear.ForeColor = [System.Drawing.Color]::White
         $btnClear.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
         $btnClear.Add_Click({
-            $result = [System.Windows.Forms.MessageBox]::Show(
+            $result = Show-ModernMessageDialog -Arguments @(
                 "Möchten Sie wirklich ALLE Einträge aus der Datenbank löschen?`n`nDiese Aktion kann nicht rückgängig gemacht werden!",
                 "Datenbank leeren",
                 [System.Windows.Forms.MessageBoxButtons]::YesNo,
@@ -341,7 +341,7 @@ function Show-DatabaseOverview {
                     $clearCmd.ExecuteNonQuery() | Out-Null
                     $conn.Close()
                     
-                    [System.Windows.Forms.MessageBox]::Show(
+                    Show-ModernMessageDialog -Arguments @(
                         "Alle Einträge wurden erfolgreich gelöscht.",
                         "Erfolgreich",
                         [System.Windows.Forms.MessageBoxButtons]::OK,
@@ -350,7 +350,7 @@ function Show-DatabaseOverview {
                     $dbForm.Close()
                 }
                 catch {
-                    [System.Windows.Forms.MessageBox]::Show(
+                    Show-ModernMessageDialog -Arguments @(
                         "Fehler beim Leeren der Datenbank:`n`n$_",
                         "Fehler",
                         [System.Windows.Forms.MessageBoxButtons]::OK,
@@ -457,7 +457,7 @@ function Show-DatabaseOverview {
         $dbForm.ShowDialog() | Out-Null
     }
     catch {
-        [System.Windows.Forms.MessageBox]::Show(
+        Show-ModernMessageDialog -Arguments @(
             "Fehler beim Laden der Datenbank-Übersicht:`n`n$_",
             "Fehler",
             [System.Windows.Forms.MessageBoxButtons]::OK,
