@@ -3421,6 +3421,9 @@ $settingsButton.Add_MouseEnter({ $this.BackColor = [System.Drawing.Color]::Slate
 $settingsButton.Add_MouseLeave({ $this.BackColor = [System.Drawing.Color]::DarkSlateGray })
 [void]$titleBar.Controls.Add($settingsButton)
 
+$mainform.Add_Resize({ Update-TitleBarSearchLayout })
+Update-TitleBarSearchLayout
+
 # Titelleiste zum Formular hinzufügen
 [void]$mainform.Controls.Add($titleBar)
 
@@ -4426,13 +4429,24 @@ $searchBoxWrapper.Controls.Add($searchClearButton)
 # Zentrale Suche in die Titelleiste verschieben; die eigentliche Filterlogik bleibt unverändert.
 $searchLabel.Visible = $false
 [void]$searchPanel.Controls.Remove($searchBoxWrapper)
-$searchBoxWrapper.Location = New-Object System.Drawing.Point(230, 2)
+$searchBoxWrapper.Location = New-Object System.Drawing.Point(330, 2)
 $searchBoxWrapper.Size = New-Object System.Drawing.Size(340, 26)
 $searchTextBox.Location = New-Object System.Drawing.Point(8, 2)
 $searchTextBox.Size = New-Object System.Drawing.Size(296, 22)
 $searchClearButton.Location = New-Object System.Drawing.Point(308, 0)
 $searchBoxWrapper.Visible = $true
 $titleBar.Controls.Add($searchBoxWrapper)
+
+function Update-TitleBarSearchLayout {
+    if (-not $titleBar -or -not $searchBoxWrapper) { return }
+
+    $availableWidth = $titleBar.ClientSize.Width
+    $centeredX = [int](($availableWidth - $searchBoxWrapper.Width) / 2)
+    $minimumX = if ($titleLabel) { $titleLabel.Right + 15 } else { 10 }
+    $maximumX = if ($settingsButton) { $settingsButton.Left - $searchBoxWrapper.Width - 15 } else { $availableWidth - $searchBoxWrapper.Width - 10 }
+    $searchX = [Math]::Max($minimumX, [Math]::Min($centeredX, $maximumX))
+    $searchBoxWrapper.Location = New-Object System.Drawing.Point($searchX, 2)
+}
 
 function Update-SearchModeLabel {
     if ($searchTextBox) {
