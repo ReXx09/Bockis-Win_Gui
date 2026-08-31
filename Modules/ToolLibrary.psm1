@@ -3343,6 +3343,7 @@ function Update-ToolsDisplay {
             }
         })
     $timer.Start()
+    return $totalTools
 }
 
 # Exportiere die Funktionen
