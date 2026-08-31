@@ -1865,6 +1865,8 @@ function Get-GitPullDependencyStatus {
         Branch           = $null
         Remote           = $null
         Dirty            = $false
+        AheadCount       = 0
+        BehindCount      = 0
         ToolLibraryName  = "Git"
         ToolLibraryCategory = "Coding / IT"
     }
@@ -1895,14 +1897,32 @@ function Get-GitPullDependencyStatus {
         $dirtyOutput = (& $gitClient.Command -C $RepositoryPath status --porcelain 2>&1 | Out-String)
         $isDirty = -not [string]::IsNullOrWhiteSpace($dirtyOutput)
 
+        $aheadCount = 0
+        $behindCount = 0
+        if ($upstream) {
+            $aheadBehindOutput = (& $gitClient.Command -C $RepositoryPath rev-list --left-right --count "HEAD...@{u}" 2>&1 | Out-String).Trim()
+            if ($LASTEXITCODE -eq 0 -and $aheadBehindOutput -match '^(\d+)\s+(\d+)$') {
+                $aheadCount = [int]$Matches[1]
+                $behindCount = [int]$Matches[2]
+            }
+        }
+
         $status.Found = $true
         $status.Available = $true
         $status.Version = if ($branch) { $branch } else { 'Unbekannter Branch' }
         $status.Branch = $branch
         $status.Remote = $upstream
         $status.Dirty = $isDirty
-        $status.Status = if ($isDirty) { '⚠ Lokale Änderungen' } elseif ($upstream) { '✓ Bereit' } else { '⚠ Kein Upstream' }
-        $status.StatusColor = if ($isDirty -or -not $upstream) { 'Yellow' } else { 'Green' }
+        $status.AheadCount = $aheadCount
+        $status.BehindCount = $behindCount
+        $status.Status = if ($isDirty) { '⚠ Lokale Änderungen' }
+            elseif (-not $upstream) { '⚠ Kein Upstream' }
+            elseif ($aheadCount -gt 0) { "⚠ $aheadCount Commit(s) nicht gepusht" }
+            elseif ($behindCount -gt 0) { "↓ $behindCount Commit(s) verfügbar" }
+            else { '✓ Bereit' }
+        $status.StatusColor = if ($isDirty -or -not $upstream -or $aheadCount -gt 0) { 'Yellow' }
+            elseif ($behindCount -gt 0) { 'Green' }
+            else { 'Green' }
     } catch {
         $status.Status = "⚠ Git-Status fehlgeschlagen"
         $status.StatusColor = "Yellow"
