@@ -4588,24 +4588,6 @@ function Update-AvailableUpdatesMarker {
     $tooltipObj.SetToolTip($btnFilterUpdates, $tooltipText)
 }
 
-# Info-Text für Suchergebnisse
-$searchResultBox = New-Object System.Windows.Forms.Panel
-$searchResultBox.Location = New-Object System.Drawing.Point(520, 10)
-$searchResultBox.Size = New-Object System.Drawing.Size(125, 30)
-$searchResultBox.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
-$searchResultBox.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
-$searchResultBox.Visible = $false
-$searchResultLabel = New-Object System.Windows.Forms.Label
-$searchResultLabel.Location = New-Object System.Drawing.Point(8, 4)
-$searchResultLabel.Size = New-Object System.Drawing.Size(107, 20)
-$searchResultLabel.ForeColor = [System.Drawing.Color]::Gray
-$searchResultLabel.Font = New-Object System.Drawing.Font("Segoe UI", 9)
-$searchResultLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
-$searchResultLabel.Text = ""
-$searchResultBox.Controls.Add($searchResultLabel)
-$searchResultBox.Location = New-Object System.Drawing.Point(580, 0)
-$titleBar.Controls.Add($searchResultBox)
-
 # Hilfsfunktion zum Aktualisieren aller Kategorie-Zähler
 function Update-CategoryCounts {
     param([string]$SearchQuery = "")
@@ -4671,22 +4653,16 @@ function Set-SearchResultStatus {
     param([int]$ResultCount)
 
     if ($ResultCount -eq 0) {
-        $searchResultLabel.Text = "Keine Ergebnisse"
-        $searchResultLabel.ForeColor = [System.Drawing.Color]::Salmon
         $progressBar.CustomText = "Suche: Keine Ergebnisse"
         $progressBar.TextColor = [System.Drawing.Color]::Salmon
         $global:progressBarPostText = "Suche: Keine Ergebnisse"
         $global:progressBarPostColor = [System.Drawing.Color]::Salmon
     } elseif ($ResultCount -eq 1) {
-        $searchResultLabel.Text = "1 Tool gefunden"
-        $searchResultLabel.ForeColor = [System.Drawing.Color]::LightGreen
         $progressBar.CustomText = "Suche: 1 Tool gefunden"
         $progressBar.TextColor = [System.Drawing.Color]::LightGreen
         $global:progressBarPostText = "Suche: 1 Tool gefunden"
         $global:progressBarPostColor = [System.Drawing.Color]::LightGreen
     } else {
-        $searchResultLabel.Text = "$ResultCount Tools gefunden"
-        $searchResultLabel.ForeColor = [System.Drawing.Color]::LightGreen
         $progressBar.CustomText = "Suche: $ResultCount Tools gefunden"
         $progressBar.TextColor = [System.Drawing.Color]::LightGreen
         $global:progressBarPostText = "Suche: $ResultCount Tools gefunden"
@@ -4712,7 +4688,6 @@ $searchTextBox.Add_TextChanged({
     
         # Aktualisiere Suchergebnis-Label und Tool-Anzeige
         if ([string]::IsNullOrWhiteSpace($searchQuery)) {
-            $searchResultLabel.Text = ""
             $progressBar.CustomText = "Bereit"
             $progressBar.TextColor = [System.Drawing.Color]::White
             $global:progressBarPostText = "Bereit"
@@ -4721,8 +4696,6 @@ $searchTextBox.Add_TextChanged({
             $resultCount = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category $script:currentDownloadCategory -MainProgressBar $progressBar -SearchQuery "" -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates -StatusFilter $script:statusFilter
         } elseif ($searchQuery.Length -lt 3) {
             # Zu kurzer Suchbegriff
-            $searchResultLabel.Text = "Mindestens 3 Zeichen eingeben"
-            $searchResultLabel.ForeColor = [System.Drawing.Color]::Orange
             $progressBar.CustomText = "Suche: Mindestens 3 Zeichen eingeben"
             $progressBar.TextColor = [System.Drawing.Color]::Orange
             $global:progressBarPostText = "Suche: Mindestens 3 Zeichen eingeben"
@@ -7565,7 +7538,6 @@ $downloadsPanel = New-CollapsiblePanel -Title "Tool-Downloads" -YPosition 157 -T
     # Suchfeld im mainContentPanel einblenden
     if ($searchPanel) { $searchPanel.Visible = $true }
     $searchBoxWrapper.Visible = $true
-    $searchResultBox.Visible = $false
     Set-SearchCueText ""
     Update-SearchModeLabel
 
@@ -7726,7 +7698,6 @@ $btnAllTools.Add_Click({
         # Suchfeld einblenden
         if ($searchPanel) { $searchPanel.Visible = $true }
         $searchBoxWrapper.Visible = $true
-        $searchResultBox.Visible = $true
         Set-SearchCueText "Nach Paketen suchen"
     
         # mainContentPanel-Panels ausblenden
@@ -7742,7 +7713,6 @@ $btnAllTools.Add_Click({
     
         # Aktuelle Kategorie speichern
         $script:currentDownloadCategory = "all"
-        $searchResultBox.Visible = $true
         Set-SearchCueText "Nach Paketen suchen"
         Update-SearchModeLabel
     
@@ -7807,7 +7777,6 @@ $btnSystemTools.Add_Click({
         # Aktuelle Kategorie speichern
         $script:currentDownloadCategory = "system"
         $searchBoxWrapper.Visible = $true
-        $searchResultBox.Visible = $true
         Set-SearchCueText "Nach Paketen suchen"
         Update-SearchModeLabel
     
@@ -7872,7 +7841,6 @@ $btnApplications.Add_Click({
         # Aktuelle Kategorie speichern
         $script:currentDownloadCategory = "applications"
         $searchBoxWrapper.Visible = $true
-        $searchResultBox.Visible = $true
         Set-SearchCueText "Nach Paketen suchen"
         Update-SearchModeLabel
     
@@ -7937,7 +7905,6 @@ $btnAudioTV.Add_Click({
         # Aktuelle Kategorie speichern
         $script:currentDownloadCategory = "audiotv"
         $searchBoxWrapper.Visible = $true
-        $searchResultBox.Visible = $true
         Set-SearchCueText "Nach Paketen suchen"
         Update-SearchModeLabel
     
@@ -8002,7 +7969,6 @@ $btnCodingTools.Add_Click({
         # Aktuelle Kategorie speichern
         $script:currentDownloadCategory = "coding"
         $searchBoxWrapper.Visible = $true
-        $searchResultBox.Visible = $true
         Set-SearchCueText "Nach Paketen suchen"
         Update-SearchModeLabel
     
