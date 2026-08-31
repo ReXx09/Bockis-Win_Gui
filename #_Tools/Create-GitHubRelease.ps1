@@ -2,9 +2,9 @@
 # Erstellt einen GitHub Release mit automatischem ZIP-Upload
 
 param(
-    [string]$Version = "4.2.5",
+    [string]$Version = "4.2.6",
     [string]$RepoOwner = "ReXx09",
-    [string]$RepoName = "Bockis-Win_Gui-DEV",
+    [string]$RepoName = "Bockis-Win_Gui",
     [string]$Token = "",           # Leer lassen – wird aus Token-Datei gelesen
     [switch]$PreRelease = $false,
     [switch]$Draft = $false
@@ -36,21 +36,11 @@ $releaseBody = @"
 ## Bockis System-Tool v$Version
 
 ### Bugfixes
-- **Browser oeffnet sich nicht (Admin-Kontext)**: Open-UrlInBrowser nutzt jetzt Shell.Application des laufenden (nicht-erhoehten) Explorer-Prozesses - behebt die Chromium/Brave-Elevation-Barriere
-- **Add-ons starten nicht**: .bat/.cmd-Dateien werden jetzt explizit ueber cmd.exe /c ausgefuehrt - zuverlaessiger aus erhoehtem Kontext
-- **WPF-Fehler lautlos verschluckt**: Add_Click-Handler hat jetzt try-catch mit Write-ToolLog
-- **Settings-Dialog**: Duplikate entfernt, Action-Buttons und Closure-Variable-Capture korrigiert
-- **Tray-Wiederherstellung**: Stabilitaet beim GUI-Restore aus dem Tray verbessert
+- **Toolsuche zeigte "Keine Ergebnisse" bei Treffern**: Update-ToolsDisplay gibt die Trefferanzahl jetzt korrekt an die Suchstatusanzeige zurueck (asynchroner Kachel-Aufbau ueberschrieb vorher den Rueckgabewert)
 
 ### Neue Features
-- **Extensions-System**: Verwaltung externer Erweiterungen (Dashboard, MultiMonitor) direkt aus der GUI
-- **ADB Link** in Tool-Bibliothek (Coding / IT) hinzugefuegt
-- **DetectCommand-Mechanismus**: Tools ohne Winget-ID ueber PATH-Befehl als installiert erkennbar
-
-### Verbesserungen
-- Extension-Logging via Write-ToolLog -ToolName 'EXTENSION'
-- Data/Add-ons als Git-Submodule (bockis-dashboard, multimonitor-profile-tool)
-- Set-ProjectVersion.ps1 Pfadfehler korrigiert
+- **Performance-Tweaks**: Transparenzeffekte, visuelle Effekte, Mausbeschleunigung und Windows Game Mode als reversible Einstellungen - mit Bestaetigungsdialog, einmaliger Registry-Sicherung und Restore-Funktion
+- **Git-Pull-Statuspruefung erweitert**: Erkennt jetzt ungepushte lokale Commits (Ahead/Behind via git rev-list) und zeigt einen klaren Warnhinweis statt faelschlich "Bereit"
 
 ### Installation
 1. ZIP-Datei herunterladen und entpacken
@@ -224,6 +214,7 @@ $openBrowser = Read-Host "Release im Browser öffnen? (j/n)"
 if ($openBrowser -eq 'j' -or $openBrowser -eq 'J') {
     Start-Process $release.html_url
 }
+
 
 
 

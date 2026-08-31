@@ -1,7 +1,20 @@
-# Bockis System-Tool v4.2.5
+# Bockis System-Tool v4.2.6
 
-**Datum:** 2026-08-25
+**Datum:** 2026-08-31
 **Autor:** Bockis
+
+---
+
+## Version 4.2.6
+
+### Bugfixes
+
+- **Toolsuche zeigte "Keine Ergebnisse" bei Treffern**: `Update-ToolsDisplay` gab die Trefferanzahl nicht mehr korrekt zurück, da die Tool-Kacheln asynchron über einen Timer aufgebaut werden. Die Funktion liefert die ermittelte Trefferzahl jetzt direkt nach dem Start des Anzeige-Timers zurück.
+
+### Neue Features
+
+- **Performance-Tweaks**: Vier neue, reversible Einstellungen (Transparenzeffekte, visuelle Effekte, Mausbeschleunigung, Windows Game Mode) im Settings-Dialog. Änderungen werden erst nach Bestätigung angewendet; der ursprüngliche Registry-Zustand wird einmalig gesichert und kann per `Restore-PerformanceTweaks` wiederhergestellt werden.
+- **Git-Pull-Statusprüfung erweitert**: `Get-GitPullDependencyStatus` erkennt jetzt lokale Commits, die noch nicht gepusht wurden (`git rev-list --left-right --count`), und zeigt "⚠ X Commit(s) nicht gepusht" statt fälschlich "✓ Bereit" an.
 
 ---
 

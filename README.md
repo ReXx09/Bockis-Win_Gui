@@ -1,4 +1,4 @@
-﻿# Bockis System-Tool v4.2.5
+﻿# Bockis System-Tool v4.2.6
 
 Ein professionelles PowerShell-basiertes Systemwartungs-Tool mit moderner grafischer Benutzeroberfläche, WPF-Integration und umfassenden Diagnose- und Reparaturfunktionen für Windows 10/11.
 
@@ -243,7 +243,12 @@ Benutzerdefinierte Farbschemata werden in `config.json` gespeichert:
 
 ## 📋 Changelog
 
-### Version 4.2.5 (25. August 2026) — Aktuell
+### Version 4.2.6 (31. August 2026) — Aktuell
+- 🔍 **Toolsuche behoben**: Die Trefferanzahl wird jetzt korrekt an die Suchstatusanzeige zurückgegeben — vorher zeigte ein einzelner Treffer fälschlich „Keine Ergebnisse“ an.
+- ⚡ **Performance-Tweaks**: Neue Einstellungen für Transparenzeffekte, visuelle Effekte, Mausbeschleunigung und Windows Game Mode — mit Bestätigungsdialog und einmaliger Registry-Sicherung inkl. Wiederherstellung.
+- 🔀 **Git Pull Status**: Die Dependency-Anzeige erkennt jetzt ungepushte lokale Commits und zeigt einen klaren Hinweis statt fälschlich „✓ Bereit“.
+
+### Version 4.2.5 (25. August 2026)
 - 🔄 **Git Pull**: Statusprüfung und Pull verwenden jetzt garantiert denselben lokalen Repository-Pfad.
 - ♻️ **ToolLibrary-Reload**: Die Tool-Liste wird nach einem Pull beim Öffnen der Downloads-Ansicht neu geladen.
 - 🎮 **Epic Games Launcher**: Als Anwendung mit Winget-Installation `EpicGames.EpicGamesLauncher` ergänzt.
