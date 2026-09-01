@@ -7175,6 +7175,12 @@ $btnCheckDependenciesH.Add_Click({
                         $actionButton.BackColor = [System.Drawing.Color]::FromArgb(52, 152, 219)
                         $actionButton.ForeColor = [System.Drawing.Color]::White
                         $actionButton.Tag = @{ Dependency = $dep; Action = "gui-release-select"; IsUpgrade = $true }
+                    } elseif ($dep.Name -eq "GUI-Update (GitHub)" -and $dep.AvailableVersion -and ($dep.AvailableVersion -eq ($dep.Version -replace '^v', ''))) {
+                        # Installierte Version entspricht dem neuesten Release: kein Down- oder Update noetig
+                        $actionButton.Text = "Version wählen"
+                        $actionButton.BackColor = [System.Drawing.Color]::FromArgb(124, 77, 255)
+                        $actionButton.ForeColor = [System.Drawing.Color]::White
+                        $actionButton.Tag = @{ Dependency = $dep; Action = "gui-release-select"; IsUpgrade = $false }
                     } elseif ($dep.Name -eq "GUI-Update (GitHub)") {
                         $actionButton.Text = "Downgrade"
                         $actionButton.BackColor = [System.Drawing.Color]::FromArgb(124, 77, 255)
