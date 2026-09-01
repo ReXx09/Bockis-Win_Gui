@@ -1035,7 +1035,7 @@ if ($settingsResult -and $settingsResult.Success) {
 $script:BgColor = [System.Drawing.Color]::FromArgb(30, 30, 30)
 
 $mainform = New-Object System.Windows.Forms.Form
-$mainform.Text = "$script:AppName $script:AppVersion$script:WorkspaceTag"
+$mainform.Text = "$script:AppName $script:AppVersion"
 $mainform.Font = New-Object System.Drawing.Font("Segoe UI", 10)
 $mainform.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::None  # Kein Rahmen
 $mainform.MinimumSize = New-Object System.Drawing.Size(1000, 800)
@@ -1139,7 +1139,7 @@ $script:mouseOffset = New-Object System.Drawing.Point
 
 # Titel-Label
 $titleLabel = New-Object System.Windows.Forms.Label
-$titleLabel.Text = "$script:AppName $script:AppVersion$script:WorkspaceTag"
+$titleLabel.Text = "$script:AppName $script:AppVersion"
 $titleLabel.ForeColor = [System.Drawing.Color]::White
 $titleLabel.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
 $titleLabel.Location = New-Object System.Drawing.Point(10, 5)
@@ -10421,6 +10421,11 @@ $statusLabel = New-Object System.Windows.Forms.ToolStripStatusLabel
 $statusLabel.Text = "Status: Bereit | " + (Get-Date -Format "dd.MM.yyyy HH:mm")
 $statusLabel.ForeColor = [System.Drawing.Color]::FromArgb(220, 220, 220)  # Helles Grau für Text
 
+# Workspace-Hinweis dauerhaft in der Statuszeile anzeigen
+$workspaceStatusLabel = New-Object System.Windows.Forms.ToolStripStatusLabel
+$workspaceStatusLabel.Text = if ($script:IsWorkspaceInstance) { "Workspace: Git-Arbeitsverzeichnis" } else { "" }
+$workspaceStatusLabel.ForeColor = [System.Drawing.Color]::Gold
+
 # Admin-Indikator
 $adminLabel = New-Object System.Windows.Forms.ToolStripStatusLabel
 $adminLabel.Alignment = [System.Windows.Forms.ToolStripItemAlignment]::Right
@@ -10433,6 +10438,7 @@ if (Test-Admin) {
 }
 
 $statusBar.Items.Add($statusLabel)
+$statusBar.Items.Add($workspaceStatusLabel)
 $statusBar.Items.Add($adminLabel)
 $mainform.Controls.Add($statusBar)
 
