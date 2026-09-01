@@ -1816,6 +1816,12 @@ function Initialize-ToolEntry {
     $border.VerticalAlignment = "Top"
     $border.Margin = if ($TileSize -eq "List") { New-Object Windows.Thickness(5, 2, 5, 2) } else { $script:toolResourceDictionary["ToolTileMargins"] }
     $border.Cursor = [System.Windows.Input.Cursors]::Hand
+    if ($TileSize -eq "List") {
+        $border.BorderThickness = New-Object Windows.Thickness(0, 0, 0, 1)
+        $border.CornerRadius = 0
+        $border.Background = [Windows.Media.Brushes]::Transparent
+        $border.BorderBrush = [Windows.Media.Brushes]::LightGray
+    }
 
     # Prüfen, ob das Tool bereits installiert ist und entsprechend hervorheben
     $isInstalled = Test-ToolInstalled -Tool $Tool
@@ -2004,7 +2010,9 @@ function Initialize-ToolEntry {
     }
     
     $headerPanel.Children.Add($namePanel)
-    $dockPanel.Children.Add($headerPanel)
+    if (-not $isListView) {
+        $dockPanel.Children.Add($headerPanel)
+    }
 
     # Beschreibungsbereich (in Listenansicht und kleinen Kacheln kürzer)
     $descPanel = New-Object Windows.Controls.StackPanel
@@ -2041,7 +2049,9 @@ function Initialize-ToolEntry {
     $descLabel.FontSize = if ($isListView) { 10 } elseif ($isSmallTile) { 10 } else { 12 }
     $descLabel.Margin = if ($isListView) { New-Object Windows.Thickness(5, 0, 5, 0) } else { New-Object Windows.Thickness(5) }
     $descPanel.Children.Add($descLabel)
-    $dockPanel.Children.Add($descPanel)
+    if (-not $isListView) {
+        $dockPanel.Children.Add($descPanel)
+    }
 
     # Button Panel
     $buttonPanel = New-Object Windows.Controls.StackPanel
@@ -2658,7 +2668,28 @@ function Initialize-ToolEntry {
         $buttonPanel.Children.Add($uninstallButton)
     }
 
-    $dockPanel.Children.Add($buttonPanel)
+    if ($isListView) {
+        $rowGrid = New-Object Windows.Controls.Grid
+        $rowGrid.Height = 34
+        foreach ($columnWidth in @("230", "*", "170")) {
+            $column = New-Object Windows.Controls.ColumnDefinition
+            if ($columnWidth -eq "*") {
+                $column.Width = New-Object Windows.GridLength(1, [Windows.GridUnitType]::Star)
+            } else {
+                $column.Width = New-Object Windows.GridLength([double]$columnWidth)
+            }
+            $rowGrid.ColumnDefinitions.Add($column)
+        }
+        [Windows.Controls.Grid]::SetColumn($headerPanel, 0)
+        [Windows.Controls.Grid]::SetColumn($descPanel, 1)
+        [Windows.Controls.Grid]::SetColumn($buttonPanel, 2)
+        $rowGrid.Children.Add($headerPanel)
+        $rowGrid.Children.Add($descPanel)
+        $rowGrid.Children.Add($buttonPanel)
+        $dockPanel.Children.Add($rowGrid)
+    } else {
+        $dockPanel.Children.Add($buttonPanel)
+    }
     $TargetElement.Children.Add($border)
 }
 
@@ -3212,6 +3243,33 @@ function Update-ToolsDisplay {
         }
         
         return $totalTools
+    }
+
+    if ($TileSize -eq "List") {
+        $headerGrid = New-Object Windows.Controls.Grid
+        $headerGrid.Width = $script:toolResourceDictionary["ToolTileWidthList"]
+        $headerGrid.Height = 28
+        $headerGrid.Background = [Windows.Media.Brushes]::DimGray
+        foreach ($columnWidth in @("230", "*", "170")) {
+            $column = New-Object Windows.Controls.ColumnDefinition
+            if ($columnWidth -eq "*") {
+                $column.Width = New-Object Windows.GridLength(1, [Windows.GridUnitType]::Star)
+            } else {
+                $column.Width = New-Object Windows.GridLength([double]$columnWidth)
+            }
+            $headerGrid.ColumnDefinitions.Add($column)
+        }
+        foreach ($header in @(@{ Text = "Tool"; Column = 0 }, @{ Text = "Beschreibung"; Column = 1 }, @{ Text = "Aktionen"; Column = 2 })) {
+            $headerText = New-Object Windows.Controls.TextBlock
+            $headerText.Text = $header.Text
+            $headerText.FontWeight = [Windows.FontWeights]::Bold
+            $headerText.Foreground = [Windows.Media.Brushes]::White
+            $headerText.VerticalAlignment = [Windows.VerticalAlignment]::Center
+            $headerText.Margin = New-Object Windows.Thickness(8, 0, 4, 0)
+            [Windows.Controls.Grid]::SetColumn($headerText, $header.Column)
+            $headerGrid.Children.Add($headerText)
+        }
+        $WrapPanel.Children.Add($headerGrid)
     }
     $processedTools = 0
     

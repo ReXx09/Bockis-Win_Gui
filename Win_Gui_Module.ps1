@@ -4292,7 +4292,7 @@ $searchPanel.Visible = $false  # Standardmäßig ausgeblendet
 $mainContentPanel.Controls.Add($searchPanel)
 
 # View-Größen-Buttons (Rechts im Search-Panel)
-$script:currentTileSize = "Medium"  # Default: Medium
+$script:currentTileSize = "List"  # Schnelle Tabellenansicht als Standard
 
 $viewButtonSize = New-Object System.Drawing.Size(35, 25)
 $viewButtonY = 12
@@ -4365,7 +4365,7 @@ $btnListView.Add_Click({
         }
         $script:currentTileSize = "List"
         Update-TileViewButtons
-        $null = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category $script:currentDownloadCategory -MainProgressBar $progressBar -SearchQuery (Get-ActiveSearchQuery) -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates
+        $null = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category $script:currentDownloadCategory -MainProgressBar $progressBar -SearchQuery (Get-ActiveSearchQuery) -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates -StatusFilter $script:statusFilter
     })
 $tooltipObj.SetToolTip($btnListView, "Listen-Ansicht")
 $searchPanel.Controls.Add($btnListView)
@@ -4379,6 +4379,7 @@ function Update-TileViewButtons {
     $btnMediumTiles.BackColor = if ($script:currentTileSize -eq "Medium") { $activeColor } else { $inactiveColor }
     $btnListView.BackColor = if ($script:currentTileSize -eq "List") { $activeColor } else { $inactiveColor }
 }
+Update-TileViewButtons
 
 # Suchfeld-Label – vertikal zentriert im Panel
 $searchLabel = New-Object System.Windows.Forms.Label
