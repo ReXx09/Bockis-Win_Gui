@@ -7187,7 +7187,8 @@ $btnCheckDependenciesH.Add_Click({
                         $actionButton.ForeColor = [System.Drawing.Color]::White
                         $actionButton.Tag = @{ Dependency = $dep; Action = "gui-release-select"; IsUpgrade = $false }
                     } elseif ($dep.Name -eq "Git Pull" -and $dep.Available) {
-                        $actionButton.Text = "Git Pull"
+                        $isFileDriftOnly = ($dep.BehindCount -eq 0 -and $dep.Dirty)
+                        $actionButton.Text = if ($isFileDriftOnly) { "Zurücksetzen" } else { "Git Pull" }
                         $actionButton.BackColor = [System.Drawing.Color]::FromArgb(255, 152, 0)
                         $actionButton.ForeColor = [System.Drawing.Color]::White
                         $actionButton.Tag = @{ Dependency = $dep; Action = "git-pull" }
@@ -10189,15 +10190,106 @@ function Invoke-GitPullDependencyAction {
             return @{ Success = $false; Cancelled = $false; Message = "Kein Git-Upstream konfiguriert" }
         }
 
-        $confirmText = @"
+        # Remote-Referenz aktualisieren, damit Ahead/Behind unabhaengig vom Datei-Zustand ermittelt werden kann
+        if ($ProgressCallback) {
+            & $ProgressCallback 15 "Hole Remote-Informationen..."
+        }
+        $remoteName = ($upstream -split '/', 2)[0]
+        (& $gitCommand.Source -C $RepositoryPath fetch --prune $remoteName 2>&1 | Out-String) | Out-Null
+
+        $behindCount = 0
+        $behindOutput = (& $gitCommand.Source -C $RepositoryPath rev-list --count "HEAD..$upstream" 2>&1 | Out-String).Trim()
+        if ($LASTEXITCODE -eq 0 -and $behindOutput -match '^\d+$') { $behindCount = [int]$behindOutput }
+
+        $dirtyOutput = (& $gitCommand.Source -C $RepositoryPath status --porcelain 2>&1 | Out-String)
+        $isDirty = -not [string]::IsNullOrWhiteSpace($dirtyOutput)
+
+        # Fall 1: Keine neuen Remote-Commits, aber Arbeitsverzeichnis weicht vom letzten Commit ab
+        # (typischerweise durch ein GUI-Update/Downgrade, das Dateien direkt ueberschrieben hat).
+        # Ein "git pull" waere hier ein reiner No-Op und wuerde die Abweichung nicht beheben.
+        if ($behindCount -eq 0 -and $isDirty) {
+            $resetConfirmText = @"
+Es gibt keine neuen Commits auf $upstream.
+
+Ihre Arbeitsdateien weichen jedoch vom letzten Commit ab
+(vermutlich durch ein GUI-Update oder einen Versionswechsel ueberschrieben).
+
+Ein normaler Git Pull wuerde hieran nichts aendern.
+
+Moechten Sie die Arbeitskopie jetzt auf den Stand von $upstream zurücksetzen?
+Lokale Datei-Abweichungen gehen dabei verloren.
+"@
+            $resetConfirm = Show-ModernMessageDialog -Arguments @(
+                $resetConfirmText,
+                "Auf Remote-Stand zuruecksetzen",
+                [System.Windows.Forms.MessageBoxButtons]::YesNo,
+                [System.Windows.Forms.MessageBoxIcon]::Warning
+            )
+
+            if ($resetConfirm -ne [System.Windows.Forms.DialogResult]::Yes) {
+                return @{ Success = $false; Cancelled = $true; Message = "Abgebrochen" }
+            }
+
+            if ($ProgressCallback) {
+                & $ProgressCallback 60 "Setze Arbeitskopie zurueck..."
+            }
+
+            $resetOutput = (& $gitCommand.Source -C $RepositoryPath reset --hard $upstream 2>&1 | Out-String).Trim()
+            $resetExitCode = $LASTEXITCODE
+
+            if ($resetExitCode -ne 0) {
+                $resetErrorMessage = if ($resetOutput) { $resetOutput } else { "git reset fehlgeschlagen" }
+                return @{ Success = $false; Cancelled = $false; Message = $resetErrorMessage }
+            }
+
+            if ($LogCallback) {
+                & $LogCallback 'success' "Arbeitskopie auf $upstream zurückgesetzt (Datei-Abweichung behoben)"
+            }
+            if ($ProgressCallback) {
+                & $ProgressCallback 100 "Zurueckgesetzt" ([System.Drawing.Color]::LimeGreen)
+            }
+
+            Show-TemporaryCmdPreview -RepositoryPath $RepositoryPath -Title 'Git Pull Kontrolle' -Lines @(
+                'Git Pull Kontrolle',
+                ' ',
+                "Repository: $RepositoryPath",
+                "Branch: $branch",
+                "Upstream: $upstream",
+                ' ',
+                'Ausgabe:',
+                $(if ($resetOutput) { $resetOutput } else { 'Keine Ausgabe vorhanden.' }),
+                ' ',
+                'Status: Arbeitskopie auf Remote-Stand zurückgesetzt.'
+            ) | Out-Null
+
+            return @{
+                Success            = $true
+                Cancelled          = $false
+                Message            = "Arbeitskopie wurde auf $upstream zurückgesetzt."
+                Output             = $resetOutput
+                Updated            = $true
+                RestartRecommended = $true
+            }
+        }
+
+        $confirmText = if ($behindCount -gt 0) {
+@"
 Git Pull jetzt starten?
 
 Branch: $branch
 Quelle: $upstream
+Neue Commits: $behindCount
 
 WICHTIG: Der Pull kann Beta-Daten enthalten.
 Lokale Aenderungen werden mit --autostash zwischengespeichert (sofern moeglich).
 "@
+        } else {
+@"
+Es sind keine neuen Commits auf $upstream vorhanden.
+
+Git Pull jetzt trotzdem ausfuehren?
+"@
+        }
         $confirmResult = Show-ModernMessageDialog -Arguments @(
             $confirmText,
             "Git Pull bestaetigen",
