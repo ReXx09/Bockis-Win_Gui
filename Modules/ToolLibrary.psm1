@@ -2979,6 +2979,13 @@ function Update-ToolsDisplay {
         $script:activeDisplayTimer.Stop()
         $script:activeDisplayTimer = $null
     }
+    if ($script:activeDisplayResetTimer -and $script:activeDisplayResetTimer.IsEnabled) {
+        $script:activeDisplayResetTimer.Stop()
+        $script:activeDisplayResetTimer.Dispose()
+        $script:activeDisplayResetTimer = $null
+    }
+    $script:displayGeneration = [int]$script:displayGeneration + 1
+    $displayGeneration = $script:displayGeneration
 
     # Bestehenden Content löschen
     $WrapPanel.Children.Clear()
@@ -3225,6 +3232,7 @@ function Update-ToolsDisplay {
         "StatusFilter"    = $StatusFilter
         "PostStatusText"  = $PostStatusText
         "PostStatusColor" = $PostStatusColor
+        "Generation"      = $displayGeneration
     }
     $timer.Add_Tick({
             # Variablen aus Tag abrufen
@@ -3240,6 +3248,12 @@ function Update-ToolsDisplay {
             $StatusFilter = $this.Tag.StatusFilter
             $PostStatusText = $this.Tag.PostStatusText
             $PostStatusColor = $this.Tag.PostStatusColor
+
+            # Bereits eingeplante Ticks einer älteren Suche dürfen keine Kacheln mehr anhängen.
+            if ($this.Tag.Generation -ne $script:displayGeneration) {
+                $this.Stop()
+                return
+            }
         
             # Abbruchbedingung: Alle Tools verarbeitet
             if ($processedTools -ge $totalTools) {
@@ -3258,6 +3272,7 @@ function Update-ToolsDisplay {
                     
                         # Nach kurzer Pause auf den Post-Status setzen
                         $resetTimer = New-Object System.Windows.Forms.Timer
+                        $script:activeDisplayResetTimer = $resetTimer
                         $resetTimer.Interval = 1000
                         $resetTimer.Tag = @{ Bar = $MainProgressBar; Text = $PostStatusText; Color = $PostStatusColor }
                         $resetTimer.Add_Tick({
@@ -3271,10 +3286,12 @@ function Update-ToolsDisplay {
                                     $global:progressBarPostColor = $null
                                     $bar.CustomText = $finalText
                                     $bar.TextColor = $finalColor
+                                    $script:activeDisplayResetTimer = $null
                                 } else {
                                     $bar.Value = 0
                                 }
                                 $this.Stop()
+                                $this.Dispose()
                             })
                         $resetTimer.Start()
                     } else {
