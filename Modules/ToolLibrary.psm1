@@ -1864,6 +1864,10 @@ function Initialize-ToolEntry {
         $border.Background = $script:toolResourceDictionary["ToolInstallUnselectedColor"]
         $border.BorderBrush = [Windows.Media.Brushes]::LightGray
     }
+    if ($TileSize -eq "List") {
+        $border.Background = [Windows.Media.Brushes]::Transparent
+        $border.BorderBrush = [Windows.Media.Brushes]::LightGray
+    }
     
     $border.Tag = $Tool
     $tooltipText = $Tool.Description
@@ -2670,7 +2674,8 @@ function Initialize-ToolEntry {
 
     if ($isListView) {
         $rowGrid = New-Object Windows.Controls.Grid
-        $rowGrid.Height = 34
+        $rowGrid.MinHeight = 54
+        $rowGrid.Height = [double]::NaN
         foreach ($columnWidth in @("230", "*", "170")) {
             $column = New-Object Windows.Controls.ColumnDefinition
             if ($columnWidth -eq "*") {
