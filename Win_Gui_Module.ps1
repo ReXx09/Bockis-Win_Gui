@@ -16,6 +16,20 @@ $script:VersionDate = "2026-08-31"
 $script:GuiUpdateRepoOwner = "ReXx09"
 $script:GuiUpdateRepoName = "Bockis-Win_Gui"
 
+# Erkennt, ob diese Instanz direkt aus einem Git-Arbeitsverzeichnis gestartet wurde
+# (im Unterschied zu einer separat installierten Version), damit dies in der GUI sichtbar ist.
+$script:IsWorkspaceInstance = $false
+try {
+    $workspaceGitCommand = Get-Command git -ErrorAction SilentlyContinue
+    if ($workspaceGitCommand) {
+        $workspaceRepoCheck = (& $workspaceGitCommand.Source -C $PSScriptRoot rev-parse --is-inside-work-tree 2>&1 | Out-String).Trim()
+        if ($LASTEXITCODE -eq 0 -and $workspaceRepoCheck -eq 'true') {
+            $script:IsWorkspaceInstance = $true
+        }
+    }
+} catch { <# Erkennung ist rein informativ, darf den Start nicht blockieren #> }
+$script:WorkspaceTag = if ($script:IsWorkspaceInstance) { " [Workspace]" } else { "" }
+
 # ===================================================================
 # ZONE.IDENTIFIER / MARK OF THE WEB ENTFERNEN
 # Wenn das Tool als ZIP von GitHub heruntergeladen und entpackt wurde,
@@ -1021,7 +1035,7 @@ if ($settingsResult -and $settingsResult.Success) {
 $script:BgColor = [System.Drawing.Color]::FromArgb(30, 30, 30)
 
 $mainform = New-Object System.Windows.Forms.Form
-$mainform.Text = "$script:AppName $script:AppVersion"
+$mainform.Text = "$script:AppName $script:AppVersion$script:WorkspaceTag"
 $mainform.Font = New-Object System.Drawing.Font("Segoe UI", 10)
 $mainform.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::None  # Kein Rahmen
 $mainform.MinimumSize = New-Object System.Drawing.Size(1000, 800)
@@ -1125,7 +1139,7 @@ $script:mouseOffset = New-Object System.Drawing.Point
 
 # Titel-Label
 $titleLabel = New-Object System.Windows.Forms.Label
-$titleLabel.Text = "$script:AppName $script:AppVersion"
+$titleLabel.Text = "$script:AppName $script:AppVersion$script:WorkspaceTag"
 $titleLabel.ForeColor = [System.Drawing.Color]::White
 $titleLabel.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
 $titleLabel.Location = New-Object System.Drawing.Point(10, 5)
@@ -3380,8 +3394,9 @@ $infoButton.BackColor = [System.Drawing.Color]::DarkSlateGray
 $infoButton.ForeColor = [System.Drawing.Color]::White
 $infoButton.Font = New-Object System.Drawing.Font("Segoe UI", 12)
 $infoButton.Add_Click({
+        $workspaceHint = if ($script:IsWorkspaceInstance) { "`n`n⚠ Dies ist eine Workspace-Version (Git-Arbeitsverzeichnis), keine separate Installation." } else { "" }
         Show-ModernMessageDialog -Arguments @(
-            "$script:AppName $script:AppVersion`n`nEntwickelt von $script:AppPublisher`nVersion: $script:AppVersion`nDatum: $script:VersionDate`n`nEin umfassendes Werkzeug für System-Wartung und -Diagnose.",
+            "$script:AppName $script:AppVersion$script:WorkspaceTag`n`nEntwickelt von $script:AppPublisher`nVersion: $script:AppVersion`nDatum: $script:VersionDate$workspaceHint`n`nEin umfassendes Werkzeug für System-Wartung und -Diagnose.",
             "Über System-Tool",
             [System.Windows.Forms.MessageBoxButtons]::OK,
             [System.Windows.Forms.MessageBoxIcon]::Information
