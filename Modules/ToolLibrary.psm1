@@ -502,6 +502,15 @@ $script:toolLibrary['coding'] = @(
         Winget      = 'JRSoftware.InnoSetup'
     },
     @{
+        Name        = 'Arduino IDE'
+        Description = 'Offizielle Entwicklungsumgebung zum Programmieren von Arduino-Mikrocontrollern'
+        Version     = 'Aktuell'
+        DownloadUrl = 'https://www.arduino.cc/en/software'
+        Category    = 'Coding / IT'
+        Tags        = @('Arduino', 'IDE', 'Microcontroller', 'Embedded', 'Development')
+        Winget      = 'ArduinoSA.IDE.stable'
+    },
+    @{
         Name        = 'Git'
         Description = 'Verteilte Versionsverwaltung für Repositories, Branches und Pull-Workflows'
         Version     = 'Aktuell'
