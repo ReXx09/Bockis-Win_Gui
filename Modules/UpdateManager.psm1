@@ -76,6 +76,63 @@ function Install-Update {
     }
 
     Write-UpdateManagerGuiDebugLog -Message "Selected asset | Name=$($asset.name) | ApiUrl=$($asset.url) | BrowserUrl=$($asset.browser_download_url)"
+
+    # Schutz: Ein Update/Downgrade darf niemals ein Git-Arbeitsverzeichnis (Entwicklungskopie) ueberschreiben.
+    # Ist ApplicationPath ein Git-Clone, muss der Nutzer einen separaten Installationsordner waehlen.
+    $gitCommand = Get-Command git -ErrorAction SilentlyContinue
+    if ($gitCommand -and (Test-Path $ApplicationPath)) {
+        $repoCheck = (& $gitCommand.Source -C $ApplicationPath rev-parse --is-inside-work-tree 2>&1 | Out-String).Trim()
+        if ($LASTEXITCODE -eq 0 -and $repoCheck -eq 'true') {
+            Write-UpdateManagerGuiDebugLog -Message "ApplicationPath ist Git-Arbeitsverzeichnis, Umleitung erforderlich | Path=$ApplicationPath"
+
+            $gitWarningText = @"
+Dieser Ordner ist ein Git-Arbeitsverzeichnis:
+
+$ApplicationPath
+
+Ein Update/Downgrade wuerde hier alle Quelldateien ueberschreiben
+und lokale/gepushte Aenderungen zerstoeren.
+
+Bitte waehlen Sie einen separaten Ordner fuer die installierte Version.
+Das Git-Arbeitsverzeichnis bleibt dabei unveraendert.
+"@
+            $gitWarningResult = Show-ModernMessageDialog -Arguments @(
+                $gitWarningText,
+                "Git-Arbeitsverzeichnis erkannt",
+                [System.Windows.Forms.MessageBoxButtons]::OKCancel,
+                [System.Windows.Forms.MessageBoxIcon]::Warning
+            )
+
+            if ($gitWarningResult -ne [System.Windows.Forms.DialogResult]::OK) {
+                Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Info'
+                $OutputBox.AppendText("[i] Update abgebrochen (Git-Arbeitsverzeichnis geschuetzt).`r`n")
+                return $false
+            }
+
+            $folderDialog = New-Object System.Windows.Forms.FolderBrowserDialog
+            $folderDialog.Description = "Installationsordner fuer v$LatestVersion waehlen (nicht das Git-Arbeitsverzeichnis)"
+            $folderDialog.ShowNewFolderButton = $true
+
+            if ($folderDialog.ShowDialog($MainForm) -ne [System.Windows.Forms.DialogResult]::OK -or [string]::IsNullOrWhiteSpace($folderDialog.SelectedPath)) {
+                Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Info'
+                $OutputBox.AppendText("[i] Update abgebrochen (kein Zielordner gewaehlt).`r`n")
+                return $false
+            }
+
+            $selectedPath = $folderDialog.SelectedPath
+            $selectedRepoCheck = (& $gitCommand.Source -C $selectedPath rev-parse --is-inside-work-tree 2>&1 | Out-String).Trim()
+            if ($LASTEXITCODE -eq 0 -and $selectedRepoCheck -eq 'true') {
+                Set-OutputSelectionStyle -OutputBox $OutputBox -Style 'Error'
+                $OutputBox.AppendText("[✗] Der gewaehlte Ordner ist ebenfalls ein Git-Arbeitsverzeichnis. Update abgebrochen.`r`n")
+                Write-UpdateManagerGuiDebugLog -Message "Selected install path is also a git working tree | Path=$selectedPath"
+                return $false
+            }
+
+            $ApplicationPath = $selectedPath
+            Write-UpdateManagerGuiDebugLog -Message "Installationspfad umgeleitet auf: $ApplicationPath"
+            $OutputBox.AppendText("[i] Installationsordner umgeleitet auf: $ApplicationPath`r`n")
+        }
+    }
     
     # Benutzer fragen
     $releaseNotesPreview = if ($LatestRelease.body.Length -gt 200) {
@@ -97,7 +154,7 @@ function Install-Update {
     }
 
     $result = Show-ModernMessageDialog -Arguments @(
-        "Ausgewählte Version: v$LatestVersion`n`nAktuell installiert: v$CurrentVersion`n`nRelease-Notes:`n$releaseNotesPreview`n`n$operationQuestion",
+        "Ausgewählte Version: v$LatestVersion`n`nAktuell installiert: v$CurrentVersion`n`nZielordner: $ApplicationPath`n`nRelease-Notes:`n$releaseNotesPreview`n`n$operationQuestion",
         $operationTitle,
         [System.Windows.Forms.MessageBoxButtons]::YesNo,
         [System.Windows.Forms.MessageBoxIcon]::Information
