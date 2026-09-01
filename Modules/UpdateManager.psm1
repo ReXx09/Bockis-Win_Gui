@@ -46,6 +46,47 @@ function Write-UpdateManagerGuiDebugLog {
     }
 }
 
+# Merkt sich pro Benutzer/Maschine einen alternativen Installationsordner fuer den Fall,
+# dass die Anwendung aus einem Git-Arbeitsverzeichnis heraus gestartet wird. Liegt bewusst
+# ausserhalb des Repos (%LOCALAPPDATA%), damit dieser Entwickler-Pfad nicht mit versioniert wird.
+function Get-DevInstallPathOverrideFile {
+    $configDir = Join-Path $env:LOCALAPPDATA "Bockis-System-Tool"
+    if (-not (Test-Path $configDir)) {
+        New-Item -Path $configDir -ItemType Directory -Force | Out-Null
+    }
+    return (Join-Path $configDir "dev-install-path.txt")
+}
+
+function Get-RememberedDevInstallPath {
+    param([string]$GitRepoPath)
+
+    $overrideFile = Get-DevInstallPathOverrideFile
+    if (-not (Test-Path $overrideFile)) { return $null }
+
+    $rememberedPaths = Get-Content -Path $overrideFile -ErrorAction SilentlyContinue
+    foreach ($line in $rememberedPaths) {
+        if ([string]::IsNullOrWhiteSpace($line)) { continue }
+        $parts = $line -split '\|', 2
+        if ($parts.Count -eq 2 -and $parts[0] -eq $GitRepoPath -and (Test-Path $parts[1])) {
+            return $parts[1]
+        }
+    }
+    return $null
+}
+
+function Set-RememberedDevInstallPath {
+    param(
+        [string]$GitRepoPath,
+        [string]$InstallPath
+    )
+
+    $overrideFile = Get-DevInstallPathOverrideFile
+    $existingLines = if (Test-Path $overrideFile) { @(Get-Content -Path $overrideFile -ErrorAction SilentlyContinue) } else { @() }
+    $filteredLines = $existingLines | Where-Object { $_ -and ($_ -split '\|', 2)[0] -ne $GitRepoPath }
+    $filteredLines += "$GitRepoPath|$InstallPath"
+    Set-Content -Path $overrideFile -Value $filteredLines -Encoding UTF8
+}
+
 function Install-Update {
     [CmdletBinding()]
     param(
@@ -84,7 +125,16 @@ function Install-Update {
         $repoCheck = (& $gitCommand.Source -C $ApplicationPath rev-parse --is-inside-work-tree 2>&1 | Out-String).Trim()
         if ($LASTEXITCODE -eq 0 -and $repoCheck -eq 'true') {
             Write-UpdateManagerGuiDebugLog -Message "ApplicationPath ist Git-Arbeitsverzeichnis, Umleitung erforderlich | Path=$ApplicationPath"
+            $gitRepoPathForMemory = $ApplicationPath
 
+            # Erst pruefen, ob fuer dieses Git-Arbeitsverzeichnis bereits ein Installationsordner bekannt ist.
+            # Analog zu einer echten Installation, die ihren eigenen Ordner kennt, muss dann nicht erneut gefragt werden.
+            $rememberedPath = Get-RememberedDevInstallPath -GitRepoPath $gitRepoPathForMemory
+            if ($rememberedPath) {
+                $ApplicationPath = $rememberedPath
+                Write-UpdateManagerGuiDebugLog -Message "Bekannten Installationsordner wiederverwendet: $ApplicationPath"
+                $OutputBox.AppendText("[i] Installationsordner (gemerkt): $ApplicationPath`r`n")
+            } else {
             $gitWarningText = @"
 Dieser Ordner ist ein Git-Arbeitsverzeichnis:
 
@@ -95,6 +145,7 @@ und lokale/gepushte Aenderungen zerstoeren.
 
 Bitte waehlen Sie einen separaten Ordner fuer die installierte Version.
 Das Git-Arbeitsverzeichnis bleibt dabei unveraendert.
+Diese Auswahl wird gemerkt und kuenftig automatisch wiederverwendet.
 "@
             $gitWarningResult = Show-ModernMessageDialog -Arguments @(
                 $gitWarningText,
@@ -129,8 +180,10 @@ Das Git-Arbeitsverzeichnis bleibt dabei unveraendert.
             }
 
             $ApplicationPath = $selectedPath
-            Write-UpdateManagerGuiDebugLog -Message "Installationspfad umgeleitet auf: $ApplicationPath"
+            Set-RememberedDevInstallPath -GitRepoPath $gitRepoPathForMemory -InstallPath $ApplicationPath
+            Write-UpdateManagerGuiDebugLog -Message "Installationspfad umgeleitet und gemerkt: $ApplicationPath"
             $OutputBox.AppendText("[i] Installationsordner umgeleitet auf: $ApplicationPath`r`n")
+            }
         }
     }
     
