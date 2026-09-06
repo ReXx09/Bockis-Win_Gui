@@ -1,38 +1,38 @@
-[
-  {
-    "id": "bockis-dashboard",
-    "title": "Bockis Dashboard",
-    "repoUrl": "https://github.com/ReXx09/Bockis-Dashboard",
-    "ref": "main",
-    "relativePath": "Data\\Add-ons\\bockis-dashboard",
-    "entryPoint": "app.py",
-    "capabilities": [
-      "dashboard",
-      "monitoring",
-      "audio"
-    ],
-    "minGuiVersion": "4.2.0",
-    "enabled": true,
-    "trust": "official",
-    "startWithWindows": false,
-    "showInTray": false
-  },
-  {
-    "id": "multimonitor-profile-tool",
-    "title": "MultiMonitor Profile Tool",
-    "repoUrl": "https://github.com/ReXx09/MultiMonitorProfileTool",
-    "ref": "master",
-    "relativePath": "Data\\Add-ons\\multimonitor-profile-tool",
-    "entryPoint": "launcher.bat",
-    "capabilities": [
-      "monitoring",
-      "layout-editor",
-      "profiles"
-    ],
-    "minGuiVersion": "4.2.0",
-    "enabled": true,
-    "trust": "community",
-    "startWithWindows": false,
-    "showInTray": true
-  }
+﻿[
+    {
+        "id":  "bockis-dashboard",
+        "title":  "Bockis Dashboard",
+        "repoUrl":  "https://github.com/ReXx09/Bockis-Dashboard",
+        "ref":  "main",
+        "relativePath":  "Data\\Add-ons\\bockis-dashboard",
+        "entryPoint":  "app.py",
+        "capabilities":  [
+                             "dashboard",
+                             "monitoring",
+                             "audio"
+                         ],
+        "minGuiVersion":  "4.2.0",
+        "enabled":  true,
+        "trust":  "official",
+        "startWithWindows":  false,
+        "showInTray":  false
+    },
+    {
+        "id":  "multimonitor-profile-tool",
+        "title":  "MultiMonitor Profile Tool",
+        "repoUrl":  "https://github.com/ReXx09/MultiMonitorProfileTool",
+        "ref":  "master",
+        "relativePath":  "Data\\Add-ons\\multimonitor-profile-tool",
+        "entryPoint":  "launcher.bat",
+        "capabilities":  [
+                             "monitoring",
+                             "layout-editor",
+                             "profiles"
+                         ],
+        "minGuiVersion":  "4.2.0",
+        "enabled":  true,
+        "trust":  "community",
+        "startWithWindows":  false,
+        "showInTray":  false
+    }
 ]

@@ -18,7 +18,6 @@ $script:toolLibrary['system'] = @(
         Name        = '7-Zip'
         Description = 'Komprimierungsprogramm für Dateien und Ordner'
         Version     = '23.01'
-        DownloadUrl = 'https://www.7-zip.org/a/7z2501-x64.exe'
         Category    = 'System-Tools'
         Tags        = @('Compression', 'Archive', 'Utility')
         Winget      = '7zip.7zip'
@@ -776,9 +775,24 @@ function Test-ToolDownloaded {
         return $false
     }
     
-    # Hole alle Installer-Dateien im Download-Ordner
-    $allFiles = Get-ChildItem -Path $DownloadPath -ErrorAction SilentlyContinue | 
-        Where-Object { $_.Extension -in @('.exe', '.zip', '.msi') }
+    $downloadDirectory = Get-Item -Path $DownloadPath -ErrorAction SilentlyContinue
+    if ($null -eq $downloadDirectory) {
+        return $false
+    }
+
+    $cacheKey = $downloadDirectory.FullName
+    $directoryTimestamp = $downloadDirectory.LastWriteTimeUtc.Ticks
+    if ($script:downloadedFileCache.ContainsKey($cacheKey) -and
+        $script:downloadedFileCacheDirectoryTimestamp[$cacheKey] -eq $directoryTimestamp) {
+        $allFiles = $script:downloadedFileCache[$cacheKey]
+    } else {
+        $allFiles = @(
+            Get-ChildItem -Path $downloadDirectory.FullName -ErrorAction SilentlyContinue |
+                Where-Object { $_.Extension -in @('.exe', '.zip', '.msi') }
+        )
+        $script:downloadedFileCache[$cacheKey] = $allFiles
+        $script:downloadedFileCacheDirectoryTimestamp[$cacheKey] = $directoryTimestamp
+    }
     
     if ($allFiles.Count -eq 0) {
         return $false
@@ -1819,8 +1833,6 @@ function Initialize-ToolEntry {
     if ($TileSize -eq "List") {
         $border.BorderThickness = New-Object Windows.Thickness(0, 0, 0, 1)
         $border.CornerRadius = 0
-        $border.Background = [Windows.Media.Brushes]::Transparent
-        $border.BorderBrush = [Windows.Media.Brushes]::LightGray
     }
 
     # Prüfen, ob das Tool bereits installiert ist und entsprechend hervorheben
@@ -1966,7 +1978,7 @@ function Initialize-ToolEntry {
     $appName.Text = $Tool.Name
     $appName.FontWeight = [Windows.FontWeights]::Bold
     $appName.FontSize = if ($isSmallTile) { 12 } else { $script:toolResourceDictionary["ToolTileFontSize"] }
-    $appName.Foreground = if ($isListView) { [Windows.Media.Brushes]::White } else { $script:toolResourceDictionary["MainForegroundColor"] }
+    $appName.Foreground = $script:toolResourceDictionary["MainForegroundColor"]
     $appName.TextWrapping = if ($isSmallTile) { [Windows.TextWrapping]::Wrap } else { [Windows.TextWrapping]::NoWrap }
     $namePanel.Children.Add($appName)
     
@@ -1975,7 +1987,7 @@ function Initialize-ToolEntry {
         $categoryBlock = New-Object Windows.Controls.TextBlock
         $categoryBlock.Text = "Kategorie: " + $Tool.Category
         $categoryBlock.FontSize = 12
-        $categoryBlock.Foreground = if ($isListView) { [Windows.Media.Brushes]::LightGray } else { $script:toolResourceDictionary["CategoryForegroundColor"] }
+        $categoryBlock.Foreground = $script:toolResourceDictionary["CategoryForegroundColor"]
         $namePanel.Children.Add($categoryBlock)
     }
     
@@ -2002,7 +2014,7 @@ function Initialize-ToolEntry {
             $statusBlock.FontWeight = [Windows.FontWeights]::Bold
         } else {
             $statusBlock.Text = "Nicht installiert"
-            $statusBlock.Foreground = if ($isListView) { [Windows.Media.Brushes]::LightGray } else { [Windows.Media.Brushes]::Gray }
+            $statusBlock.Foreground = [Windows.Media.Brushes]::Gray
         }
         
         $namePanel.Children.Add($statusBlock)
@@ -2021,13 +2033,8 @@ function Initialize-ToolEntry {
     
     $descLabel = New-Object Windows.Controls.TextBlock
     if ($isListView) {
-        # Listenansicht: Nur eine Zeile Beschreibung
-        $descLabel.Text = if ($Tool.Description.Length -gt 80) { 
-            $Tool.Description.Substring(0, 80) + "..." 
-        } else { 
-            $Tool.Description 
-        }
-        $descLabel.TextWrapping = [Windows.TextWrapping]::NoWrap
+        $descLabel.Text = $Tool.Description
+        $descLabel.TextWrapping = [Windows.TextWrapping]::Wrap
     } elseif ($isSmallTile) {
         # Kleine Kacheln: Sehr kurze Beschreibung
         $descLabel.Text = if ($Tool.Description.Length -gt 50) { 
@@ -2046,7 +2053,7 @@ function Initialize-ToolEntry {
         $descLabel.TextWrapping = [Windows.TextWrapping]::Wrap
     }
     $descLabel.FontSize = if ($isListView) { 10 } elseif ($isSmallTile) { 10 } else { 12 }
-    $descLabel.Foreground = if ($isListView) { [Windows.Media.Brushes]::White } else { [Windows.Media.Brushes]::Black }
+    $descLabel.Foreground = [Windows.Media.Brushes]::Black
     $descLabel.Margin = if ($isListView) { New-Object Windows.Thickness(5, 0, 5, 0) } else { New-Object Windows.Thickness(5) }
     $descPanel.Children.Add($descLabel)
     if (-not $isListView) {
@@ -2720,11 +2727,76 @@ function Show-ToolTileList {
 # Cache für verfügbare Updates (winget upgrade)
 $script:availableUpdatesCache = $null
 $script:availableUpdatesCacheTimestamp = $null
+$script:availableUpdatesPersistentCachePath = Join-Path $PSScriptRoot "..\Data\Cache\winget-updates.json"
+$script:availableUpdatesPersistentCacheMaxAgeMinutes = 15
+$script:toolVersionInfoCache = @{}
+$script:toolVersionInfoCacheTimestamp = @{}
+$script:toolVersionInfoCacheExpirationSeconds = 60
+$script:downloadedFileCache = @{}
+$script:downloadedFileCacheDirectoryTimestamp = @{}
+
+function Import-PersistentAvailableUpdatesCache {
+    if (-not (Test-Path $script:availableUpdatesPersistentCachePath)) {
+        return $null
+    }
+
+    try {
+        $record = Get-Content -LiteralPath $script:availableUpdatesPersistentCachePath -Raw -ErrorAction Stop | ConvertFrom-Json
+        $timestamp = [DateTime]$record.Timestamp
+        if (((Get-Date) - $timestamp).TotalMinutes -ge $script:availableUpdatesPersistentCacheMaxAgeMinutes) {
+            return $null
+        }
+
+        $cache = @{}
+        foreach ($property in $record.Updates.PSObject.Properties) {
+            $cache[$property.Name] = @{
+                HasUpdate        = [bool]$property.Value.HasUpdate
+                Name             = [string]$property.Value.Name
+                InstalledVersion = [string]$property.Value.InstalledVersion
+                AvailableVersion = [string]$property.Value.AvailableVersion
+                RawLine          = [string]$property.Value.RawLine
+            }
+        }
+        return @{ Cache = $cache; Timestamp = $timestamp }
+    } catch {
+        Write-Verbose "Persistenten Updatecache konnte nicht geladen werden: $_"
+        return $null
+    }
+}
+
+function Export-PersistentAvailableUpdatesCache {
+    param([Parameter(Mandatory = $true)][hashtable]$Cache)
+
+    try {
+        $directory = Split-Path -Parent $script:availableUpdatesPersistentCachePath
+        if (-not (Test-Path $directory)) {
+            New-Item -Path $directory -ItemType Directory -Force | Out-Null
+        }
+        @{ Timestamp = Get-Date; Updates = $Cache } |
+            ConvertTo-Json -Depth 6 |
+            Set-Content -LiteralPath $script:availableUpdatesPersistentCachePath -Encoding UTF8
+    } catch {
+        Write-Verbose "Persistenter Updatecache konnte nicht gespeichert werden: $_"
+    }
+}
 
 function Initialize-AvailableUpdatesCache {
     param(
         [switch]$ForceRefresh
     )
+
+    if ($ForceRefresh) {
+        $script:toolVersionInfoCache.Clear()
+        $script:toolVersionInfoCacheTimestamp.Clear()
+    }
+
+    if (-not $ForceRefresh -and $null -eq $script:availableUpdatesCache) {
+        $persistentCache = Import-PersistentAvailableUpdatesCache
+        if ($persistentCache) {
+            $script:availableUpdatesCache = $persistentCache.Cache
+            $script:availableUpdatesCacheTimestamp = $persistentCache.Timestamp
+        }
+    }
 
     # Cache 60 Sekunden wiederverwenden (außer ForceRefresh)
     if (-not $ForceRefresh -and $script:availableUpdatesCache -and $script:availableUpdatesCacheTimestamp) {
@@ -2741,34 +2813,26 @@ function Initialize-AvailableUpdatesCache {
         if ([string]::IsNullOrWhiteSpace($upgradeOutput)) {
             $script:availableUpdatesCache = $cache
             $script:availableUpdatesCacheTimestamp = Get-Date
+            Export-PersistentAvailableUpdatesCache -Cache $cache
             return $cache
         }
 
         $lines = $upgradeOutput -split "`r?`n"
-        $toolIds = @(Get-AllTools | Where-Object { $_.Winget } | ForEach-Object { $_.Winget } | Sort-Object -Unique)
+        # Die Update-Tabelle vollständig lesen, damit auch nicht in der GUI
+        # hinterlegte Winget-Pakete im globalen Filter verfügbar sind.
+        $linePattern = '^\s*(?<name>.*?)\s{2,}(?<id>\S+)\s{2,}(?<installed>\S+)\s{2,}(?<available>\S+)(?:\s{2,}(?<source>\S+))?\s*$'
+        foreach ($line in $lines) {
+            if ($line -notmatch $linePattern) { continue }
 
-        foreach ($wingetId in $toolIds) {
-            if ([string]::IsNullOrWhiteSpace($wingetId)) { continue }
+            $packageId = $matches['id']
+            if ([string]::IsNullOrWhiteSpace($packageId) -or $packageId -eq 'Id') { continue }
 
-            $idPattern = [regex]::Escape($wingetId)
-            $matchingLine = $lines | Where-Object { $_ -match "(^|\s)$idPattern(\s|$)" } | Select-Object -First 1
-            if (-not $matchingLine) { continue }
-
-            # Tabellenzeile robust parsen: Name | ID | Installiert | Verfügbar | Quelle
-            $linePattern = "^\s*(?<name>.*?)\s{2,}(?<id>$idPattern)\s{2,}(?<installed>\S+)\s{2,}(?<available>\S+)(?:\s{2,}(?<source>\S+))?\s*$"
-            $installedVersion = $null
-            $availableVersion = $null
-
-            if ($matchingLine -match $linePattern) {
-                $installedVersion = $matches['installed']
-                $availableVersion = $matches['available']
-            }
-
-            $cache[$wingetId.ToLower()] = @{
+            $cache[$packageId.ToLower()] = @{
                 HasUpdate        = $true
-                InstalledVersion = $installedVersion
-                AvailableVersion = $availableVersion
-                RawLine          = $matchingLine
+                Name             = $matches['name'].Trim()
+                InstalledVersion = $matches['installed']
+                AvailableVersion = $matches['available']
+                RawLine          = $line
             }
         }
     } catch {
@@ -2777,6 +2841,7 @@ function Initialize-AvailableUpdatesCache {
 
     $script:availableUpdatesCache = $cache
     $script:availableUpdatesCacheTimestamp = Get-Date
+    Export-PersistentAvailableUpdatesCache -Cache $cache
     return $cache
 }
 
@@ -2800,15 +2865,25 @@ function Get-ToolVersionInfo {
     try {
         $wingetIdLower = $Tool.Winget.ToLower()
 
+        if ($script:toolVersionInfoCache.ContainsKey($wingetIdLower) -and $script:toolVersionInfoCacheTimestamp.ContainsKey($wingetIdLower)) {
+            $cacheAgeSeconds = ((Get-Date) - $script:toolVersionInfoCacheTimestamp[$wingetIdLower]).TotalSeconds
+            if ($cacheAgeSeconds -lt $script:toolVersionInfoCacheExpirationSeconds) {
+                return $script:toolVersionInfoCache[$wingetIdLower]
+            }
+        }
+
         # 1) Zentrale Update-Liste bevorzugen (zuverlässiger/schneller)
         $updatesCache = Initialize-AvailableUpdatesCache
         if ($updatesCache -and $updatesCache.ContainsKey($wingetIdLower)) {
             $cachedUpdate = $updatesCache[$wingetIdLower]
-            return @{
+            $versionInfo = @{
                 InstalledVersion = $cachedUpdate.InstalledVersion
                 AvailableVersion = $cachedUpdate.AvailableVersion
                 HasUpdate        = $true
             }
+            $script:toolVersionInfoCache[$wingetIdLower] = $versionInfo
+            $script:toolVersionInfoCacheTimestamp[$wingetIdLower] = Get-Date
+            return $versionInfo
         }
 
         # 2) Kein Update in Cache: installierte Version gezielt prüfen
@@ -2851,11 +2926,14 @@ function Get-ToolVersionInfo {
                 }
             }
             
-            return @{
+            $versionInfo = @{
                 InstalledVersion = $installedVersion
                 AvailableVersion = $availableVersion
                 HasUpdate        = $hasUpdate
             }
+            $script:toolVersionInfoCache[$wingetIdLower] = $versionInfo
+            $script:toolVersionInfoCacheTimestamp[$wingetIdLower] = Get-Date
+            return $versionInfo
         } else {
             Stop-Job -Job $job -ErrorAction SilentlyContinue
             Write-Verbose "Timeout beim Abrufen der Versionsinfo für $($Tool.Name)"
@@ -3047,10 +3125,19 @@ function Update-ToolsDisplay {
         if (-not $cacheSuccess) {
             Write-Warning "Cache-Initialisierung fehlgeschlagen - Installationsstatus kann ungenau sein"
         }
+
+        # Ein Filterwechsel kann während der Cache-Abfrage durch DoEvents reentrant eintreten.
+        # Ein veralteter Aufruf darf danach keine neue Ansicht mehr vorbereiten.
+        if ($displayGeneration -ne $script:displayGeneration) {
+            return 0
+        }
     }
 
     # Update-Cache einmalig vorab laden (verhindert fehlende Treffer durch Einzel-Timeouts)
-    $null = Initialize-AvailableUpdatesCache -ForceRefresh:$ForceRefresh
+    $availableUpdates = Initialize-AvailableUpdatesCache -ForceRefresh:$ForceRefresh
+    if ($displayGeneration -ne $script:displayGeneration) {
+        return 0
+    }
     
     # Fortschrittsanzeige erstellen (temporär - wird nur genutzt wenn keine Haupt-ProgressBar angegeben ist)
     $progressBorder = New-Object Windows.Controls.Border
@@ -3143,7 +3230,7 @@ function Update-ToolsDisplay {
         
         # Speichere die Tools im Cache, wenn der Cache verfügbar ist
         if ($filteredTools.Count -gt 0 -and (Get-Command -Name Set-CachedToolsByCategory -ErrorAction SilentlyContinue)) {
-            Set-CachedToolsByCategory -Category $Category -Tools $filteredTools
+            $null = Set-CachedToolsByCategory -Category $Category -Tools $filteredTools
         }
     } else {
         # Auch gecachte Tools validieren
@@ -3154,6 +3241,30 @@ function Update-ToolsDisplay {
                 ![string]::IsNullOrWhiteSpace($_.Name)
             })
         Write-Verbose "Nach Cache-Validierung: $($filteredTools.Count) gültige Tools"
+    }
+
+    # Im globalen Filter zusätzlich externe Winget-Updates als eigene Einträge anzeigen.
+    if ($Category -eq "all" -and $StatusFilter -eq "All" -and -not $ShowOnlyUpdates -and $availableUpdates) {
+        $knownToolIds = @{}
+        foreach ($knownTool in (Get-AllTools | Where-Object { $_.Winget })) {
+            $knownToolIds[$knownTool.Winget.ToLowerInvariant()] = $true
+        }
+
+        foreach ($packageId in $availableUpdates.Keys) {
+            $packageIdLower = $packageId.ToLowerInvariant()
+            if ($knownToolIds.ContainsKey($packageIdLower)) { continue }
+
+            $updateInfo = $availableUpdates[$packageId]
+            $filteredTools += @{
+                Name        = if ($updateInfo.Name) { $updateInfo.Name } else { $packageId }
+                Description = "Externes Winget-Update"
+                Version     = $updateInfo.AvailableVersion
+                Category    = "Externe Updates"
+                Tags        = @("External", "Winget", "Update")
+                Winget      = $packageId
+                External    = $true
+            }
+        }
     }
     
     # Gesamtzahl der Tools für die Fortschrittsberechnung
@@ -3215,6 +3326,28 @@ function Update-ToolsDisplay {
             Write-Verbose "Nach Suchfilter '$SearchQuery': $totalTools Tools gefunden"
         }
     }
+
+    # Der Rückgabewert wird für die Statusanzeige verwendet und muss den aktiven
+    # Statusfilter berücksichtigen, nicht nur die Gesamtzahl der Kategorie.
+    $displayableToolCount = $totalTools
+    if ($StatusFilter -eq "Installed" -or $StatusFilter -eq "Updates" -or $ShowOnlyUpdates) {
+        $displayableToolCount = 0
+        foreach ($tool in $filteredTools) {
+            $shouldDisplay = $false
+            if ($tool.Winget) {
+                $isInstalled = [bool](Test-ToolInstalled -Tool $tool)
+                if ($StatusFilter -eq "Installed") {
+                    $shouldDisplay = $isInstalled
+                } elseif ($isInstalled) {
+                    $versionInfo = Get-ToolVersionInfo -Tool $tool
+                    $shouldDisplay = ($null -ne $versionInfo -and [bool]$versionInfo.HasUpdate)
+                }
+            }
+            if ($shouldDisplay) {
+                $displayableToolCount++
+            }
+        }
+    }
     
     # WICHTIG: Update-Filter wird während der Tool-Erstellung angewendet, nicht hier
     # da wir die Versionsinformationen erst beim Initialisieren jedes Tools ermitteln
@@ -3243,7 +3376,7 @@ function Update-ToolsDisplay {
             $MainProgressBar.TextColor = $PostStatusColor
         }
         
-        return $totalTools
+        return $displayableToolCount
     }
 
     if ($TileSize -eq "List") {
@@ -3333,8 +3466,13 @@ function Update-ToolsDisplay {
                         $resetTimer = New-Object System.Windows.Forms.Timer
                         $script:activeDisplayResetTimer = $resetTimer
                         $resetTimer.Interval = 1000
-                        $resetTimer.Tag = @{ Bar = $MainProgressBar; Text = $PostStatusText; Color = $PostStatusColor }
+                        $resetTimer.Tag = @{ Bar = $MainProgressBar; Text = $PostStatusText; Color = $PostStatusColor; Generation = $displayGeneration }
                         $resetTimer.Add_Tick({
+                            if ($this.Tag.Generation -ne $script:displayGeneration) {
+                                $this.Stop()
+                                $this.Dispose()
+                                return
+                            }
                                 $bar = $this.Tag.Bar
                                 if ($bar.GetType().Name -eq "TextProgressBar") {
                                     $bar.Value = 0
@@ -3369,7 +3507,7 @@ function Update-ToolsDisplay {
                 }
             
                 # Gebe Anzahl der angezeigten Tools zurück
-                return $totalTools
+                return $displayableToolCount
             }
         
             # Aktuelles Tool verarbeiten - mit Fehlerbehandlung
@@ -3402,6 +3540,10 @@ function Update-ToolsDisplay {
                     
                         # Tool nur anzeigen wenn Filter-Bedingung erfüllt
                         if ($shouldDisplay) {
+                            if ($this.Tag.Generation -ne $script:displayGeneration) {
+                                $this.Stop()
+                                return
+                            }
                             Initialize-ToolEntry -TargetElement $WrapPanel -Tool $tool -TileSize $TileSize
                         }
                     } else {

@@ -4515,6 +4515,71 @@ function Get-ActiveSearchQuery {
     return $searchTextBox.Text
 }
 
+function Show-ExternalUpdateSelectionDialog {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string[]]$UpdateIds,
+        [Parameter(Mandatory = $true)]
+        [hashtable]$UpdateCache
+    )
+
+    $dialog = New-Object System.Windows.Forms.Form
+    $dialog.Text = "Externe Updates auswählen"
+    $dialog.Size = New-Object System.Drawing.Size(720, 440)
+    $dialog.StartPosition = [System.Windows.Forms.FormStartPosition]::CenterParent
+    $dialog.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedDialog
+    $dialog.MaximizeBox = $false
+    $dialog.MinimizeBox = $false
+    $dialog.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 40)
+    $dialog.ForeColor = [System.Drawing.Color]::White
+
+    $label = New-Object System.Windows.Forms.Label
+    $label.Text = "Diese Pakete sind nicht in der GUI hinterlegt. Markiere die externen Updates, die separat ausgeführt werden sollen:"
+    $label.Location = New-Object System.Drawing.Point(15, 15)
+    $label.Size = New-Object System.Drawing.Size(675, 35)
+    $label.ForeColor = [System.Drawing.Color]::White
+    $dialog.Controls.Add($label)
+
+    $list = New-Object System.Windows.Forms.CheckedListBox
+    $list.Location = New-Object System.Drawing.Point(15, 58)
+    $list.Size = New-Object System.Drawing.Size(675, 285)
+    $list.CheckOnClick = $true
+    $list.BackColor = [System.Drawing.Color]::FromArgb(55, 55, 58)
+    $list.ForeColor = [System.Drawing.Color]::White
+    $itemMap = @{}
+    foreach ($packageId in ($UpdateIds | Sort-Object)) {
+        $updateInfo = $UpdateCache[$packageId]
+        $installedVersion = if ($updateInfo.InstalledVersion) { $updateInfo.InstalledVersion } else { "?" }
+        $availableVersion = if ($updateInfo.AvailableVersion) { $updateInfo.AvailableVersion } else { "?" }
+        $displayText = "$packageId | $installedVersion -> $availableVersion"
+        $itemMap[$displayText] = $packageId
+        [void]$list.Items.Add($displayText, $false)
+    }
+    $dialog.Controls.Add($list)
+
+    $cancelButton = New-Object System.Windows.Forms.Button
+    $cancelButton.Text = "Abbrechen"
+    $cancelButton.Location = New-Object System.Drawing.Point(465, 355)
+    $cancelButton.Size = New-Object System.Drawing.Size(90, 30)
+    $cancelButton.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
+    $dialog.Controls.Add($cancelButton)
+
+    $confirmButton = New-Object System.Windows.Forms.Button
+    $confirmButton.Text = "Auswahl aktualisieren"
+    $confirmButton.Location = New-Object System.Drawing.Point(560, 355)
+    $confirmButton.Size = New-Object System.Drawing.Size(130, 30)
+    $confirmButton.DialogResult = [System.Windows.Forms.DialogResult]::OK
+    $dialog.Controls.Add($confirmButton)
+    $dialog.AcceptButton = $confirmButton
+    $dialog.CancelButton = $cancelButton
+
+    if ($dialog.ShowDialog($mainform) -ne [System.Windows.Forms.DialogResult]::OK) {
+        return @()
+    }
+
+    return @($list.CheckedItems | ForEach-Object { $itemMap[[string]$_] })
+}
+
 # Filter-Button für Updates
 $script:showOnlyUpdates = $false
 $updateButtonFont = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
@@ -4530,37 +4595,43 @@ $btnFilterUpdates.Font = $updateButtonFont
 $btnFilterUpdates.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
 $btnFilterUpdates.Cursor = [System.Windows.Forms.Cursors]::Hand
 $btnFilterUpdates.Add_Click({
-        # Nur ausführen, wenn eine Kategorie gewählt wurde
-        if ([string]::IsNullOrWhiteSpace($script:currentDownloadCategory)) {
-            return
-        }
         $wingetCommand = Get-Command winget.exe -ErrorAction SilentlyContinue
         if (-not $wingetCommand) {
             $progressBar.CustomText = "Winget wurde nicht gefunden"
             return
         }
-        $selectedTools = if ($script:currentDownloadCategory -eq "all") { @(Get-AllTools) } else { @(Get-ToolsByCategory -Category $script:currentDownloadCategory) }
+
         $updateCache = Initialize-AvailableUpdatesCache
-        $selectedUpdateIds = @($selectedTools | Where-Object { $_.Winget -and $updateCache.ContainsKey($_.Winget.ToLower()) } | ForEach-Object { $_.Winget })
-        if ($selectedUpdateIds.Count -eq 0) {
-            $progressBar.CustomText = "Keine Updates in der Auswahl"
+        $guiPackageIds = @(Get-AllTools | Where-Object { $_.Winget } | ForEach-Object { $_.Winget.ToLowerInvariant() } | Sort-Object -Unique)
+        $externalUpdateIds = @($updateCache.Keys | Where-Object { $guiPackageIds -notcontains $_.ToLowerInvariant() })
+        if ($externalUpdateIds.Count -eq 0) {
+            $progressBar.CustomText = "Keine externen Updates verfügbar"
             return
         }
-        $progressBar.CustomText = "Aktualisiere Auswahl..."
-        foreach ($packageId in $selectedUpdateIds) {
-            Start-Process -FilePath $wingetCommand.Source -ArgumentList "upgrade --id $packageId --silent --accept-source-agreements --accept-package-agreements --disable-interactivity" -Wait -WindowStyle Hidden
+
+        $externalIdsToUpdate = @(Show-ExternalUpdateSelectionDialog -UpdateIds $externalUpdateIds -UpdateCache $updateCache)
+        if ($externalIdsToUpdate.Count -eq 0) {
+            $progressBar.CustomText = "Keine externen Updates ausgewählt"
+            return
+        }
+
+        $progressBar.CustomText = "Aktualisiere externe Auswahl..."
+        $progressBar.TextColor = [System.Drawing.Color]::Yellow
+        foreach ($packageId in $externalIdsToUpdate) {
+            Start-Process -FilePath $wingetCommand.Source -ArgumentList "upgrade --id $packageId --silent --accept-source-agreements --accept-package-agreements --disable-interactivity" -Wait -WindowStyle Normal
         }
         $null = Initialize-InstalledPackagesCache
         $null = Initialize-AvailableUpdatesCache -ForceRefresh
         $null = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category $script:currentDownloadCategory -MainProgressBar $progressBar -ForceRefresh -SearchQuery (Get-ActiveSearchQuery) -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates -StatusFilter $script:statusFilter
         Update-AvailableUpdatesMarker
+        $tooltipObj.SetToolTip($btnFilterUpdates, "Externe Updates separat auswählen und aktualisieren")
     })
-$tooltipObj.SetToolTip($btnFilterUpdates, "Updates der aktuell ausgewählten Kategorie installieren")
+$tooltipObj.SetToolTip($btnFilterUpdates, "Externe Updates separat auswählen und aktualisieren")
 $searchPanel.Controls.Add($btnFilterUpdates)
 
 # Aktionen für die gesamte Tool-Liste
 $btnUpdateAll = New-Object System.Windows.Forms.Button
-$btnUpdateAll.Text = "Alle aktualisieren"
+$btnUpdateAll.Text = "GUI aktualisieren"
 $btnUpdateAll.Location = New-Object System.Drawing.Point(150, 12)
 $btnUpdateAll.Size = New-Object System.Drawing.Size(130, 25)
 $btnUpdateAll.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
@@ -4583,16 +4654,41 @@ $btnUpdateAll.Add_Click({
             return
         }
 
-        $progressBar.CustomText = "Aktualisiere alle Pakete..."
+        $updateCache = Initialize-AvailableUpdatesCache
+        $guiPackageIds = @(
+            Get-AllTools |
+                Where-Object { $_.Winget } |
+                ForEach-Object { $_.Winget.ToLowerInvariant() } |
+                Sort-Object -Unique
+        )
+        $guiUpdateIds = @($updateCache.Keys | Where-Object { $guiPackageIds -contains $_.ToLowerInvariant() })
+        $externalUpdateIds = @($updateCache.Keys | Where-Object { $guiPackageIds -notcontains $_.ToLowerInvariant() })
+
+        if ($externalUpdateIds.Count -gt 0) {
+            $tooltipObj.SetToolTip($btnFilterUpdates, "$($externalUpdateIds.Count) externe Updates über Auswahl aktualisieren separat behandelbar")
+        }
+
+        if ($guiUpdateIds.Count -eq 0) {
+            $progressBar.CustomText = if ($externalUpdateIds.Count -gt 0) { "Keine GUI-Updates vorhanden" } else { "Keine Updates verfügbar" }
+            return
+        }
+
+        $progressBar.CustomText = "Aktualisiere GUI-Pakete..."
         $progressBar.TextColor = [System.Drawing.Color]::Yellow
-        $updateProcess = Start-Process -FilePath $wingetCommand.Source -ArgumentList "upgrade --all --silent --accept-source-agreements --accept-package-agreements --disable-interactivity" -Wait -PassThru -WindowStyle Hidden
+        $updateExitCode = 0
+        foreach ($packageId in $guiUpdateIds) {
+            $updateProcess = Start-Process -FilePath $wingetCommand.Source -ArgumentList "upgrade --id $packageId --silent --accept-source-agreements --accept-package-agreements --disable-interactivity" -Wait -PassThru -WindowStyle Normal
+            if ($updateProcess.ExitCode -ne 0) {
+                $updateExitCode = $updateProcess.ExitCode
+            }
+        }
         $null = Initialize-InstalledPackagesCache
         $null = Initialize-AvailableUpdatesCache -ForceRefresh
         $null = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category $script:currentDownloadCategory -MainProgressBar $progressBar -ForceRefresh -SearchQuery (Get-ActiveSearchQuery) -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates -StatusFilter $script:statusFilter
         Update-AvailableUpdatesMarker
-        $progressBar.CustomText = if ($updateProcess.ExitCode -eq 0) { "Alle Pakete aktualisiert" } else { "Aktualisierung beendet (Code $($updateProcess.ExitCode))" }
+        $progressBar.CustomText = if ($updateExitCode -eq 0) { "GUI-Pakete aktualisiert" } else { "Aktualisierung beendet (Code $updateExitCode)" }
     })
-$tooltipObj.SetToolTip($btnUpdateAll, "Alle verfügbaren Pakete aktualisieren")
+$tooltipObj.SetToolTip($btnUpdateAll, "Alle in der GUI bekannten Pakete aktualisieren; externe Updates werden separat gemeldet")
 $searchPanel.Controls.Add($btnUpdateAll)
 
 $btnReloadTools = New-Object System.Windows.Forms.Button
@@ -4640,22 +4736,49 @@ $statusFilterCombo.Add_SelectedIndexChanged({
             default { "All" }
         }
         if (-not [string]::IsNullOrWhiteSpace($script:currentDownloadCategory)) {
-            $null = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category $script:currentDownloadCategory -MainProgressBar $progressBar -ForceRefresh -SearchQuery (Get-ActiveSearchQuery) -TileSize $script:currentTileSize -ShowOnlyUpdates $false -StatusFilter $script:statusFilter
+            $resultCount = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category $script:currentDownloadCategory -MainProgressBar $progressBar -SearchQuery (Get-ActiveSearchQuery) -TileSize $script:currentTileSize -ShowOnlyUpdates $false -StatusFilter $script:statusFilter
+            Update-AvailableUpdatesMarker -VisibleToolCount $resultCount
         }
     })
 $tooltipObj.SetToolTip($statusFilterCombo, "Tools nach Installations- oder Update-Status filtern")
 $searchPanel.Controls.Add($statusFilterCombo)
 
 function Update-AvailableUpdatesMarker {
+    param(
+        [object]$VisibleToolCount = $null
+    )
+
+    $visibleCount = -1
+    $numericCounts = @($VisibleToolCount | Where-Object { $_ -is [byte] -or $_ -is [int16] -or $_ -is [int32] -or $_ -is [int64] -or $_ -is [single] -or $_ -is [double] -or $_ -is [decimal] })
+    if ($numericCounts.Count -gt 0) {
+        $visibleCount = [int]$numericCounts[-1]
+    }
+
     $updateCache = Initialize-AvailableUpdatesCache
     $updateCount = @($updateCache.Keys).Count
-    if ($updateCount -gt 0) {
+    if ($script:statusFilter -eq "Installed" -and $visibleCount -ge 0) {
+        $btnFilterUpdates.ForeColor = if ($updateCount -gt 0) { [System.Drawing.Color]::Orange } else { [System.Drawing.Color]::LightGreen }
+        $statusText = "$visibleCount installierte Tools sichtbar"
+        $tooltipText = "Installierte Tools: $visibleCount"
+    } elseif ($script:statusFilter -eq "Updates" -and $visibleCount -ge 0) {
+        $btnFilterUpdates.ForeColor = if ($updateCount -gt 0) { [System.Drawing.Color]::Orange } else { [System.Drawing.Color]::LightGreen }
+        $statusText = "$visibleCount aktualisierbare Tools sichtbar"
+        $tooltipText = "Aktualisierbare Tools: $visibleCount"
+    } elseif ($updateCount -gt 0) {
         $btnFilterUpdates.ForeColor = [System.Drawing.Color]::Orange
         $tooltipText = "$updateCount verfügbare Updates in der Auswahl aktualisieren"
+        $statusText = "$updateCount aktualisierbare Tools verfügbar"
     } else {
         $btnFilterUpdates.ForeColor = [System.Drawing.Color]::LightGreen
         $tooltipText = "Keine Updates verfügbar"
+        $statusText = "Keine zu aktualisierenden Tools verfügbar"
     }
+    $statusColor = if ($updateCount -gt 0) { [System.Drawing.Color]::Orange } else { [System.Drawing.Color]::LightGreen }
+    $progressBar.CustomText = $statusText
+    $progressBar.TextColor = $statusColor
+    # Der asynchrone Lade-Reset übernimmt diesen Wert nach Abschluss des Timers.
+    $global:progressBarPostText = $statusText
+    $global:progressBarPostColor = $statusColor
     $tooltipObj.SetToolTip($btnFilterUpdates, $tooltipText)
 }
 
@@ -4759,12 +4882,9 @@ $searchTextBox.Add_TextChanged({
     
         # Aktualisiere Suchergebnis-Label und Tool-Anzeige
         if ([string]::IsNullOrWhiteSpace($searchQuery)) {
-            $progressBar.CustomText = "Bereit"
-            $progressBar.TextColor = [System.Drawing.Color]::White
-            $global:progressBarPostText = "Bereit"
-            $global:progressBarPostColor = [System.Drawing.Color]::White
-            # Zeige alle Tools ohne Filter
+            # Zeige alle Tools ohne Filter und den aktuellen Updatezustand
             $resultCount = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category $script:currentDownloadCategory -MainProgressBar $progressBar -SearchQuery "" -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates -StatusFilter $script:statusFilter
+            Update-AvailableUpdatesMarker -VisibleToolCount $resultCount
         } elseif ($searchQuery.Length -lt 3) {
             # Zu kurzer Suchbegriff
             $progressBar.CustomText = "Suche: Mindestens 3 Zeichen eingeben"
@@ -7800,7 +7920,7 @@ $btnAllTools.Add_Click({
         # Tools mit Installationsüberprüfung anzeigen und Progressbar aktualisieren
         $resultCount = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category "all" -MainProgressBar $progressBar -SearchQuery (Get-ActiveSearchQuery) -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates -StatusFilter $script:statusFilter
         if (-not [string]::IsNullOrWhiteSpace((Get-ActiveSearchQuery))) { Set-SearchResultStatus -ResultCount $resultCount }
-        Update-AvailableUpdatesMarker
+        Update-AvailableUpdatesMarker -VisibleToolCount $resultCount
     })
 $downloadsPanel.Content.Controls.Add($btnAllTools)
 
@@ -7864,7 +7984,7 @@ $btnSystemTools.Add_Click({
         # Tools mit Installationsüberprüfung anzeigen und Progressbar aktualisieren
         $resultCount = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category "system" -MainProgressBar $progressBar -SearchQuery (Get-ActiveSearchQuery) -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates -StatusFilter $script:statusFilter
         if (-not [string]::IsNullOrWhiteSpace((Get-ActiveSearchQuery))) { Set-SearchResultStatus -ResultCount $resultCount }
-        Update-AvailableUpdatesMarker
+        Update-AvailableUpdatesMarker -VisibleToolCount $resultCount
     })
 $downloadsPanel.Content.Controls.Add($btnSystemTools)
 
@@ -7928,7 +8048,7 @@ $btnApplications.Add_Click({
         # Tools mit Installationsüberprüfung anzeigen und Progressbar aktualisieren
         $resultCount = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category "applications" -MainProgressBar $progressBar -SearchQuery (Get-ActiveSearchQuery) -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates -StatusFilter $script:statusFilter
         if (-not [string]::IsNullOrWhiteSpace((Get-ActiveSearchQuery))) { Set-SearchResultStatus -ResultCount $resultCount }
-        Update-AvailableUpdatesMarker
+        Update-AvailableUpdatesMarker -VisibleToolCount $resultCount
     })
 $downloadsPanel.Content.Controls.Add($btnApplications)
 
@@ -7992,7 +8112,7 @@ $btnAudioTV.Add_Click({
         # Tools mit Installationsüberprüfung anzeigen und Progressbar aktualisieren
         $resultCount = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category "audiotv" -MainProgressBar $progressBar -SearchQuery (Get-ActiveSearchQuery) -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates -StatusFilter $script:statusFilter
         if (-not [string]::IsNullOrWhiteSpace((Get-ActiveSearchQuery))) { Set-SearchResultStatus -ResultCount $resultCount }
-        Update-AvailableUpdatesMarker
+        Update-AvailableUpdatesMarker -VisibleToolCount $resultCount
     })
 $downloadsPanel.Content.Controls.Add($btnAudioTV)
 
@@ -8056,7 +8176,7 @@ $btnCodingTools.Add_Click({
         # Tools mit Installationsüberprüfung anzeigen und Progressbar aktualisieren
         $resultCount = Update-ToolsDisplay -WrapPanel $toolWrapPanel -Category "coding" -MainProgressBar $progressBar -SearchQuery (Get-ActiveSearchQuery) -TileSize $script:currentTileSize -ShowOnlyUpdates $script:showOnlyUpdates -StatusFilter $script:statusFilter
         if (-not [string]::IsNullOrWhiteSpace((Get-ActiveSearchQuery))) { Set-SearchResultStatus -ResultCount $resultCount }
-        Update-AvailableUpdatesMarker
+        Update-AvailableUpdatesMarker -VisibleToolCount $resultCount
     })
 $downloadsPanel.Content.Controls.Add($btnCodingTools)
 
@@ -10620,11 +10740,10 @@ function Get-ToolInfo {
     $progressBar.CustomText = "Tool-Info geladen"
     $progressBar.TextColor = [System.Drawing.Color]::LimeGreen
 
-    # Nach kurzer Pause zurücksetzen
+    # Nach kurzer Pause den aktuellen Updatezustand anzeigen
     Start-Sleep -Milliseconds 1000
     $progressBar.Value = 0
-    $progressBar.CustomText = "Bereit"
-    $progressBar.TextColor = [System.Drawing.Color]::White
+    Update-AvailableUpdatesMarker
 }
 
 # Tool-Info-Box dem toolInfoViewPanel hinzufügen
