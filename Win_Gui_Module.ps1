@@ -1349,6 +1349,11 @@ function Get-PythonDashboardCapabilities {
 function Set-PythonDashboardStartupRegistration {
     param([bool]$Enable)
 
+    if ($script:IsWorkspaceInstance -and $Enable) {
+        Write-Warning "Workspace-Instanz darf keinen Windows-Autostart registrieren."
+        $Enable = $false
+    }
+
     $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
     $valueName = 'BockisPythonDashboard'
     $runnerPath = Get-PythonDashboardStartScriptPath
@@ -1372,6 +1377,11 @@ function Set-PythonDashboardStartupRegistration {
 
 function Set-GuiStartupRegistration {
     param([bool]$Enable)
+
+    if ($script:IsWorkspaceInstance -and $Enable) {
+        Write-Warning "Workspace-Instanz darf keinen Windows-Autostart registrieren."
+        $Enable = $false
+    }
 
     $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
     $valueName = 'BockisSystemToolGUI'
@@ -1451,6 +1461,37 @@ function Set-GuiStartupFolderRegistration {
         Remove-Item -Path $shortcutPath -Force -ErrorAction SilentlyContinue
     }
     return $true
+}
+
+function Disable-WorkspaceAutoStart {
+    if (-not $script:IsWorkspaceInstance) { return }
+
+    $settings = Get-SystemToolSettings
+    $startupKeys = @(
+        'AutoStartPythonDashboardOnAppStart',
+        'AutoStartPythonDashboardOnWindowsLogin',
+        'AutoStartGuiOnWindowsLogin',
+        'AutoStartExtensionsOnWindowsLogin',
+        'RunNetworkScanAtStartup',
+        'RunSmartRepairAtStartup',
+        'MinimizeToTrayOnStartup'
+    )
+    $settingsChanged = $false
+    foreach ($key in $startupKeys) {
+        if ($settings -and [bool]$settings.$key) {
+            $settings.$key = $false
+            $settingsChanged = $true
+        }
+    }
+    if ($settingsChanged) {
+        Set-SystemToolSettings -Settings $settings
+        $configPath = Join-Path $PSScriptRoot 'config.json'
+        [void](Export-SystemToolSettings -ConfigPath $configPath -Silent)
+    }
+
+    Set-PythonDashboardStartupRegistration -Enable:$false | Out-Null
+    Set-GuiStartupRegistration -Enable:$false | Out-Null
+    Write-Host '[WORKSPACE-SCHUTZ] Windows-Autostart und automatische Startaktionen deaktiviert.' -ForegroundColor Yellow
 }
 
 function Get-ExternalToolsConfigPath {
@@ -10424,7 +10465,7 @@ $statusLabel.ForeColor = [System.Drawing.Color]::FromArgb(220, 220, 220)  # Hell
 
 # Workspace-Hinweis dauerhaft in der Statuszeile anzeigen
 $workspaceStatusLabel = New-Object System.Windows.Forms.ToolStripStatusLabel
-$workspaceStatusLabel.Text = if ($script:IsWorkspaceInstance) { "Workspace: Git-Arbeitsverzeichnis" } else { "" }
+$workspaceStatusLabel.Text = if ($script:IsWorkspaceInstance) { "Workspace: Git-Arbeitsverzeichnis | Autostart deaktiviert" } else { "" }
 $workspaceStatusLabel.ForeColor = [System.Drawing.Color]::Gold
 
 # Admin-Indikator
@@ -10698,11 +10739,12 @@ $mainform.Add_Shown({
         # 1. Einstellungen laden (5%)
         Update-InitProgress -Value 5 -Text "Lade Einstellungen..."
         $null = Update-Settings
+        Disable-WorkspaceAutoStart
 
         # Optional: Python-Dashboard beim Bockis-Start automatisch im Hintergrund starten
         try {
             $currentSettings = Get-SystemToolSettings
-            if ($currentSettings -and [bool]$currentSettings.AutoStartPythonDashboardOnAppStart) {
+            if (-not $script:IsWorkspaceInstance -and $currentSettings -and [bool]$currentSettings.AutoStartPythonDashboardOnAppStart) {
                 $pyStartResult = Start-PythonDashboard
                 if ($pyStartResult.Success) {
                     if ($script:pythonDashboardButton) {
@@ -10720,7 +10762,7 @@ $mainform.Add_Shown({
         }
 
         try {
-            if ($StartedFromWindowsLogin) {
+            if ($StartedFromWindowsLogin -and -not $script:IsWorkspaceInstance) {
                 Start-ConfiguredExtensionsOnWindowsLogin -OutputBox $outputBox
             }
         }
@@ -11254,7 +11296,7 @@ Update-AllButtonFlatAppearance -RootControl $mainform
 $startupSettings = Get-SystemToolSettings
 $script:isStartupTrayLaunch = $false
 $script:hideToTrayOnShown = $false
-if ($StartedFromWindowsLogin -and $startupSettings -and [bool]$startupSettings.MinimizeToTrayOnStartup) {
+if ($StartedFromWindowsLogin -and -not $script:IsWorkspaceInstance -and $startupSettings -and [bool]$startupSettings.MinimizeToTrayOnStartup) {
     $script:isStartupTrayLaunch = $true
     $script:hideToTrayOnShown = $true
     $mainform.ShowInTaskbar = $false
