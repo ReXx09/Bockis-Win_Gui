@@ -1864,11 +1864,6 @@ function Initialize-ToolEntry {
         $border.Background = $script:toolResourceDictionary["ToolInstallUnselectedColor"]
         $border.BorderBrush = [Windows.Media.Brushes]::LightGray
     }
-    if ($TileSize -eq "List") {
-        $border.Background = [Windows.Media.Brushes]::Transparent
-        $border.BorderBrush = [Windows.Media.Brushes]::LightGray
-    }
-    
     $border.Tag = $Tool
     $tooltipText = $Tool.Description
     if ($hasUpdate) {
