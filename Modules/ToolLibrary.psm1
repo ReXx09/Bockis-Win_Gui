@@ -1971,7 +1971,7 @@ function Initialize-ToolEntry {
     $appName.Text = $Tool.Name
     $appName.FontWeight = [Windows.FontWeights]::Bold
     $appName.FontSize = if ($isSmallTile) { 12 } else { $script:toolResourceDictionary["ToolTileFontSize"] }
-    $appName.Foreground = $script:toolResourceDictionary["MainForegroundColor"]
+    $appName.Foreground = if ($isListView) { [Windows.Media.Brushes]::White } else { $script:toolResourceDictionary["MainForegroundColor"] }
     $appName.TextWrapping = if ($isSmallTile) { [Windows.TextWrapping]::Wrap } else { [Windows.TextWrapping]::NoWrap }
     $namePanel.Children.Add($appName)
     
@@ -1980,7 +1980,7 @@ function Initialize-ToolEntry {
         $categoryBlock = New-Object Windows.Controls.TextBlock
         $categoryBlock.Text = "Kategorie: " + $Tool.Category
         $categoryBlock.FontSize = 12
-        $categoryBlock.Foreground = $script:toolResourceDictionary["CategoryForegroundColor"]
+        $categoryBlock.Foreground = if ($isListView) { [Windows.Media.Brushes]::LightGray } else { $script:toolResourceDictionary["CategoryForegroundColor"] }
         $namePanel.Children.Add($categoryBlock)
     }
     
@@ -2007,7 +2007,7 @@ function Initialize-ToolEntry {
             $statusBlock.FontWeight = [Windows.FontWeights]::Bold
         } else {
             $statusBlock.Text = "Nicht installiert"
-            $statusBlock.Foreground = [Windows.Media.Brushes]::Gray
+            $statusBlock.Foreground = if ($isListView) { [Windows.Media.Brushes]::LightGray } else { [Windows.Media.Brushes]::Gray }
         }
         
         $namePanel.Children.Add($statusBlock)
@@ -2051,6 +2051,7 @@ function Initialize-ToolEntry {
         $descLabel.TextWrapping = [Windows.TextWrapping]::Wrap
     }
     $descLabel.FontSize = if ($isListView) { 10 } elseif ($isSmallTile) { 10 } else { 12 }
+    $descLabel.Foreground = if ($isListView) { [Windows.Media.Brushes]::White } else { [Windows.Media.Brushes]::Black }
     $descLabel.Margin = if ($isListView) { New-Object Windows.Thickness(5, 0, 5, 0) } else { New-Object Windows.Thickness(5) }
     $descPanel.Children.Add($descLabel)
     if (-not $isListView) {
@@ -3436,7 +3437,7 @@ function Update-ToolsDisplay {
 }
 
 # Exportiere die Funktionen
-Export-ModuleMember -Function Get-AllTools, Get-ToolsByCategory, Get-ToolsByTag, Get-ToolByName, Install-ToolPackage, Get-ToolDownload, Flatten, Update-ToolProgress, Set-ToolResource, Initialize-ToolEntry, Show-ToolTileList, Test-ToolInstalled, Test-ToolUpdateAvailable, Get-ToolVersionInfo, Update-ToolsDisplay, Stop-ToolProcess, Get-WingetErrorDescription, Show-ToolAcquisitionDialog, Test-ToolDownloaded, Get-ToolLocalInstallerPath, Invoke-ToolDownload, Install-ToolFromLocal
+Export-ModuleMember -Function Get-AllTools, Get-ToolsByCategory, Get-ToolsByTag, Get-ToolByName, Install-ToolPackage, Get-ToolDownload, Flatten, Update-ToolProgress, Set-ToolResource, Initialize-ToolEntry, Show-ToolTileList, Test-ToolInstalled, Test-ToolUpdateAvailable, Get-ToolVersionInfo, Update-ToolsDisplay, Stop-ToolProcess, Get-WingetErrorDescription, Show-ToolAcquisitionDialog, Test-ToolDownloaded, Get-ToolLocalInstallerPath, Invoke-ToolDownload, Install-ToolFromLocal, Initialize-AvailableUpdatesCache
 
 # SIG # Begin signature block
 # MIIcSgYJKoZIhvcNAQcCoIIcOzCCHDcCAQExDzANBglghkgBZQMEAgEFADB5Bgor
