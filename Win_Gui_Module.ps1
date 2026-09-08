@@ -685,6 +685,35 @@ function Test-Admin {
 
 $script:GuiElevatedTaskName = 'BockisSystemToolGUI-Elevated'
 
+function Remove-WorkspaceGuiElevatedLaunchTask {
+    if (-not $script:IsWorkspaceInstance) {
+        return
+    }
+
+    try {
+        $task = Get-ScheduledTask -TaskName $script:GuiElevatedTaskName -ErrorAction SilentlyContinue
+        if (-not $task) {
+            return
+        }
+
+        $workspaceScriptPath = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot 'Win_Gui_Module.ps1'))
+        $workspacePathPattern = [regex]::Escape($workspaceScriptPath)
+        $pointsToWorkspace = @($task.Actions | Where-Object {
+                $_.Execute -match 'powershell' -and $_.Arguments -match $workspacePathPattern
+            }).Count -gt 0
+
+        if ($pointsToWorkspace) {
+            Unregister-ScheduledTask -TaskName $script:GuiElevatedTaskName -Confirm:$false -ErrorAction SilentlyContinue
+            Write-Verbose "Workspace-Autostartaufgabe entfernt: $($script:GuiElevatedTaskName)"
+        }
+    }
+    catch {
+        Write-Verbose "Workspace-Autostartaufgabe konnte nicht entfernt werden: $_"
+    }
+}
+
+Remove-WorkspaceGuiElevatedLaunchTask
+
 function Register-GuiElevatedLaunchTask {
     param(
         [string]$TaskName = $script:GuiElevatedTaskName,
@@ -710,6 +739,10 @@ function Register-GuiElevatedLaunchTask {
 
 function Invoke-GuiElevatedLaunchTask {
     param([string]$TaskName = $script:GuiElevatedTaskName)
+
+    if ($script:IsWorkspaceInstance) {
+        return $false
+    }
 
     try {
         $runResult = Start-Process -FilePath 'schtasks.exe' -ArgumentList @('/Run', '/TN', $TaskName) -WindowStyle Hidden -Wait -PassThru -ErrorAction Stop
@@ -743,8 +776,11 @@ if (-not (Test-Admin)) {
     }
 }
 
-# Elevated-Task bei erfolgreichem Admin-Start automatisch aktualisieren
-$null = Register-GuiElevatedLaunchTask -TaskName $script:GuiElevatedTaskName -ScriptPath $MyInvocation.MyCommand.Path
+# Elevated-Task bei erfolgreichem Admin-Start automatisch aktualisieren.
+# Die Workspace-Version darf keine Windows-Autostartaufgabe registrieren.
+if (-not $script:IsWorkspaceInstance) {
+    $null = Register-GuiElevatedLaunchTask -TaskName $script:GuiElevatedTaskName -ScriptPath $MyInvocation.MyCommand.Path
+}
 
 # Logo-Funktion hinzufügen
 function Show-SystemToolLogo {
@@ -4618,7 +4654,9 @@ $btnFilterUpdates.Add_Click({
         $progressBar.CustomText = "Aktualisiere externe Auswahl..."
         $progressBar.TextColor = [System.Drawing.Color]::Yellow
         foreach ($packageId in $externalIdsToUpdate) {
-            Start-Process -FilePath $wingetCommand.Source -ArgumentList "upgrade --id $packageId --silent --accept-source-agreements --accept-package-agreements --disable-interactivity" -Wait -WindowStyle Normal
+            $updateProcess = Start-Process -FilePath $wingetCommand.Source -ArgumentList "upgrade --id $packageId --silent --accept-source-agreements --accept-package-agreements --disable-interactivity" -Wait -PassThru -WindowStyle Normal
+            $updateInfo = $updateCache[$packageId]
+            $null = Add-ToolUpdateHistory -PackageId $packageId -Name $updateInfo.Name -InstalledVersion $updateInfo.InstalledVersion -AvailableVersion $updateInfo.AvailableVersion -ExitCode $updateProcess.ExitCode
         }
         $null = Initialize-InstalledPackagesCache
         $null = Initialize-AvailableUpdatesCache -ForceRefresh
@@ -4681,6 +4719,8 @@ $btnUpdateAll.Add_Click({
             if ($updateProcess.ExitCode -ne 0) {
                 $updateExitCode = $updateProcess.ExitCode
             }
+            $updateInfo = $updateCache[$packageId]
+            $null = Add-ToolUpdateHistory -PackageId $packageId -Name $updateInfo.Name -InstalledVersion $updateInfo.InstalledVersion -AvailableVersion $updateInfo.AvailableVersion -ExitCode $updateProcess.ExitCode
         }
         $null = Initialize-InstalledPackagesCache
         $null = Initialize-AvailableUpdatesCache -ForceRefresh

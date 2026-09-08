@@ -12,12 +12,52 @@ $script:installedPackagesCache = $null
 $script:installedPackagesCacheTime = $null
 $script:installedPackagesPersistentCachePath = Join-Path $PSScriptRoot "..\Data\Cache\installed-packages.json"
 $script:installedPackagesPersistentCacheMaxAgeMinutes = 15
+$script:installedPackagesRefreshJob = $null
 
 # Locking-Variable für Cache-Initialisierung (verhindert Race Conditions)
 $script:cacheInitializationLock = $false
 
 # Liste der bekannten Schlüssel initialisieren
 $script:knownKeys = @()
+
+function Start-InstalledPackagesCacheRefresh {
+    if ($script:installedPackagesRefreshJob) {
+        return
+    }
+
+    try {
+        $script:installedPackagesRefreshJob = Start-Job -ScriptBlock {
+            winget list 2>$null | Out-String
+        }
+    } catch {
+        Write-Verbose "Hintergrundaktualisierung des Installationscache konnte nicht gestartet werden: $_"
+        $script:installedPackagesRefreshJob = $null
+    }
+}
+
+function Stop-InstalledPackagesCacheRefresh {
+    if (-not $script:installedPackagesRefreshJob) {
+        return
+    }
+
+    Stop-Job -Job $script:installedPackagesRefreshJob -ErrorAction SilentlyContinue
+    Remove-Job -Job $script:installedPackagesRefreshJob -Force -ErrorAction SilentlyContinue
+    $script:installedPackagesRefreshJob = $null
+}
+
+function Save-InstalledPackagesPersistentCache {
+    try {
+        $cacheDirectory = Split-Path -Parent $script:installedPackagesPersistentCachePath
+        if (-not (Test-Path $cacheDirectory)) {
+            New-Item -Path $cacheDirectory -ItemType Directory -Force | Out-Null
+        }
+        @{ Timestamp = $script:installedPackagesCacheTime.ToString('o'); Output = [string]$script:installedPackagesCache } |
+            ConvertTo-Json -Depth 3 |
+            Set-Content -LiteralPath $script:installedPackagesPersistentCachePath -Encoding UTF8
+    } catch {
+        Write-Verbose "Persistenter Installationscache konnte nicht gespeichert werden: $_"
+    }
+}
 
 # Cache-Ablaufzeit (in Minuten)
 $script:defaultCacheExpiration = 15  # 15 Minuten Standard-Ablaufzeit für Tool-Informationen
@@ -129,6 +169,8 @@ function Remove-ToolFromCache {
 # Funktion zum Leeren des gesamten Caches
 function Clear-ToolCache {
     try {
+        Stop-InstalledPackagesCacheRefresh
+
         # Sammle alle bekannten Schlüssel, für die wir den Cache leeren wollen
         $keysToRemove = @()
         
@@ -163,14 +205,36 @@ function Clear-ToolCache {
 
 # Funktion zum Initialisieren des Caches für installierte Pakete (ruft nur einmal winget list auf)
 function Initialize-InstalledPackagesCache {
+    if ($script:installedPackagesRefreshJob -and $script:installedPackagesRefreshJob.State -in @('Failed', 'Stopped', 'Disconnected')) {
+        Stop-InstalledPackagesCacheRefresh
+    }
+
+    if ($script:installedPackagesRefreshJob -and $script:installedPackagesRefreshJob.State -eq 'Completed') {
+        try {
+            $script:installedPackagesCache = Receive-Job -Job $script:installedPackagesRefreshJob | Out-String
+            $script:installedPackagesCacheTime = Get-Date
+            Save-InstalledPackagesPersistentCache
+        } finally {
+            Remove-Job -Job $script:installedPackagesRefreshJob -Force -ErrorAction SilentlyContinue
+            $script:installedPackagesRefreshJob = $null
+        }
+    }
+
     if ($null -eq $script:installedPackagesCache -and (Test-Path $script:installedPackagesPersistentCachePath)) {
         try {
             $persistentRecord = Get-Content -LiteralPath $script:installedPackagesPersistentCachePath -Raw -ErrorAction Stop | ConvertFrom-Json
-            $persistentTimestamp = [DateTime]$persistentRecord.Timestamp
+            $timestampValue = $persistentRecord.Timestamp
+            if ($timestampValue -is [psobject] -and $timestampValue.PSObject.Properties['DateTime']) {
+                $timestampValue = $timestampValue.DateTime
+            } elseif ($timestampValue -is [psobject] -and $timestampValue.PSObject.Properties['value']) {
+                $timestampValue = $timestampValue.value
+            }
+            $persistentTimestamp = [DateTime]::Parse([string]$timestampValue)
             if (((Get-Date) - $persistentTimestamp).TotalMinutes -lt $script:installedPackagesPersistentCacheMaxAgeMinutes) {
                 $script:installedPackagesCache = [string]$persistentRecord.Output
                 $script:installedPackagesCacheTime = $persistentTimestamp
                 Write-Verbose "Installierte Pakete aus persistentem Cache geladen"
+                Start-InstalledPackagesCacheRefresh
                 return $true
             }
         } catch {
@@ -183,6 +247,12 @@ function Initialize-InstalledPackagesCache {
         $cacheAge = (Get-Date) - $script:installedPackagesCacheTime
         if ($cacheAge.TotalMinutes -lt $script:installedPackagesCacheExpiration) {
             Write-Verbose "Installierte Pakete Cache ist aktuell (Alter: $($cacheAge.TotalMinutes) Minuten)"
+            return $true
+        }
+
+        if ($cacheAge.TotalMinutes -lt $script:installedPackagesPersistentCacheMaxAgeMinutes) {
+            Start-InstalledPackagesCacheRefresh
+            Write-Verbose "Verwende abgelaufenen Installationscache während der Hintergrundaktualisierung"
             return $true
         }
     }
@@ -220,17 +290,7 @@ function Initialize-InstalledPackagesCache {
         if ($completed) {
             $script:installedPackagesCache = Receive-Job -Job $job
             $script:installedPackagesCacheTime = Get-Date
-            try {
-                $cacheDirectory = Split-Path -Parent $script:installedPackagesPersistentCachePath
-                if (-not (Test-Path $cacheDirectory)) {
-                    New-Item -Path $cacheDirectory -ItemType Directory -Force | Out-Null
-                }
-                @{ Timestamp = $script:installedPackagesCacheTime; Output = [string]$script:installedPackagesCache } |
-                    ConvertTo-Json -Depth 3 |
-                    Set-Content -LiteralPath $script:installedPackagesPersistentCachePath -Encoding UTF8
-            } catch {
-                Write-Verbose "Persistenter Installationscache konnte nicht gespeichert werden: $_"
-            }
+            Save-InstalledPackagesPersistentCache
             $cacheLines = ($script:installedPackagesCache -split "`n").Count
             Write-Verbose "Installierte Pakete Cache wurde aktualisiert ($cacheLines Zeilen)"
             Write-Host "[CACHE-INIT] Cache erfolgreich geladen: $cacheLines Zeilen" -ForegroundColor Green
@@ -391,6 +451,7 @@ function Update-ToolInstallationStatus {
     Write-Verbose "Installationsstatus für $($Tool.Name) aktualisiert: $IsInstalled"
     
     # Paketcache als veraltet markieren
+    Stop-InstalledPackagesCacheRefresh
     $script:installedPackagesCache = $null
     $script:installedPackagesCacheTime = $null
     

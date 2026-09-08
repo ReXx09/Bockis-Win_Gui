@@ -2729,11 +2729,57 @@ $script:availableUpdatesCache = $null
 $script:availableUpdatesCacheTimestamp = $null
 $script:availableUpdatesPersistentCachePath = Join-Path $PSScriptRoot "..\Data\Cache\winget-updates.json"
 $script:availableUpdatesPersistentCacheMaxAgeMinutes = 15
+$script:availableUpdatesRefreshJob = $null
 $script:toolVersionInfoCache = @{}
 $script:toolVersionInfoCacheTimestamp = @{}
 $script:toolVersionInfoCacheExpirationSeconds = 60
 $script:downloadedFileCache = @{}
 $script:downloadedFileCacheDirectoryTimestamp = @{}
+$script:toolUpdateHistoryPath = Join-Path $PSScriptRoot "..\Data\Cache\update-history.json"
+
+function Add-ToolUpdateHistory {
+    param(
+        [Parameter(Mandatory = $true)][string]$PackageId,
+        [string]$Name,
+        [string]$InstalledVersion,
+        [string]$AvailableVersion,
+        [int]$ExitCode = 0
+    )
+
+    if ($ExitCode -ne 0) {
+        return $false
+    }
+
+    try {
+        $directory = Split-Path -Parent $script:toolUpdateHistoryPath
+        if (-not (Test-Path $directory)) {
+            New-Item -Path $directory -ItemType Directory -Force | Out-Null
+        }
+
+        $history = @()
+        if (Test-Path $script:toolUpdateHistoryPath) {
+            $storedHistory = Get-Content -LiteralPath $script:toolUpdateHistoryPath -Raw -ErrorAction Stop | ConvertFrom-Json
+            if ($storedHistory) {
+                $history = @($storedHistory)
+            }
+        }
+
+        $history += [ordered]@{
+            Timestamp        = (Get-Date).ToString('o')
+            PackageId        = $PackageId
+            Name             = $Name
+            InstalledVersion = $InstalledVersion
+            AvailableVersion = $AvailableVersion
+            ExitCode         = $ExitCode
+        }
+        $history = @($history | Select-Object -Last 200)
+        $history | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $script:toolUpdateHistoryPath -Encoding UTF8
+        return $true
+    } catch {
+        Write-Verbose "Update-Verlauf konnte nicht gespeichert werden: $_"
+        return $false
+    }
+}
 
 function Import-PersistentAvailableUpdatesCache {
     if (-not (Test-Path $script:availableUpdatesPersistentCachePath)) {
@@ -2742,7 +2788,13 @@ function Import-PersistentAvailableUpdatesCache {
 
     try {
         $record = Get-Content -LiteralPath $script:availableUpdatesPersistentCachePath -Raw -ErrorAction Stop | ConvertFrom-Json
-        $timestamp = [DateTime]$record.Timestamp
+        $timestampValue = $record.Timestamp
+        if ($timestampValue -is [psobject] -and $timestampValue.PSObject.Properties['DateTime']) {
+            $timestampValue = $timestampValue.DateTime
+        } elseif ($timestampValue -is [psobject] -and $timestampValue.PSObject.Properties['value']) {
+            $timestampValue = $timestampValue.value
+        }
+        $timestamp = [DateTime]::Parse([string]$timestampValue)
         if (((Get-Date) - $timestamp).TotalMinutes -ge $script:availableUpdatesPersistentCacheMaxAgeMinutes) {
             return $null
         }
@@ -2772,12 +2824,59 @@ function Export-PersistentAvailableUpdatesCache {
         if (-not (Test-Path $directory)) {
             New-Item -Path $directory -ItemType Directory -Force | Out-Null
         }
-        @{ Timestamp = Get-Date; Updates = $Cache } |
+        @{ Timestamp = (Get-Date).ToString('o'); Updates = $Cache } |
             ConvertTo-Json -Depth 6 |
             Set-Content -LiteralPath $script:availableUpdatesPersistentCachePath -Encoding UTF8
     } catch {
         Write-Verbose "Persistenter Updatecache konnte nicht gespeichert werden: $_"
     }
+}
+
+function Convert-WingetUpgradeOutputToCache {
+    param([Parameter(Mandatory = $true)][string]$UpgradeOutput)
+
+    $cache = @{}
+    $linePattern = '^\s*(?<name>.*?)\s{2,}(?<id>\S+)\s{2,}(?<installed>\S+)\s{2,}(?<available>\S+)(?:\s{2,}(?<source>\S+))?\s*$'
+    foreach ($line in ($UpgradeOutput -split "`r?`n")) {
+        if ($line -notmatch $linePattern) { continue }
+
+        $packageId = $matches['id']
+        if ([string]::IsNullOrWhiteSpace($packageId) -or $packageId -eq 'Id') { continue }
+
+        $cache[$packageId.ToLower()] = @{
+            HasUpdate        = $true
+            Name             = $matches['name'].Trim()
+            InstalledVersion = $matches['installed']
+            AvailableVersion = $matches['available']
+            RawLine          = $line
+        }
+    }
+    return $cache
+}
+
+function Start-AvailableUpdatesCacheRefresh {
+    if ($script:availableUpdatesRefreshJob) {
+        return
+    }
+
+    try {
+        $script:availableUpdatesRefreshJob = Start-Job -ScriptBlock {
+            winget upgrade --accept-source-agreements --disable-interactivity 2>$null | Out-String
+        }
+    } catch {
+        Write-Verbose "Hintergrundaktualisierung des Updatecache konnte nicht gestartet werden: $_"
+        $script:availableUpdatesRefreshJob = $null
+    }
+}
+
+function Stop-AvailableUpdatesCacheRefresh {
+    if (-not $script:availableUpdatesRefreshJob) {
+        return
+    }
+
+    Stop-Job -Job $script:availableUpdatesRefreshJob -ErrorAction SilentlyContinue
+    Remove-Job -Job $script:availableUpdatesRefreshJob -Force -ErrorAction SilentlyContinue
+    $script:availableUpdatesRefreshJob = $null
 }
 
 function Initialize-AvailableUpdatesCache {
@@ -2788,6 +2887,33 @@ function Initialize-AvailableUpdatesCache {
     if ($ForceRefresh) {
         $script:toolVersionInfoCache.Clear()
         $script:toolVersionInfoCacheTimestamp.Clear()
+        Stop-AvailableUpdatesCacheRefresh
+    }
+
+    if ($script:availableUpdatesRefreshJob -and $script:availableUpdatesRefreshJob.State -in @('Failed', 'Stopped', 'Disconnected')) {
+        Stop-AvailableUpdatesCacheRefresh
+    }
+
+    if ($script:availableUpdatesRefreshJob -and $script:availableUpdatesRefreshJob.State -eq 'Completed') {
+        try {
+            $upgradeOutput = Receive-Job -Job $script:availableUpdatesRefreshJob | Out-String
+            $script:availableUpdatesCache = Convert-WingetUpgradeOutputToCache -UpgradeOutput $upgradeOutput
+            $script:availableUpdatesCacheTimestamp = Get-Date
+            Export-PersistentAvailableUpdatesCache -Cache $script:availableUpdatesCache
+        } finally {
+            Remove-Job -Job $script:availableUpdatesRefreshJob -Force -ErrorAction SilentlyContinue
+            $script:availableUpdatesRefreshJob = $null
+        }
+    }
+
+    if (-not $ForceRefresh -and $script:availableUpdatesCache -and $script:availableUpdatesCacheTimestamp) {
+        $cacheAgeMinutes = ((Get-Date) - $script:availableUpdatesCacheTimestamp).TotalMinutes
+        if ($cacheAgeMinutes -lt $script:availableUpdatesPersistentCacheMaxAgeMinutes) {
+            if ($cacheAgeMinutes -ge 1 -and -not $script:availableUpdatesRefreshJob) {
+                Start-AvailableUpdatesCacheRefresh
+            }
+            return $script:availableUpdatesCache
+        }
     }
 
     if (-not $ForceRefresh -and $null -eq $script:availableUpdatesCache) {
@@ -2795,6 +2921,8 @@ function Initialize-AvailableUpdatesCache {
         if ($persistentCache) {
             $script:availableUpdatesCache = $persistentCache.Cache
             $script:availableUpdatesCacheTimestamp = $persistentCache.Timestamp
+            Start-AvailableUpdatesCacheRefresh
+            return $script:availableUpdatesCache
         }
     }
 
@@ -2817,24 +2945,9 @@ function Initialize-AvailableUpdatesCache {
             return $cache
         }
 
-        $lines = $upgradeOutput -split "`r?`n"
         # Die Update-Tabelle vollständig lesen, damit auch nicht in der GUI
         # hinterlegte Winget-Pakete im globalen Filter verfügbar sind.
-        $linePattern = '^\s*(?<name>.*?)\s{2,}(?<id>\S+)\s{2,}(?<installed>\S+)\s{2,}(?<available>\S+)(?:\s{2,}(?<source>\S+))?\s*$'
-        foreach ($line in $lines) {
-            if ($line -notmatch $linePattern) { continue }
-
-            $packageId = $matches['id']
-            if ([string]::IsNullOrWhiteSpace($packageId) -or $packageId -eq 'Id') { continue }
-
-            $cache[$packageId.ToLower()] = @{
-                HasUpdate        = $true
-                Name             = $matches['name'].Trim()
-                InstalledVersion = $matches['installed']
-                AvailableVersion = $matches['available']
-                RawLine          = $line
-            }
-        }
+        $cache = Convert-WingetUpgradeOutputToCache -UpgradeOutput $upgradeOutput
     } catch {
         Write-Verbose "Initialize-AvailableUpdatesCache: Fehler beim Laden der Updates: $_"
     }
@@ -3574,7 +3687,7 @@ function Update-ToolsDisplay {
 }
 
 # Exportiere die Funktionen
-Export-ModuleMember -Function Get-AllTools, Get-ToolsByCategory, Get-ToolsByTag, Get-ToolByName, Install-ToolPackage, Get-ToolDownload, Flatten, Update-ToolProgress, Set-ToolResource, Initialize-ToolEntry, Show-ToolTileList, Test-ToolInstalled, Test-ToolUpdateAvailable, Get-ToolVersionInfo, Update-ToolsDisplay, Stop-ToolProcess, Get-WingetErrorDescription, Show-ToolAcquisitionDialog, Test-ToolDownloaded, Get-ToolLocalInstallerPath, Invoke-ToolDownload, Install-ToolFromLocal, Initialize-AvailableUpdatesCache
+Export-ModuleMember -Function Get-AllTools, Get-ToolsByCategory, Get-ToolsByTag, Get-ToolByName, Install-ToolPackage, Get-ToolDownload, Flatten, Update-ToolProgress, Set-ToolResource, Initialize-ToolEntry, Show-ToolTileList, Test-ToolInstalled, Test-ToolUpdateAvailable, Get-ToolVersionInfo, Update-ToolsDisplay, Stop-ToolProcess, Get-WingetErrorDescription, Show-ToolAcquisitionDialog, Test-ToolDownloaded, Get-ToolLocalInstallerPath, Invoke-ToolDownload, Install-ToolFromLocal, Initialize-AvailableUpdatesCache, Add-ToolUpdateHistory
 
 # SIG # Begin signature block
 # MIIcSgYJKoZIhvcNAQcCoIIcOzCCHDcCAQExDzANBglghkgBZQMEAgEFADB5Bgor

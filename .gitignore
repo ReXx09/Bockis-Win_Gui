@@ -21,6 +21,7 @@ Data/Temp/*.json
 Data/Database/*.db
 Data/Database/
 Data/ToolDownloads/
+Data/Cache/
 Data/dashboard_launchers.json
 
 # Python cache
