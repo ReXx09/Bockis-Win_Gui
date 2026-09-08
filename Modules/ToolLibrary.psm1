@@ -2730,12 +2730,69 @@ $script:availableUpdatesCacheTimestamp = $null
 $script:availableUpdatesPersistentCachePath = Join-Path $PSScriptRoot "..\Data\Cache\winget-updates.json"
 $script:availableUpdatesPersistentCacheMaxAgeMinutes = 15
 $script:availableUpdatesRefreshJob = $null
+$script:toolVersionPersistentCachePath = Join-Path $PSScriptRoot "..\Data\Cache\tool-versions.json"
+$script:toolVersionPersistentCacheMaxAgeMinutes = 15
+$script:toolVersionPersistentCache = $null
 $script:toolVersionInfoCache = @{}
 $script:toolVersionInfoCacheTimestamp = @{}
 $script:toolVersionInfoCacheExpirationSeconds = 60
 $script:downloadedFileCache = @{}
 $script:downloadedFileCacheDirectoryTimestamp = @{}
 $script:toolUpdateHistoryPath = Join-Path $PSScriptRoot "..\Data\Cache\update-history.json"
+
+function Import-PersistentToolVersionCache {
+    if (-not (Test-Path $script:toolVersionPersistentCachePath)) {
+        return @{}
+    }
+
+    try {
+        $record = Get-Content -LiteralPath $script:toolVersionPersistentCachePath -Raw -ErrorAction Stop | ConvertFrom-Json
+        $cache = @{}
+        foreach ($property in $record.Versions.PSObject.Properties) {
+            $entry = $property.Value
+            $timestamp = [DateTime]::Parse([string]$entry.Timestamp)
+            if (((Get-Date) - $timestamp).TotalMinutes -lt $script:toolVersionPersistentCacheMaxAgeMinutes) {
+                $cache[$property.Name] = @{
+                    InstalledVersion = [string]$entry.InstalledVersion
+                    AvailableVersion = [string]$entry.AvailableVersion
+                    HasUpdate        = [bool]$entry.HasUpdate
+                    Timestamp        = $timestamp
+                }
+            }
+        }
+        return $cache
+    } catch {
+        Write-Verbose "Persistenter Versionscache konnte nicht geladen werden: $_"
+        return @{}
+    }
+}
+
+function Export-PersistentToolVersionCache {
+    param([Parameter(Mandatory = $true)][hashtable]$Cache)
+
+    try {
+        $directory = Split-Path -Parent $script:toolVersionPersistentCachePath
+        if (-not (Test-Path $directory)) {
+            New-Item -Path $directory -ItemType Directory -Force | Out-Null
+        }
+
+        $versions = @{}
+        foreach ($key in $Cache.Keys) {
+            $entry = $Cache[$key]
+            $versions[$key] = @{
+                InstalledVersion = $entry.InstalledVersion
+                AvailableVersion = $entry.AvailableVersion
+                HasUpdate        = [bool]$entry.HasUpdate
+                Timestamp        = ([DateTime]$entry.Timestamp).ToString('o')
+            }
+        }
+        @{ Timestamp = (Get-Date).ToString('o'); Versions = $versions } |
+            ConvertTo-Json -Depth 5 |
+            Set-Content -LiteralPath $script:toolVersionPersistentCachePath -Encoding UTF8
+    } catch {
+        Write-Verbose "Persistenter Versionscache konnte nicht gespeichert werden: $_"
+    }
+}
 
 function Add-ToolUpdateHistory {
     param(
@@ -2999,6 +3056,21 @@ function Get-ToolVersionInfo {
             return $versionInfo
         }
 
+        if ($null -eq $script:toolVersionPersistentCache) {
+            $script:toolVersionPersistentCache = Import-PersistentToolVersionCache
+        }
+        if ($script:toolVersionPersistentCache.ContainsKey($wingetIdLower)) {
+            $persistentInfo = $script:toolVersionPersistentCache[$wingetIdLower]
+            $versionInfo = @{
+                InstalledVersion = $persistentInfo.InstalledVersion
+                AvailableVersion = $persistentInfo.AvailableVersion
+                HasUpdate        = [bool]$persistentInfo.HasUpdate
+            }
+            $script:toolVersionInfoCache[$wingetIdLower] = $versionInfo
+            $script:toolVersionInfoCacheTimestamp[$wingetIdLower] = Get-Date
+            return $versionInfo
+        }
+
         # 2) Kein Update in Cache: installierte Version gezielt prüfen
         # Verwende winget list mit upgrade check
         $job = Start-Job -ScriptBlock {
@@ -3046,6 +3118,13 @@ function Get-ToolVersionInfo {
             }
             $script:toolVersionInfoCache[$wingetIdLower] = $versionInfo
             $script:toolVersionInfoCacheTimestamp[$wingetIdLower] = Get-Date
+            $script:toolVersionPersistentCache[$wingetIdLower] = @{
+                InstalledVersion = $versionInfo.InstalledVersion
+                AvailableVersion = $versionInfo.AvailableVersion
+                HasUpdate        = $versionInfo.HasUpdate
+                Timestamp        = Get-Date
+            }
+            Export-PersistentToolVersionCache -Cache $script:toolVersionPersistentCache
             return $versionInfo
         } else {
             Stop-Job -Job $job -ErrorAction SilentlyContinue
