@@ -3519,27 +3519,30 @@ function Update-ToolsDisplay {
         }
     }
 
-    # Der Rückgabewert wird für die Statusanzeige verwendet und muss den aktiven
-    # Statusfilter berücksichtigen, nicht nur die Gesamtzahl der Kategorie.
-    $displayableToolCount = $totalTools
+    # Den Statusfilter vor dem Render-Timer anwenden, damit Anzahl und sichtbare
+    # Tool-Liste dieselbe Datenmenge verwenden.
     if ($StatusFilter -eq "Installed" -or $StatusFilter -eq "Updates" -or $ShowOnlyUpdates) {
-        $displayableToolCount = 0
-        foreach ($tool in $filteredTools) {
-            $shouldDisplay = $false
-            if ($tool.Winget) {
-                $isInstalled = [bool](Test-ToolInstalled -Tool $tool)
-                if ($StatusFilter -eq "Installed") {
-                    $shouldDisplay = $isInstalled
-                } elseif ($isInstalled) {
-                    $versionInfo = Get-ToolVersionInfo -Tool $tool
-                    $shouldDisplay = ($null -ne $versionInfo -and [bool]$versionInfo.HasUpdate)
-                }
+        $filteredTools = @($filteredTools | Where-Object {
+            $tool = $_
+            if (-not $tool.Winget) {
+                return $false
             }
-            if ($shouldDisplay) {
-                $displayableToolCount++
+
+            $isInstalled = [bool](Test-ToolInstalled -Tool $tool)
+            if ($StatusFilter -eq "Installed") {
+                return $isInstalled
             }
-        }
+            if (-not $isInstalled) {
+                return $false
+            }
+
+            $versionInfo = Get-ToolVersionInfo -Tool $tool
+            return ($null -ne $versionInfo -and [bool]$versionInfo.HasUpdate)
+        })
+        $totalTools = $filteredTools.Count
     }
+
+    $displayableToolCount = $totalTools
     
     # WICHTIG: Update-Filter wird während der Tool-Erstellung angewendet, nicht hier
     # da wir die Versionsinformationen erst beim Initialisieren jedes Tools ermitteln
@@ -3711,33 +3714,11 @@ function Update-ToolsDisplay {
                 
                     # Nur verarbeiten, wenn das Tool nicht null ist
                     if ($null -ne $tool) {
-                        # Prüfe die gewählte Statusfilterung
-                        $shouldDisplay = $true
-                        if ($ShowOnlyUpdates -or $StatusFilter -eq "Updates") {
-                            # Prüfe ob Tool installiert ist und Update verfügbar
-                            if ($tool.Winget) {
-                                $isInstalled = Test-ToolInstalled -Tool $tool
-                                if ($isInstalled) {
-                                    $versionInfo = Get-ToolVersionInfo -Tool $tool
-                                    $shouldDisplay = ($null -ne $versionInfo -and $versionInfo.HasUpdate)
-                                } else {
-                                    $shouldDisplay = $false
-                                }
-                            } else {
-                                $shouldDisplay = $false
-                            }
-                        } elseif ($StatusFilter -eq "Installed") {
-                            $shouldDisplay = Test-ToolInstalled -Tool $tool
+                        if ($this.Tag.Generation -ne $script:displayGeneration) {
+                            $this.Stop()
+                            return
                         }
-                    
-                        # Tool nur anzeigen wenn Filter-Bedingung erfüllt
-                        if ($shouldDisplay) {
-                            if ($this.Tag.Generation -ne $script:displayGeneration) {
-                                $this.Stop()
-                                return
-                            }
-                            Initialize-ToolEntry -TargetElement $WrapPanel -Tool $tool -TileSize $TileSize
-                        }
+                        Initialize-ToolEntry -TargetElement $WrapPanel -Tool $tool -TileSize $TileSize
                     } else {
                         Write-Warning "Update-ToolsDisplay: NULL-Tool an Index $processedTools gefunden"
                     }
@@ -3762,7 +3743,7 @@ function Update-ToolsDisplay {
             }
         })
     $timer.Start()
-    return $totalTools
+    return $displayableToolCount
 }
 
 # Exportiere die Funktionen

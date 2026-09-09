@@ -4503,6 +4503,39 @@ $searchTextBox.Add_HandleCreated({
         [SearchCueBanner]::Set($searchTextBox.Handle, "Nach Paketen suchen")
     })
 
+$searchPlaceholderLabel = New-Object System.Windows.Forms.Label
+$searchPlaceholderLabel.Text = "Nach Paketen suchen"
+$searchPlaceholderLabel.Location = New-Object System.Drawing.Point(8, 2)
+$searchPlaceholderLabel.Size = New-Object System.Drawing.Size(296, 22)
+$searchPlaceholderLabel.AutoSize = $false
+$searchPlaceholderLabel.BackColor = [System.Drawing.Color]::Transparent
+$searchPlaceholderLabel.ForeColor = [System.Drawing.Color]::FromArgb(170, 170, 170)
+$searchPlaceholderLabel.Font = $searchTextBox.Font
+$searchPlaceholderLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleLeft
+$searchPlaceholderLabel.Cursor = [System.Windows.Forms.Cursors]::IBeam
+$searchPlaceholderLabel.Add_Click({ $searchTextBox.Focus() })
+$searchPlaceholderLabel.Add_MouseEnter({
+        $searchPlaceholderLabel.ForeColor = [System.Drawing.Color]::White
+    })
+$searchPlaceholderLabel.Add_MouseLeave({
+        $searchPlaceholderLabel.ForeColor = [System.Drawing.Color]::FromArgb(170, 170, 170)
+    })
+$searchBoxWrapper.Controls.Add($searchPlaceholderLabel)
+$tooltipObj.SetToolTip($searchTextBox, "Nach Paketen, Namen oder Kategorien suchen")
+$tooltipObj.SetToolTip($searchPlaceholderLabel, "Nach Paketen, Namen oder Kategorien suchen")
+$tooltipObj.SetToolTip($searchBoxWrapper, "Nach Paketen, Namen oder Kategorien suchen")
+
+function Update-SearchPlaceholderVisibility {
+    if ($searchPlaceholderLabel -and $searchTextBox) {
+        $searchPlaceholderLabel.Visible = [string]::IsNullOrEmpty($searchTextBox.Text)
+    }
+}
+
+$searchTextBox.Add_TextChanged({ Update-SearchPlaceholderVisibility })
+$searchTextBox.Add_Enter({ Update-SearchPlaceholderVisibility })
+$searchTextBox.Add_Leave({ Update-SearchPlaceholderVisibility })
+Update-SearchPlaceholderVisibility
+
 function Set-SearchCueText {
     param([string]$Text)
     if ($searchTextBox -and $searchTextBox.IsHandleCreated) {
@@ -4534,9 +4567,16 @@ $searchBoxWrapper.Location = New-Object System.Drawing.Point(230, 2)
 $searchBoxWrapper.Size = New-Object System.Drawing.Size(340, 26)
 $searchTextBox.Location = New-Object System.Drawing.Point(8, 2)
 $searchTextBox.Size = New-Object System.Drawing.Size(296, 22)
+$searchPlaceholderLabel.Location = New-Object System.Drawing.Point(8, 2)
+$searchPlaceholderLabel.Size = New-Object System.Drawing.Size(296, 22)
 $searchClearButton.Location = New-Object System.Drawing.Point(308, 0)
 $searchBoxWrapper.Visible = $true
 $titleBar.Controls.Add($searchBoxWrapper)
+$searchPlaceholderLabel.Visible = [string]::IsNullOrEmpty($searchTextBox.Text)
+$searchPlaceholderLabel.BringToFront()
+if ($searchTextBox.IsHandleCreated) {
+    [SearchCueBanner]::Set($searchTextBox.Handle, "Nach Paketen suchen")
+}
 
 function Update-TitleBarSearchLayout {
     if (-not $titleBar -or -not $searchBoxWrapper) { return }
@@ -4547,6 +4587,13 @@ function Update-TitleBarSearchLayout {
     $maximumX = if ($settingsButton) { $settingsButton.Left - $searchBoxWrapper.Width - 15 } else { $availableWidth - $searchBoxWrapper.Width - 10 }
     $searchX = [Math]::Max($minimumX, [Math]::Min($centeredX, $maximumX))
     $searchBoxWrapper.Location = New-Object System.Drawing.Point($searchX, 2)
+    if ($searchTextBox.IsHandleCreated -and [string]::IsNullOrEmpty($searchTextBox.Text)) {
+        [SearchCueBanner]::Set($searchTextBox.Handle, "Nach Paketen suchen")
+    }
+    Update-SearchPlaceholderVisibility
+    if ($searchPlaceholderLabel.Visible) {
+        $searchPlaceholderLabel.BringToFront()
+    }
 }
 
 $mainform.Add_Resize({ Update-TitleBarSearchLayout })
