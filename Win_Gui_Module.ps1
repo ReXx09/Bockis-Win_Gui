@@ -683,7 +683,12 @@ function Test-Admin {
     return $currentUser.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
-$script:GuiElevatedTaskName = 'BockisSystemToolGUI-Elevated'
+$script:GuiElevatedTaskName = if ($script:IsWorkspaceInstance) {
+    'BockisSystemToolGUI-Workspace-Elevated'
+} else {
+    'BockisSystemToolGUI-Elevated'
+}
+$script:LegacyGuiElevatedTaskName = 'BockisSystemToolGUI-Elevated'
 
 function Remove-WorkspaceGuiElevatedLaunchTask {
     if (-not $script:IsWorkspaceInstance) {
@@ -691,20 +696,22 @@ function Remove-WorkspaceGuiElevatedLaunchTask {
     }
 
     try {
-        $task = Get-ScheduledTask -TaskName $script:GuiElevatedTaskName -ErrorAction SilentlyContinue
-        if (-not $task) {
-            return
-        }
-
         $workspaceScriptPath = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot 'Win_Gui_Module.ps1'))
         $workspacePathPattern = [regex]::Escape($workspaceScriptPath)
-        $pointsToWorkspace = @($task.Actions | Where-Object {
-                $_.Execute -match 'powershell' -and $_.Arguments -match $workspacePathPattern
-            }).Count -gt 0
+        $tasks = @(Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object {
+            $_.TaskName -eq $script:GuiElevatedTaskName -or
+            (($_.TaskName -eq $script:LegacyGuiElevatedTaskName) -and @($_.Actions | Where-Object {
+                $_.Execute -match '(?i)powershell(?:\.exe)?$' -and $_.Arguments -match $workspacePathPattern
+            }).Count -gt 0)
+        })
 
-        if ($pointsToWorkspace) {
-            Unregister-ScheduledTask -TaskName $script:GuiElevatedTaskName -Confirm:$false -ErrorAction SilentlyContinue
-            Write-Verbose "Workspace-Autostartaufgabe entfernt: $($script:GuiElevatedTaskName)"
+        foreach ($task in $tasks) {
+            $fullTaskName = "{0}{1}" -f $task.TaskPath, $task.TaskName
+            if ($task.State -eq 'Running') {
+                Stop-ScheduledTask -TaskPath $task.TaskPath -TaskName $task.TaskName -ErrorAction SilentlyContinue
+            }
+            Unregister-ScheduledTask -TaskPath $task.TaskPath -TaskName $task.TaskName -Confirm:$false -ErrorAction Stop
+            Write-Verbose "Workspace-Autostartaufgabe entfernt: $fullTaskName"
         }
     }
     catch {
@@ -774,6 +781,10 @@ if (-not (Test-Admin)) {
         Write-Host "Bitte starten Sie das Skript manuell mit Administratorrechten." -ForegroundColor Yellow
         exit
     }
+}
+
+if ($script:IsWorkspaceInstance) {
+    Remove-WorkspaceGuiElevatedLaunchTask
 }
 
 # Elevated-Task bei erfolgreichem Admin-Start automatisch aktualisieren.
