@@ -104,7 +104,160 @@ public class RoundedCorners {
 "@ -ReferencedAssemblies System.Windows.Forms -ErrorAction SilentlyContinue
 }
 
+# Form-Subclass für die rahmenlose, dynamisch größenveränderbare Oberfläche.
+# WICHTIG: WS_THICKFRAME muss über CreateParams gesetzt werden, nicht nachträglich per
+# SetWindowLongPtr - WinForms überschreibt bei jedem internen UpdateStyles()/RecreateHandle()
+# den kompletten Fensterstil anhand von CreateParams und entfernt sonst unbekannte Bits wieder.
+if (-not ([System.Management.Automation.PSTypeName]'DynamicResizableForm').Type) {
+    Add-Type -TypeDefinition @"
+using System;
+using System.Drawing;
+using System.Windows.Forms;
 
+public class DynamicResizableForm : Form {
+    public bool EnableDynamicResize;
+
+    private const int WS_THICKFRAME = 0x00040000;
+    private const int WS_MAXIMIZEBOX = 0x00010000;
+    private const int WM_NCHITTEST = 0x0084;
+    private const int WM_NCLBUTTONDOWN = 0x00A1;
+    private const int WM_SYSCOMMAND = 0x0112;
+    private const int WM_GETMINMAXINFO = 0x0024;
+    private const int WM_NCCALCSIZE = 0x0083;
+    private const int WM_NCACTIVATE = 0x0086;
+    private const int SC_SIZE = 0xF000;
+    private const int HTCLIENT = 1;
+    private const int HTLEFT = 10;
+    private const int HTRIGHT = 11;
+    private const int HTTOP = 12;
+    private const int HTTOPLEFT = 13;
+    private const int HTTOPRIGHT = 14;
+    private const int HTBOTTOM = 15;
+    private const int HTBOTTOMLEFT = 16;
+    private const int HTBOTTOMRIGHT = 17;
+    private const int MONITOR_DEFAULTTONEAREST = 2;
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct POINTSTRUCT { public int X; public int Y; }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct MINMAXINFO {
+        public POINTSTRUCT ptReserved;
+        public POINTSTRUCT ptMaxSize;
+        public POINTSTRUCT ptMaxPosition;
+        public POINTSTRUCT ptMinTrackSize;
+        public POINTSTRUCT ptMaxTrackSize;
+    }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct RECTSTRUCT { public int Left; public int Top; public int Right; public int Bottom; }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct MONITORINFO {
+        public int cbSize;
+        public RECTSTRUCT rcMonitor;
+        public RECTSTRUCT rcWork;
+        public int dwFlags;
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool ReleaseCapture();
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr SendMessage(IntPtr handle, int message, IntPtr wParam, IntPtr lParam);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromWindow(IntPtr handle, int flags);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFO info);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr DefWindowProc(IntPtr handle, int message, IntPtr wParam, IntPtr lParam);
+
+    protected override CreateParams CreateParams {
+        get {
+            CreateParams cp = base.CreateParams;
+            if (EnableDynamicResize) {
+                cp.Style |= WS_THICKFRAME | WS_MAXIMIZEBOX;
+            }
+            return cp;
+        }
+    }
+
+    protected override void WndProc(ref Message message) {
+        if (EnableDynamicResize && message.Msg == WM_NCACTIVATE) {
+            // lParam=-1 weist Windows an, den (nicht vorhandenen) NC-Bereich nicht neu zu
+            // zeichnen - sonst färbt Windows Rand/Titelleiste beim Fokuswechsel grau ein.
+            message.Result = DefWindowProc(this.Handle, WM_NCACTIVATE, message.WParam, new IntPtr(-1));
+            return;
+        }
+
+        if (EnableDynamicResize && message.Msg == WM_NCCALCSIZE && message.WParam != IntPtr.Zero) {
+            // Client-Bereich = komplettes Fenster, sonst reserviert Windows wegen WS_THICKFRAME
+            // einen sichtbaren nativen Rahmen (weißer Streifen) rund um das Fenster.
+            message.Result = IntPtr.Zero;
+            return;
+        }
+
+        if (EnableDynamicResize && message.Msg == WM_GETMINMAXINFO) {
+            // Ohne diese Korrektur berechnet Windows die Maximieren-Grenzen bei
+            // rahmenlosen WS_THICKFRAME-Fenstern falsch und schneidet rechts/unten ab.
+            IntPtr monitor = MonitorFromWindow(this.Handle, MONITOR_DEFAULTTONEAREST);
+            if (monitor != IntPtr.Zero) {
+                MONITORINFO info = new MONITORINFO();
+                info.cbSize = System.Runtime.InteropServices.Marshal.SizeOf(typeof(MONITORINFO));
+                if (GetMonitorInfo(monitor, ref info)) {
+                    MINMAXINFO mmi = (MINMAXINFO)System.Runtime.InteropServices.Marshal.PtrToStructure(message.LParam, typeof(MINMAXINFO));
+                    mmi.ptMaxPosition.X = info.rcWork.Left - info.rcMonitor.Left;
+                    mmi.ptMaxPosition.Y = info.rcWork.Top - info.rcMonitor.Top;
+                    mmi.ptMaxSize.X = info.rcWork.Right - info.rcWork.Left;
+                    mmi.ptMaxSize.Y = info.rcWork.Bottom - info.rcWork.Top;
+                    mmi.ptMaxTrackSize.X = mmi.ptMaxSize.X;
+                    mmi.ptMaxTrackSize.Y = mmi.ptMaxSize.Y;
+                    System.Runtime.InteropServices.Marshal.StructureToPtr(mmi, message.LParam, true);
+                }
+            }
+            message.Result = IntPtr.Zero;
+            return;
+        }
+
+        if (EnableDynamicResize && message.Msg == WM_NCLBUTTONDOWN && this.WindowState == FormWindowState.Normal) {
+            int hitTest = message.WParam.ToInt32();
+            if (hitTest >= HTLEFT && hitTest <= HTBOTTOMRIGHT) {
+                ReleaseCapture();
+                SendMessage(this.Handle, WM_SYSCOMMAND, (IntPtr)(SC_SIZE | hitTest), IntPtr.Zero);
+                return;
+            }
+        }
+
+        if (EnableDynamicResize && message.Msg == WM_NCHITTEST && this.WindowState == FormWindowState.Normal) {
+            int screenX = unchecked((short)(long)message.LParam);
+            int screenY = unchecked((short)((long)message.LParam >> 16));
+            Point point = this.PointToClient(new Point(screenX, screenY));
+            int edge = 8;
+            bool left = point.X <= edge;
+            bool right = point.X >= this.ClientSize.Width - edge;
+            bool top = point.Y <= edge;
+            bool bottom = point.Y >= this.ClientSize.Height - edge;
+
+            if (top && left) { message.Result = (IntPtr)HTTOPLEFT; return; }
+            if (top && right) { message.Result = (IntPtr)HTTOPRIGHT; return; }
+            if (bottom && left) { message.Result = (IntPtr)HTBOTTOMLEFT; return; }
+            if (bottom && right) { message.Result = (IntPtr)HTBOTTOMRIGHT; return; }
+            if (left) { message.Result = (IntPtr)HTLEFT; return; }
+            if (right) { message.Result = (IntPtr)HTRIGHT; return; }
+            if (top) { message.Result = (IntPtr)HTTOP; return; }
+            if (bottom) { message.Result = (IntPtr)HTBOTTOM; return; }
+            message.Result = (IntPtr)HTCLIENT;
+            return;
+        }
+
+        base.WndProc(ref message);
+    }
+}
+"@ -ReferencedAssemblies System.Drawing, System.Windows.Forms -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+}
 
 # ===================================================================
 # Web-Dashboard: Thread-sicherer Output-Buffer (wird per Referenz an Runspace übergeben)
@@ -1009,6 +1162,7 @@ if ($missingModules.Count -gt 0) {
 
 # Einstellungen beim Programmstart laden (Ausgabe erfolgt später)
 $settingsResult = Import-Settings
+$settings = Get-SystemToolSettings
 
 # Initialisiere Ausgabecodierung
 & {
@@ -1081,10 +1235,14 @@ if ($settingsResult -and $settingsResult.Success) {
 # Globale Hintergrundfarbe – wird von allen Panels verwendet (verhindert weißen Flicker)
 $script:BgColor = [System.Drawing.Color]::FromArgb(30, 30, 30)
 
-$mainform = New-Object System.Windows.Forms.Form
+$mainform = New-Object DynamicResizableForm
 $mainform.Text = "$script:AppName $script:AppVersion"
 $mainform.Font = New-Object System.Drawing.Font("Segoe UI", 10)
-$mainform.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::None  # Kein Rahmen
+$layoutMode = if ($settings -and @('Fixed', 'Dynamic') -contains [string]$settings.LayoutMode) { [string]$settings.LayoutMode } else { 'Fixed' }
+$isDynamicLayout = $layoutMode -eq 'Dynamic'
+$mainform.EnableDynamicResize = $isDynamicLayout
+$mainform.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::None
+$mainform.MaximizeBox = $isDynamicLayout
 $mainform.MinimumSize = New-Object System.Drawing.Size(1000, 800)
 $mainform.BackColor = $script:BgColor
 
@@ -3452,6 +3610,33 @@ $minimizeButton.Add_MouseEnter({ $this.BackColor = [System.Drawing.Color]::FromA
 $minimizeButton.Add_MouseLeave({ $this.BackColor = [System.Drawing.Color]::DarkSlateGray })
 [void]$titleBar.Controls.Add($minimizeButton)
 
+# Maximieren/Wiederherstellen-Button (nur im dynamischen Layout sichtbar)
+$maximizeButton = New-Object System.Windows.Forms.Button
+$maximizeButton.Text = "□"
+$maximizeButton.Size = New-Object System.Drawing.Size(30, 30)
+$maximizeButton.Location = New-Object System.Drawing.Point(940, 0)
+$maximizeButton.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+$maximizeButton.FlatAppearance.BorderSize = 0
+$maximizeButton.FlatAppearance.BorderColor = [System.Drawing.Color]::DarkSlateGray
+$maximizeButton.FlatAppearance.MouseDownBackColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
+$maximizeButton.BackColor = [System.Drawing.Color]::DarkSlateGray
+$maximizeButton.ForeColor = [System.Drawing.Color]::White
+$maximizeButton.Font = New-Object System.Drawing.Font("Segoe UI", 10)
+$maximizeButton.Visible = $isDynamicLayout
+$maximizeButton.Add_Click({
+        if ($mainform.WindowState -eq [System.Windows.Forms.FormWindowState]::Maximized) {
+            $mainform.WindowState = [System.Windows.Forms.FormWindowState]::Normal
+            $maximizeButton.Text = "□"
+        }
+        else {
+            $mainform.WindowState = [System.Windows.Forms.FormWindowState]::Maximized
+            $maximizeButton.Text = "❐"
+        }
+    })
+$maximizeButton.Add_MouseEnter({ $this.BackColor = [System.Drawing.Color]::FromArgb(43, 43, 43) })
+$maximizeButton.Add_MouseLeave({ $this.BackColor = [System.Drawing.Color]::DarkSlateGray })
+[void]$titleBar.Controls.Add($maximizeButton)
+
 # Schließen-Button
 $closeButton = New-Object System.Windows.Forms.Button
 $closeButton.Text = "×"
@@ -3550,6 +3735,12 @@ $titleBar.Add_MouseMove({
 
 $titleBar.Add_MouseUp({
         $script:titleBarLastLocation = $null
+    })
+
+$titleBar.Add_DoubleClick({
+        if ($isDynamicLayout -and $maximizeButton.Visible) {
+            $maximizeButton.PerformClick()
+        }
     })
 
 # Hintergrund-Panel für die Hardware-Monitore
@@ -6282,76 +6473,6 @@ $global:btnStartSmartRepairNav.Add_Click({
 $script:currentSystemView = "securityView"
 
 # Event-Handler wurden in die Collapsible Panels integriert (siehe New-CollapsiblePanel OnExpand)
-
-# Info-Buttons für die Panels erstellen
-$infoButtonSystem = New-ModernInfoButton -x 940 -y 10 -clickAction {
-    Show-ModernMessageDialog -Arguments @(
-        "System & Sicherheit Übersicht:
-
-Dieser Bereich enthält Tools zur Diagnose, Wartung und Absicherung des Windows-Betriebssystems:
-
-• System & Sicherheit: MRT-Scans und Windows Defender zur Malware-Erkennung
-• System-Wartung: SFC Check zur Reparatur von Windows-Dateien und Windows Update
-
-Verwenden Sie diese Tools, wenn Ihr System instabil ist, Sie Sicherheitsprobleme vermuten oder grundlegende Systemprüfungen durchführen möchten.",
-        "System & Sicherheit Hilfe",
-        [System.Windows.Forms.MessageBoxButtons]::OK,
-        [System.Windows.Forms.MessageBoxIcon]::Information
-    )
-}
-$mainContentPanel.Controls.Add($infoButtonSystem)
-
-$infoButtonDisk = New-ModernInfoButton -x 940 -y 10 -clickAction {
-    Show-ModernMessageDialog -Arguments @(
-        "Diagnose & Reparatur Übersicht:
-
-Diese Tools helfen bei der Diagnose und Reparatur von Festplatten-, Arbeitsspeicher- und Windows-Image-Problemen:
-
-• Diagnose: Memory Diagnostic zur Überprüfung des Arbeitsspeichers
-• Festplatten-Prüfung: CHKDSK zum Erkennen und Reparieren von Laufwerksfehlern
-• System-Reparatur (DISM): Werkzeuge zur Reparatur des Windows-Abbilds
-
-Verwenden Sie diese Tools bei ungewöhnlichem Systemverhalten, Abstürzen, Speicherproblemen oder wenn Anzeichen auf Festplatten- oder Image-Probleme hindeuten.",
-        "Diagnose & Reparatur Hilfe",
-        [System.Windows.Forms.MessageBoxButtons]::OK,
-        [System.Windows.Forms.MessageBoxIcon]::Information
-    )
-}
-$mainContentPanel.Controls.Add($infoButtonDisk)
-
-$infoButtonNetwork = New-ModernInfoButton -x 940 -y 10 -clickAction {
-    Show-ModernMessageDialog -Arguments @(
-        "Netzwerk-Tools Übersicht:
-
-Tools zur Diagnose und Behebung von Netzwerkproblemen:
-
-• Netzwerk-Diagnose: Ping-Tests zur Überprüfung der Verbindungsqualität
-• Netzwerk-Reparatur: Zurücksetzen von Netzwerkadaptern bei Verbindungsproblemen
-
-Verwenden Sie diese Funktionen bei Internetzugangsproblemen, langsamen Verbindungen oder Netzwerkfehlern.",
-        "Netzwerk-Tools Hilfe",
-        [System.Windows.Forms.MessageBoxButtons]::OK,
-        [System.Windows.Forms.MessageBoxIcon]::Information
-    )
-}
-$mainContentPanel.Controls.Add($infoButtonNetwork)
-
-$infoButtonCleanup = New-ModernInfoButton -x 940 -y 10 -clickAction {
-    Show-ModernMessageDialog -Arguments @(
-        "Bereinigung Übersicht:
-
-Tools zur Systemoptimierung und Freigabe von Speicherplatz:
-
-• System-Bereinigung: Disk Cleanup zum Entfernen unnötiger Systemdateien
-• Temporäre Dateien: Optionen zur Bereinigung temporärer Dateien mit unterschiedlicher Tiefe
-
-Regelmäßige Bereinigung kann die Systemleistung verbessern und wertvollen Speicherplatz freigeben.",
-        "Bereinigung Hilfe",
-        [System.Windows.Forms.MessageBoxButtons]::OK,
-        [System.Windows.Forms.MessageBoxIcon]::Information
-    )
-}
-$mainContentPanel.Controls.Add($infoButtonCleanup)
 
 # System-Unterbuttons wurden bereits in den Collapsible Panels definiert (siehe oben)
 
@@ -11510,6 +11631,145 @@ function Update-AllButtonFlatAppearance {
 }
 Update-AllButtonFlatAppearance -RootControl $mainform
 
+function Update-DynamicMainLayout {
+    if (-not $isDynamicLayout -or -not $mainform -or $mainform.WindowState -eq [System.Windows.Forms.FormWindowState]::Minimized) {
+        return
+    }
+
+    $clientWidth = [Math]::Max($mainform.ClientSize.Width, 1000)
+    $clientHeight = [Math]::Max($mainform.ClientSize.Height, 800)
+    if ($mainform.WindowState -eq [System.Windows.Forms.FormWindowState]::Maximized) {
+        # ClientSize kann beim Resize-Event kurzzeitig hinter dem tatsächlichen Maximieren
+        # zurückliegen - die echte Monitor-Arbeitsfläche als verlässlichen Fallback nutzen.
+        try {
+            $workingArea = [System.Windows.Forms.Screen]::FromControl($mainform).WorkingArea
+            $clientWidth = [Math]::Max($clientWidth, $workingArea.Width)
+            $clientHeight = [Math]::Max($clientHeight, $workingArea.Height)
+        } catch {}
+    }
+    $navigationWidth = 217
+    $layoutLeft = 0
+    $contentLeft = 225
+    $contentWidth = [Math]::Max(300, $clientWidth - $contentLeft - 10)
+    if ($mainform.WindowState -eq [System.Windows.Forms.FormWindowState]::Maximized) {
+        # Im Vollbild bleibt die Arbeitsfläche als zusammenhängende Gruppe zentriert.
+        # Dadurch wächst der Hauptbereich weiter, ohne dass Navigation und Inhalt an
+        # den äußersten Bildschirmrändern kleben.
+        $workspaceWidth = [Math]::Min([Math]::Max(1200, $clientWidth - 40), 3000)
+        $layoutLeft = [Math]::Floor(($clientWidth - $workspaceWidth) / 2)
+        $navigationWidth = 260
+        $contentLeft = $layoutLeft + $navigationWidth + 20
+        $contentWidth = [Math]::Max(600, $workspaceWidth - $navigationWidth - 30)
+    }
+    # Hardware-Monitor-Reihe bekommt eine maximale Breite und wird zentriert, statt bei sehr
+    # breiten (z.B. Ultrawide-)Fenstern über den kompletten Client-Bereich gestreckt zu werden.
+    $monitorMaxWidth = 1400
+    $monitorPanelWidth = [Math]::Min($clientWidth, $monitorMaxWidth)
+    $monitorPanelLeft = [Math]::Max(0, [Math]::Floor(($clientWidth - $monitorPanelWidth) / 2))
+    $monitorWidth = [Math]::Max(300, $monitorPanelWidth - 2)
+    $monitorColumnWidth = [Math]::Floor($monitorWidth / 3)
+    $outputTop = 165
+    $progressHeight = 32
+    # StatusStrip dockt automatisch am unteren Rand - deren Höhe muss abgezogen werden,
+    # sonst überlappt die Progressbar die Statuszeile. Visible ist vor dem ersten Show()
+    # immer False, deshalb nur auf Vorhandensein prüfen.
+    $statusBarHeight = if ($statusBar) { $statusBar.Height } else { 0 }
+    $outputHeight = [Math]::Max(240, $clientHeight - $statusBarHeight - $outputTop - $progressHeight - 10)
+
+
+    $titleBar.Width = $clientWidth
+    $outputButtonPanel.Left = $layoutLeft
+    $outputButtonPanel.Width = $navigationWidth
+    $mainButtonPanel.Left = $layoutLeft
+    $mainButtonPanel.Width = $navigationWidth
+    $restartButtonPanel.Left = $layoutLeft
+    $restartButtonPanel.Width = $navigationWidth
+    $navigationInnerWidth = if ($mainform.WindowState -eq [System.Windows.Forms.FormWindowState]::Maximized) { 250 } else { 210 }
+    foreach ($navigationContainer in $mainButtonPanel.Controls) {
+        if ($navigationContainer -is [System.Windows.Forms.Panel] -and $navigationContainer.Tag -ne $null) {
+            $navigationContainer.Width = $navigationInnerWidth
+            foreach ($navigationChild in $navigationContainer.Controls) {
+                if ($navigationChild -is [System.Windows.Forms.Button] -and $navigationChild.Width -ge 200) {
+                    $navigationChild.Width = $navigationInnerWidth
+                } elseif ($navigationChild -is [System.Windows.Forms.Panel] -and $navigationChild.Width -ge 200) {
+                    $navigationChild.Width = $navigationInnerWidth
+                }
+                foreach ($navigationArrow in $navigationChild.Controls) {
+                    if ($navigationArrow.Tag -eq 'arrow') {
+                        $navigationArrow.Left = $navigationChild.Width - $navigationArrow.Width - 5
+                    }
+                }
+            }
+        }
+    }
+    $mainContentPanel.Left = $contentLeft
+    $outputPanel.Left = $contentLeft + 5
+    $progressBarPanel.Left = $contentLeft + 5
+    $monitorBackgroundPanel.Width = $monitorPanelWidth
+    $monitorBackgroundPanel.Left = $monitorPanelLeft
+    $gbCPU.Width = $monitorColumnWidth
+    $gbCPU.Left = $monitorPanelLeft + 1
+    $gbGPU.Left = $monitorPanelLeft + $monitorColumnWidth + 1
+    $gbGPU.Width = $monitorColumnWidth
+    $gbRAM.Left = $monitorPanelLeft + ($monitorColumnWidth * 2) + 1
+    $gbRAM.Width = $monitorWidth - ($monitorColumnWidth * 2)
+    $lblCPUTitle.Width = [Math]::Max(30, $gbCPU.Width - $btnCPUDebug.Width)
+    $btnCPUDebug.Left = $gbCPU.Width - $btnCPUDebug.Width
+    $lblGPUTitle.Width = [Math]::Max(30, $gbGPU.Width - $btnGPUDebug.Width)
+    $btnGPUDebug.Left = $gbGPU.Width - $btnGPUDebug.Width
+    $lblRAMTitle.Width = [Math]::Max(30, $gbRAM.Width - $btnRAMDebug.Width)
+    $btnRAMDebug.Left = $gbRAM.Width - $btnRAMDebug.Width
+    # Labels bisher fest auf 347-350px - füllen sonst bei breiteren Boxen nur den linken Rand.
+    $cpuLabel.Width = [Math]::Max(100, $gbCPU.Width - 2)
+    $gpuLabel.Width = [Math]::Max(100, $gbGPU.Width - 2)
+    $ramLabel.Width = [Math]::Max(100, $gbRAM.Width - 2)
+    $mainContentPanel.Width = $contentWidth
+    $searchPanel.Width = $contentWidth
+    $outputPanel.Width = $contentWidth
+    $outputPanel.Height = $outputHeight
+    $progressBarPanel.Width = $contentWidth
+    $progressBarPanel.Top = $outputPanel.Bottom + 5
+
+
+    $mainContentPanel.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right
+    $mainButtonPanel.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Bottom
+    $restartButtonPanel.Anchor = [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Bottom
+    # Anchor=Bottom allein reicht nicht: Bei den schwankenden ClientSize-Werten während des
+    # Start-Layouts setzt sich der Anker-Abstand sonst zu niedrig fest und ragt in die Statuszeile.
+    $restartButtonPanel.Top = $clientHeight - $statusBarHeight - 10 - $restartButtonPanel.Height
+    $monitorBackgroundPanel.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left
+    $outputPanel.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right -bor [System.Windows.Forms.AnchorStyles]::Bottom
+    $progressBarPanel.Anchor = [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right -bor [System.Windows.Forms.AnchorStyles]::Bottom
+
+    $buttonRight = $clientWidth - 30
+    $closeButton.Left = $buttonRight
+    $maximizeButton.Left = $buttonRight - 30
+    $minimizeButton.Left = $buttonRight - 60
+    $infoButton.Left = $buttonRight - 90
+    $settingsButton.Left = $buttonRight - 120
+    Update-TitleBarSearchLayout
+}
+
+if ($isDynamicLayout) {
+    # Kurzer Settle-Timer: nach dem letzten Resize-Event noch einmal mit garantiert
+    # final aktualisierter ClientSize layouten (fängt Race Conditions beim Maximieren ab).
+    $script:layoutSettleTimer = New-Object System.Windows.Forms.Timer
+    $script:layoutSettleTimer.Interval = 120
+    $script:layoutSettleTimer.Add_Tick({
+            $script:layoutSettleTimer.Stop()
+            Update-DynamicMainLayout
+            # Erzwingt einen kompletten Repaint - sonst kann der Bildschirm während der
+            # Windows-Maximieren-Animation kurz veraltete (nicht zentrierte) Inhalte zeigen.
+            $mainform.Invalidate($true)
+        })
+    $mainform.Add_Resize({
+            Update-DynamicMainLayout
+            $script:layoutSettleTimer.Stop()
+            $script:layoutSettleTimer.Start()
+        })
+    Update-DynamicMainLayout
+}
+
 $startupSettings = Get-SystemToolSettings
 $script:isStartupTrayLaunch = $false
 $script:hideToTrayOnShown = $false
@@ -11519,6 +11779,11 @@ if ($StartedFromWindowsLogin -and -not $script:IsWorkspaceInstance -and $startup
     $mainform.ShowInTaskbar = $false
     $mainform.WindowState = [System.Windows.Forms.FormWindowState]::Minimized
     $mainform.Opacity = 0
+}
+
+if ($isDynamicLayout -and [bool]$settings.WindowMaximized -and -not $script:hideToTrayOnShown) {
+    $mainform.WindowState = [System.Windows.Forms.FormWindowState]::Maximized
+    $maximizeButton.Text = "❐"
 }
 
 $mainform.Add_Shown({

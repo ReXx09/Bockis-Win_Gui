@@ -199,6 +199,8 @@ function Initialize-SystemToolSettings {
     $defaultSettings = @{
         FontSize            = 10
         SaveWindowSize      = $true
+        LayoutMode          = "Fixed"
+        WindowMaximized     = $false
         WindowWidth         = 1000 # Standardwerte für die Fenstergröße
         WindowHeight        = 850  # Diese werden später überschrieben, wenn gespeichert
         WindowLeft          = 0    # Standardwerte für die Fensterposition
@@ -309,6 +311,14 @@ function Import-SystemToolSettings {
             }
             if (-not $settingsHashtable.ContainsKey("UseModernSettingsDialog")) {
                 $settingsHashtable["UseModernSettingsDialog"] = $true
+                $needsSave = $true
+            }
+            if (-not $settingsHashtable.ContainsKey("LayoutMode") -or @('Fixed', 'Dynamic') -notcontains [string]$settingsHashtable["LayoutMode"]) {
+                $settingsHashtable["LayoutMode"] = "Fixed"
+                $needsSave = $true
+            }
+            if (-not $settingsHashtable.ContainsKey("WindowMaximized")) {
+                $settingsHashtable["WindowMaximized"] = $false
                 $needsSave = $true
             }
             if (-not $settingsHashtable.ContainsKey("StartupProfile")) {
@@ -1001,6 +1011,7 @@ function Get-SettingsRegistry {
         [PSCustomObject]@{ Category = 'Allgemein'; Group = 'Symbol-Farben'; Type = 'Color'; SettingKey = 'Color.Alert'; ColorKey = 'Alert'; Label = 'Hinweis'; PreviewIcon = '[⚠]'; Description = 'Farbe für Hinweise/Alert-Symbole.' }
         [PSCustomObject]@{ Category = 'Allgemein'; Group = 'Anzeige'; Type = 'Choice'; SettingKey = 'FontSize'; Label = 'Schriftgröße'; Description = 'Steuert die Basis-Schriftgröße für Ausgaben.'; Options = @(8, 9, 10, 11, 12, 14) }
         [PSCustomObject]@{ Category = 'Allgemein'; Group = 'Anzeige'; Type = 'Toggle'; SettingKey = 'SaveWindowSize'; Label = 'Fenstergröße und Position speichern'; Description = 'Speichert Größe und Position beim Beenden.' }
+        [PSCustomObject]@{ Category = 'Allgemein'; Group = 'Anzeige'; Type = 'Choice'; SettingKey = 'LayoutMode'; Label = 'Layout-Modus'; Description = 'Fix behält die bisherige Fensterdarstellung bei. Dynamisch erlaubt Größenänderung und Maximieren.'; Options = @('Fixed', 'Dynamic') }
         [PSCustomObject]@{ Category = 'Monitoring'; Group = 'Überwachung'; Type = 'Choice'; SettingKey = 'UpdateInterval'; Label = 'Update-Intervall (ms)'; Description = 'Aktualisierungsintervall für die Hardware-Überwachung.'; Options = @(500, 750, 1000, 1500, 2000, 3000, 5000, 10000) }
         [PSCustomObject]@{ Category = 'Monitoring'; Group = 'Schwellenwerte'; Type = 'Choice'; SettingKey = 'CpuThreshold'; Label = 'CPU-Warnschwelle (%)'; Description = 'Ab welcher CPU-Last eine Warnung angezeigt wird.'; Options = @(50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100) }
         [PSCustomObject]@{ Category = 'Monitoring'; Group = 'Schwellenwerte'; Type = 'Choice'; SettingKey = 'RamThreshold'; Label = 'RAM-Warnschwelle (%)'; Description = 'Ab welcher RAM-Auslastung eine Warnung angezeigt wird.'; Options = @(50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100) }
@@ -1672,6 +1683,7 @@ function Show-SettingsDialogModern {
         $simpleChanges = [System.Collections.Generic.List[string]]::new()
         $compareMap = @{
             'Schriftgröße'                             = @{ Key = 'FontSize';                              Suffix = '' }
+            'Layout-Modus'                             = @{ Key = 'LayoutMode';                           Suffix = ' (Neustart erforderlich)' }
             'Update-Intervall'                          = @{ Key = 'UpdateInterval';                        Suffix = ' ms' }
             'CPU-Warnschwelle'                          = @{ Key = 'CpuThreshold';                          Suffix = '%' }
             'RAM-Warnschwelle'                          = @{ Key = 'RamThreshold';                          Suffix = '%' }
@@ -1995,11 +2007,30 @@ function Show-SettingsDialog {
     $chkSaveWindowSize.ForeColor = $textColor
     $chkSaveWindowSize.Checked = $script:settings.SaveWindowSize  # Aktuelle Einstellung laden
     $tabDisplay.Controls.Add($chkSaveWindowSize)
+
+    # Layout-Modus
+    $lblLayoutMode = New-Object System.Windows.Forms.Label
+    $lblLayoutMode.Text = "Layout-Modus:"
+    $lblLayoutMode.Location = New-Object System.Drawing.Point(15, 92)
+    $lblLayoutMode.Size = New-Object System.Drawing.Size(120, 25)
+    $lblLayoutMode.ForeColor = $textColor
+    $tabDisplay.Controls.Add($lblLayoutMode)
+
+    $cmbLayoutMode = New-Object System.Windows.Forms.ComboBox
+    $cmbLayoutMode.Location = New-Object System.Drawing.Point(150, 88)
+    $cmbLayoutMode.Size = New-Object System.Drawing.Size(110, 25)
+    $cmbLayoutMode.DropDownStyle = [System.Windows.Forms.ComboBoxStyle]::DropDownList
+    $cmbLayoutMode.BackColor = [System.Drawing.Color]::FromArgb(37, 37, 38)
+    $cmbLayoutMode.ForeColor = [System.Drawing.Color]::FromArgb(220, 220, 220)
+    $cmbLayoutMode.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+    @('Fixed', 'Dynamic') | ForEach-Object { [void]$cmbLayoutMode.Items.Add($_) }
+    $cmbLayoutMode.SelectedItem = if (@('Fixed', 'Dynamic') -contains [string]$script:settings.LayoutMode) { [string]$script:settings.LayoutMode } else { 'Fixed' }
+    $tabDisplay.Controls.Add($cmbLayoutMode)
     
     # Symbol-Farben Gruppe
     $grpSymbolColors = New-Object System.Windows.Forms.GroupBox
     $grpSymbolColors.Text = "Symbol-Farben anpassen"
-    $grpSymbolColors.Location = New-Object System.Drawing.Point(15, 100)
+    $grpSymbolColors.Location = New-Object System.Drawing.Point(15, 125)
     $grpSymbolColors.Size = New-Object System.Drawing.Size(550, 240)
     $grpSymbolColors.ForeColor = [System.Drawing.Color]::FromArgb(100, 181, 246)
     $tabDisplay.Controls.Add($grpSymbolColors)
@@ -2853,6 +2884,7 @@ function Show-SettingsDialog {
             $script:settings = @{
                 FontSize            = $cmbFontSize.SelectedItem
                 SaveWindowSize      = $chkSaveWindowSize.Checked
+                LayoutMode          = $cmbLayoutMode.SelectedItem
                 # Behalte die aktuellen Fenstergrößen- und Positionswerte bei
                 WindowWidth         = $currentWindowWidth
                 WindowHeight        = $currentWindowHeight
@@ -3077,10 +3109,20 @@ function Export-WindowPosition {
     # Aktuelle Fenstergröße und -position speichern, wenn Option aktiviert ist
     if ($settings.SaveWindowSize) {
         Write-Host "Speichere Fenstergröße und -position..." -ForegroundColor Green
-        $settings.WindowWidth = $MainForm.Width
-        $settings.WindowHeight = $MainForm.Height
-        $settings.WindowLeft = $MainForm.Left
-        $settings.WindowTop = $MainForm.Top
+        $settings.WindowMaximized = $MainForm.WindowState -eq [System.Windows.Forms.FormWindowState]::Maximized
+        if ($settings.WindowMaximized -and $MainForm.RestoreBounds.Width -gt 0) {
+            $restoreBounds = $MainForm.RestoreBounds
+            $settings.WindowWidth = $restoreBounds.Width
+            $settings.WindowHeight = $restoreBounds.Height
+            $settings.WindowLeft = $restoreBounds.Left
+            $settings.WindowTop = $restoreBounds.Top
+        }
+        else {
+            $settings.WindowWidth = $MainForm.Width
+            $settings.WindowHeight = $MainForm.Height
+            $settings.WindowLeft = $MainForm.Left
+            $settings.WindowTop = $MainForm.Top
+        }
         Set-SystemToolSettings -Settings $settings
         # Speichere in die Konfigurationsdatei (ohne zusätzliche Konsolenausgabe)
         Export-SystemToolSettings -ConfigPath $ConfigPath -Silent
