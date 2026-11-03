@@ -11684,7 +11684,7 @@ function Update-DynamicMainLayout {
     $mainButtonPanel.Width = $navigationWidth
     $restartButtonPanel.Left = $layoutLeft
     $restartButtonPanel.Width = $navigationWidth
-    $navigationInnerWidth = if ($mainform.WindowState -eq [System.Windows.Forms.FormWindowState]::Maximized) { 250 } else { 210 }
+    $navigationInnerWidth = [Math]::Max(210, $navigationWidth - 10)
     foreach ($navigationContainer in $mainButtonPanel.Controls) {
         if ($navigationContainer -is [System.Windows.Forms.Panel] -and $navigationContainer.Tag -ne $null) {
             $navigationContainer.Width = $navigationInnerWidth
