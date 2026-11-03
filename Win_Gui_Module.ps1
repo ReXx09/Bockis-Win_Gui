@@ -1240,6 +1240,15 @@ $mainform.Text = "$script:AppName $script:AppVersion"
 $mainform.Font = New-Object System.Drawing.Font("Segoe UI", 10)
 $layoutMode = if ($settings -and @('Fixed', 'Dynamic') -contains [string]$settings.LayoutMode) { [string]$settings.LayoutMode } else { 'Fixed' }
 $isDynamicLayout = $layoutMode -eq 'Dynamic'
+$loadedNavigationPaneWidth = 0
+$hasValidNavigationPaneWidth = $settings -and
+    [int]::TryParse([string]$settings.NavigationPaneWidth, [ref]$loadedNavigationPaneWidth) -and
+    $loadedNavigationPaneWidth -ge 217 -and $loadedNavigationPaneWidth -le 1000
+$script:NavigationPaneWidth = if ($hasValidNavigationPaneWidth) {
+    $loadedNavigationPaneWidth
+} else {
+    260
+}
 $mainform.EnableDynamicResize = $isDynamicLayout
 $mainform.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::None
 $mainform.MaximizeBox = $isDynamicLayout
@@ -3704,6 +3713,11 @@ $settingsButton.Add_Click({
             BtnNetwork   = $btnNetwork
             BtnCleanup   = $btnCleanup
         }
+        if ($isDynamicLayout) {
+            Update-DynamicMainLayout
+        } else {
+            Update-FixedNavigationLayout
+        }
     })
 $settingsButton.Add_MouseEnter({ $this.BackColor = [System.Drawing.Color]::SlateGray })
 $settingsButton.Add_MouseLeave({ $this.BackColor = [System.Drawing.Color]::DarkSlateGray })
@@ -4483,7 +4497,7 @@ $mainform.Controls.Add($outputButtonPanel)
 # Erstelle eine Button-Leiste für die Hauptnavigation (vertikal) 
 $mainButtonPanel = New-Object System.Windows.Forms.Panel
 $mainButtonPanel.Location = New-Object System.Drawing.Point(3, 160)  
-$mainButtonPanel.Size = New-Object System.Drawing.Size(217, 440)  
+$mainButtonPanel.Size = New-Object System.Drawing.Size($script:NavigationPaneWidth, 440)
 $mainButtonPanel.BackColor = $script:BgColor
 $mainform.Controls.Add($mainButtonPanel)
 
@@ -4496,7 +4510,7 @@ $_dbProp.SetValue($outputButtonPanel, $true, $null)
 # Erstelle separates Panel für Neustart-Button (unterhalb mainButtonPanel)
 $restartButtonPanel = New-Object System.Windows.Forms.Panel
 $restartButtonPanel.Location = New-Object System.Drawing.Point(3, 615)  # Kurz vor unterem Rand
-$restartButtonPanel.Size = New-Object System.Drawing.Size(217, 150)
+$restartButtonPanel.Size = New-Object System.Drawing.Size($script:NavigationPaneWidth, 150)
 $restartButtonPanel.BackColor = $script:BgColor
 $mainform.Controls.Add($restartButtonPanel)
 $_dbProp.SetValue($restartButtonPanel, $true, $null)
@@ -4520,6 +4534,87 @@ $outputPanel.Location = New-Object System.Drawing.Point(225, 165)  # Button-Pane
 $outputPanel.Size = New-Object System.Drawing.Size(765, 560)  # Breite für breitere Button-Panels reduziert
 $outputPanel.BackColor = [System.Drawing.Color]::FromArgb(30, 30, 30)  # Dunkles Grau wie Hauptfenster
 $mainform.Controls.Add($outputPanel)
+
+# Ziehbare Trennleiste zwischen Navigation und Inhaltsbereich.
+$navigationSplitter = New-Object System.Windows.Forms.Panel
+$navigationSplitter.Size = New-Object System.Drawing.Size(6, 600)
+$navigationSplitter.BackColor = $script:BgColor
+$navigationSplitter.Cursor = [System.Windows.Forms.Cursors]::VSplit
+$navigationSplitter.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Left
+$navigationSplitter.AccessibleName = "Breite der Navigation ändern"
+$mainform.Controls.Add($navigationSplitter)
+$script:isNavigationSplitterDragging = $false
+$navigationSplitter.Add_Paint({
+        param($sender, $e)
+        $gripWidth = [Math]::Min(6, $sender.ClientSize.Width)
+        $gripHeight = [Math]::Min(32, $sender.ClientSize.Height)
+        $gripX = [Math]::Floor(($sender.ClientSize.Width - $gripWidth) / 2)
+        $gripY = [Math]::Floor(($sender.ClientSize.Height - $gripHeight) / 2)
+        $gripBrush = [System.Drawing.SolidBrush]::new([System.Drawing.Color]::FromArgb(145, 145, 145))
+        try {
+            $e.Graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+            $e.Graphics.FillEllipse($gripBrush, $gripX, $gripY, $gripWidth, $gripHeight)
+        }
+        finally {
+            $gripBrush.Dispose()
+        }
+    })
+$navigationSplitter.Add_MouseEnter({
+        $navigationSplitter.BackColor = [System.Drawing.Color]::FromArgb(55, 55, 55)
+    })
+$navigationSplitter.Add_MouseLeave({
+        if (-not $script:isNavigationSplitterDragging) {
+            $navigationSplitter.BackColor = $script:BgColor
+        }
+    })
+$navigationSplitter.Add_MouseDown({
+        param($sender, $e)
+        if ($e.Button -eq [System.Windows.Forms.MouseButtons]::Left) {
+            $script:isNavigationSplitterDragging = $true
+            $navigationSplitter.BackColor = [System.Drawing.Color]::FromArgb(55, 55, 55)
+            $navigationSplitter.Capture = $true
+        }
+    })
+$navigationSplitter.Add_MouseMove({
+        if (-not $script:isNavigationSplitterDragging) { return }
+
+        $oldSplitterBounds = $navigationSplitter.Bounds
+        $pointer = $mainform.PointToClient([System.Windows.Forms.Cursor]::Position)
+        $newWidth = $pointer.X - $mainButtonPanel.Left - [int]($navigationSplitter.Width / 2)
+        $widthBounds = Get-NavigationPaneWidthBounds -Fullscreen:($mainform.WindowState -eq [System.Windows.Forms.FormWindowState]::Maximized)
+        $newWidth = [Math]::Max($widthBounds.Minimum, [Math]::Min($widthBounds.Maximum, $newWidth))
+        if ($newWidth -eq $script:NavigationPaneWidth) { return }
+
+        $script:NavigationPaneWidth = $newWidth
+        if ($isDynamicLayout) {
+            Update-DynamicMainLayout
+        } else {
+            Update-FixedNavigationLayout
+        }
+
+        $dirtyBounds = [System.Drawing.Rectangle]::Union($oldSplitterBounds, $navigationSplitter.Bounds)
+        $mainform.Invalidate($dirtyBounds, $true)
+        $mainform.Update()
+    })
+$navigationSplitter.Add_MouseUp({
+        param($sender, $e)
+        if ($e.Button -ne [System.Windows.Forms.MouseButtons]::Left -or -not $script:isNavigationSplitterDragging) { return }
+
+        $script:isNavigationSplitterDragging = $false
+        $navigationSplitter.Capture = $false
+        $splitterPointer = $navigationSplitter.PointToClient([System.Windows.Forms.Cursor]::Position)
+        if (-not $navigationSplitter.ClientRectangle.Contains($splitterPointer)) {
+            $navigationSplitter.BackColor = $script:BgColor
+        }
+        $currentSettings = Get-SystemToolSettings
+        if ($currentSettings -and [bool]$currentSettings.SaveWindowSize) {
+            $currentSettings.NavigationPaneWidth = $script:NavigationPaneWidth
+            Set-SystemToolSettings -Settings $currentSettings
+            if (-not (Export-SystemToolSettings -ConfigPath "$PSScriptRoot\config.json" -Silent)) {
+                Write-ToolLog -ToolName 'SETTINGS' -Message 'Navigationsbreite konnte nicht gespeichert werden.' -Level Error
+            }
+        }
+    })
 
 # Hilfsvariable für aktive Ansicht
 $script:currentView = "outputView"
@@ -5074,9 +5169,6 @@ function Update-AvailableUpdatesMarker {
 # Hilfsfunktion zum Aktualisieren aller Kategorie-Zähler
 function Update-CategoryCounts {
     param([string]$SearchQuery = "")
-    
-    # Nach einem Git Pull die ToolLibrary aus dem aktuellen Arbeitsstand neu laden.
-    Import-Module "$PSScriptRoot\Modules\ToolLibrary.psm1" -Force -ErrorAction Stop
     
     # Hilfsfunktion zum Zählen der Tools mit Suchfilter
     $countToolsWithSearch = {
@@ -6711,7 +6803,7 @@ function Switch-ConsoleVisibility {
 $btnToggleConsole = New-Object System.Windows.Forms.Button
 $btnToggleConsole.Text = "◄"
 $btnToggleConsole.Size = New-Object System.Drawing.Size(45, 30)
-$btnToggleConsole.Location = New-Object System.Drawing.Point(20, 5)
+$btnToggleConsole.Location = New-Object System.Drawing.Point(37, 5)
 $btnToggleConsole.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 $btnToggleConsole.FlatAppearance.BorderSize = 0
 $btnToggleConsole.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
@@ -6789,7 +6881,7 @@ if ($tooltipObj) {
 $btnCMDQuick = New-Object System.Windows.Forms.Button
 $btnCMDQuick.Text = "⚡    CMD"
 $btnCMDQuick.Size = New-Object System.Drawing.Size(83, 30)
-$btnCMDQuick.Location = New-Object System.Drawing.Point(66, 5)
+$btnCMDQuick.Location = New-Object System.Drawing.Point(88, 5)
 $btnCMDQuick.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 $btnCMDQuick.FlatAppearance.BorderSize = 0
 $btnCMDQuick.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
@@ -6867,7 +6959,7 @@ if ($tooltipObj) {
 $btnOutput = New-Object System.Windows.Forms.Button
 $btnOutput.Text = "►"
 $btnOutput.Size = New-Object System.Drawing.Size(45, 30)
-$btnOutput.Location = New-Object System.Drawing.Point(150, 5)
+$btnOutput.Location = New-Object System.Drawing.Point(177, 5)
 $btnOutput.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
 $btnOutput.FlatAppearance.BorderSize = 0
 $btnOutput.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(43, 43, 43)
@@ -6914,15 +7006,6 @@ $outputButtonPanel.Controls.Add($btnOutput)
 if ($tooltipObj) {
     $tooltipObj.SetToolTip($btnOutput, "Zur vorherigen Ansicht wechseln")
 }
-
-# Vertikaler Trenner rechts neben dem 3-in-1 Button
-$toggleSeparator = New-Object System.Windows.Forms.Label
-$toggleSeparator.Location = New-Object System.Drawing.Point(208, 8)
-$toggleSeparator.Size = New-Object System.Drawing.Size(2, 28)
-$toggleSeparator.BackColor = [System.Drawing.Color]::FromArgb(120, 120, 120)
-$toggleSeparator.BorderStyle = [System.Windows.Forms.BorderStyle]::None
-$outputButtonPanel.Controls.Add($toggleSeparator)
-
 
 #------------------------------------------------------------------------------------------------------------
 # HORIZONTALE INFO-PANELS IM MAIN-CONTENT-PANEL (oben rechts)
@@ -8094,6 +8177,7 @@ Add-ButtonIcon -Button $btnAllTools -IconCode 0xE71D -IconSize 12 -LeftMargin 10
 $lblAllToolsCount = New-Object System.Windows.Forms.Label
 $lblAllToolsCount.Size = New-Object System.Drawing.Size(30, 20)
 $lblAllToolsCount.Location = New-Object System.Drawing.Point(175, 8)
+$lblAllToolsCount.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Right
 $lblAllToolsCount.TextAlign = [System.Drawing.ContentAlignment]::MiddleRight
 $lblAllToolsCount.ForeColor = [System.Drawing.Color]::LightGray
 $lblAllToolsCount.BackColor = [System.Drawing.Color]::Transparent
@@ -8159,6 +8243,7 @@ Add-ButtonIcon -Button $btnSystemTools -IconCode 0xE90F -IconSize 12 -LeftMargin
 $lblSystemToolsCount = New-Object System.Windows.Forms.Label
 $lblSystemToolsCount.Size = New-Object System.Drawing.Size(30, 20)
 $lblSystemToolsCount.Location = New-Object System.Drawing.Point(175, 8)
+$lblSystemToolsCount.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Right
 $lblSystemToolsCount.TextAlign = [System.Drawing.ContentAlignment]::MiddleRight
 $lblSystemToolsCount.ForeColor = [System.Drawing.Color]::LightGray
 $lblSystemToolsCount.BackColor = [System.Drawing.Color]::Transparent
@@ -8223,6 +8308,7 @@ Add-ButtonIcon -Button $btnApplications -IconCode 0xE8A5 -IconSize 12 -LeftMargi
 $lblApplicationsCount = New-Object System.Windows.Forms.Label
 $lblApplicationsCount.Size = New-Object System.Drawing.Size(30, 20)
 $lblApplicationsCount.Location = New-Object System.Drawing.Point(175, 8)
+$lblApplicationsCount.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Right
 $lblApplicationsCount.TextAlign = [System.Drawing.ContentAlignment]::MiddleRight
 $lblApplicationsCount.ForeColor = [System.Drawing.Color]::LightGray
 $lblApplicationsCount.BackColor = [System.Drawing.Color]::Transparent
@@ -8287,6 +8373,7 @@ Add-ButtonIcon -Button $btnAudioTV -IconCode 0xE8D6 -IconSize 12 -LeftMargin 10
 $lblAudioTVCount = New-Object System.Windows.Forms.Label
 $lblAudioTVCount.Size = New-Object System.Drawing.Size(30, 20)
 $lblAudioTVCount.Location = New-Object System.Drawing.Point(175, 8)
+$lblAudioTVCount.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Right
 $lblAudioTVCount.TextAlign = [System.Drawing.ContentAlignment]::MiddleRight
 $lblAudioTVCount.ForeColor = [System.Drawing.Color]::LightGray
 $lblAudioTVCount.BackColor = [System.Drawing.Color]::Transparent
@@ -8351,6 +8438,7 @@ Add-ButtonIcon -Button $btnCodingTools -IconCode 0xE943 -IconSize 12 -LeftMargin
 $lblCodingToolsCount = New-Object System.Windows.Forms.Label
 $lblCodingToolsCount.Size = New-Object System.Drawing.Size(30, 20)
 $lblCodingToolsCount.Location = New-Object System.Drawing.Point(175, 8)
+$lblCodingToolsCount.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Right
 $lblCodingToolsCount.TextAlign = [System.Drawing.ContentAlignment]::MiddleRight
 $lblCodingToolsCount.ForeColor = [System.Drawing.Color]::LightGray
 $lblCodingToolsCount.BackColor = [System.Drawing.Color]::Transparent
@@ -11046,6 +11134,24 @@ try {
 $toolWrapPanel = New-Object Windows.Controls.WrapPanel
 $toolWrapPanel.Margin = New-Object Windows.Thickness(10, 15, 10, 10)  # Links: 10, Oben: 15px mehr Abstand, Rechts: 10, Unten: 10
 $toolWrapPanel.Background = [Windows.Media.SolidColorBrush]::new([Windows.Media.Color]::FromRgb(30, 30, 30))
+$toolWrapPanel.Add_SizeChanged({
+        if ($script:currentTileSize -ne "List") {
+            return
+        }
+
+        $listWidth = [Math]::Floor($this.ActualWidth)
+        if ($listWidth -le 0) {
+            return
+        }
+
+        foreach ($child in $this.Children) {
+            if ($child -is [Windows.Controls.Border] -and $child.Tag -is [hashtable]) {
+                $child.Width = $listWidth
+            } elseif ($child -is [Windows.Controls.Grid] -and $child.Tag -eq "ToolListHeader") {
+                $child.Width = [Math]::Max(1, $listWidth - 6)
+            }
+        }
+    })
 $toolScrollViewer.Content = $toolWrapPanel
 $toolDownloadsHost.Child = $toolScrollViewer
 
@@ -11631,6 +11737,25 @@ function Update-AllButtonFlatAppearance {
 }
 Update-AllButtonFlatAppearance -RootControl $mainform
 
+function Get-NavigationPaneWidthBounds {
+    param([bool]$Fullscreen)
+
+    $settings = Get-SystemToolSettings
+    $rangeKey = if ($Fullscreen) { 'NavigationPaneFullscreenRange' } else { 'NavigationPaneWindowedRange' }
+    $movementRange = 0
+    if (-not $settings -or
+        -not $settings.ContainsKey($rangeKey) -or
+        -not [int]::TryParse([string]$settings[$rangeKey], [ref]$movementRange) -or
+        $movementRange -lt 0 -or $movementRange -gt 783) {
+        throw "Ungültiger Navigationsbereich in den Einstellungen: $rangeKey"
+    }
+
+    return [PSCustomObject]@{
+        Minimum = 217
+        Maximum = 217 + $movementRange
+    }
+}
+
 function Update-DynamicMainLayout {
     if (-not $isDynamicLayout -or -not $mainform -or $mainform.WindowState -eq [System.Windows.Forms.FormWindowState]::Minimized) {
         return
@@ -11639,17 +11764,29 @@ function Update-DynamicMainLayout {
     $clientWidth = [Math]::Max($mainform.ClientSize.Width, 1000)
     $clientHeight = [Math]::Max($mainform.ClientSize.Height, 800)
     if ($mainform.WindowState -eq [System.Windows.Forms.FormWindowState]::Maximized) {
-        # ClientSize kann beim Resize-Event kurzzeitig hinter dem tatsächlichen Maximieren
-        # zurückliegen - die echte Monitor-Arbeitsfläche als verlässlichen Fallback nutzen.
+        # Nur bei Bounds in voller Monitorgröße darf die Arbeitsfläche als Fallback
+        # dienen. Andernfalls würden Controls bei einem fehlerhaften Restore außerhalb
+        # des tatsächlich sichtbaren Fensters angeordnet.
         try {
             $workingArea = [System.Windows.Forms.Screen]::FromControl($mainform).WorkingArea
-            $clientWidth = [Math]::Max($clientWidth, $workingArea.Width)
-            $clientHeight = [Math]::Max($clientHeight, $workingArea.Height)
-        } catch {}
+            $windowBounds = $mainform.Bounds
+            $boundsMatchWorkingArea =
+                [Math]::Abs($windowBounds.Left - $workingArea.Left) -le 2 -and
+                [Math]::Abs($windowBounds.Top - $workingArea.Top) -le 2 -and
+                [Math]::Abs($windowBounds.Width - $workingArea.Width) -le 2 -and
+                [Math]::Abs($windowBounds.Height - $workingArea.Height) -le 2
+            if ($boundsMatchWorkingArea) {
+                $clientWidth = [Math]::Max($clientWidth, $workingArea.Width)
+                $clientHeight = [Math]::Max($clientHeight, $workingArea.Height)
+            }
+        } catch {
+            Write-Warning "Monitor-Arbeitsfläche für maximiertes Layout konnte nicht ermittelt werden: $_"
+        }
     }
-    $navigationWidth = 217
+    $widthBounds = Get-NavigationPaneWidthBounds -Fullscreen:($mainform.WindowState -eq [System.Windows.Forms.FormWindowState]::Maximized)
+    $navigationWidth = [Math]::Max($widthBounds.Minimum, [Math]::Min($widthBounds.Maximum, [int]$script:NavigationPaneWidth))
     $layoutLeft = 0
-    $contentLeft = 225
+    $contentLeft = $layoutLeft + $navigationWidth + 8
     $contentWidth = [Math]::Max(300, $clientWidth - $contentLeft - 10)
     if ($mainform.WindowState -eq [System.Windows.Forms.FormWindowState]::Maximized) {
         # Im Vollbild bleibt die Arbeitsfläche als zusammenhängende Gruppe zentriert.
@@ -11657,7 +11794,6 @@ function Update-DynamicMainLayout {
         # den äußersten Bildschirmrändern kleben.
         $workspaceWidth = [Math]::Min([Math]::Max(1200, $clientWidth - 40), 3000)
         $layoutLeft = [Math]::Floor(($clientWidth - $workspaceWidth) / 2)
-        $navigationWidth = 260
         $contentLeft = $layoutLeft + $navigationWidth + 20
         $contentWidth = [Math]::Max(600, $workspaceWidth - $navigationWidth - 30)
     }
@@ -11670,11 +11806,16 @@ function Update-DynamicMainLayout {
     $monitorColumnWidth = [Math]::Floor($monitorWidth / 3)
     $outputTop = 165
     $progressHeight = 32
+    $bottomInset = if ($mainform.WindowState -eq [System.Windows.Forms.FormWindowState]::Maximized) {
+        [int][Math]::Round($clientHeight * 0.15)
+    } else {
+        0
+    }
     # StatusStrip dockt automatisch am unteren Rand - deren Höhe muss abgezogen werden,
     # sonst überlappt die Progressbar die Statuszeile. Visible ist vor dem ersten Show()
     # immer False, deshalb nur auf Vorhandensein prüfen.
     $statusBarHeight = if ($statusBar) { $statusBar.Height } else { 0 }
-    $outputHeight = [Math]::Max(240, $clientHeight - $statusBarHeight - $outputTop - $progressHeight - 10)
+    $outputHeight = [Math]::Max(240, $clientHeight - $statusBarHeight - $outputTop - $progressHeight - 10 - $bottomInset)
 
 
     $titleBar.Width = $clientWidth
@@ -11684,24 +11825,8 @@ function Update-DynamicMainLayout {
     $mainButtonPanel.Width = $navigationWidth
     $restartButtonPanel.Left = $layoutLeft
     $restartButtonPanel.Width = $navigationWidth
-    $navigationInnerWidth = [Math]::Max(210, $navigationWidth - 10)
-    foreach ($navigationContainer in $mainButtonPanel.Controls) {
-        if ($navigationContainer -is [System.Windows.Forms.Panel] -and $navigationContainer.Tag -ne $null) {
-            $navigationContainer.Width = $navigationInnerWidth
-            foreach ($navigationChild in $navigationContainer.Controls) {
-                if ($navigationChild -is [System.Windows.Forms.Button] -and $navigationChild.Width -ge 200) {
-                    $navigationChild.Width = $navigationInnerWidth
-                } elseif ($navigationChild -is [System.Windows.Forms.Panel] -and $navigationChild.Width -ge 200) {
-                    $navigationChild.Width = $navigationInnerWidth
-                }
-                foreach ($navigationArrow in $navigationChild.Controls) {
-                    if ($navigationArrow.Tag -eq 'arrow') {
-                        $navigationArrow.Left = $navigationChild.Width - $navigationArrow.Width - 5
-                    }
-                }
-            }
-        }
-    }
+    $navigationSplitter.Left = $layoutLeft + $navigationWidth + 1
+    Set-NavigationChildWidths -NavigationWidth $navigationWidth
     $mainContentPanel.Left = $contentLeft
     $outputPanel.Left = $contentLeft + 5
     $progressBarPanel.Left = $contentLeft + 5
@@ -11727,16 +11852,26 @@ function Update-DynamicMainLayout {
     $searchPanel.Width = $contentWidth
     $outputPanel.Width = $contentWidth
     $outputPanel.Height = $outputHeight
+    $navigationSplitter.Top = $outputPanel.Top
+    $navigationSplitter.Height = $outputPanel.Height
     $progressBarPanel.Width = $contentWidth
     $progressBarPanel.Top = $outputPanel.Bottom + 5
 
 
     $mainContentPanel.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right
-    $mainButtonPanel.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Bottom
+    $mainButtonPanel.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left
     $restartButtonPanel.Anchor = [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Bottom
     # Anchor=Bottom allein reicht nicht: Bei den schwankenden ClientSize-Werten während des
     # Start-Layouts setzt sich der Anker-Abstand sonst zu niedrig fest und ragt in die Statuszeile.
-    $restartButtonPanel.Top = $clientHeight - $statusBarHeight - 10 - $restartButtonPanel.Height
+    $restartLayoutHeight = [Math]::Max(1, $mainform.ClientSize.Height)
+    $restartBottomInset = if ($mainform.WindowState -eq [System.Windows.Forms.FormWindowState]::Maximized) {
+        [int][Math]::Round($restartLayoutHeight * 0.15)
+    } else {
+        0
+    }
+    $restartDesiredTop = $restartLayoutHeight - $statusBarHeight - 10 - $restartButtonPanel.Height - $restartBottomInset
+    $restartButtonPanel.Top = [Math]::Max($mainButtonPanel.Bottom + 10, $restartDesiredTop)
+    $restartButtonPanel.BringToFront()
     $monitorBackgroundPanel.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left
     $outputPanel.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right -bor [System.Windows.Forms.AnchorStyles]::Bottom
     $progressBarPanel.Anchor = [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right -bor [System.Windows.Forms.AnchorStyles]::Bottom
@@ -11748,6 +11883,135 @@ function Update-DynamicMainLayout {
     $infoButton.Left = $buttonRight - 90
     $settingsButton.Left = $buttonRight - 120
     Update-TitleBarSearchLayout
+}
+
+function Set-NavigationControlRegion {
+    param(
+        [System.Windows.Forms.Control]$Control,
+        [int]$Radius = 8
+    )
+
+    if (-not $Control -or $Control.Width -le 0 -or $Control.Height -le 0) {
+        return
+    }
+
+    $diameter = [Math]::Min($Radius * 2, [Math]::Min($Control.Width, $Control.Height))
+    $path = New-Object System.Drawing.Drawing2D.GraphicsPath
+    $path.AddArc(0, 0, $diameter, $diameter, 180, 90)
+    $path.AddArc($Control.Width - $diameter, 0, $diameter, $diameter, 270, 90)
+    $path.AddArc($Control.Width - $diameter, $Control.Height - $diameter, $diameter, $diameter, 0, 90)
+    $path.AddArc(0, $Control.Height - $diameter, $diameter, $diameter, 90, 90)
+    $path.CloseFigure()
+
+    $region = New-Object System.Drawing.Region($path)
+    $path.Dispose()
+    if ($Control.Region) {
+        $Control.Region.Dispose()
+    }
+    $Control.Region = $region
+}
+
+function Set-NavigationChildWidths {
+    param([int]$NavigationWidth)
+
+    $navigationInnerWidth = [Math]::Max(210, $NavigationWidth - 10)
+    $toolbarGap = 6
+    $toolbarGroupWidth = $btnToggleConsole.Width + $toolbarGap + $btnCMDQuick.Width + $toolbarGap + $btnOutput.Width
+    $toolbarLeft = [Math]::Max(0, [Math]::Floor(($NavigationWidth - $toolbarGroupWidth) / 2))
+    $btnToggleConsole.Left = $toolbarLeft
+    $btnCMDQuick.Left = $toolbarLeft + $btnToggleConsole.Width + $toolbarGap
+    $btnOutput.Left = $btnCMDQuick.Left + $btnCMDQuick.Width + $toolbarGap
+
+    foreach ($parentPanel in @($mainButtonPanel, $restartButtonPanel)) {
+        foreach ($navigationContainer in $parentPanel.Controls) {
+            if ($navigationContainer -is [System.Windows.Forms.Panel] -and $navigationContainer.Tag -ne $null) {
+                $navigationContainer.Width = $navigationInnerWidth
+                foreach ($navigationChild in $navigationContainer.Controls) {
+                    Set-NavigationControlWidth -Control $navigationChild -Width $navigationInnerWidth
+                }
+            }
+        }
+    }
+
+    if ($script:cleanupDownloadsSeparator) {
+        $script:cleanupDownloadsSeparator.Width = $navigationInnerWidth
+    }
+}
+
+function Set-NavigationControlWidth {
+    param(
+        [System.Windows.Forms.Control]$Control,
+        [int]$Width
+    )
+
+    if (-not $Control) { return }
+
+    if (($Control -is [System.Windows.Forms.Button] -or $Control -is [System.Windows.Forms.Panel]) -and $Control.Width -ge 200) {
+        $Control.Width = $Width
+        Set-NavigationControlRegion -Control $Control
+    }
+    if ($Control.Tag -eq 'arrow' -and $Control.Parent) {
+        $Control.Left = $Control.Parent.Width - $Control.Width - 5
+    }
+    foreach ($child in $Control.Controls) {
+        Set-NavigationControlWidth -Control $child -Width $Width
+    }
+}
+
+function Update-FixedNavigationLayout {
+    if (-not $mainform -or $mainform.WindowState -eq [System.Windows.Forms.FormWindowState]::Minimized) {
+        return
+    }
+
+    $clientWidth = $mainform.ClientSize.Width
+    $clientHeight = $mainform.ClientSize.Height
+    $statusBarHeight = if ($statusBar) { $statusBar.Height } else { 0 }
+    $widthBounds = Get-NavigationPaneWidthBounds -Fullscreen:($mainform.WindowState -eq [System.Windows.Forms.FormWindowState]::Maximized)
+    $navigationWidth = [Math]::Max($widthBounds.Minimum, [Math]::Min($widthBounds.Maximum, [int]$script:NavigationPaneWidth))
+    $contentLeft = $navigationWidth + 8
+    $contentWidth = [Math]::Max(300, $clientWidth - $contentLeft - 10)
+    $bottomInset = if ($mainform.WindowState -eq [System.Windows.Forms.FormWindowState]::Maximized) {
+        [int][Math]::Round($clientHeight * 0.15)
+    } else {
+        0
+    }
+    $outputTop = 165
+    $progressHeight = 32
+    if ($bottomInset -gt 0) {
+        $outputHeight = [Math]::Max(240, $clientHeight - $statusBarHeight - $outputTop - $progressHeight - 10 - $bottomInset)
+    }
+
+    $outputButtonPanel.Left = 0
+    $outputButtonPanel.Width = $navigationWidth
+    $mainButtonPanel.Left = 0
+    $mainButtonPanel.Width = $navigationWidth
+    $restartButtonPanel.Left = 0
+    $restartButtonPanel.Width = $navigationWidth
+    $navigationSplitter.Left = $navigationWidth + 1
+    Set-NavigationChildWidths -NavigationWidth $navigationWidth
+
+    $mainContentPanel.Left = $contentLeft
+    $mainContentPanel.Width = $contentWidth
+    $searchPanel.Width = $contentWidth
+    $outputPanel.Left = $contentLeft + 5
+    $outputPanel.Width = $contentWidth
+    if ($bottomInset -gt 0) {
+        $outputPanel.Height = $outputHeight
+    }
+    $navigationSplitter.Top = $outputPanel.Top
+    $navigationSplitter.Height = $outputPanel.Height
+    $progressBarPanel.Left = $outputPanel.Left
+    $progressBarPanel.Width = $contentWidth
+    $progressBarPanel.Top = $outputPanel.Bottom + 5
+    $restartLayoutHeight = [Math]::Max(1, $mainform.ClientSize.Height)
+    $restartBottomInset = if ($mainform.WindowState -eq [System.Windows.Forms.FormWindowState]::Maximized) {
+        [int][Math]::Round($restartLayoutHeight * 0.15)
+    } else {
+        0
+    }
+    $restartDesiredTop = $restartLayoutHeight - $statusBarHeight - 10 - $restartButtonPanel.Height - $restartBottomInset
+    $restartButtonPanel.Top = [Math]::Max($mainButtonPanel.Bottom + 10, $restartDesiredTop)
+    $restartButtonPanel.BringToFront()
 }
 
 if ($isDynamicLayout) {
@@ -11767,8 +12031,34 @@ if ($isDynamicLayout) {
             $script:layoutSettleTimer.Stop()
             $script:layoutSettleTimer.Start()
         })
+    $mainform.Add_Activated({
+            if ($mainform.WindowState -ne [System.Windows.Forms.FormWindowState]::Maximized) {
+                return
+            }
+
+            $workingArea = [System.Windows.Forms.Screen]::FromControl($mainform).WorkingArea
+            $windowBounds = $mainform.Bounds
+            $boundsMatchWorkingArea =
+                [Math]::Abs($windowBounds.Left - $workingArea.Left) -le 2 -and
+                [Math]::Abs($windowBounds.Top - $workingArea.Top) -le 2 -and
+                [Math]::Abs($windowBounds.Width - $workingArea.Width) -le 2 -and
+                [Math]::Abs($windowBounds.Height - $workingArea.Height) -le 2
+
+            if (-not $boundsMatchWorkingArea) {
+                # Erneutes Maximieren lässt Windows die aktuellen Monitorgrenzen
+                # anwenden, ohne die gespeicherten RestoreBounds zu verändern.
+                $mainform.WindowState = [System.Windows.Forms.FormWindowState]::Normal
+                $mainform.WindowState = [System.Windows.Forms.FormWindowState]::Maximized
+            }
+
+            $script:layoutSettleTimer.Stop()
+            $script:layoutSettleTimer.Start()
+        })
     Update-DynamicMainLayout
+} else {
+    Update-FixedNavigationLayout
 }
+$navigationSplitter.BringToFront()
 
 $startupSettings = Get-SystemToolSettings
 $script:isStartupTrayLaunch = $false
@@ -11961,14 +12251,3 @@ $mainform.Add_Shown({
 # YyKNcb+HLXv5YRdKfIIqqa+B6DBOZyfjNhFHwrTqq8oIU0LFn0Azy7KgyhL50Jq4
 # l+HJ+GdN9Loq4LF/M1igCdJu8Xr+jRRS+rIN+rK7K+zTTamLn0ttCuFe14gUeA==
 # SIG # End signature block
-
-
-
-
-
-
-
-
-
-
-

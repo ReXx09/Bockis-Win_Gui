@@ -1820,6 +1820,9 @@ function Initialize-ToolEntry {
         "List" { $script:toolResourceDictionary["ToolTileWidthList"] }
         default { $script:toolResourceDictionary["ToolTileWidthMedium"] }
     }
+    if ($TileSize -eq "List" -and $TargetElement.ActualWidth -gt 0) {
+        $tileWidth = [Math]::Floor($TargetElement.ActualWidth)
+    }
     
     $border = New-Object Windows.Controls.Border
     $border.BorderThickness = $script:toolResourceDictionary["ToolTileBorderThickness"]
@@ -1828,7 +1831,7 @@ function Initialize-ToolEntry {
     $border.Width = $tileWidth
     $border.MinHeight = if ($TileSize -eq "Large") { 180 } else { 0 }  # Mindesthöhe für kleine Kacheln
     $border.VerticalAlignment = "Top"
-    $border.Margin = if ($TileSize -eq "List") { New-Object Windows.Thickness(5, 2, 5, 2) } else { $script:toolResourceDictionary["ToolTileMargins"] }
+    $border.Margin = if ($TileSize -eq "List") { New-Object Windows.Thickness(0, 2, 0, 2) } else { $script:toolResourceDictionary["ToolTileMargins"] }
     $border.Cursor = [System.Windows.Input.Cursors]::Hand
     if ($TileSize -eq "List") {
         $border.BorderThickness = New-Object Windows.Thickness(0, 0, 0, 1)
@@ -3576,7 +3579,13 @@ function Update-ToolsDisplay {
 
     if ($TileSize -eq "List") {
         $headerGrid = New-Object Windows.Controls.Grid
-        $headerGrid.Width = $script:toolResourceDictionary["ToolTileWidthList"]
+        $listWidth = [double]$WrapPanel.ActualWidth
+        if ($listWidth -le 0) {
+            $listWidth = [double]$script:toolResourceDictionary["ToolTileWidthList"]
+        }
+        $headerGrid.Width = [Math]::Max(1, $listWidth - 6)
+        $headerGrid.Margin = New-Object Windows.Thickness(3, 0, 3, 0)
+        $headerGrid.Tag = "ToolListHeader"
         $headerGrid.Height = 28
         $headerGrid.Background = [Windows.Media.Brushes]::DimGray
         foreach ($columnWidth in @("230", "*", "170")) {

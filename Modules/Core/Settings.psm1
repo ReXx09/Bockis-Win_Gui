@@ -205,6 +205,9 @@ function Initialize-SystemToolSettings {
         WindowHeight        = 850  # Diese werden später überschrieben, wenn gespeichert
         WindowLeft          = 0    # Standardwerte für die Fensterposition
         WindowTop           = 0    # Diese werden später überschrieben, wenn gespeichert
+        NavigationPaneWidth = 260
+        NavigationPaneWindowedRange = 80
+        NavigationPaneFullscreenRange = 203
         UpdateInterval      = 1000
         CpuThreshold        = 90
         RamThreshold        = 85
@@ -320,6 +323,28 @@ function Import-SystemToolSettings {
             if (-not $settingsHashtable.ContainsKey("WindowMaximized")) {
                 $settingsHashtable["WindowMaximized"] = $false
                 $needsSave = $true
+            }
+            $navigationPaneWidth = 0
+            $hasValidNavigationPaneWidth = $settingsHashtable.ContainsKey("NavigationPaneWidth") -and
+                [int]::TryParse([string]$settingsHashtable["NavigationPaneWidth"], [ref]$navigationPaneWidth) -and
+                $navigationPaneWidth -ge 217 -and $navigationPaneWidth -le 1000
+            if (-not $hasValidNavigationPaneWidth) {
+                $settingsHashtable["NavigationPaneWidth"] = 260
+                $needsSave = $true
+            }
+            $navigationRangeDefaults = @{
+                NavigationPaneWindowedRange = 80
+                NavigationPaneFullscreenRange = 203
+            }
+            foreach ($rangeKey in $navigationRangeDefaults.Keys) {
+                $navigationRange = 0
+                $hasValidNavigationRange = $settingsHashtable.ContainsKey($rangeKey) -and
+                    [int]::TryParse([string]$settingsHashtable[$rangeKey], [ref]$navigationRange) -and
+                    $navigationRange -ge 0 -and $navigationRange -le 783
+                if (-not $hasValidNavigationRange) {
+                    $settingsHashtable[$rangeKey] = $navigationRangeDefaults[$rangeKey]
+                    $needsSave = $true
+                }
             }
             if (-not $settingsHashtable.ContainsKey("StartupProfile")) {
                 $settingsHashtable["StartupProfile"] = "Standard"
@@ -1012,6 +1037,8 @@ function Get-SettingsRegistry {
         [PSCustomObject]@{ Category = 'Allgemein'; Group = 'Anzeige'; Type = 'Choice'; SettingKey = 'FontSize'; Label = 'Schriftgröße'; Description = 'Steuert die Basis-Schriftgröße für Ausgaben.'; Options = @(8, 9, 10, 11, 12, 14) }
         [PSCustomObject]@{ Category = 'Allgemein'; Group = 'Anzeige'; Type = 'Toggle'; SettingKey = 'SaveWindowSize'; Label = 'Fenstergröße und Position speichern'; Description = 'Speichert Größe und Position beim Beenden.' }
         [PSCustomObject]@{ Category = 'Allgemein'; Group = 'Anzeige'; Type = 'Choice'; SettingKey = 'LayoutMode'; Label = 'Layout-Modus'; Description = 'Fix behält die bisherige Fensterdarstellung bei. Dynamisch erlaubt Größenänderung und Maximieren.'; Options = @('Fixed', 'Dynamic') }
+        [PSCustomObject]@{ Category = 'Allgemein'; Group = 'Anzeige'; Type = 'Integer'; SettingKey = 'NavigationPaneWindowedRange'; Label = 'Splitterweg im Fenstermodus (px)'; Description = 'Bewegungsbereich ab der Mindestbreite von 217 px. Zulässig: 0 bis 783 px.'; MinValue = 0; MaxValue = 783 }
+        [PSCustomObject]@{ Category = 'Allgemein'; Group = 'Anzeige'; Type = 'Integer'; SettingKey = 'NavigationPaneFullscreenRange'; Label = 'Splitterweg im Vollbildmodus (px)'; Description = 'Bewegungsbereich ab der Mindestbreite von 217 px. Zulässig: 0 bis 783 px.'; MinValue = 0; MaxValue = 783 }
         [PSCustomObject]@{ Category = 'Monitoring'; Group = 'Überwachung'; Type = 'Choice'; SettingKey = 'UpdateInterval'; Label = 'Update-Intervall (ms)'; Description = 'Aktualisierungsintervall für die Hardware-Überwachung.'; Options = @(500, 750, 1000, 1500, 2000, 3000, 5000, 10000) }
         [PSCustomObject]@{ Category = 'Monitoring'; Group = 'Schwellenwerte'; Type = 'Choice'; SettingKey = 'CpuThreshold'; Label = 'CPU-Warnschwelle (%)'; Description = 'Ab welcher CPU-Last eine Warnung angezeigt wird.'; Options = @(50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100) }
         [PSCustomObject]@{ Category = 'Monitoring'; Group = 'Schwellenwerte'; Type = 'Choice'; SettingKey = 'RamThreshold'; Label = 'RAM-Warnschwelle (%)'; Description = 'Ab welcher RAM-Auslastung eine Warnung angezeigt wird.'; Options = @(50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100) }
@@ -1301,6 +1328,11 @@ function Show-SettingsDialogModern {
                             $currentValue = "$($existingControl.SelectedItem)"
                         }
                     }
+                    'Integer' {
+                        if ($null -ne $existingControl -and ($existingControl.PSObject.Properties.Name -contains 'Text')) {
+                            $currentValue = "$($existingControl.Text)"
+                        }
+                    }
                     'Color' {
                         if ($null -ne $existingControl -and ($existingControl.PSObject.Properties.Name -contains 'SelectedHex')) {
                             $currentValue = "$($existingControl.SelectedHex)"
@@ -1319,6 +1351,16 @@ function Show-SettingsDialogModern {
                     $ctrl.IsChecked = [bool]$currentValue
                     $ctrl.Content = 'Aktiviert'
                     $ctrl.Foreground = ([System.Windows.Media.BrushConverter]::new().ConvertFrom('#D6D6D6'))
+                    $stack.Children.Add($ctrl)
+                }
+                'Integer' {
+                    $ctrl = New-Object System.Windows.Controls.TextBox
+                    $ctrl.Width = 110
+                    $ctrl.Height = 30
+                    $ctrl.Text = [string]$currentValue
+                    $ctrl.Background = ([System.Windows.Media.BrushConverter]::new().ConvertFrom('#F0F0F0'))
+                    $ctrl.Foreground = ([System.Windows.Media.BrushConverter]::new().ConvertFrom('#111111'))
+                    $ctrl.BorderBrush = ([System.Windows.Media.BrushConverter]::new().ConvertFrom('#8A8A8A'))
                     $stack.Children.Add($ctrl)
                 }
                 'Choice' {
@@ -1579,6 +1621,20 @@ function Show-SettingsDialogModern {
                         $updatedSettings[$def.SettingKey] = $selected
                     }
                 }
+                'Integer' {
+                    $integerValue = 0
+                    if (-not [int]::TryParse([string]$ctrlEntry.Control.Text, [ref]$integerValue) -or
+                        $integerValue -lt [int]$def.MinValue -or $integerValue -gt [int]$def.MaxValue) {
+                        Show-ModernMessageDialog -Arguments @(
+                            "$($def.Label) muss eine ganze Zahl zwischen $($def.MinValue) und $($def.MaxValue) sein.",
+                            'Ungültiger Wert',
+                            'OK',
+                            'Warning'
+                        ) | Out-Null
+                        return
+                    }
+                    $updatedSettings[$def.SettingKey] = $integerValue
+                }
                 'Color' {
                     if (-not $updatedSettings.ContainsKey('ColorScheme')) { $updatedSettings['ColorScheme'] = @{} }
                     if ($updatedSettings.ColorScheme -isnot [hashtable]) { $updatedSettings.ColorScheme = ConvertTo-SettingsHashtable -InputObject $updatedSettings.ColorScheme }
@@ -1684,6 +1740,8 @@ function Show-SettingsDialogModern {
         $compareMap = @{
             'Schriftgröße'                             = @{ Key = 'FontSize';                              Suffix = '' }
             'Layout-Modus'                             = @{ Key = 'LayoutMode';                           Suffix = ' (Neustart erforderlich)' }
+            'Splitterweg im Fenstermodus'              = @{ Key = 'NavigationPaneWindowedRange';           Suffix = ' px' }
+            'Splitterweg im Vollbildmodus'              = @{ Key = 'NavigationPaneFullscreenRange';         Suffix = ' px' }
             'Update-Intervall'                          = @{ Key = 'UpdateInterval';                        Suffix = ' ms' }
             'CPU-Warnschwelle'                          = @{ Key = 'CpuThreshold';                          Suffix = '%' }
             'RAM-Warnschwelle'                          = @{ Key = 'RamThreshold';                          Suffix = '%' }
@@ -1979,6 +2037,48 @@ function Show-SettingsDialog {
     $tabDisplay.Text = "Anzeige"
     $tabDisplay.BackColor = [System.Drawing.Color]::FromArgb(30, 30, 30)
     $tabDisplay.ForeColor = [System.Drawing.Color]::FromArgb(220, 220, 220)
+
+    $tabNavigation = New-Object System.Windows.Forms.TabPage
+    $tabNavigation.Text = "Navigation"
+    $tabNavigation.BackColor = [System.Drawing.Color]::FromArgb(30, 30, 30)
+    $tabNavigation.ForeColor = [System.Drawing.Color]::FromArgb(220, 220, 220)
+
+    $lblNavigationRangeHelp = New-Object System.Windows.Forms.Label
+    $lblNavigationRangeHelp.Text = "Der Bewegungsbereich beginnt bei der Mindestbreite von 217 px. Zulässig sind 0 bis 783 px."
+    $lblNavigationRangeHelp.Location = New-Object System.Drawing.Point(15, 20)
+    $lblNavigationRangeHelp.Size = New-Object System.Drawing.Size(540, 40)
+    $lblNavigationRangeHelp.ForeColor = $textColor
+    $tabNavigation.Controls.Add($lblNavigationRangeHelp)
+
+    $lblWindowedNavigationRange = New-Object System.Windows.Forms.Label
+    $lblWindowedNavigationRange.Text = "Splitterweg im Fenstermodus (px):"
+    $lblWindowedNavigationRange.Location = New-Object System.Drawing.Point(15, 75)
+    $lblWindowedNavigationRange.Size = New-Object System.Drawing.Size(330, 25)
+    $lblWindowedNavigationRange.ForeColor = $textColor
+    $tabNavigation.Controls.Add($lblWindowedNavigationRange)
+
+    $numWindowedNavigationRange = New-Object System.Windows.Forms.NumericUpDown
+    $numWindowedNavigationRange.Location = New-Object System.Drawing.Point(360, 72)
+    $numWindowedNavigationRange.Size = New-Object System.Drawing.Size(100, 25)
+    $numWindowedNavigationRange.Minimum = 0
+    $numWindowedNavigationRange.Maximum = 783
+    $numWindowedNavigationRange.Value = [Math]::Max(0, [Math]::Min(783, [int]$script:settings.NavigationPaneWindowedRange))
+    $tabNavigation.Controls.Add($numWindowedNavigationRange)
+
+    $lblFullscreenNavigationRange = New-Object System.Windows.Forms.Label
+    $lblFullscreenNavigationRange.Text = "Splitterweg im Vollbildmodus (px):"
+    $lblFullscreenNavigationRange.Location = New-Object System.Drawing.Point(15, 115)
+    $lblFullscreenNavigationRange.Size = New-Object System.Drawing.Size(330, 25)
+    $lblFullscreenNavigationRange.ForeColor = $textColor
+    $tabNavigation.Controls.Add($lblFullscreenNavigationRange)
+
+    $numFullscreenNavigationRange = New-Object System.Windows.Forms.NumericUpDown
+    $numFullscreenNavigationRange.Location = New-Object System.Drawing.Point(360, 112)
+    $numFullscreenNavigationRange.Size = New-Object System.Drawing.Size(100, 25)
+    $numFullscreenNavigationRange.Minimum = 0
+    $numFullscreenNavigationRange.Maximum = 783
+    $numFullscreenNavigationRange.Value = [Math]::Max(0, [Math]::Min(783, [int]$script:settings.NavigationPaneFullscreenRange))
+    $tabNavigation.Controls.Add($numFullscreenNavigationRange)
     
     # Schriftgröße Einstellung
     $lblFontSize = New-Object System.Windows.Forms.Label
@@ -2857,6 +2957,7 @@ function Show-SettingsDialog {
     
     # Tabs zum TabControl hinzufügen
     $settingsTabControl.TabPages.Add($tabDisplay)
+    $settingsTabControl.TabPages.Add($tabNavigation)
     $settingsTabControl.TabPages.Add($tabMonitoring)
     $settingsTabControl.TabPages.Add($tabLogs)
     $settingsTabControl.TabPages.Add($tabBehavior)
@@ -2890,6 +2991,9 @@ function Show-SettingsDialog {
                 WindowHeight        = $currentWindowHeight
                 WindowLeft          = $currentWindowLeft
                 WindowTop           = $currentWindowTop
+                NavigationPaneWidth = [int]$script:settings.NavigationPaneWidth
+                NavigationPaneWindowedRange = [int]$numWindowedNavigationRange.Value
+                NavigationPaneFullscreenRange = [int]$numFullscreenNavigationRange.Value
                 UpdateInterval      = $numUpdateInterval.Value
                 CpuThreshold        = $numCpuThreshold.Value
                 RamThreshold        = $numRamThreshold.Value
