@@ -1,3 +1,26 @@
+# Bockis System-Tool v4.2.7
+
+**Datum:** 2026-11-03
+
+---
+
+## Version 4.2.7
+
+### Neue Funktionen
+
+- **Dynamisches Fensterlayout**: Fenstergröße und Navigationsbreite lassen sich anpassen; der Splitterweg ist für Fenster- und Vollbildmodus separat einstellbar.
+- **Tabellenansicht für Tool-Downloads**: Die Listenansicht zeigt die Kopfzeile über einspaltigen, responsiven Tool-Zeilen.
+- **Erweiterte Updateverwaltung**: Externe Winget-Updates und verfügbare Tool-Versionen werden in der GUI berücksichtigt.
+
+### Verbesserungen und Fehlerbehebungen
+
+- **Suche**: Veraltete asynchrone Suchläufe werden abgebrochen, damit Ergebnisse nicht doppelt erscheinen.
+- **Vollbild**: Maximierte Fenstergrenzen und Layout werden beim Zurückwechseln zur GUI erneut abgeglichen.
+- **Navigation**: Download-Zähler folgen der veränderbaren Navigationsbreite; die 3-in-1-Toolbar ist gleichmäßig ausgerichtet.
+- **Tool-Ansicht**: Lesbarkeit, Statusfarben und Zeilenhöhen der Downloadliste wurden verbessert.
+
+---
+
 # Bockis System-Tool v4.2.6
 
 **Datum:** 2026-08-31

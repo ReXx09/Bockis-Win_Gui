@@ -2,7 +2,7 @@
 # Erstellt einen GitHub Release mit automatischem ZIP-Upload
 
 param(
-    [string]$Version = "4.2.6",
+    [string]$Version = "4.2.7",
     [string]$RepoOwner = "ReXx09",
     [string]$RepoName = "Bockis-Win_Gui",
     [string]$Token = "",           # Leer lassen – wird aus Token-Datei gelesen
@@ -214,12 +214,3 @@ $openBrowser = Read-Host "Release im Browser öffnen? (j/n)"
 if ($openBrowser -eq 'j' -or $openBrowser -eq 'J') {
     Start-Process $release.html_url
 }
-
-
-
-
-
-
-
-
-
